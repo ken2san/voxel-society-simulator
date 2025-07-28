@@ -1,0 +1,14 @@
+/* --- Voxel Society Simulator Styles --- */
+#gameCanvas { width: 100%; height: 65vh; background-color: rgba(255,255,255,0.01); }
+#minimapCanvas { width: 110px; height: 110px; background-color: #232946; border: 2.5px solid #3b82f6; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.thought-bubble { position: fixed; pointer-events: none; font-size: 2.1rem; font-weight: bold; text-shadow: 0 2px 8px rgba(0,0,0,0.18); transition: opacity 0.2s; z-index: 10; }
+.thought-bubble[data-show="true"] { opacity: 1; }
+.thought-bubble[data-show="false"] { opacity: 0; }
+@keyframes iconIn { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.card { background: linear-gradient(120deg, #232946 80%, #1a1a2e 100%); border-radius: 2rem; box-shadow: 0 16px 32px -8px rgba(0,0,0,0.22), 0 8px 16px -6px rgba(0,0,0,0.14); border: 2px solid #3b82f6; }
+h1 { font-size: 2.7rem; color: #60a5fa; letter-spacing: 0.04em; text-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+p { font-size: 1.15rem; color: #e0e7ef; }
+#messageBox { background: #232946; border: 2px solid #3b82f6; box-shadow: 0 8px 24px rgba(0,0,0,0.22); }
+#messageText { color: #60a5fa; }
+#messageBoxCloseBtn { background: #3b82f6; color: #fff; border-radius: 1rem; }
+#debugToggle { accent-color: #3b82f6; }

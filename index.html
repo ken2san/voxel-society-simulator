@@ -71,8 +71,10 @@
         /* デバッグトグル強化 */
         #debugToggle { accent-color: #3b82f6; }
     </style>
+    <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="game.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
@@ -423,146 +425,11 @@
 
             updateThoughtBubble(isNight) {
                 let thought = null;
-                const shelterExists = this.findShelter(isNight) !== null;
-                const carryingItem = this.inventory[0];
-
-                // Use a single, simple emoji for each state
-                if (this.needs.safety < 50 * this.personality.bravery && isNight) {
-                    thought = '😨';
-                } else if (this.needs.energy < 30 * this.personality.bravery) {
-                    thought = '😴';
-                } else if (this.needs.hunger < 50) {
-                    thought = '🍎';
-                } else if (this.needs.social < 40) {
-                    thought = '💬';
-                } else if (this.state === 'socializing') {
-                    thought = '❤️';
-                } else if (carryingItem) {
-                    thought = '�';
-                } else {
-                    thought = null;
-                }
-
-                this.thoughtBubble.innerText = thought;
-                this.thoughtBubble.setAttribute('data-show', thought ? 'true' : 'false');
-                if (thought) {
-                    const screenPos = toScreenPosition(this.head, camera);
-                    this.thoughtBubble.style.left = `${screenPos.x - 14}px`;
-                    this.thoughtBubble.style.top = `${screenPos.y - 32}px`;
-                }
-            }
-
-            decideNextAction(isNight) {
-        this.log(`Needs: H:${this.needs.hunger.toFixed(0)}, E:${this.needs.energy.toFixed(0)}, Sa:${this.needs.safety.toFixed(0)}, So:${this.needs.social.toFixed(0)} | Personality: B:${this.personality.bravery.toFixed(2)}, D:${this.personality.diligence.toFixed(2)}`);
-
-        if (this.needs.safety < 50 * this.personality.bravery && isNight) {
-            this.log("Safety critical!", {safety: this.needs.safety, bravery: this.personality.bravery});
-            const shelterPos = this.findShelter(isNight);
-            if (shelterPos) {
-                this.log("Shelter found", shelterPos);
-                this.setNextAction('SEEK_SHELTER', shelterPos, shelterPos); return;
-            } else {
-                this.log("No shelter found");
-            }
-            const digWallTarget = this.findDiggableShelterSpot();
-            if (digWallTarget) {
-                this.log("Diggable shelter spot found", digWallTarget);
-                const adjacentSpot = this.findAdjacentSpot(digWallTarget);
-                if (adjacentSpot) {
-                    this.setNextAction('CREATE_SHELTER', digWallTarget, adjacentSpot); return;
-                } else {
-                    this.log("No adjacent spot for shelter digging");
-                }
-            } else {
-                this.log("No diggable shelter spot found");
-            }
-            if (this.canDigDown()) {
-                this.log("Can dig down for shelter");
-                const digDownTarget = { x: this.gridPos.x, y: this.gridPos.y - 1, z: this.gridPos.z };
-                const adjacentSpot = this.findAdjacentStandingSpot();
-                if (adjacentSpot) {
-                    this.setNextAction('CREATE_SHELTER', digDownTarget, adjacentSpot); return;
-                } else {
-                    this.log("No adjacent standing spot for digging down");
-                }
-            } else {
-                this.log("Cannot dig down for shelter");
-            }
-        }
-        if (this.needs.energy < 70 * this.personality.bravery) {
-            this.log("Energy critical!", {energy: this.needs.energy, bravery: this.personality.bravery});
-            if (this.isSafe(isNight)) {
-                this.log("Safe spot for rest");
-                this.setNextAction('REST'); return;
-            }
-            const shelterPos = this.findShelter(isNight) || this.findDiggableShelterSpot();
-            if (shelterPos) {
-                this.log("Shelter found for rest", shelterPos);
-                const adjacentSpot = this.findAdjacentSpot(shelterPos) || shelterPos;
-                if (adjacentSpot) {
-                    this.setNextAction('SEEK_SHELTER_TO_REST', shelterPos, adjacentSpot); return;
-                } else {
-                    this.log("No adjacent spot for shelter rest");
-                }
-            } else {
-                this.log("No shelter found for rest");
-            }
-        }
-        if (this.needs.hunger < 70) {
-            this.log("Hunger critical!", {hunger: this.needs.hunger});
-            const foodPos = this.findClosestFood();
-            if (foodPos) {
-                this.log("Food found", foodPos);
-                const adjacentSpot = this.findAdjacentSpot(foodPos);
-                if(adjacentSpot){
-                    this.setNextAction('EAT', foodPos, adjacentSpot); return;
-                } else {
-                    this.log("No adjacent spot for food");
-                }
-            } else {
-                this.log("No food found");
-            }
-            const digTarget = this.findDiggableBlock();
-            if (digTarget) {
-                this.log("Diggable block found for hunger", digTarget);
-                const adjacentSpot = this.findAdjacentSpot(digTarget);
-                if (adjacentSpot) {
-                    this.setNextAction('DESTROY_BLOCK', digTarget, adjacentSpot); return;
-                } else {
-                    this.log("No adjacent spot for diggable block");
-                }
-            } else {
-                this.log("No diggable block found for hunger");
-            }
-        }
-        if (this.needs.social < 70) {
-            this.log("Social need critical!", {social: this.needs.social});
-            const partner = this.findClosestPartner();
-            if (partner) {
-                this.log("Partner found", partner.id);
-                this.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
-            } else {
-                this.log("No partner found");
-            }
-        }
-
-        const diligentRand = Math.random();
-        this.log("Diligence check", {rand: diligentRand, threshold: this.personality.diligence - 0.5});
-        if (diligentRand < this.personality.diligence - 0.5) {
-            this.log("Feeling diligent...");
-            if (this.inventory[0] !== null) {
-                this.log("Inventory not empty", this.inventory[0]);
-                const item = ITEM_TYPES[this.inventory[0]];
-                if (item.isStorable && this.homePosition) {
-                    this.log("Item is storable and home exists");
-                    const storageSpot = this.findStorageSpot();
-                    if (storageSpot) {
-                        this.log("Storage spot found", storageSpot);
-                        this.setNextAction('STORE_ITEM', storageSpot, this.findAdjacentSpot(storageSpot) || this.gridPos, BLOCK_TYPES.FRUIT); return;
-                    } else {
-                        this.log("No storage spot found");
-                    }
-                } else if (this.inventory[0] === 'WOOD_LOG' && this.provisionalHome && !this.homePosition) {
+        // Initialize AOS (Animate On Scroll)
+        document.addEventListener('DOMContentLoaded', function() { AOS.init({ once: true }); });
+        // ゲームロジックは game.js で管理
+        // main() や Three.js の初期化は game.js 側で行う
+        // ここではUI初期化やAOSのみ
                     this.log("Ready to build home");
                     this.setNextAction('BUILD_HOME', this.provisionalHome, this.provisionalHome); return;
                 } else {
@@ -619,146 +486,11 @@
                 this.log(`Performing action: ${this.action.type}`);
                 if(this.action.type !== 'REST' && this.action.type.indexOf('SEEK_SHELTER') === -1) { this.actionAnim.active = true; this.actionAnim.timer = this.actionAnim.duration; }
 
-                if (this.action.type === 'REST') { this.state = 'resting'; }
-                else if (this.action.type === 'SOCIALIZE') { this.state = 'socializing'; }
-                else if (this.action.type === 'EAT') {
-                    const {x, y, z} = this.action.target;
-                    const blockId = worldData.get(`${x},${y},${z}`);
-                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                    if (blockType && blockType.isEdible) {
-                        const wasInDanger = this.needs.safety < 70;
-                        this.needs.hunger = Math.min(100, this.needs.hunger + blockType.foodValue);
-                        removeBlock(x, y, z);
-                        this.learn({type: 'ATE_FOOD', inDanger: wasInDanger});
-                    }
-                } else if (this.action.type === 'DESTROY_BLOCK' || this.action.type === 'CREATE_SHELTER' || this.action.type === 'CHOP_WOOD' || this.action.type === 'COLLECT_FOR_STORAGE') {
-                    const {x, y, z} = this.action.target;
-                    const blockId = worldData.get(`${x},${y},${z}`);
-                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                    removeBlock(x, y, z);
-                    if (blockType && blockType.drops) this.pickupItem(blockType.drops);
-                    this.needs.energy -= 5;
-                } else if (this.action.type === 'PLACE_ITEM' || this.action.type === 'STORE_ITEM') {
-                    const {x, y, z} = this.action.target;
-                    addBlock(x, y, z, this.action.item); this.dropItem();
-                } else if (this.action.type === 'BUILD_HOME') {
-                    const {x, y, z} = this.provisionalHome;
-                    addBlock(x, y-1, z, BLOCK_TYPES.BED);
-                    this.homePosition = this.provisionalHome;
-                    this.dropItem();
-                    this.learn({type: 'BUILT_HOME'});
-                } else if (this.action.type === 'WANDER') {
-                    const directions = [{x:0, z:1}, {x:0, z:-1}, {x:1, z:0}, {x:-1, z:0}].sort(() => Math.random() - 0.5);
-                    for (const dir of directions) {
-                        const nextX = this.gridPos.x + dir.x; const nextZ = this.gridPos.z + dir.z;
-                        if (nextX < 0 || nextX >= gridSize || nextZ < 0 || nextZ >= gridSize) continue;
-                        const groundY = findGroundY(nextX, nextZ);
-                        if (groundY !== -1 && Math.abs(groundY - (this.gridPos.y - 1)) <= 1) { this.targetPos = { x: nextX, y: groundY + 1, z: nextZ }; this.state = 'moving'; break; }
-                    }
-                }
-
-                if (this.state !== 'resting' && this.state !== 'moving' && this.state !== 'socializing') { this.action = null; this.state = 'idle'; this.actionCooldown = 0.5 + Math.random(); }
-            }
-
-            learn(outcome) {
-                if (outcome.type === 'SAFETY_DECREASE') { this.personality.bravery = Math.max(0.5, this.personality.bravery - 0.05); }
-                else if (outcome.type === 'ATE_FOOD' && outcome.inDanger) { this.personality.bravery = Math.min(1.5, this.personality.bravery + 0.1); }
-                else if (outcome.type === 'BUILT_HOME') { this.personality.diligence = Math.min(1.5, this.personality.diligence + 0.2); }
-                else if (outcome.type === 'FOUND_SHELTER') { this.personality.diligence = Math.min(1.5, this.personality.diligence + 0.05); }
-                this.updateColorFromPersonality();
-            }
-
-            pickupItem(itemName) { if (this.inventory[0] === null) { this.inventory[0] = itemName; this.carriedItemMesh.material = ITEM_TYPES[itemName].material; this.carriedItemMesh.visible = true; } }
-            dropItem() { this.inventory[0] = null; this.carriedItemMesh.visible = false; }
-
-            findClosestResource(blockId) {
-                let closest = null; let minDistance = Infinity;
-                for (const [key, id] of worldData.entries()) {
-                    if (id === blockId) {
-                        const [x, y, z] = key.split(',').map(Number);
-                        const distance = this.mesh.position.distanceTo(new THREE.Vector3(x, y, z));
-                        if (distance < minDistance) { minDistance = distance; closest = { x, y, z }; }
-                    }
-                } return closest;
-            }
-            findClosestFood() { return this.findClosestResource(BLOCK_TYPES.FRUIT.id); }
-            findClosestWood() { return this.findClosestResource(BLOCK_TYPES.WOOD.id); }
-
-            findClosestPartner() {
-                let closest = null; let minDistance = Infinity;
-                for (const char of characters) {
-                    if (char.id === this.id) continue;
-                    const distance = this.mesh.position.distanceTo(char.mesh.position);
-                    if (distance < minDistance) { minDistance = distance; closest = char; }
-                } return closest;
-            }
-
-            reproduceWith(partner) {
-                const spawnPos = findValidSpawn();
-                if (spawnPos) {
-                    const childGenes = {
-                        bravery: (this.personality.bravery + partner.personality.bravery) / 2 + (Math.random() - 0.5) * 0.1,
-                        diligence: (this.personality.diligence + partner.personality.diligence) / 2 + (Math.random() - 0.5) * 0.1
-                    };
-                    spawnCharacter(spawnPos, childGenes);
-                }
-            }
-
-            findPlaceableSpot() {
-                const radius = 3;
-                for (let dx = -radius; dx <= radius; dx++) { for (let dz = -radius; dz <= radius; dz++) {
-                    const x = this.gridPos.x + dx; const z = this.gridPos.z + dz;
-                    const groundY = findGroundY(x, z);
-                    if (groundY !== -1 && groundY < maxHeight - 1) { const key = `${x},${groundY + 1},${z}`; if (!worldData.has(key)) return { x, y: groundY + 1, z }; }
-                }} return null;
-            }
-
-            findStorageSpot() {
-                if (!this.homePosition) return null;
-                const radius = 2;
-                for (let dx = -radius; dx <= radius; dx++) { for (let dz = -radius; dz <= radius; dz++) {
-                    const x = this.homePosition.x + dx; const y = this.homePosition.y; const z = this.homePosition.z + dz;
-                    if (isSafeSpot({x, y, z}) && !worldData.has(`${x},${y-1},${z}`)) { return { x, y: y-1, z }; }
-                }} return null;
-            }
-
-            findDiggableBlock() {
-                const radius = 8; const currentY = this.gridPos.y - 1;
-                for (let dx = -radius; dx <= radius; dx++) { for (let dz = -radius; dz <= radius; dz++) { for (let dy = 1; dy >= -2; dy--) {
-                    const x = this.gridPos.x + dx; const y = currentY + dy; const z = this.gridPos.z + dz;
-                    const blockId = worldData.get(`${x},${y},${z}`);
-                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                    if (blockType && blockType.diggable) return { x, y, z };
-                }}} return null;
-            }
-
-            findAdjacentSpot(targetBlockPos) {
-                const directions = [{x:0, z:1}, {x:0, z:-1}, {x:1, z:0}, {x:-1, z:0}].sort(() => Math.random() - 0.5);
-                for (const dir of directions) {
-                    const x = targetBlockPos.x + dir.x; const z = targetBlockPos.z + dir.z;
-                    const groundY = findGroundY(x, z);
-                    if (groundY !== -1) {
-                        const standingY = groundY + 1;
-                        if (!worldData.has(`${x},${standingY},${z}`)) {
-                            return { x: x, y: standingY, z: z };
-                        }
-                    }
-                } return null;
-            }
-
-            findAdjacentStandingSpot() {
-                const directions = [{x:0, z:1}, {x:0, z:-1}, {x:1, z:0}, {x:-1, z:0}].sort(() => Math.random() - 0.5);
-                for (const dir of directions) {
-                    const nextX = this.gridPos.x + dir.x;
-                    const nextZ = this.gridPos.z + dir.z;
-                    if (nextX < 0 || nextX >= gridSize || nextZ < 0 || nextZ >= gridSize) continue;
-                    const groundY = findGroundY(nextX, nextZ);
-                    if (groundY !== -1 && Math.abs(groundY - (this.gridPos.y - 1)) <= 1) {
-                        return { x: nextX, y: groundY + 1, z: nextZ };
-                    }
-                }
-                return null;
-            }
+        // Initialize AOS (Animate On Scroll)
+        document.addEventListener('DOMContentLoaded', function() { AOS.init({ once: true }); });
+        // ゲームロジックは game.js で管理
+        // main() や Three.js の初期化は game.js 側で行う
+        // ここではUI初期化やAOSのみ
 
             isSafe(isNight) {
                 if (!isNight) return true; // It's always safe enough during the day
