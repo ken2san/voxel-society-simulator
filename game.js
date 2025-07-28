@@ -1,6 +1,9 @@
 // --- Voxel Society Simulator Main JS ---
 // All logic from <script> in index.html will be moved here.
 // This file should be loaded after three.js and OrbitControls.js
+// --- Voxel Society Simulator Main JS ---
+// All logic from <script> in index.html will be moved here.
+// This file should be loaded after three.js and OrbitControls.js
 
 // Voxel Society Simulator main game logic
 // Migrated from index.html
@@ -76,6 +79,32 @@ const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, transparent:
 
 // --- Character Class ---
 class Character {
+    // Find a nearby diggable block (for hunger logic)
+    findClosestPartner() {
+        let closest = null;
+        let minDist = Infinity;
+        for (const char of characters) {
+            if (char.id === this.id) continue;
+            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+            if (dist < minDist) {
+                minDist = dist;
+                closest = char;
+            }
+        }
+        return closest;
+    }
+    findDiggableBlock() {
+        let minDist = Infinity, closest = null;
+        for (const [key, id] of worldData.entries()) {
+            const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
+            if (type && type.diggable) {
+                const [x, y, z] = key.split(',').map(Number);
+                const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+                if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+            }
+        }
+        return closest;
+    }
     decideNextAction(isNight) {
         this.log(`Needs: H:${this.needs.hunger.toFixed(0)}, E:${this.needs.energy.toFixed(0)}, Sa:${this.needs.safety.toFixed(0)}, So:${this.needs.social.toFixed(0)} | Personality: B:${this.personality.bravery.toFixed(2)}, D:${this.personality.diligence.toFixed(2)}`);
 
@@ -258,12 +287,16 @@ class Character {
     }
 
     findAdjacentSpot(target) {
-        // Find adjacent empty spot next to target block
+        // Find adjacent empty spot next to target block, and ensure it's above ground
         const directions = [
             {dx:1, dz:0}, {dx:-1, dz:0}, {dx:0, dz:1}, {dx:0, dz:-1}
         ];
         for (const dir of directions) {
-            const x = target.x + dir.dx, y = target.y, z = target.z + dir.dz;
+            const x = target.x + dir.dx;
+            const z = target.z + dir.dz;
+            const groundY = findGroundY(x, z);
+            if (groundY === -1) continue;
+            const y = groundY + 1;
             const key = `${x},${y},${z}`;
             if (!worldData.has(key)) return {x, y, z};
         }
@@ -419,13 +452,80 @@ class Character {
         }
         const currentY = this.gridPos.y;
         const targetY = this.targetPos.y;
+        // --- 階段移動（BFS）ロジック ---
         if (Math.abs(targetY - currentY) > 1) {
-            this.log('Too high/low to climb/descend in one step', {currentY, targetY});
-            this.state = 'idle';
-            this.targetPos = null;
-            this.action = null;
-            this.actionCooldown = 0.5 + Math.random();
-            return;
+            const start = this.gridPos;
+            const goal = this.targetPos;
+            const visited = new Set();
+            const queue = [{pos: start, path: []}];
+            let foundPath = null;
+            const directions = [
+                {dx:1, dz:0}, {dx:-1, dz:0}, {dx:0, dz:1}, {dx:0, dz:-1}
+            ];
+            let stepCount = 0;
+        const maxSteps = 800;
+            let nearest = null;
+            let nearestDist = Infinity;
+            while (queue.length > 0) {
+                if (stepCount++ > maxSteps) {
+                    this.log('BFS aborted: too many steps', {start, goal});
+                    break;
+                }
+                const {pos, path} = queue.shift();
+                const key = `${pos.x},${pos.y},${pos.z}`;
+                if (visited.has(key)) continue;
+                visited.add(key);
+                // 目標に到達
+                if (pos.x === goal.x && pos.y === goal.y && pos.z === goal.z) {
+                    foundPath = path;
+                    break;
+                }
+                // 目標に近い座標を記録
+                const dist = Math.abs(pos.x - goal.x) + Math.abs(pos.y - goal.y) + Math.abs(pos.z - goal.z);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearest = {pos, path};
+                }
+                for (const dir of directions) {
+                    const nx = pos.x + dir.dx;
+                    const nz = pos.z + dir.dz;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const ny = pos.y + dy;
+                        const nkey = `${nx},${ny},${nz}`;
+                        if (ny < 0 || ny >= maxHeight) continue;
+                        if (!worldData.has(nkey)) {
+                            queue.push({pos: {x: nx, y: ny, z: nz}, path: [...path, {x: nx, y: ny, z: nz}]});
+                        } else {
+                            const blockId = worldData.get(nkey);
+                            const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                            if (blockType && blockType.diggable) {
+                                queue.push({pos: {x: nx, y: ny, z: nz}, path: [...path, {x: nx, y: ny, z: nz, dig:true}]});
+                            }
+                        }
+                    }
+                }
+            }
+            if (foundPath && foundPath.length > 0) {
+                const nextStep = foundPath[0];
+                if (nextStep.dig) {
+                    this.targetPos = {x: nextStep.x, y: nextStep.y, z: nextStep.z};
+                    this.action = { type: 'DESTROY_BLOCK', target: {x: nextStep.x, y: nextStep.y, z: nextStep.z} };
+                } else {
+                    this.targetPos = nextStep;
+                }
+            } else if (nearest && nearest.path.length > 0) {
+                // 目標に最も近い座標へ移動
+                const nextStep = nearest.path[0];
+                this.targetPos = nextStep;
+                this.log('No path to goal, moving to nearest reachable', {nearest: nearest.pos});
+            } else {
+                this.log('No path found for stairs movement', {start, goal});
+                this.state = 'idle';
+                this.targetPos = null;
+                this.action = null;
+                this.actionCooldown = 0.5 + Math.random();
+                return;
+            }
         }
         const blockKey = `${this.targetPos.x},${this.targetPos.y},${this.targetPos.z}`;
         if (worldData.has(blockKey)) {
@@ -436,13 +536,24 @@ class Character {
             this.actionCooldown = 0.5 + Math.random();
             return;
         }
-        if (this.targetPos.y !== groundY + 1) {
-            this.log('Target position is not above ground', {targetY, groundY});
-            this.state = 'idle';
-            this.targetPos = null;
-            this.action = null;
-            this.actionCooldown = 0.5 + Math.random();
-            return;
+        // Relax movement check for shelter/digging actions and food collection actions
+        if (this.action && (
+            this.action.type === 'CREATE_SHELTER' ||
+            this.action.type === 'DIG_SHELTER' ||
+            this.action.type === 'DESTROY_BLOCK' ||
+            this.action.type === 'EAT' ||
+            this.action.type === 'COLLECT_FOOD' ||
+            this.action.type === 'COLLECT_FOR_STORAGE')) {
+            // Allow movement even if not strictly above ground
+        } else {
+            if (this.targetPos.y !== groundY + 1) {
+                this.log('Target position is not above ground', {targetY, groundY});
+                this.state = 'idle';
+                this.targetPos = null;
+                this.action = null;
+                this.actionCooldown = 0.5 + Math.random();
+                return;
+            }
         }
         const targetWorldPos = new THREE.Vector3(this.targetPos.x * blockSize + 0.5, this.targetPos.y, this.targetPos.z * blockSize + 0.5);
         const direction = targetWorldPos.clone().sub(this.mesh.position);
@@ -542,17 +653,39 @@ class Character {
         if(this.action.type !== 'REST' && this.action.type.indexOf('SEEK_SHELTER') === -1) { this.actionAnim.active = true; this.actionAnim.timer = this.actionAnim.duration; }
 
         switch (this.action.type) {
+            case 'CREATE_SHELTER': {
+                // 掘った後にBED設置
+                const {x, y, z} = this.action.target;
+                removeBlock(x, y, z);
+                addBlock(x, y, z, BLOCK_TYPES.BED);
+                this.homePosition = {x, y, z};
+                this.actionCooldown = 2.5;
+                break;
+            }
+            case 'EAT': {
+                // Eat food block directly from the world (not inventory)
+                const {x, y, z} = this.action.target;
+                const blockId = worldData.get(`${x},${y},${z}`);
+                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                if (blockType && blockType.isEdible) {
+                    const wasInDanger = this.needs.safety < 70;
+                    this.needs.hunger = Math.min(100, this.needs.hunger + blockType.foodValue);
+                    removeBlock(x, y, z);
+                    this.learn && this.learn({ type: 'ATE_FOOD', inDanger: wasInDanger });
+                }
+                this.actionCooldown = 1.2;
+                break;
+            }
             case 'COLLECT_FOOD':
             case 'COLLECT_FOR_STORAGE': {
-                // Pick up food block
+                // Pick up food block (for future use, e.g. storage)
                 const {x, y, z} = this.action.target;
                 const key = `${x},${y},${z}`;
                 const blockId = worldData.get(key);
                 const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                if (blockType && blockType.isEdible) {
+                if (blockType && blockType.isEdible && this.inventory[0] === null) {
                     removeBlock(x, y, z);
                     this.inventory[0] = ITEM_TYPES.FRUIT_ITEM;
-                    this.needs.hunger = Math.min(100, this.needs.hunger + blockType.foodValue);
                     this.carriedItemMesh.material = blockMaterials.get(BLOCK_TYPES.FRUIT.id);
                     this.carriedItemMesh.visible = true;
                 }
@@ -597,7 +730,7 @@ class Character {
                 const key = `${x},${y},${z}`;
                 const blockId = worldData.get(key);
                 const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                if (blockType && blockType.diggable && blockType.name === '木') {
+                if (blockType && blockType.diggable && blockType.name === '木' && this.inventory[0] === null) {
                     removeBlock(x, y, z);
                     this.inventory[0] = ITEM_TYPES.WOOD_LOG;
                     this.carriedItemMesh.material = blockMaterials.get(BLOCK_TYPES.WOOD.id);
