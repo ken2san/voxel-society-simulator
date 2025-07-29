@@ -44,7 +44,8 @@ export const BLOCK_TYPES = {
 };
 export const ITEM_TYPES = {
     WOOD_LOG: { id: 100, name: '丸太', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.WOOD.color }) },
-    FRUIT_ITEM: { id: 101, name: '果実アイテム', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.FRUIT.color }), isStorable: true }
+    FRUIT_ITEM: { id: 101, name: '果実アイテム', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.FRUIT.color }), isStorable: true },
+    STONE_TOOL: { id: 102, name: '石の道具', material: new THREE.MeshLambertMaterial({ color: 0x888888 }), isTool: true }
 };
 export const blockMaterials = new Map();
 Object.values(BLOCK_TYPES).forEach(type => { if (type.color) { blockMaterials.set(type.id, new THREE.MeshLambertMaterial({ color: type.color })); } });
@@ -60,9 +61,26 @@ export function generateTerrain() {
         const noiseVal = PerlinNoise.simplex2(x / terrainScale, z / terrainScale);
         const normalizedHeight = (noiseVal + 1) / 2;
         const height = Math.floor(normalizedHeight * (maxHeight / 1.5)) + 1;
-        for (let y = 0; y < height; y++) {
-            if (isPath && y === height - 1) continue;
-            addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
+        // --- Cave generation: randomly carve out horizontal caves at mid-level ---
+        let isCave = false;
+        if (!isPath && height > 4 && Math.random() < 0.10) {
+            // 10% chance to make a cave at y = 2 or 3
+            const caveY = 2 + Math.floor(Math.random() * 2);
+            for (let y = 0; y < height; y++) {
+                if (y === caveY || y === caveY + 1) {
+                    // Mark as cave air (special flag)
+                    const key = `${x},${y},${z}`;
+                    worldData.set(key, { id: BLOCK_TYPES.AIR.id, cave: true });
+                    isCave = true;
+                } else {
+                    addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
+                }
+            }
+        } else {
+            for (let y = 0; y < height; y++) {
+                if (isPath && y === height - 1) continue;
+                addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
+            }
         }
         if (!isPath && Math.random() < 0.3) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false);
         if (!isPath && Math.random() < 0.20 && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
@@ -147,7 +165,15 @@ export function onWindowResize() {
     renderer.setSize(gameCanvas.width, gameCanvas.height);
 }
 export function isSafeSpot(pos) {
-    for (let i = 1; i < 4; i++) { if (worldData.has(`${pos.x},${pos.y+i},${pos.z}`)) return true; }
+    // Recognize cave air as safe
+    for (let i = 1; i < 4; i++) {
+        const key = `${pos.x},${pos.y+i},${pos.z}`;
+        const val = worldData.get(key);
+        if (val && ((typeof val === 'object' && val.cave) || (typeof val === 'number' && val !== BLOCK_TYPES.AIR.id))) return true;
+    }
+    // Also, if current spot is cave air
+    const here = worldData.get(`${pos.x},${pos.y},${pos.z}`);
+    if (here && typeof here === 'object' && here.cave) return true;
     return false;
 }
 export function drawMinimap() {

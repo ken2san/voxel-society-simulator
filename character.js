@@ -24,6 +24,156 @@ function toScreenPosition(obj, camera, canvas = null) {
 // ...existing code...
 
 class Character {
+    // --- Group detection and per-group leader election ---
+    // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
+    static detectGroupsAndElectLeaders(characters) {
+        if (!characters || characters.length === 0) return;
+        // 1. Build affinity graph (affinity >= 30)
+        const visited = new Set();
+        let groupIdCounter = 1;
+        for (const char of characters) {
+            char.groupId = null;
+            char.role = 'worker';
+        }
+        for (const char of characters) {
+            if (char.groupId) continue;
+            // BFS to find all connected by affinity >= 30
+            const queue = [char];
+            char.groupId = groupIdCounter;
+            let groupMembers = [char];
+            while (queue.length > 0) {
+                const current = queue.shift();
+                for (const [otherId, affinity] of current.relationships.entries()) {
+                    if (affinity < 30) continue;
+                    const other = characters.find(c => c.id === otherId);
+                    if (other && !other.groupId) {
+                        other.groupId = groupIdCounter;
+                        queue.push(other);
+                        groupMembers.push(other);
+                    }
+                }
+            }
+            // 2. Elect leader in this group
+            if (groupMembers.length > 0) {
+                Character.electLeaderInGroup(groupMembers);
+            }
+            groupIdCounter++;
+        }
+    }
+
+    // Elect leader within a group (list of Character)
+    static electLeaderInGroup(groupMembers) {
+        let maxFriends = -1;
+        let candidates = [];
+        for (const char of groupMembers) {
+            let friendCount = 0;
+            for (const affinity of char.relationships.values()) {
+                if (affinity >= 30) friendCount++;
+            }
+            if (friendCount > maxFriends) {
+                maxFriends = friendCount;
+                candidates = [char];
+            } else if (friendCount === maxFriends) {
+                candidates.push(char);
+            }
+        }
+        // If tie, pick the one with highest total affinity
+        let leader = candidates[0];
+        let maxAffinity = -Infinity;
+        for (const char of candidates) {
+            let totalAffinity = 0;
+            for (const affinity of char.relationships.values()) {
+                totalAffinity += affinity;
+            }
+            if (totalAffinity > maxAffinity) {
+                maxAffinity = totalAffinity;
+                leader = char;
+            }
+        }
+        // Assign roles in group
+        for (const char of groupMembers) {
+            char.role = (char === leader) ? 'leader' : 'worker';
+        }
+    }
+    // --- Affinity-based leader election ---
+    // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
+    // (Deprecated: use detectGroupsAndElectLeaders instead)
+    static electLeader() {}
+    // --- Visualize owned land: tint ground block under owned tiles ---
+    visualizeOwnedLand() {
+        // Only tint if three.js mesh exists and worldData/blockMaterials is available
+        if (!this.ownedLand || !blockMaterials) return;
+        for (const key of this.ownedLand) {
+            const [x, y, z] = key.split(',').map(Number);
+            // Find ground block just below y (if any)
+            const belowKey = `${x},${y-1},${z}`;
+            const blockId = worldData.get(belowKey);
+            if (blockId && blockMaterials.has(blockId)) {
+                let mat = blockMaterials.get(blockId);
+                // --- マテリアルが共有されている場合は複製 ---
+                if (mat && (!mat._isClonedForLand || !mat._ownerId || mat._ownerId !== this.id)) {
+                    // 新しいマテリアルを作成し、色を設定
+                    const clonedMat = mat.clone();
+                    clonedMat._isClonedForLand = true;
+                    clonedMat._ownerId = this.id;
+                    // Tint by role: leader=blue, worker=green
+                    if (this.role === 'leader') clonedMat.color.setRGB(0.3, 0.3, 0.8);
+                    else clonedMat.color.setRGB(0.2, 0.7, 0.2);
+                    // 対象のメッシュを探してマテリアルを差し替え
+                    if (mat.meshes && mat.meshes.length > 0) {
+                        for (const mesh of mat.meshes) {
+                            if (mesh.position.x === x + 0.5 && mesh.position.y === y - 1 && mesh.position.z === z + 0.5) {
+                                mesh.material = clonedMat;
+                            }
+                        }
+                    }
+                    // blockMaterialsにも登録（必要なら）
+                    // blockMaterials.set(blockId, clonedMat); // ←全体差し替えはしない
+                } else if (mat) {
+                    // 既にクローン済みなら色だけ再設定
+                    if (this.role === 'leader') mat.color.setRGB(0.3, 0.3, 0.8);
+                    else mat.color.setRGB(0.2, 0.7, 0.2);
+                }
+            }
+        }
+    }
+    // --- Land ownership: claim current position ---
+    claimCurrentLand() {
+        const key = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
+        this.ownedLand.add(key);
+    }
+
+    // --- Check if a position is owned by another character ---
+    isLandOwnedByOther(pos) {
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        for (const char of chars) {
+            if (char.id !== this.id && char.ownedLand && char.ownedLand.has(key)) {
+                return char;
+            }
+        }
+        return null;
+    }
+
+    // --- Land contest: simple win/lose based on personality and needs ---
+    contestLand(otherChar) {
+        // Simple: higher bravery + energy wins
+        const myScore = (this.personality.bravery * 0.7 + this.needs.energy * 0.3);
+        const otherScore = (otherChar.personality.bravery * 0.7 + otherChar.needs.energy * 0.3);
+        if (myScore > otherScore) {
+            // Take over land
+            for (const key of otherChar.ownedLand) {
+                this.ownedLand.add(key);
+            }
+            otherChar.ownedLand.clear();
+            this.log('Won land contest against', otherChar.id);
+        } else {
+            // Retreat (wander)
+            this.log('Lost land contest against', otherChar.id);
+            this.setNextAction('WANDER');
+        }
+    }
+
     // ...existing code...
     // --- BFSパスファインディング（bak_game.js準拠）---
     bfsPath(start, goal, maxStep = 32) {
@@ -77,17 +227,21 @@ class Character {
 
     // --- シェルター探索（bak_game.js準拠）---
     findShelter(isNight) {
-        // 周囲の空きブロックのうち、上にブロックがある場所を優先
+        // Look for empty spots with cover above, or cave air
         for (let dy = 0; dy <= 2; dy++) {
             for (let dx = -2; dx <= 2; dx++) {
                 for (let dz = -2; dz <= 2; dz++) {
                     const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
                     const key = `${x},${y},${z}`;
-                    if (!worldData.has(key)) {
+                    const val = worldData.get(key);
+                    // Recognize cave air as shelter
+                    if (val && typeof val === 'object' && val.cave) return {x, y, z};
+                    if (!val) {
                         // 上にブロックがあるか
                         let covered = false;
                         for (let i = 1; i <= 2; i++) {
-                            if (worldData.has(`${x},${y+i},${z}`)) covered = true;
+                            const above = worldData.get(`${x},${y+i},${z}`);
+                            if (above && ((typeof above === 'object' && above.cave) || (typeof above === 'number' && above !== BLOCK_TYPES.AIR.id))) covered = true;
                         }
                         if (covered) return {x, y, z};
                     }
@@ -128,6 +282,12 @@ class Character {
         this.scene = scene;
         this.mesh = new THREE.Group();
         this.scene.add(this.mesh);
+
+        // --- Social role assignment ---
+        this.role = 'worker'; // All start as worker; leader emerges via group detection
+        this.groupId = null; // Will be set by group detection
+        // --- Owned land (set of grid keys) ---
+        this.ownedLand = new Set();
 
         // AI & State
         this.gridPos = startPos;
@@ -324,6 +484,15 @@ class Character {
 
     update(deltaTime, isNight, camera) {
         this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos });
+        // Claim land underfoot every update
+        this.claimCurrentLand();
+        // Visualize owned land
+        this.visualizeOwnedLand();
+        // Check for land competition if standing on other's land
+        const otherOwner = this.isLandOwnedByOther(this.gridPos);
+        if (otherOwner) {
+            this.contestLand(otherOwner);
+        }
         // Death timer for revival
         if (this.state === 'dead') {
             if (!this.deathTimer) this.deathTimer = 0;
@@ -336,7 +505,7 @@ class Character {
         }
         // --- Needs decay (bak_game.js準拠) ---
         const oldSafety = this.needs.safety;
-        this.needs.hunger -= deltaTime * 1.5 * this.personality.diligence;
+        this.needs.hunger -= deltaTime * 0.7 * this.personality.diligence; // 減少速度を半分に
         this.needs.social -= deltaTime * 1;
         if (this.state === 'moving' || this.state === 'working') {
             this.needs.energy -= deltaTime * 2;
@@ -377,8 +546,8 @@ class Character {
             }
             if(this.needs.social >= 100) this.state = 'idle';
         }
-        // Death condition
-        if (this.needs.hunger <= 0) {
+        // Death condition（猶予を-10まで）
+        if (this.needs.hunger <= -10) {
             this.die();
             this.updateThoughtBubble(isNight, camera);
             return;
@@ -393,23 +562,49 @@ class Character {
         this.updateThoughtBubble(isNight, camera);
     }
     die() {
+        // 死亡時に持ち物をワールドにドロップ
+        if (this.inventory && this.inventory[0]) {
+            const dropPos = { x: this.gridPos.x, y: this.gridPos.y - 1, z: this.gridPos.z };
+            let dropBlock = null;
+            if (this.inventory[0] === 'STONE_TOOL' && BLOCK_TYPES.STONE) {
+                dropBlock = BLOCK_TYPES.STONE;
+            } else if (this.inventory[0] === 'WOOD_LOG' && BLOCK_TYPES.WOOD) {
+                dropBlock = BLOCK_TYPES.WOOD;
+            } else if (this.inventory[0] === 'FRUIT_ITEM' && BLOCK_TYPES.FRUIT) {
+                dropBlock = BLOCK_TYPES.FRUIT;
+            }
+            if (dropBlock) {
+                addBlock(dropPos.x, dropPos.y, dropPos.z, dropBlock);
+            }
+            this.inventory[0] = null;
+            this.carriedItemMesh.visible = false;
+        }
+        // シーンから削除
+        if (this.scene && this.mesh) {
+            this.scene.remove(this.mesh);
+        }
+        // 吹き出し削除
+        if (this.thoughtBubble && this.thoughtBubble.parentNode) {
+            this.thoughtBubble.parentNode.removeChild(this.thoughtBubble);
+        }
+        // キャラクター配列から削除
+        if (typeof window !== 'undefined' && window.characters) {
+            const idx = window.characters.findIndex(c => c.id === this.id);
+            if (idx !== -1) window.characters.splice(idx, 1);
+            // --- Group/leader re-detection after death ---
+            Character.detectGroupsAndElectLeaders(window.characters);
+        } else if (typeof characters !== 'undefined') {
+            const idx = characters.findIndex(c => c.id === this.id);
+            if (idx !== -1) characters.splice(idx, 1);
+            // --- Group/leader re-detection after death ---
+            Character.detectGroupsAndElectLeaders(characters);
+        }
         this.state = 'dead';
-        this.deathTimer = 0;
-        this.log('Character died', { id: this.id });
+        this.log('Character died and removed', { id: this.id });
     }
 
-    revive() {
-        this.state = 'idle';
-        this.deathTimer = 0;
-        // needsリセット（bak_game.js風）
-        this.needs = {
-            hunger: 50 + Math.random() * 30,
-            energy: 50 + Math.random() * 30,
-            safety: 100,
-            social: 50 + Math.random() * 30
-        };
-        this.log('Character revived', { id: this.id });
-    }
+    // 死亡時に消滅する仕様のため、revive()は無効化
+    revive() {}
 
     updateMovement(deltaTime) {
         this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos });
@@ -468,6 +663,7 @@ class Character {
     }
 
     updateAnimations(deltaTime) {
+        // --- Blinking logic ---
         if (!this.blinkTimer) this.blinkTimer = 0;
         if (!this.blinkInterval) this.blinkInterval = 1.5 + Math.random();
         this.blinkTimer += deltaTime;
@@ -484,8 +680,8 @@ class Character {
             this.blinkInterval = 1.5 + Math.random();
             this.blinkTimer = 0;
         }
-        // --- 表情変化（needs/stateに応じて目・口の色や形を変える）---
-        // 目の色
+
+        // --- Facial expression (eyes/mouth color/shape) ---
         if (this.state === 'dead') {
             this.eyeMaterial.color.set(0x888888);
         } else if (this.state === 'resting') {
@@ -501,10 +697,10 @@ class Character {
         } else {
             this.eyeMaterial.color.set(0x000000);
         }
-        // 口の色・形状
+        // Mouth color/shape
         if (this.state === 'dead') {
             this.mouth.material.color.set(0x888888);
-            this.mouth.rotation.z = Math.PI; // への字
+            this.mouth.rotation.z = Math.PI; // frown
         } else if (this.state === 'resting') {
             this.mouth.material.color.set(0x2222ff);
             this.mouth.rotation.z = 0;
@@ -513,7 +709,7 @@ class Character {
             this.mouth.rotation.z = 0;
         } else if (this.needs.hunger < 30) {
             this.mouth.material.color.set(0xff0000);
-            this.mouth.rotation.z = Math.PI * 0.7; // しょんぼり
+            this.mouth.rotation.z = Math.PI * 0.7; // sad
         } else if (this.needs.energy < 30) {
             this.mouth.material.color.set(0x00aaff);
             this.mouth.rotation.z = Math.PI * 0.5;
@@ -524,23 +720,45 @@ class Character {
             this.mouth.material.color.set(0x222222);
             this.mouth.rotation.z = 0;
         }
-        // --- 体のアニメーション ---
+
+        // --- Body animation: more charming/expressive ---
         if (this.state === 'idle') {
+            // Bouncier idle bob and subtle wiggle
             this.bobTime += deltaTime * 2.5;
-            this.body.position.y = 0.25 + Math.sin(this.bobTime) * 0.03;
-            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1) * 0.02;
+            const bob = Math.sin(this.bobTime) * 0.06 + Math.sin(this.bobTime * 0.5) * 0.02;
+            const wiggle = Math.sin(this.bobTime * 0.7) * 0.08;
+            this.body.position.y = 0.25 + bob;
+            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1) * 0.03;
+            this.mesh.rotation.z = wiggle * 0.5;
+            // Arms: gentle sway
+            this.leftArm.rotation.x = Math.sin(this.bobTime * 0.7) * 0.2;
+            this.rightArm.rotation.x = -Math.sin(this.bobTime * 0.7) * 0.2;
+            // Head: slight tilt
+            this.head.rotation.z = Math.sin(this.bobTime * 0.5) * 0.08;
         } else if (this.state === 'moving') {
+            // More pronounced walk bob, tilt, and arm swing
             this.bobTime += deltaTime * 8;
-            const walkCycleAngle = Math.sin(this.bobTime) * 0.8;
-            this.leftArm.rotation.x = walkCycleAngle; this.rightArm.rotation.x = -walkCycleAngle;
-            this.mesh.rotation.z = Math.cos(this.bobTime) * 0.2;
-            this.body.position.y = 0.25;
-            this.head.position.y = 0.75;
+            const walkBob = Math.abs(Math.sin(this.bobTime)) * 0.10 + Math.sin(this.bobTime * 0.5) * 0.02;
+            const walkTilt = Math.cos(this.bobTime) * 0.25;
+            const armSwing = Math.sin(this.bobTime) * 1.0;
+            this.body.position.y = 0.25 + walkBob;
+            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1) * 0.04;
+            this.mesh.rotation.z = walkTilt;
+            this.leftArm.rotation.x = armSwing * 0.7;
+            this.rightArm.rotation.x = -armSwing * 0.7;
+            // Head: more energetic tilt
+            this.head.rotation.z = Math.sin(this.bobTime * 0.7) * 0.13;
         } else {
-            this.mesh.rotation.z *= 0.9; this.leftArm.rotation.x *= 0.9; this.rightArm.rotation.x *= 0.9;
-            this.body.position.y = 0.25;
-            this.head.position.y = 0.75;
+            // Smoothly return to neutral pose
+            this.mesh.rotation.z *= 0.85;
+            this.leftArm.rotation.x *= 0.85;
+            this.rightArm.rotation.x *= 0.85;
+            this.body.position.y += (0.25 - this.body.position.y) * 0.2;
+            this.head.position.y += (0.75 - this.head.position.y) * 0.2;
+            this.head.rotation.z *= 0.85;
         }
+
+        // Action squash/stretch
         if (this.actionAnim && this.actionAnim.active) {
             this.actionAnim.timer -= deltaTime;
             const phase = 1.0 - (this.actionAnim.timer / this.actionAnim.duration);
@@ -548,14 +766,23 @@ class Character {
             this.body.scale.set(1 + (1 - scale) * 0.5, scale, 1 + (1 - scale) * 0.5);
             if (this.actionAnim.timer <= 0) { this.actionAnim.active = false; this.body.scale.set(1, 1, 1); }
         }
-        if (this.state === 'resting') { this.body.scale.y = 0.6; } else if (!this.actionAnim.active) { this.body.scale.y = 1.0; }
+        if (this.state === 'resting') {
+            this.body.scale.y = 0.6;
+        } else if (!this.actionAnim.active) {
+            this.body.scale.y = 1.0;
+        }
     }
 
 
     updateThoughtBubble(isNight, camera) {
-        // Show emotion icon above head based on needs/state (bak_game.js準拠)
+        // Show emotion icon above head based on needs/state/role/land (bak_game.js準拠+拡張)
         if (!this.thoughtBubble) return;
         let icon = null;
+        // Show role as prefix
+        let rolePrefix = '';
+        if (this.role === 'leader') rolePrefix = '👑';
+        else if (this.role === 'worker') rolePrefix = '🧑‍🌾';
+
         if (this.state === 'dead') icon = '💀';
         else if (this.state === 'resting') icon = '🛏️';
         else if (this.state === 'socializing') {
@@ -572,8 +799,14 @@ class Character {
         else if (this.state === 'moving') icon = '🚶';
         else icon = null;
 
-        if (icon) {
-            this.thoughtBubble.textContent = icon;
+        // Show number of owned land tiles for debug
+        let landInfo = '';
+        if (this.ownedLand && this.ownedLand.size > 0) {
+            landInfo = ` (${this.ownedLand.size})`;
+        }
+
+        if (icon || rolePrefix) {
+            this.thoughtBubble.textContent = `${rolePrefix}${icon ? icon : ''}${landInfo}`;
             this.thoughtBubble.setAttribute('data-show', 'true');
             // canvasを取得し、正しいスクリーン座標で配置
             const canvas = document.getElementById('gameCanvas');
@@ -626,12 +859,78 @@ class Character {
             };
             child.updateColorFromPersonality && child.updateColorFromPersonality();
             child.updateWorldPosFromGrid && child.updateWorldPosFromGrid();
+            // --- Group/leader re-detection after birth ---
+            if (typeof window !== 'undefined' && window.characters) {
+                Character.detectGroupsAndElectLeaders(window.characters);
+            } else if (typeof characters !== 'undefined') {
+                Character.detectGroupsAndElectLeaders(characters);
+            }
         }
     }
 
     decideNextAction(isNight) {
-        this.log('decideNextAction', { needs: this.needs, state: this.state, personality: this.personality });
+        this.log('decideNextAction', { needs: this.needs, state: this.state, personality: this.personality, role: this.role });
+        // --- Role-based AI priority (強化) ---
+        if (this.role === 'leader') {
+            // Leader: prioritize expanding land
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx === 0 && dz === 0) continue;
+                    const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
+                    const key = `${x},${y},${z}`;
+                    if (!this.ownedLand.has(key) && !this.isLandOwnedByOther({x, y, z})) {
+                        this.setNextAction('WANDER', null, {x, y, z});
+                        return;
+                    }
+                }
+            }
+        } else if (this.role === 'worker') {
+            // Worker: prioritize resource gathering/storage
+            if (this.inventory[0] === null) {
+                const foodPos = this.findClosestFood();
+                if (foodPos) {
+                    const adjacentSpot = this.findAdjacentSpot(foodPos);
+                    if(adjacentSpot){
+                        this.setNextAction('COLLECT_FOOD', foodPos, adjacentSpot); return;
+                    }
+                }
+                const woodPos = this.findClosestWood();
+                if (woodPos) {
+                    const adjacentSpot = this.findAdjacentSpot(woodPos);
+                    if(adjacentSpot){
+                        this.setNextAction('CHOP_WOOD', woodPos, adjacentSpot); return;
+                    }
+                }
+            } else {
+                if (this.homePosition) {
+                    const storageSpot = this.findStorageSpot && this.findStorageSpot();
+                    if (storageSpot) {
+                        this.setNextAction('STORE_ITEM', storageSpot, this.findAdjacentSpot(storageSpot) || this.gridPos, BLOCK_TYPES.FRUIT); return;
+                    }
+                }
+            }
+        }
         // --- bak_game.js準拠の優先順位AI + BUILD_WALL拡張 ---
+        // Step 3: Tool crafting (if no tool, try to craft one from nearby stone)
+        if (!this.inventory.includes('STONE_TOOL')) {
+            // Look for adjacent STONE block
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        if (dx === 0 && dy === 0 && dz === 0) continue;
+                        const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
+                        const key = `${x},${y},${z}`;
+                        let blockId = worldData.get(key);
+                        if (typeof blockId === 'object' && blockId.id !== undefined) blockId = blockId.id;
+                        if (blockId === BLOCK_TYPES.STONE.id) {
+                            this.setNextAction('CRAFT_TOOL', {x, y, z}, this.gridPos);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         if (this.needs.safety < 50 * this.personality.bravery && isNight) {
             const shelterPos = this.findShelter(isNight);
             if (shelterPos) {
@@ -669,7 +968,7 @@ class Character {
                 }
             }
         }
-        if (this.needs.hunger < 70) {
+        if (this.needs.hunger < 90) { // 食料探索の閾値を90に
             const foodPos = this.findClosestFood();
             if (foodPos) {
                 const adjacentSpot = this.findAdjacentSpot(foodPos);
@@ -742,6 +1041,20 @@ class Character {
         if(this.action.type !== 'REST' && this.action.type.indexOf('SEEK_SHELTER') === -1) { this.actionAnim.active = true; this.actionAnim.timer = this.actionAnim.duration; }
 
         switch (this.action.type) {
+            case 'CRAFT_TOOL': {
+                // Remove STONE block and add STONE_TOOL to inventory
+                const {x, y, z} = this.action.target;
+                let blockId = worldData.get(`${x},${y},${z}`);
+                if (typeof blockId === 'object' && blockId.id !== undefined) blockId = blockId.id;
+                if (blockId === BLOCK_TYPES.STONE.id && this.inventory[0] === null) {
+                    removeBlock(x, y, z);
+                    this.inventory[0] = 'STONE_TOOL';
+                    this.carriedItemMesh.material = ITEM_TYPES.STONE_TOOL.material;
+                    this.carriedItemMesh.visible = true;
+                }
+                this.actionCooldown = 1.5;
+                break;
+            }
             case 'BUILD_WALL': {
                 // 周囲の空きスポットにDIRTまたはSTONEで壁を作る（50%ずつの確率）
                 const wallSpots = this.action.target;
