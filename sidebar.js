@@ -1,8 +1,16 @@
 // 右サイドバー：選択キャラ詳細
 function renderCharacterDetail() {
-    if (!rightSidebar || !selectedCharId || !window.characters) return;
-    const char = window.characters.find(c => c.id === selectedCharId);
-    if (!char) return;
+    if (!rightSidebar) return;
+    // ダミー表示テスト: 条件を満たさない場合はダミーを表示
+    if (selectedCharId === null || selectedCharId === undefined || !window.characters) {
+        rightSidebar.innerHTML = '<div style="padding:24px;color:#888;font-size:1.2em;">[Dummy] No character selected.<br>右サイドバーのテスト表示</div>';
+        return;
+    }
+    const char = window.characters.find(c => c.id == selectedCharId);
+    if (!char) {
+        rightSidebar.innerHTML = '<div style="padding:24px;color:#888;font-size:1.2em;">[Dummy] Character not found.<br>右サイドバーのテスト表示</div>';
+        return;
+    }
     rightSidebar.innerHTML = '';
 
     // グループ色取得
@@ -61,8 +69,9 @@ function renderCharacterDetail() {
                 barWrap.style.marginBottom = '2px';
                 const label = document.createElement('span');
                 label.textContent = st.label;
-                label.style.width = '48px';
+                label.style.width = '80px'; // さらに幅を広げて折り返し防止
                 label.style.fontSize = '0.98em';
+                label.style.color = '#444';
                 const barBg = document.createElement('div');
                 barBg.style.background = '#eee';
                 barBg.style.width = '110px';
@@ -77,7 +86,7 @@ function renderCharacterDetail() {
                 barWrap.appendChild(label);
                 barWrap.appendChild(barBg);
                 const val = document.createElement('span');
-                val.textContent = char.needs[st.key];
+                val.textContent = Math.round(char.needs[st.key]);
                 val.style.fontSize = '0.95em';
                 val.style.color = '#444';
                 barWrap.appendChild(val);
@@ -308,9 +317,9 @@ function renderCharacterList() {
             badge.textContent = icons.slice(0,2).join('');
             if (icons.length === 0) badge.textContent = char.role === 'worker' ? '🧑‍🌾' : '🙂';
             li.appendChild(badge);
-            // ナンバリング
+            // idをそのまま表示
             const numSpan = document.createElement('span');
-            numSpan.textContent = `${idx + 1}.`;
+            numSpan.textContent = `${char.id}`;
             numSpan.style.color = '#888';
             numSpan.style.fontWeight = 'bold';
             numSpan.style.fontSize = '1.05em';
@@ -358,7 +367,7 @@ function renderCharacterList() {
         groupTitle.style.fontWeight = 'bold';
         groupTitle.style.marginBottom = '8px';
         groupTitle.style.fontSize = '1.1em';
-        groupTitle.style.color = '#444'; // 明示的な色指定
+        groupTitle.style.color = '#222'; // より濃い色で視認性向上
         groupTitle.textContent = `未所属（${ungrouped.length}人）`;
         groupBlock.appendChild(groupTitle);
         const ul = document.createElement('ul');
@@ -385,24 +394,15 @@ function renderCharacterList() {
             badge.textContent = icons.slice(0,2).join('');
             if (icons.length === 0) badge.textContent = char.role === 'worker' ? '🧑‍🌾' : '🙂';
             li.appendChild(badge);
-            // ナンバリング
+            // idを1回だけ表示
             const numSpan = document.createElement('span');
-            numSpan.textContent = `${idx + 1}.`;
-            numSpan.style.color = '#888';
-            numSpan.style.fontWeight = 'bold';
+            numSpan.textContent = `${char.id}`;
+            numSpan.style.color = '#222';
+            numSpan.style.fontWeight = char.role === 'leader' ? 'bold' : 'normal';
             numSpan.style.fontSize = '1.05em';
+            // 労働者の文字色を黒系に強制
+            if (char.role === 'worker') numSpan.style.color = '#222';
             li.appendChild(numSpan);
-            // キャラ名（id）: idが数字のみの場合は表示しない
-            if (!/^\d+$/.test(String(char.id))) {
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = char.id;
-                nameSpan.style.color = '#222';
-                nameSpan.style.fontWeight = char.role === 'leader' ? 'bold' : 'normal';
-                nameSpan.style.fontSize = '1.05em';
-                // 労働者の文字色を黒系に強制
-                if (char.role === 'worker') nameSpan.style.color = '#222';
-                li.appendChild(nameSpan);
-            }
             // 状態テキスト
             const stateSpan = document.createElement('span');
             stateSpan.style.fontSize = '0.95em';
