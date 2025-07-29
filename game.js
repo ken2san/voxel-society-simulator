@@ -188,6 +188,7 @@ class Character {
                 this.log("No diggable block found for hunger");
             }
         }
+        // --- 社会性欲求が低い場合は最優先で交流 ---
         if (this.needs.social < 70) {
             this.log("Social need critical!", {social: this.needs.social});
             const partner = this.findClosestPartner();
@@ -196,6 +197,7 @@ class Character {
                 this.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
             } else {
                 this.log("No partner found");
+                this.setNextAction('WANDER'); return;
             }
         }
 
@@ -312,8 +314,42 @@ class Character {
     }
 
     reproduceWith(partner) {
-        // Placeholder for reproduction logic
+        // Create child with mixed color and inherited personality
         this.log('Reproducing with', partner.id);
+        // Mix colors
+        const c1 = this.bodyMaterial.color;
+        const c2 = partner.bodyMaterial.color;
+        const childColor = {
+            r: (c1.r + c2.r) / 2,
+            g: (c1.g + c2.g) / 2,
+            b: (c1.b + c2.b) / 2
+        };
+        // Mix personality
+        const childGenes = {
+            bravery: Math.max(0.5, Math.min(1.5, (this.personality.bravery + partner.personality.bravery) / 2 + (Math.random()-0.5)*0.1)),
+            diligence: Math.max(0.5, Math.min(1.5, (this.personality.diligence + partner.personality.diligence) / 2 + (Math.random()-0.5)*0.1))
+        };
+        // Find spawn position near parents (prefer free adjacent spot)
+        let spawnPos = null;
+        const trySpots = [this.gridPos, partner.gridPos];
+        for (const base of trySpots) {
+            const spot = this.findAdjacentSpot(base);
+            if (spot) { spawnPos = spot; break; }
+        }
+        if (!spawnPos) spawnPos = this.gridPos;
+        // Spawn child
+        spawnCharacter(spawnPos, childGenes);
+        // Set child color and initial needs after spawn
+        const child = characters[characters.length-1];
+        child.bodyMaterial.color.setRGB(childColor.r, childColor.g, childColor.b);
+        child.needs = {
+            hunger: 80 + Math.random()*10,
+            energy: 80 + Math.random()*10,
+            safety: 100,
+            social: 80 + Math.random()*10
+        };
+        child.updateColorFromPersonality();
+        child.updateWorldPosFromGrid();
     }
     constructor(scene, startPos, id, genes = null) {
         this.id = id;
@@ -343,6 +379,7 @@ class Character {
         this.bobTime = Math.random() * 100;
         this.actionAnim = { active: false, timer: 0, duration: 0.4 };
         this.relationships = new Map();
+        this.bfsFailCount = 0; // BFS失敗カウント
 
         // Visuals
         this.bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -404,6 +441,30 @@ class Character {
         const oldSafety = this.needs.safety;
         this.needs.hunger -= deltaTime * 1.5 * this.personality.diligence;
         this.needs.social -= deltaTime * 1;
+        // needs値の下限を0に制限
+        this.needs.hunger = Math.max(0, this.needs.hunger);
+        this.needs.social = Math.max(0, this.needs.social);
+        this.needs.safety = Math.max(0, this.needs.safety);
+        this.needs.energy = Math.max(0, this.needs.energy);
+
+        // needsが0になったら倒れる
+        if ((this.needs.hunger === 0 || this.needs.energy === 0 || this.needs.social === 0) && this.state !== 'dead') {
+            this.state = 'dead';
+            this.action = null;
+            this.targetPos = null;
+            this.actionCooldown = Infinity;
+            this.bodyMaterial.color.setRGB(0.1,0.1,0.1);
+            this.thoughtBubble.textContent = '💀';
+            this.thoughtBubble.setAttribute('data-show', 'true');
+            return;
+        }
+        // --- 社会性欲求 ---
+        // 満たされる条件: 他キャラが近くにいる
+        for (const char of characters) {
+            if (char.id !== this.id && this.mesh.position.distanceTo(char.mesh.position) < 2.5) {
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 10);
+            }
+        }
         if (this.state === 'moving' || this.state === 'working') { this.needs.energy -= deltaTime * 2; }
         if (isNight && !this.isSafe(isNight)) { this.needs.safety -= deltaTime * 5; } else if (!isNight) { this.needs.safety = Math.min(100, this.needs.safety + deltaTime * 10); }
 
@@ -424,6 +485,11 @@ class Character {
                 let affinity = this.relationships.get(partner.id) || 0;
                 affinity += deltaTime * 5;
                 this.relationships.set(partner.id, affinity);
+                // --- ハートアイコン表示 ---
+                if (affinity > 30) {
+                    this.thoughtBubble.textContent = '❤️';
+                    this.thoughtBubble.setAttribute('data-show', 'true');
+                }
                 if (affinity >= 50) {
                     this.reproduceWith && this.reproduceWith(partner);
                     this.relationships.set(partner.id, 0);
@@ -435,8 +501,10 @@ class Character {
 
         if (this.state === 'idle') { this.actionCooldown -= deltaTime; if (this.actionCooldown <= 0) this.decideNextAction && this.decideNextAction(isNight); }
         if (this.state === 'moving') this.updateMovement(deltaTime);
-        this.updateAnimations(deltaTime);
-        this.updateThoughtBubble(isNight);
+        if (this.state !== 'dead') {
+            this.updateAnimations(deltaTime);
+            this.updateThoughtBubble(isNight);
+        }
     }
 
     updateMovement(deltaTime) {
@@ -463,7 +531,7 @@ class Character {
                 {dx:1, dz:0}, {dx:-1, dz:0}, {dx:0, dz:1}, {dx:0, dz:-1}
             ];
             let stepCount = 0;
-        const maxSteps = 800;
+            const maxSteps = 800;
             let nearest = null;
             let nearestDist = Infinity;
             while (queue.length > 0) {
@@ -506,6 +574,7 @@ class Character {
                 }
             }
             if (foundPath && foundPath.length > 0) {
+                this.bfsFailCount = 0;
                 const nextStep = foundPath[0];
                 if (nextStep.dig) {
                     this.targetPos = {x: nextStep.x, y: nextStep.y, z: nextStep.z};
@@ -514,26 +583,45 @@ class Character {
                     this.targetPos = nextStep;
                 }
             } else if (nearest && nearest.path.length > 0) {
+                this.bfsFailCount++;
                 // 目標に最も近い座標へ移動
                 const nextStep = nearest.path[0];
                 this.targetPos = nextStep;
                 this.log('No path to goal, moving to nearest reachable', {nearest: nearest.pos});
+                // 一定回数失敗したらwander
+                if (this.bfsFailCount >= 3) {
+                    this.log('Too many BFS fails, switching to wander');
+                    this.state = 'idle';
+                    this.targetPos = null;
+                    this.action = null;
+                    this.actionCooldown = 0.5 + Math.random();
+                    this.setNextAction('WANDER');
+                    this.bfsFailCount = 0;
+                    return;
+                }
             } else {
+                this.bfsFailCount++;
                 this.log('No path found for stairs movement', {start, goal});
+                // BFS失敗時はwander行動に切り替え
                 this.state = 'idle';
                 this.targetPos = null;
                 this.action = null;
                 this.actionCooldown = 0.5 + Math.random();
+                this.setNextAction('WANDER');
+                this.bfsFailCount = 0;
                 return;
             }
         }
         const blockKey = `${this.targetPos.x},${this.targetPos.y},${this.targetPos.z}`;
         if (worldData.has(blockKey)) {
             this.log('Blocked by block at target', this.targetPos);
+            // ブロックされていたらwander行動に切り替え
             this.state = 'idle';
             this.targetPos = null;
             this.action = null;
             this.actionCooldown = 0.5 + Math.random();
+            this.setNextAction('WANDER');
+            this.bfsFailCount = 0;
             return;
         }
         // Relax movement check for shelter/digging actions and food collection actions
@@ -552,6 +640,8 @@ class Character {
                 this.targetPos = null;
                 this.action = null;
                 this.actionCooldown = 0.5 + Math.random();
+                this.setNextAction('WANDER');
+                this.bfsFailCount = 0;
                 return;
             }
         }
@@ -851,13 +941,21 @@ function spawnCharacter(pos, genes = null) {
 function generateTerrain() {
     PerlinNoise.seed(Math.random);
     const terrainScale = 12;
+    // 通路用の空き座標を記録
+    const pathRows = [Math.floor(gridSize/3), Math.floor(gridSize*2/3)];
+    const pathCols = [Math.floor(gridSize/3), Math.floor(gridSize*2/3)];
     for (let x = 0; x < gridSize; x++) { for (let z = 0; z < gridSize; z++) {
+        // 通路（空きスペース）を確保
+        let isPath = pathRows.includes(z) || pathCols.includes(x);
         const noiseVal = PerlinNoise.simplex2(x / terrainScale, z / terrainScale);
         const normalizedHeight = (noiseVal + 1) / 2;
         const height = Math.floor(normalizedHeight * (maxHeight / 1.5)) + 1;
-        for (let y = 0; y < height; y++) { addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false); }
-        if (Math.random() < 0.3) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false); // 果実の生成確率を増やす
-        if (Math.random() < 0.20 && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
+        for (let y = 0; y < height; y++) {
+            if (isPath && y === height - 1) continue; // 通路部分は地表を空ける
+            addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
+        }
+        if (!isPath && Math.random() < 0.3) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false); // 果実の生成確率を増やす
+        if (!isPath && Math.random() < 0.20 && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
             const treeHeight = height + Math.floor(Math.random() * 3) + 3;
             for (let y = height; y < treeHeight; y++) addBlock(x, y, z, BLOCK_TYPES.WOOD, false);
             for(let dx = -1; dx <= 1; dx++) { for(let dz = -1; dz <= 1; dz++) {
