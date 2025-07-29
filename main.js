@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 
 
-function init() {
+async function init() {
     try {
         // Setup canvas and context
         const gameCanvas = document.getElementById('gameCanvas');
@@ -45,11 +45,18 @@ function init() {
             gameCanvas, minimapCanvas, minimapCtx
         });
 
+
+
         generateTerrain();
-        // Spawn 10 characters
+        // Spawn 10 characters (await each for correct timing)
         for (let i = 0; i < 10; i++) {
-            spawnCharacter(findValidSpawn());
+            await spawnCharacter(findValidSpawn());
         }
+
+        // Make characters array available globally for sidebar.js
+        window.characters = characters;
+        // サイドバーを再描画（関数がwindowにあれば）
+        if (window.renderCharacterList) window.renderCharacterList();
 
         window.addEventListener('resize', onWindowResize);
         const msgBoxBtn = document.getElementById('messageBoxCloseBtn');
