@@ -55,7 +55,15 @@ function init() {
         const msgBoxBtn = document.getElementById('messageBoxCloseBtn');
         if (msgBoxBtn) msgBoxBtn.addEventListener('click', () => document.getElementById('messageBox').classList.add('hidden'));
         const debugToggle = document.getElementById('debugToggle');
-        if (debugToggle) debugToggle.addEventListener('change', (e) => { setDEBUG_MODE(e.target.checked); });
+        if (debugToggle) debugToggle.addEventListener('change', (e) => {
+            setDEBUG_MODE(e.target.checked);
+            window.DEBUG_MODE = e.target.checked;
+        });
+        // Initialize window.DEBUG_MODE on load to match toggle state
+        if (debugToggle) {
+            window.DEBUG_MODE = debugToggle.checked;
+            setDEBUG_MODE(debugToggle.checked);
+        }
 
         animate();
     } catch (error) { console.error("Initialization Error:", error); }

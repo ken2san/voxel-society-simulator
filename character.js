@@ -1,9 +1,127 @@
-import { worldData, BLOCK_TYPES, ITEM_TYPES, findGroundY, isSafeSpot, spawnCharacter, blockMaterials, gridSize, maxHeight, getDEBUG_MODE, characters, removeBlock, addBlock } from './world.js';
-import { toScreenPosition } from './world.js';
-import * as THREE from 'three';
 
+import * as THREE from 'three';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight } from './world.js';
+
+// --- Helper: 3Dオブジェクトのワールド座標をスクリーン座標に変換 ---
+function toScreenPosition(obj, camera, canvas = null) {
+    // obj: THREE.Object3D, camera: THREE.Camera, canvas: HTMLCanvasElement
+    const vector = new THREE.Vector3();
+    obj.updateMatrixWorld();
+    vector.setFromMatrixPosition(obj.matrixWorld);
+    vector.project(camera);
+    let rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    if (!canvas) {
+        canvas = document.getElementById('gameCanvas');
+    }
+    if (canvas && typeof canvas.getBoundingClientRect === 'function') {
+        rect = canvas.getBoundingClientRect();
+    }
+    const x = (vector.x + 1) / 2 * rect.width + rect.left;
+    const y = (1 - vector.y) / 2 * rect.height + rect.top;
+    return { x, y };
+}
+// charactersはグローバル参照のまま（循環参照回避のため）
+// ...existing code...
 
 class Character {
+    // ...existing code...
+    // --- BFSパスファインディング（bak_game.js準拠）---
+    bfsPath(start, goal, maxStep = 32) {
+        // 3DグリッドでのBFS経路探索。段差・落下・ジャンプも考慮。
+        const queue = [];
+        const visited = new Set();
+        const parent = new Map();
+        const key = (p) => `${p.x},${p.y},${p.z}`;
+        queue.push(start);
+        visited.add(key(start));
+        let found = false;
+        let final = null;
+        while (queue.length > 0 && !found) {
+            const cur = queue.shift();
+            if (cur.x === goal.x && cur.y === goal.y && cur.z === goal.z) {
+                found = true; final = cur; break;
+            }
+            // 6方向+段差考慮
+            const dirs = [
+                {dx:1,dy:0,dz:0},{dx:-1,dy:0,dz:0},{dx:0,dy:0,dz:1},{dx:0,dy:0,dz:-1},
+                {dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0}
+            ];
+            for (const d of dirs) {
+                let nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
+                if (ny < 0 || ny > maxHeight) continue;
+                const nkey = `${nx},${ny},${nz}`;
+                if (visited.has(nkey)) continue;
+                // 足場チェック: 下にブロックがある or 今いる場所が地面
+                const below = `${nx},${ny-1},${nz}`;
+                const curBelow = `${cur.x},${cur.y-1},${cur.z}`;
+                if (!worldData.has(below) && !worldData.has(curBelow)) continue;
+                if (worldData.has(nkey)) continue;
+                // 段差・ジャンプ: 1段上までOK
+                if (Math.abs(ny - cur.y) > 1) continue;
+                queue.push({x:nx,y:ny,z:nz});
+                visited.add(nkey);
+                parent.set(nkey, cur);
+            }
+        }
+        if (!found) return null;
+        // 経路復元
+        const path = [];
+        let cur = final;
+        while (cur && (cur.x !== start.x || cur.y !== start.y || cur.z !== start.z)) {
+            path.push(cur);
+            cur = parent.get(key(cur));
+        }
+        path.reverse();
+        return path;
+    }
+
+    // --- シェルター探索（bak_game.js準拠）---
+    findShelter(isNight) {
+        // 周囲の空きブロックのうち、上にブロックがある場所を優先
+        for (let dy = 0; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                for (let dz = -2; dz <= 2; dz++) {
+                    const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
+                    const key = `${x},${y},${z}`;
+                    if (!worldData.has(key)) {
+                        // 上にブロックがあるか
+                        let covered = false;
+                        for (let i = 1; i <= 2; i++) {
+                            if (worldData.has(`${x},${y+i},${z}`)) covered = true;
+                        }
+                        if (covered) return {x, y, z};
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // --- 掘れる避難場所探索 ---
+    findDiggableShelterSpot() {
+        // 周囲の掘れるブロックで、上に空間があるもの
+        for (let dy = 0; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                for (let dz = -2; dz <= 2; dz++) {
+                    const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
+                    const key = `${x},${y},${z}`;
+                    const blockId = worldData.get(key);
+                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                    if (blockType && blockType.diggable) {
+                        // 上に空間
+                        let air = true;
+                        for (let i = 1; i <= 2; i++) {
+                            if (worldData.has(`${x},${y+i},${z}`)) air = false;
+                        }
+                        if (air) return {x, y, z};
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+// ...existing code...
     constructor(scene, startPos, id, genes = null) {
         this.log('Character constructed', { id, startPos, genes });
         this.id = id;
@@ -35,41 +153,53 @@ class Character {
         this.relationships = new Map();
         this.bfsFailCount = 0;
 
-        // Visuals
-        this.bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        // Visuals (haniwa style)
+        // Clay-like color
+        this.bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 }); // haniwa clay color
         this.bodyMaterial.gradientMap = null;
-        this.body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.5, 32), this.bodyMaterial);
-        this.body.position.y = 0.25;
+        // Tall cylindrical body (haniwa)
+        this.body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.0, 32), this.bodyMaterial);
+        this.body.position.y = 0.5;
         this.body.castShadow = true;
         this.body.receiveShadow = true;
         this.mesh.add(this.body);
-        this.head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 32, 32), this.bodyMaterial);
-        this.head.position.y = 0.75;
+        // Simple head (slightly smaller cylinder)
+        this.head = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 0.32, 24), this.bodyMaterial);
+        this.head.position.y = 1.08;
         this.head.castShadow = true;
         this.head.receiveShadow = true;
         this.mesh.add(this.head);
-        this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        const eyeGeometry = new THREE.SphereGeometry(0.05, 16, 16);
-        this.leftEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.leftEye.position.set(-0.1, 0.05, 0.23); this.head.add(this.leftEye);
-        this.rightEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.rightEye.position.set(0.1, 0.05, 0.23); this.head.add(this.rightEye);
+        // Icon anchor (above head)
+        this.iconAnchor = new THREE.Object3D();
+        this.iconAnchor.position.set(0, 0.22, 0); // above head
+        this.head.add(this.iconAnchor);
+        // Simple face: two holes (black circles) for eyes
+        this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
+        const eyeGeometry = new THREE.CylinderGeometry(0.025, 0.025, 0.01, 12);
+        this.leftEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.leftEye.position.set(-0.06, 0.05, 0.17); this.leftEye.rotation.x = Math.PI/2; this.head.add(this.leftEye);
+        this.rightEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.rightEye.position.set(0.06, 0.05, 0.17); this.rightEye.rotation.x = Math.PI/2; this.head.add(this.rightEye);
         this.eyeMeshes = [this.leftEye, this.rightEye];
-        const mouthGeometry = new THREE.TorusGeometry(0.07, 0.012, 8, 16, Math.PI);
-        this.mouth = new THREE.Mesh(mouthGeometry, new THREE.MeshBasicMaterial({ color: 0x222222 }));
-        this.mouth.position.set(0, -0.07, 0.22);
-        this.mouth.rotation.x = Math.PI / 2;
+        // Simple mouth: small horizontal hole
+        const mouthGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.01, 12);
+        this.mouth = new THREE.Mesh(mouthGeometry, this.eyeMaterial);
+        this.mouth.position.set(0, -0.04, 0.17);
+        this.mouth.rotation.x = Math.PI/2;
         this.head.add(this.mouth);
-        const limbGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.4, 16);
-        this.leftArm = new THREE.Mesh(limbGeometry, this.bodyMaterial); this.leftArm.position.set(-0.35, 0.38, 0); this.body.add(this.leftArm);
-        this.rightArm = new THREE.Mesh(limbGeometry, this.bodyMaterial); this.rightArm.position.set(0.35, 0.38, 0); this.body.add(this.rightArm);
-        this.body.position.y = 0.68;
-        this.head.position.y = 1.18;
-        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5)); this.carriedItemMesh.position.set(0, 0.6, 0.45); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
+        // Arm loops (torus)
+        const armMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
+        const armGeometry = new THREE.TorusGeometry(0.13, 0.025, 10, 24, Math.PI*1.2);
+        this.leftArm = new THREE.Mesh(armGeometry, armMaterial); this.leftArm.position.set(-0.22, 0.65, 0); this.leftArm.rotation.z = Math.PI/2.2; this.body.add(this.leftArm);
+        this.rightArm = new THREE.Mesh(armGeometry, armMaterial); this.rightArm.position.set(0.22, 0.65, 0); this.rightArm.rotation.z = -Math.PI/2.2; this.body.add(this.rightArm);
+        // Carried item
+        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5)); this.carriedItemMesh.position.set(0, 1.0, 0.3); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
+        // Shadow
         const shadowGeometry = new THREE.CircleGeometry(0.32, 32);
         const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
         this.shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
         this.shadowMesh.position.set(0, 0.01, 0);
         this.shadowMesh.rotation.x = -Math.PI / 2;
         this.mesh.add(this.shadowMesh);
+        // Thought bubble
         this.thoughtBubble = document.createElement('div');
         this.thoughtBubble.className = 'thought-bubble';
         this.thoughtBubble.setAttribute('data-aos', 'zoom-in');
@@ -83,7 +213,9 @@ class Character {
     findClosestPartner() {
         let closest = null;
         let minDist = Infinity;
-        for (const char of characters) {
+        // Use global characters array (browser global or fallback)
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        for (const char of chars) {
             if (char.id === this.id) continue;
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
             if (dist < minDist) {
@@ -134,17 +266,24 @@ class Character {
     }
 
     findAdjacentSpot(target) {
+        // Y座標も考慮し、段差・落下・ジャンプ可能な隣接スポットを返す（bak_game.jsロジック準拠）
         const directions = [
-            {dx:1, dz:0}, {dx:-1, dz:0}, {dx:0, dz:1}, {dx:0, dz:-1}
+            {dx:1, dy:0, dz:0}, {dx:-1, dy:0, dz:0}, {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1},
+            {dx:0, dy:1, dz:0}, {dx:0, dy:-1, dz:0}
         ];
         for (const dir of directions) {
             const x = target.x + dir.dx;
+            const y = target.y + dir.dy;
             const z = target.z + dir.dz;
-            const groundY = findGroundY(x, z);
-            if (groundY === -1) continue;
-            const y = groundY + 1;
+            if (y < 0 || y > maxHeight) continue;
             const key = `${x},${y},${z}`;
-            if (!worldData.has(key)) return {x, y, z};
+            // 足場チェック: 下にブロックがあり、今の高さに空間がある
+            const below = `${x},${y-1},${z}`;
+            if (!worldData.has(below)) continue;
+            if (worldData.has(key)) continue;
+            // 段差・ジャンプ: 1段上までOK
+            if (Math.abs(y - target.y) > 1) continue;
+            return {x, y, z};
         }
         return null;
     }
@@ -163,6 +302,24 @@ class Character {
         else if (outcome.type === 'BUILT_HOME') { this.personality.diligence = Math.min(1.5, this.personality.diligence + 0.2); }
         else if (outcome.type === 'FOUND_SHELTER') { this.personality.diligence = Math.min(1.5, this.personality.diligence + 0.05); }
         this.updateColorFromPersonality();
+    }
+
+    // 周囲に壁を作るスポットを探す（空気の場所のみ）
+    findWallSpots() {
+        const spots = [];
+        const directions = [
+            {dx:1, dz:0}, {dx:-1, dz:0}, {dx:0, dz:1}, {dx:0, dz:-1}
+        ];
+        for (const dir of directions) {
+            const x = this.gridPos.x + dir.dx;
+            const z = this.gridPos.z + dir.dz;
+            const y = this.gridPos.y;
+            const key = `${x},${y},${z}`;
+            if (!worldData.has(key)) {
+                spots.push({x, y, z});
+            }
+        }
+        return spots;
     }
 
     update(deltaTime, isNight, camera) {
@@ -257,14 +414,53 @@ class Character {
     updateMovement(deltaTime) {
         this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos });
         if (!this.targetPos) { this.state = 'idle'; return; }
-        const targetWorldPos = new THREE.Vector3(this.targetPos.x * 1 + 0.5, this.targetPos.y, this.targetPos.z * 1 + 0.5);
+        // --- BFS経路探索 ---
+        if (!this.path || this.path.length === 0 || !this.lastTargetPos ||
+            this.lastTargetPos.x !== this.targetPos.x || this.lastTargetPos.y !== this.targetPos.y || this.lastTargetPos.z !== this.targetPos.z) {
+            // 新しい目的地 or 経路消失時は再探索
+            this.path = this.bfsPath(this.gridPos, this.targetPos);
+            this.lastTargetPos = { ...this.targetPos };
+            if (!this.path || this.path.length === 0) {
+                this.bfsFailCount = (this.bfsFailCount || 0) + 1;
+                if (this.bfsFailCount > 2) {
+                    this.log('BFS pathfinding failed multiple times, giving up.');
+                    this.state = 'idle';
+                    this.bfsFailCount = 0;
+                    this.actionCooldown = 1.0;
+                    return;
+                }
+                this.log('BFS pathfinding failed, will retry.');
+                this.actionCooldown = 0.5;
+                this.state = 'idle';
+                return;
+            }
+            this.bfsFailCount = 0;
+        }
+        // 1マスずつ進む
+        const next = this.path[0];
+        if (!next) {
+            this.state = 'idle';
+            this.path = [];
+            this.performAction && this.performAction();
+            return;
+        }
+        const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y, next.z + 0.5);
         const direction = targetWorldPos.clone().sub(this.mesh.position);
+        // 顔の向き（body/headのrotation.y）を移動方向に合わせる
+        if (direction.lengthSq() > 0.0001) {
+            const angle = Math.atan2(direction.x, direction.z);
+            this.body.rotation.y = angle;
+            this.head.rotation.y = angle;
+        }
         const moveDistance = this.movementSpeed * deltaTime;
         if (direction.length() < moveDistance) {
             this.mesh.position.copy(targetWorldPos);
-            this.gridPos = {x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z};
-            this.state = 'idle';
-            this.performAction && this.performAction();
+            this.gridPos = {x: next.x, y: next.y, z: next.z};
+            this.path.shift();
+            if (this.path.length === 0) {
+                this.state = 'idle';
+                this.performAction && this.performAction();
+            }
         } else {
             direction.normalize();
             this.mesh.position.add(direction.multiplyScalar(moveDistance));
@@ -288,6 +484,47 @@ class Character {
             this.blinkInterval = 1.5 + Math.random();
             this.blinkTimer = 0;
         }
+        // --- 表情変化（needs/stateに応じて目・口の色や形を変える）---
+        // 目の色
+        if (this.state === 'dead') {
+            this.eyeMaterial.color.set(0x888888);
+        } else if (this.state === 'resting') {
+            this.eyeMaterial.color.set(0x2222ff);
+        } else if (this.state === 'socializing') {
+            this.eyeMaterial.color.set(0xff33cc);
+        } else if (this.needs.hunger < 30) {
+            this.eyeMaterial.color.set(0xff0000);
+        } else if (this.needs.energy < 30) {
+            this.eyeMaterial.color.set(0x00aaff);
+        } else if (this.needs.social < 30) {
+            this.eyeMaterial.color.set(0x00ff00);
+        } else {
+            this.eyeMaterial.color.set(0x000000);
+        }
+        // 口の色・形状
+        if (this.state === 'dead') {
+            this.mouth.material.color.set(0x888888);
+            this.mouth.rotation.z = Math.PI; // への字
+        } else if (this.state === 'resting') {
+            this.mouth.material.color.set(0x2222ff);
+            this.mouth.rotation.z = 0;
+        } else if (this.state === 'socializing') {
+            this.mouth.material.color.set(0xff33cc);
+            this.mouth.rotation.z = 0;
+        } else if (this.needs.hunger < 30) {
+            this.mouth.material.color.set(0xff0000);
+            this.mouth.rotation.z = Math.PI * 0.7; // しょんぼり
+        } else if (this.needs.energy < 30) {
+            this.mouth.material.color.set(0x00aaff);
+            this.mouth.rotation.z = Math.PI * 0.5;
+        } else if (this.needs.social < 30) {
+            this.mouth.material.color.set(0x00ff00);
+            this.mouth.rotation.z = Math.PI * 0.2;
+        } else {
+            this.mouth.material.color.set(0x222222);
+            this.mouth.rotation.z = 0;
+        }
+        // --- 体のアニメーション ---
         if (this.state === 'idle') {
             this.bobTime += deltaTime * 2.5;
             this.body.position.y = 0.25 + Math.sin(this.bobTime) * 0.03;
@@ -338,11 +575,12 @@ class Character {
         if (icon) {
             this.thoughtBubble.textContent = icon;
             this.thoughtBubble.setAttribute('data-show', 'true');
-            // Position above head
-            const screenPos = toScreenPosition(this.head, camera);
+            // canvasを取得し、正しいスクリーン座標で配置
+            const canvas = document.getElementById('gameCanvas');
+            const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
             this.thoughtBubble.style.left = `${screenPos.x - 14}px`;
-            this.thoughtBubble.style.top = `${screenPos.y - 38}px`;
-            this.thoughtBubble.style.position = 'absolute';
+            this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
+            this.thoughtBubble.style.position = 'fixed';
             this.thoughtBubble.style.display = 'block';
         } else {
             this.thoughtBubble.setAttribute('data-show', 'false');
@@ -393,11 +631,16 @@ class Character {
 
     decideNextAction(isNight) {
         this.log('decideNextAction', { needs: this.needs, state: this.state, personality: this.personality });
-        // --- bak_game.js準拠の優先順位AI ---
+        // --- bak_game.js準拠の優先順位AI + BUILD_WALL拡張 ---
         if (this.needs.safety < 50 * this.personality.bravery && isNight) {
             const shelterPos = this.findShelter(isNight);
             if (shelterPos) {
                 this.setNextAction('SEEK_SHELTER', shelterPos, shelterPos); return;
+            }
+            // --- 壁を作るアクションを追加 ---
+            const wallSpots = this.findWallSpots && this.findWallSpots();
+            if (wallSpots && wallSpots.length > 0) {
+                this.setNextAction('BUILD_WALL', wallSpots, this.gridPos); return;
             }
             const digWallTarget = this.findDiggableShelterSpot && this.findDiggableShelterSpot();
             if (digWallTarget) {
@@ -499,6 +742,17 @@ class Character {
         if(this.action.type !== 'REST' && this.action.type.indexOf('SEEK_SHELTER') === -1) { this.actionAnim.active = true; this.actionAnim.timer = this.actionAnim.duration; }
 
         switch (this.action.type) {
+            case 'BUILD_WALL': {
+                // 周囲の空きスポットにDIRTまたはSTONEで壁を作る（50%ずつの確率）
+                const wallSpots = this.action.target;
+                for (const spot of wallSpots) {
+                    // 50%でDIRT, 50%でSTONE
+                    const blockType = Math.random() < 0.5 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.STONE;
+                    addBlock(spot.x, spot.y, spot.z, blockType);
+                }
+                this.actionCooldown = 2.0;
+                break;
+            }
             case 'CREATE_SHELTER': {
                 const {x, y, z} = this.action.target;
                 removeBlock(x, y, z);
@@ -608,9 +862,7 @@ class Character {
         return false;
     }
 
-    learn(outcome) {
-        // 学習ロジック例（省略）
-    }
+    // (Removed duplicate/empty learn method; the real one is above)
 
     updateColorFromPersonality() {
         const r = Math.max(0, Math.min(1, 0.2 + (this.personality.bravery - 0.5)));
@@ -624,7 +876,26 @@ class Character {
     }
 
 
-    log(message, ...args) { if (getDEBUG_MODE && getDEBUG_MODE()) console.log(`%c[Char ${this.id}]`, `color: #${this.bodyMaterial.color.getHexString()}`, message, ...args); }
+    log(message, ...args) {
+        let debug = false;
+        try {
+            if (typeof window !== 'undefined' && typeof window.getDEBUG_MODE === 'function') {
+                debug = window.getDEBUG_MODE();
+            } else if (typeof getDEBUG_MODE === 'function') {
+                debug = getDEBUG_MODE();
+            } else if (typeof window !== 'undefined' && typeof window.DEBUG_MODE !== 'undefined') {
+                debug = window.DEBUG_MODE;
+            } else if (typeof DEBUG_MODE !== 'undefined') {
+                debug = DEBUG_MODE;
+            }
+        } catch (e) { debug = false; }
+        if (debug) {
+            const color = (this.bodyMaterial && this.bodyMaterial.color)
+                ? `#${this.bodyMaterial.color.getHexString()}`
+                : '#888';
+            console.log(`%c[Char ${this.id}]`, `color: ${color}`, message, ...args);
+        }
+    }
 }
 
 export { Character };
