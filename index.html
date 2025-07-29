@@ -27,9 +27,8 @@
         }
     </style>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="game.js"></script>
+    <!-- three.jsとOrbitControlsはESMでimportするためscriptタグ不要 -->
+    <script type="module" src="main.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
@@ -48,8 +47,8 @@
     </div>
     <div id="game-container" class="relative w-full max-w-6xl flex justify-center mb-12" data-aos="zoom-in" data-aos-delay="200">
         <div class="relative w-full max-w-5xl card p-6">
-            <canvas id="gameCanvas"></canvas>
-            <canvas id="minimapCanvas" class="absolute top-6 right-6"></canvas>
+            <canvas id="gameCanvas" width="800" height="600" style="background:#222; border-radius:1rem; display:block;"></canvas>
+            <canvas id="minimapCanvas" width="96" height="96" class="absolute top-6 right-6" style="background:#111; border-radius:0.5rem; display:block;"></canvas>
         </div>
     </div>
     <div id="messageBox" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-8 rounded-2xl shadow-2xl z-50" data-aos="fade-in" data-aos-delay="300">
