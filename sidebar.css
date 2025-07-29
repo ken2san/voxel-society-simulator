@@ -1,0 +1,76 @@
+/* サイドバー全体の背景・角丸・影 */
+.sidebar-bg {
+  background: linear-gradient(135deg, #e3f0ff 0%, #f4f7fa 100%);
+  border-right: 2px solid #d0e0f0;
+  border-radius: 0 24px 24px 0;
+  box-shadow: 4px 0 16px #b0c8e033;
+  min-width: 240px;
+  padding-top: 18px;
+}
+.sidebar-bg-right {
+  background: linear-gradient(135deg, #f3e3ff 0%, #f8f4fa 100%);
+  border-left: 2px solid #e0d0f0;
+  border-radius: 24px 0 0 24px;
+  box-shadow: -4px 0 16px #c8b0e033;
+  min-width: 260px;
+  padding-top: 18px;
+}
+
+/* グループブロック */
+.group-block {
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #fff 80%, #e3f0ff11 100%);
+  padding: 10px 14px;
+  box-shadow: 0 2px 8px #0001;
+}
+.group-block-ungrouped {
+  border-left: 8px solid #bbb;
+  background: linear-gradient(90deg, #fff 80%, #bbb1 100%);
+}
+
+/* キャラバッジ */
+.char-badge {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #bbb;
+  font-size: 22px;
+  margin-right: 10px;
+  position: relative;
+}
+
+/* キャラリスト */
+.char-list-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background 0.2s;
+}
+.char-list-item:hover {
+  background: #e3f0ff22;
+}
+/* Sidebar layout for character info */
+#sidebar-left {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 220px;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+}
+#sidebar-right {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+}

@@ -775,10 +775,9 @@ class Character {
 
 
     updateThoughtBubble(isNight, camera) {
-        // Show emotion icon above head based on needs/state/role/land (bak_game.js準拠+拡張)
+        // 頭上アイコン: 役割＋状態＋グループID
         if (!this.thoughtBubble) return;
-        let icon = null;
-        // Show role as prefix
+        let icon = '';
         let rolePrefix = '';
         if (this.role === 'leader') rolePrefix = '👑';
         else if (this.role === 'worker') rolePrefix = '🧑‍🌾';
@@ -797,18 +796,14 @@ class Character {
         else if (this.needs.energy < 30) icon = '💤';
         else if (this.needs.social < 30) icon = '👥';
         else if (this.state === 'moving') icon = '🚶';
-        else icon = null;
+        else icon = '';
 
-        // Show number of owned land tiles for debug
-        let landInfo = '';
-        if (this.ownedLand && this.ownedLand.size > 0) {
-            landInfo = ` (${this.ownedLand.size})`;
-        }
+        let groupStr = '';
+        if (this.groupId) groupStr = `G${this.groupId}`;
 
-        if (icon || rolePrefix) {
-            this.thoughtBubble.textContent = `${rolePrefix}${icon ? icon : ''}${landInfo}`;
+        if (rolePrefix || icon || groupStr) {
+            this.thoughtBubble.textContent = `${rolePrefix}${icon}${groupStr}`;
             this.thoughtBubble.setAttribute('data-show', 'true');
-            // canvasを取得し、正しいスクリーン座標で配置
             const canvas = document.getElementById('gameCanvas');
             const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
             this.thoughtBubble.style.left = `${screenPos.x - 14}px`;
