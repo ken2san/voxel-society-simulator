@@ -133,8 +133,15 @@ export function findValidSpawn() {
         const x = Math.floor(Math.random() * gridSize);
         const z = Math.floor(Math.random() * gridSize);
         const y = findGroundY(x, z);
-        if (y !== -1) return { x, y: y + 1, z };
-    } return null;
+        if (y !== -1) {
+            // 下のブロックがGRASSまたはDIRTのみ許可
+            const belowId = worldData.get(`${x},${y},${z}`);
+            if (belowId === BLOCK_TYPES.GRASS.id || belowId === BLOCK_TYPES.DIRT.id) {
+                return { x, y: y + 1, z };
+            }
+        }
+    }
+    return null;
 }
 export function toScreenPosition(obj, camera) {
     const vector = new THREE.Vector3();

@@ -421,22 +421,22 @@ function renderCharacterList() {
             const tdId = document.createElement('td');
             tdId.textContent = char.id;
             tr.appendChild(tdId);
-            // 状態アイコン（全アイコンを横並びで表示）
+            // 状態アイコン（state/needsのみ、気分は含めない）
             const tdIcons = document.createElement('td');
-            let icons = [];
-            if (char.role === 'leader') icons.push('👑');
-            if (char.state === 'dead') icons.push('💀');
-            else if (char.state === 'resting') icons.push('🛏️');
-            else if (char.state === 'socializing') icons.push('💬');
+            let stateIcons = [];
+            if (char.role === 'leader') stateIcons.push('👑');
+            if (char.state === 'dead') stateIcons.push('💀');
+            else if (char.state === 'resting') stateIcons.push('🛏️');
+            else if (char.state === 'socializing') stateIcons.push('💬');
             // COLLECT_FOOD中は必ず🍎を表示
-            if (char.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
-            else if (char.needs && char.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
-            if (char.needs && char.needs.energy < 30) icons.push('💤');
-            if (char.needs && char.needs.social < 30) icons.push('👥');
-            if (char.state === 'moving') icons.push('🚶');
-            if (icons.length === 0) icons.push(char.role === 'worker' ? '🧑‍🌾' : '🙂');
-            tdIcons.textContent = icons.join(' ');
-            tdIcons.title = icons.join(' ');
+            if (char.currentAction === 'COLLECT_FOOD' && !stateIcons.includes('🍎')) stateIcons.push('🍎');
+            else if (char.needs && char.needs.hunger < 30 && !stateIcons.includes('🍎')) stateIcons.push('🍎');
+            if (char.needs && char.needs.energy < 30) stateIcons.push('💤');
+            if (char.needs && char.needs.social < 30) stateIcons.push('👥');
+            // "moving"は気分欄（mood）でのみ表示する（状態アイコンには含めない）
+            if (stateIcons.length === 0) stateIcons.push(char.role === 'worker' ? '🧑‍🌾' : '🙂');
+            tdIcons.textContent = stateIcons.join(' ');
+            tdIcons.title = stateIcons.join(' ');
             tr.appendChild(tdIcons);
             // 気分（moodアイコンのみ）
             const tdMood = document.createElement('td');
@@ -502,28 +502,29 @@ function createCharacterDetailCard(char) {
     header.style.gap = '16px';
     header.style.marginBottom = '10px';
     const bigIcon = document.createElement('span');
-    let icons = [];
-    if (char.role === 'leader') icons.push('👑');
-    if (char.state === 'dead') icons.push('💀');
-    else if (char.state === 'resting') icons.push('🛏️');
-    else if (char.state === 'socializing') icons.push('💬');
-    if (char.needs && char.needs.hunger < 30) icons.push('🍎');
-    if (char.needs && char.needs.energy < 30) icons.push('💤');
-    if (char.needs && char.needs.social < 30) icons.push('👥');
-    if (char.state === 'moving') icons.push('🚶');
-    bigIcon.textContent = icons[0] || (char.role === 'worker' ? '🧑‍🌾' : '🙂');
+    // 状態アイコン（state/needsのみ、気分は含めない）
+    let stateIcons = [];
+    if (char.role === 'leader') stateIcons.push('👑');
+    if (char.state === 'dead') stateIcons.push('💀');
+    else if (char.state === 'resting') stateIcons.push('🛏️');
+    else if (char.state === 'socializing') stateIcons.push('💬');
+    if (char.needs && char.needs.hunger < 30) stateIcons.push('🍎');
+    if (char.needs && char.needs.energy < 30) stateIcons.push('💤');
+    if (char.needs && char.needs.social < 30) stateIcons.push('👥');
+    if (char.state === 'moving') stateIcons.push('🚶');
+    bigIcon.textContent = stateIcons[0] || (char.role === 'worker' ? '🧑‍🌾' : '🙂');
     bigIcon.style.fontSize = '2.1em';
     bigIcon.style.border = '3px solid #bbb';
     bigIcon.style.borderRadius = '50%';
     bigIcon.style.padding = '7px';
     header.appendChild(bigIcon);
     // 全アイコンを横並びで表示
-    if (icons.length > 1) {
+    if (stateIcons.length > 1) {
         const allIcons = document.createElement('span');
         allIcons.style.fontSize = '1.3em';
         allIcons.style.marginLeft = '4px';
         allIcons.title = '全ての状態アイコン';
-        allIcons.textContent = icons.join(' ');
+        allIcons.textContent = stateIcons.join(' ');
         header.appendChild(allIcons);
     }
     const nameBox = document.createElement('div');
