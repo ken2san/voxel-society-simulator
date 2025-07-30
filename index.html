@@ -34,7 +34,7 @@
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
     <div id="sidebar-left" class="sidebar-bg"></div>
-    <div id="sidebar-right" class="sidebar-bg-right"></div>
+    <div id="sidebar-right" class="sidebar-bg-right" style="display:none;"></div>
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
     <p class="mb-8 text-center max-w-2xl" data-aos="fade-up" data-aos-delay="100">
         彼らは経験から学び、性格を変化させます。その個性は、体の色にも現れます。<br>
@@ -50,7 +50,7 @@
         </div>
     </div>
     <div id="game-container" class="relative w-full max-w-6xl flex justify-center mb-12" data-aos="zoom-in" data-aos-delay="200">
-        <div class="relative w-full max-w-5xl card p-6">
+        <div class="relative w-full max-w-5xl card p-6" style="margin-left:360px;">
             <canvas id="gameCanvas" width="800" height="600" style="background:#222; border-radius:1rem; display:block;"></canvas>
             <canvas id="minimapCanvas" width="96" height="96" class="absolute top-6 right-6" style="background:#111; border-radius:0.5rem; display:block;"></canvas>
         </div>

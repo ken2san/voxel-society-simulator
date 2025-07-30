@@ -28,7 +28,7 @@ class Character {
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
         if (!characters || characters.length === 0) return;
-        // 1. Build affinity graph (affinity >= 30)
+        // 1. Build affinity graph (affinity >= 50)
         const visited = new Set();
         let groupIdCounter = 1;
         for (const char of characters) {
@@ -37,14 +37,14 @@ class Character {
         }
         for (const char of characters) {
             if (char.groupId) continue;
-            // BFS to find all connected by affinity >= 30
+            // BFS to find all connected by affinity >= 50
             const queue = [char];
             char.groupId = groupIdCounter;
             let groupMembers = [char];
             while (queue.length > 0) {
                 const current = queue.shift();
                 for (const [otherId, affinity] of current.relationships.entries()) {
-                    if (affinity < 30) continue;
+                    if (affinity < 50) continue;
                     const other = characters.find(c => c.id === otherId);
                     if (other && !other.groupId) {
                         other.groupId = groupIdCounter;
@@ -54,21 +54,57 @@ class Character {
                 }
             }
             // 2. Elect leader in this group
-            if (groupMembers.length > 0) {
+            if (groupMembers.length === 1) {
+                // 1人グループはgroupIdもroleも外す
+                groupMembers[0].groupId = null;
+                groupMembers[0].role = 'worker';
+            } else if (groupMembers.length > 1) {
                 Character.electLeaderInGroup(groupMembers);
+                groupIdCounter++;
             }
-            groupIdCounter++;
+        }
+        // --- グループ合併処理 ---
+        Character.mergeGroupsIfPossible(characters);
+    }
+
+    // グループ合併: リーダー同士が近く友好度が高い場合グループ統合
+    static mergeGroupsIfPossible(characters) {
+        // すべてのリーダーを抽出
+        const leaders = characters.filter(c => c.role === 'leader');
+        for (let i = 0; i < leaders.length; i++) {
+            for (let j = i + 1; j < leaders.length; j++) {
+                const a = leaders[i], b = leaders[j];
+                // 近距離かつ友好度高い場合
+                const dist = Math.abs(a.gridPos.x - b.gridPos.x) + Math.abs(a.gridPos.y - b.gridPos.y) + Math.abs(a.gridPos.z - b.gridPos.z);
+                const affinity = a.relationships.get(b.id) || 0;
+                if (dist <= 3 && affinity >= 70 && a.groupId !== b.groupId) {
+                    // 小さいgroupIdに統一
+                    const minId = Math.min(a.groupId, b.groupId);
+                    const maxId = Math.max(a.groupId, b.groupId);
+                    for (const char of characters) {
+                        if (char.groupId === maxId) char.groupId = minId;
+                    }
+                    // 再選出
+                    const merged = characters.filter(c => c.groupId === minId);
+                    Character.electLeaderInGroup(merged);
+                }
+            }
         }
     }
 
     // Elect leader within a group (list of Character)
     static electLeaderInGroup(groupMembers) {
+        // グループが1人だけならリーダーにしない
+        if (groupMembers.length === 1) {
+            groupMembers[0].role = 'worker';
+            return;
+        }
         let maxFriends = -1;
         let candidates = [];
         for (const char of groupMembers) {
             let friendCount = 0;
             for (const affinity of char.relationships.values()) {
-                if (affinity >= 30) friendCount++;
+                if (affinity >= 50) friendCount++;
             }
             if (friendCount > maxFriends) {
                 maxFriends = friendCount;
@@ -76,6 +112,10 @@ class Character {
             } else if (friendCount === maxFriends) {
                 candidates.push(char);
             }
+        }
+        // candidatesが空なら、強制的に最初の1人をリーダー候補に
+        if (candidates.length === 0) {
+            candidates = [groupMembers[0]];
         }
         // If tie, pick the one with highest total affinity
         let leader = candidates[0];
@@ -299,6 +339,8 @@ class Character {
             safety: 100,
             social: 30 + Math.random() * 20
         };
+        // --- Mood（感情状態）---
+        this.mood = 'neutral'; // 'happy', 'sad', 'angry', 'lonely', 'scared', etc.
         this.personality = genes ? genes : {
             bravery: 0.5 + Math.random() * 0.2,
             diligence: 0.5 + Math.random() * 0.2
@@ -311,6 +353,18 @@ class Character {
         this.bobTime = Math.random() * 100;
         this.actionAnim = { active: false, timer: 0, duration: 0.4 };
         this.relationships = new Map();
+        // --- 初期relationships値を高めに設定（20〜40で他キャラと初期化） ---
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        for (const char of chars) {
+            if (char.id !== id) {
+                // 双方向で初期値を設定
+                const val = 20 + Math.random() * 20; // 20〜40
+                this.relationships.set(char.id, val);
+                if (char.relationships && typeof char.relationships.set === 'function') {
+                    char.relationships.set(id, val);
+                }
+            }
+        }
         this.bfsFailCount = 0;
 
         // Visuals (haniwa style)
@@ -503,6 +557,16 @@ class Character {
             this.updateThoughtBubble(isNight, camera);
             return;
         }
+        // --- meeting状態のとき、actionCooldownが切れたらidleに戻す ---
+        if (this.state === 'meeting') {
+            this.actionCooldown -= deltaTime;
+            if (this.actionCooldown <= 0) {
+                this.state = 'idle';
+                this.action = null;
+            }
+            this.updateThoughtBubble(isNight, camera);
+            return;
+        }
         // --- Needs decay (bak_game.js準拠) ---
         const oldSafety = this.needs.safety;
         this.needs.hunger -= deltaTime * 0.7 * this.personality.diligence; // 減少速度を半分に
@@ -515,8 +579,40 @@ class Character {
         } else if (!isNight) {
             this.needs.safety = Math.min(100, this.needs.safety + deltaTime * 10);
         }
+        // --- needsの下限を0にクリップ ---
+        this.needs.hunger = Math.max(this.needs.hunger, 0);
+        this.needs.social = Math.max(this.needs.social, 0);
+        this.needs.energy = Math.max(this.needs.energy, 0);
+        this.needs.safety = Math.max(this.needs.safety, 0);
         if (isNight && oldSafety > this.needs.safety) {
             this.learn && this.learn({ type: 'SAFETY_DECREASE' });
+        }
+
+        // --- Mood（感情状態）の更新 ---
+        // シンプルなルールでmoodを決定
+        if (this.state === 'dead') {
+            this.mood = 'dead';
+        } else if (this.state === 'resting') {
+            this.mood = 'tired';
+        } else if (this.state === 'socializing') {
+            if (this.needs.social > 80) this.mood = 'happy';
+            else this.mood = 'social';
+        } else if (this.needs.hunger < 20) {
+            this.mood = 'hungry';
+        } else if (this.needs.safety < 20) {
+            this.mood = 'scared';
+        } else if (this.needs.energy < 20) {
+            this.mood = 'tired';
+        } else if (this.needs.social < 20) {
+            this.mood = 'lonely';
+        } else if (this.state === 'meeting') {
+            this.mood = 'excited';
+        } else if (this.state === 'confused') {
+            this.mood = 'confused';
+        } else if (this.state === 'moving') {
+            this.mood = 'active';
+        } else {
+            this.mood = 'neutral';
         }
         // Recovery
         if (this.state === 'resting') {
@@ -592,15 +688,36 @@ class Character {
             const idx = window.characters.findIndex(c => c.id === this.id);
             if (idx !== -1) window.characters.splice(idx, 1);
             // --- Group/leader re-detection after death ---
-            Character.detectGroupsAndElectLeaders(window.characters);
+            Character.handleLeaderDeath(this, window.characters);
         } else if (typeof characters !== 'undefined') {
             const idx = characters.findIndex(c => c.id === this.id);
             if (idx !== -1) characters.splice(idx, 1);
             // --- Group/leader re-detection after death ---
-            Character.detectGroupsAndElectLeaders(characters);
+            Character.handleLeaderDeath(this, characters);
         }
         this.state = 'dead';
         this.log('Character died and removed', { id: this.id });
+    }
+
+    // リーダー死亡時の混乱: グループ全員をconfused状態にし一定時間後に再選出
+    static handleLeaderDeath(deadChar, characters) {
+        if (deadChar.role !== 'leader' || !deadChar.groupId) {
+            Character.detectGroupsAndElectLeaders(characters);
+            return;
+        }
+        // グループ全員をconfused状態に
+        const group = characters.filter(c => c.groupId === deadChar.groupId);
+        for (const char of group) {
+            char.state = 'confused';
+            char.actionCooldown = 2.5 + Math.random() * 2;
+        }
+        // 一定時間後にリーダー再選出
+        setTimeout(() => {
+            Character.detectGroupsAndElectLeaders(characters);
+            for (const char of group) {
+                if (char.state === 'confused') char.state = 'idle';
+            }
+        }, 2500 + Math.random() * 2000);
     }
 
     // 死亡時に消滅する仕様のため、revive()は無効化
@@ -782,24 +899,29 @@ class Character {
         if (this.role === 'leader') rolePrefix = '👑';
         else if (this.role === 'worker') rolePrefix = '🧑‍🌾';
 
-        if (this.state === 'dead') icon = '💀';
-        else if (this.state === 'resting') icon = '🛏️';
-        else if (this.state === 'socializing') {
-            if (this.thoughtBubble.textContent === '❤️') {
-                icon = '❤️';
-            } else {
-                icon = '💬';
-            }
+        // --- moodに応じたアイコン ---
+        switch (this.mood) {
+            case 'dead': icon = '💀'; break;
+            case 'tired': icon = '🛏️'; break;
+            case 'happy': icon = '😊'; break;
+            case 'social': icon = '💬'; break;
+            case 'hungry': icon = '🍎'; break;
+            case 'scared': icon = '😱'; break;
+            case 'lonely': icon = '😢'; break;
+            case 'excited': icon = '🎉'; break;
+            case 'confused': icon = '❓'; break;
+            case 'active': icon = '🚶'; break;
+            case 'neutral': icon = ''; break;
+            default: icon = ''; break;
         }
-        else if (this.needs.hunger < 30) icon = '🍎';
-        else if (isNight && !this.isSafe(isNight)) icon = '😱';
-        else if (this.needs.energy < 30) icon = '💤';
-        else if (this.needs.social < 30) icon = '👥';
-        else if (this.state === 'moving') icon = '🚶';
-        else icon = '';
+        // socializing時のハート優先
+        if (this.state === 'socializing' && this.thoughtBubble.textContent === '❤️') {
+            icon = '❤️';
+        }
 
         let groupStr = '';
-        if (this.groupId) groupStr = `G${this.groupId}`;
+        // idle状態のときはグループIDを表示しない
+        if (this.groupId && this.state !== 'idle') groupStr = `G${this.groupId}`;
 
         if (rolePrefix || icon || groupStr) {
             this.thoughtBubble.textContent = `${rolePrefix}${icon}${groupStr}`;
@@ -867,7 +989,22 @@ class Character {
         this.log('decideNextAction', { needs: this.needs, state: this.state, personality: this.personality, role: this.role });
         // --- Role-based AI priority (強化) ---
         if (this.role === 'leader') {
-            // Leader: prioritize expanding land
+            // --- New: Leader can call a meeting with group members ---
+            if (Math.random() < 0.18) { // 18%の確率で集会を開く
+                this.setNextAction('MEETING');
+                // グループメンバーを自分の近くに呼ぶ
+                const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+                const myGroup = chars.filter(c => c.groupId === this.groupId && c.id !== this.id);
+                for (const member of myGroup) {
+                    // 近くの空きスポットを探す
+                    const spot = this.findAdjacentSpot ? this.findAdjacentSpot(this.gridPos) : null;
+                    if (spot) {
+                        member.setNextAction && member.setNextAction('GO_TO_MEETING', this, spot);
+                    }
+                }
+                return;
+            }
+            // Leader: prioritize expanding land (従来の行動)
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dz = -1; dz <= 1; dz++) {
                     if (dx === 0 && dz === 0) continue;
@@ -979,7 +1116,8 @@ class Character {
                 }
             }
         }
-        if (this.needs.social < 70) {
+        // --- 社交行動の優先度を上げる: needs.social < 90でSOCIALIZEを優先 ---
+        if (this.needs.social < 90) {
             const partner = this.findClosestPartner();
             if (partner) {
                 this.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
@@ -1020,7 +1158,24 @@ class Character {
                 }
             }
         }
-        this.setNextAction('WANDER');
+        // --- WANDER時は周囲の空きスポットからランダムに移動先を選ぶ ---
+        const wanderSpots = [];
+        for (let dx = -2; dx <= 2; dx++) {
+            for (let dz = -2; dz <= 2; dz++) {
+                if (dx === 0 && dz === 0) continue;
+                const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
+                const key = `${x},${y},${z}`;
+                const below = `${x},${y-1},${z}`;
+                if (!worldData.has(key) && worldData.has(below)) {
+                    wanderSpots.push({x, y, z});
+                }
+            }
+        }
+        let moveTo = null;
+        if (wanderSpots.length > 0) {
+            moveTo = wanderSpots[Math.floor(Math.random() * wanderSpots.length)];
+        }
+        this.setNextAction('WANDER', null, moveTo);
     }
 
     setNextAction(type, target = null, moveTo = null, item = null) {
@@ -1036,6 +1191,23 @@ class Character {
         if(this.action.type !== 'REST' && this.action.type.indexOf('SEEK_SHELTER') === -1) { this.actionAnim.active = true; this.actionAnim.timer = this.actionAnim.duration; }
 
         switch (this.action.type) {
+            case 'MEETING': {
+                // リーダーが集会を開く
+                this.state = 'meeting';
+                this.actionCooldown = 3.0;
+                // 吹き出しに集会アイコン
+                if (this.thoughtBubble) {
+                    this.thoughtBubble.textContent = '📢';
+                    this.thoughtBubble.setAttribute('data-show', 'true');
+                }
+                break;
+            }
+            case 'GO_TO_MEETING': {
+                // メンバーがリーダーの近くに移動
+                this.state = 'moving';
+                this.actionCooldown = 1.5;
+                break;
+            }
             case 'CRAFT_TOOL': {
                 // Remove STONE block and add STONE_TOOL to inventory
                 const {x, y, z} = this.action.target;

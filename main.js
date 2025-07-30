@@ -57,6 +57,10 @@ async function init() {
         window.characters = characters;
         // サイドバーを再描画（関数がwindowにあれば）
         if (window.renderCharacterList) window.renderCharacterList();
+        // 1秒ごとにサイドバーを自動更新
+        setInterval(() => {
+            if (window.renderCharacterList) window.renderCharacterList();
+        }, 1000);
 
         window.addEventListener('resize', onWindowResize);
         const msgBoxBtn = document.getElementById('messageBoxCloseBtn');
