@@ -612,6 +612,19 @@ class Character {
                 this._skullTimeout = null;
             }
         }
+        // --- 社交needs回復イベント: idle中に近くに他キャラがいれば少し回復 ---
+        if (this.state === 'idle' && this.needs && this.needs.social < 100) {
+            const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+            let foundNearby = false;
+            for (const char of chars) {
+                if (char.id === this.id) continue;
+                const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+                if (dist > 0 && dist <= 2) { foundNearby = true; break; }
+            }
+            if (foundNearby) {
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 5);
+            }
+        }
         this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos });
         // Claim land underfoot every update
         this.claimCurrentLand();
@@ -705,7 +718,7 @@ class Character {
         if (isNight && !this.isSafe(isNight)) {
             this.needs.safety -= deltaTime * 5;
         } else if (!isNight) {
-            this.needs.safety = Math.min(100, this.needs.safety + deltaTime * 10);
+            this.needs.safety = Math.min(100, this.needs.safety + deltaTime * 16);
         }
         // --- needsの下限を0にクリップ ---
         this.needs.hunger = Math.max(this.needs.hunger, 0);
@@ -744,7 +757,7 @@ class Character {
         }
         // Recovery
         if (this.state === 'resting') {
-            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 10);
+            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 18);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
                 if (this.provisionalHome === null) {
@@ -756,7 +769,7 @@ class Character {
         if (this.state === 'socializing') {
             const partner = this.action?.target;
             if (partner && partner.state === 'socializing') {
-                this.needs.social = Math.min(100, this.needs.social + deltaTime * 15);
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 22);
                 let affinity = this.relationships.get(partner.id) || 0;
                 affinity += deltaTime * 5;
                 this.relationships.set(partner.id, affinity);
@@ -879,6 +892,46 @@ class Character {
                     this.log('Added unreachable food target to failedFoodTargets', {x, y, z});
                 }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
+                // --- 経路が見つからないとき: 近くの壊せるブロックを壊して道を作る ---
+                let brokeBlock = false;
+                const directions = [
+                    {dx:1, dy:0, dz:0}, {dx:-1, dy:0, dz:0}, {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1},
+                    {dx:0, dy:1, dz:0}, {dx:0, dy:-1, dz:0}
+                ];
+                for (const dir of directions) {
+                    const x = this.gridPos.x + dir.dx;
+                    const y = this.gridPos.y + dir.dy;
+                    const z = this.gridPos.z + dir.dz;
+                    const key = `${x},${y},${z}`;
+                    const blockId = worldData.get(key);
+                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                    if (blockType && blockType.diggable) {
+                        removeBlock(x, y, z);
+                        this.log('Rescue: destroyed nearby diggable block to create path', {x, y, z});
+                        brokeBlock = true;
+                        break;
+                    }
+                }
+                // --- 一定回数失敗したら: ランダムな方向に強制掘削 ---
+                if (!brokeBlock && this.bfsFailCount > 2) {
+                    const digDirs = directions.filter(d => {
+                        const x = this.gridPos.x + d.dx;
+                        const y = this.gridPos.y + d.dy;
+                        const z = this.gridPos.z + d.dz;
+                        const key = `${x},${y},${z}`;
+                        const blockId = worldData.get(key);
+                        return blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id;
+                    });
+                    if (digDirs.length > 0) {
+                        const randDir = digDirs[Math.floor(Math.random() * digDirs.length)];
+                        const x = this.gridPos.x + randDir.dx;
+                        const y = this.gridPos.y + randDir.dy;
+                        const z = this.gridPos.z + randDir.dz;
+                        removeBlock(x, y, z);
+                        this.log('Rescue: forcibly dug random direction after multiple path fails', {x, y, z});
+                        this.bfsFailCount = 0; // リセット
+                    }
+                }
                 if (this.bfsFailCount > 2) {
                     this.log('BFS pathfinding failed multiple times, giving up.');
                     this.state = 'idle';
@@ -1046,7 +1099,6 @@ class Character {
         let icon = '';
         let rolePrefix = '';
         if (this.role === 'leader') rolePrefix = '👑';
-        else if (this.role === 'worker') rolePrefix = '🧑‍🌾';
 
         // --- moodに応じたアイコン ---
         switch (this.mood) {
@@ -1140,6 +1192,38 @@ class Character {
     }
 
     decideNextAction(isNight) {
+        // --- Emergency: If needs are critically low, always prioritize survival actions ---
+        if (this.needs.hunger <= 10) {
+            const foodPos = this.findClosestFood && this.findClosestFood();
+            if (foodPos) {
+                const adjacentSpot = this.findAdjacentSpot && this.findAdjacentSpot(foodPos);
+                if (adjacentSpot) {
+                    this.setNextAction('EAT', foodPos, adjacentSpot); return;
+                }
+            }
+            // fallback: wander to search for food
+            this.setNextAction('WANDER'); return;
+        }
+        if (this.needs.energy <= 10) {
+            if (this.isSafe && this.isSafe(isNight)) {
+                this.setNextAction('REST'); return;
+            }
+            const shelterPos = this.findShelter && this.findShelter(isNight);
+            if (shelterPos) {
+                const adjacentSpot = this.findAdjacentSpot && this.findAdjacentSpot(shelterPos);
+                if (adjacentSpot) {
+                    this.setNextAction('SEEK_SHELTER_TO_REST', shelterPos, adjacentSpot); return;
+                }
+            }
+            this.setNextAction('WANDER'); return;
+        }
+        if (this.needs.social <= 10) {
+            const partner = this.findClosestPartner && this.findClosestPartner();
+            if (partner) {
+                this.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
+            }
+            this.setNextAction('WANDER'); return;
+        }
         this.log('decideNextAction', { needs: this.needs, state: this.state, personality: this.personality, role: this.role });
         // --- Role-based AI priority (強化) ---
         if (this.role === 'leader') {
