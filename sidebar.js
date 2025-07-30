@@ -495,66 +495,56 @@ function renderCharacterList() {
 function createCharacterDetailCard(char) {
     const card = document.createElement('div');
     card.className = 'character-detail-card';
-    // 上部: 顔＋ID＋グループ
+    // 上部: ID・グループ・役割・気分バッジのみ（重複排除・シンプル化）
     const header = document.createElement('div');
     header.style.display = 'flex';
+    header.style.flexDirection = 'column';
     header.style.alignItems = 'center';
-    header.style.gap = '16px';
+    header.style.justifyContent = 'center';
+    header.style.gap = '0px';
     header.style.marginBottom = '10px';
-    const bigIcon = document.createElement('span');
-    // 状態アイコン（state/needsのみ、気分は含めない）
-    let stateIcons = [];
-    if (char.role === 'leader') stateIcons.push('👑');
-    if (char.state === 'dead') stateIcons.push('💀');
-    else if (char.state === 'resting') stateIcons.push('🛏️');
-    else if (char.state === 'socializing') stateIcons.push('💬');
-    else if (char.state === 'moving') stateIcons.push('🚶');
-    if (char.needs && char.needs.hunger < 30) stateIcons.push('🍎');
-    if (char.needs && char.needs.energy < 30) stateIcons.push('�');
-    if (char.needs && char.needs.social < 30) stateIcons.push('�');
-    bigIcon.textContent = stateIcons[0] || (char.role === 'worker' ? '🧑‍🌾' : '🙂');
-    bigIcon.style.fontSize = '2.1em';
-    bigIcon.style.border = '3px solid #bbb';
-    bigIcon.style.borderRadius = '50%';
-    bigIcon.style.padding = '7px';
-    header.appendChild(bigIcon);
-    // 全アイコンを横並びで表示
-    if (stateIcons.length > 1) {
-        const allIcons = document.createElement('span');
-        allIcons.style.fontSize = '1.3em';
-        allIcons.style.marginLeft = '4px';
-        allIcons.title = '全ての状態アイコン';
-        allIcons.textContent = stateIcons.join(' ');
-        header.appendChild(allIcons);
-    }
-    const nameBox = document.createElement('div');
-    nameBox.innerHTML = `<div style=\"font-size:1.15em;font-weight:bold;color:#222;\">${char.id}</div>` +
-        `<div style=\"color:#888;font-size:0.98em;\">グループ${char.groupId ?? '未所属'}</div>` +
-        `<div style=\"font-size:0.98em;color:#666;\">${char.role === 'leader' ? 'リーダー' : char.role === 'worker' ? '労働者' : '一般'}</div>`;
-    // moodバッジ
+    // 上段: ID・グループ・役割を横並び
+    const topRow = document.createElement('div');
+    topRow.style.display = 'flex';
+    topRow.style.alignItems = 'center';
+    topRow.style.justifyContent = 'center';
+    topRow.style.gap = '12px';
+    // ID
+    const idBox = document.createElement('div');
+    idBox.textContent = char.id;
+    idBox.style.fontWeight = 'bold';
+    idBox.style.fontSize = '1.15em';
+    idBox.style.color = '#222';
+    topRow.appendChild(idBox);
+    // グループ
+    const groupBox = document.createElement('div');
+    groupBox.textContent = `グループ${char.groupId ?? '未所属'}`;
+    groupBox.style.color = '#888';
+    groupBox.style.fontSize = '0.98em';
+    topRow.appendChild(groupBox);
+    // 役割
+    const roleBox = document.createElement('div');
+    roleBox.textContent = char.role === 'leader' ? 'リーダー' : char.role === 'worker' ? '労働者' : '一般';
+    roleBox.style.color = '#666';
+    roleBox.style.fontSize = '0.98em';
+    topRow.appendChild(roleBox);
+    header.appendChild(topRow);
+    // 下段: 気分バッジを中央に
     const moodSpan = document.createElement('span');
     let moodIcon = '', moodClass = 'mood-neutral', moodText = '';
     switch (char.mood) {
-        case 'happy':
-            moodIcon = '😄'; moodClass = 'mood-happy'; moodText = 'happy'; break;
-        case 'tired':
-            moodIcon = '😪'; moodClass = 'mood-tired'; moodText = 'tired'; break;
-        case 'lonely':
-            moodIcon = '😢'; moodClass = 'mood-lonely'; moodText = 'lonely'; break;
-        case 'scared':
-            moodIcon = '😱'; moodClass = 'mood-scared'; moodText = 'scared'; break;
-        case 'angry':
-            moodIcon = '😠'; moodClass = 'mood-angry'; moodText = 'angry'; break;
-        case 'sad':
-            moodIcon = '😔'; moodClass = 'mood-sad'; moodText = 'sad'; break;
-        default:
-            moodIcon = '🙂'; moodClass = 'mood-neutral'; moodText = '';
+        case 'happy': moodIcon = '😄'; moodClass = 'mood-happy'; break;
+        case 'tired': moodIcon = '😪'; moodClass = 'mood-tired'; break;
+        case 'lonely': moodIcon = '😢'; moodClass = 'mood-lonely'; break;
+        case 'scared': moodIcon = '😱'; moodClass = 'mood-scared'; break;
+        case 'angry': moodIcon = '😠'; moodClass = 'mood-angry'; break;
+        case 'sad': moodIcon = '😔'; moodClass = 'mood-sad'; break;
+        default: moodIcon = '🙂'; moodClass = 'mood-neutral';
     }
     moodSpan.className = 'mood-badge ' + moodClass;
-    moodSpan.textContent = moodClass === 'mood-neutral' ? moodIcon : `${moodIcon} ${moodText}`;
-    moodSpan.style.marginLeft = '2px';
-    nameBox.appendChild(moodSpan);
-    header.appendChild(nameBox);
+    moodSpan.textContent = moodIcon;
+    moodSpan.style.marginTop = '6px';
+    header.appendChild(moodSpan);
     card.appendChild(header);
 
     // --- プロフィール欄（id, group, role, personality） ---
