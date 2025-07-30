@@ -24,6 +24,8 @@ function toScreenPosition(obj, camera, canvas = null) {
 // ...existing code...
 
 class Character {
+    // --- 失敗ターゲット記憶用: 食料採集失敗時に同じ座標を避ける ---
+    static failedFoodTargets = new Set();
     // --- Group detection and per-group leader election ---
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
@@ -343,11 +345,22 @@ class Character {
         this.homePosition = null; this.provisionalHome = null;
         this.inventory = [null];
         this.needs = {
-            hunger: 30 + Math.random() * 20,
-            energy: 30 + Math.random() * 20,
+            hunger: 80 + Math.random() * 10,
+            energy: 80 + Math.random() * 10,
             safety: 100,
-            social: 30 + Math.random() * 20
+            social: 80 + Math.random() * 10
         };
+        // needsが0以下なら強制回復
+        for (const k of ['hunger','energy','safety','social']) {
+            if (this.needs[k] === undefined || this.needs[k] <= 0) {
+                this.needs[k] = 80 + Math.random()*10;
+            }
+        }
+        // stateがdeadならidleにリセット
+        if (this.state === 'dead') {
+            this.state = 'idle';
+            this.action = null;
+        }
         // --- Mood（感情状態）---
         this.mood = 'neutral'; // 'happy', 'sad', 'angry', 'lonely', 'scared', etc.
         this.personality = genes ? genes : {
@@ -463,13 +476,18 @@ class Character {
     findClosestFood() {
         let minDist = Infinity, closest = null;
         for (const [key, id] of worldData.entries()) {
+            if (Character.failedFoodTargets.has(key)) continue; // 失敗ターゲットは除外
             const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
             if (type && type.isEdible) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = { x, y, z };
+                }
             }
         }
+
         return closest;
     }
 
@@ -557,9 +575,99 @@ class Character {
     }
 
     update(deltaTime, isNight, camera) {
+        // 死亡以外のstateになったら目・口の色を黒にリセット
+        if (this.state !== 'dead') {
+            if (this.eyeMeshL && this.eyeMeshR) {
+                this.eyeMeshL.material.color.setRGB(0,0,0);
+                this.eyeMeshR.material.color.setRGB(0,0,0);
+            }
+            if (this.mouthMesh) {
+                this.mouthMesh.material.color.setRGB(0,0,0);
+            }
+            this._skullShown = false;
+        }
+        // 死亡中は常にドクロマークを表示（3秒経過後にだけ非表示）
+        if (this.state === 'dead') {
+            if (this.thoughtBubble) {
+                this.thoughtBubble.textContent = '💀';
+                this.thoughtBubble.setAttribute('data-show', 'true');
+                this.thoughtBubble.style.display = '';
+                if (!this._skullTimeout) {
+                    this._skullTimeout = setTimeout(() => {
+                        if (this.thoughtBubble && this.state === 'dead') {
+                            this.thoughtBubble.setAttribute('data-show', 'false');
+                            this.thoughtBubble.style.display = 'none';
+                        }
+                        this._skullTimeout = null;
+                    }, 3000);
+                }
+            }
+        } else {
+            if (this.thoughtBubble && this.thoughtBubble.textContent === '💀') {
+                this.thoughtBubble.setAttribute('data-show', 'false');
+                this.thoughtBubble.style.display = 'none';
+            }
+            if (this._skullTimeout) {
+                clearTimeout(this._skullTimeout);
+                this._skullTimeout = null;
+            }
+        }
         this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos });
         // Claim land underfoot every update
         this.claimCurrentLand();
+
+        // --- サバイバル本能: needsが0なら自動で少し回復（死亡防止） ---
+        if (this.needs) {
+            let revived = false;
+            let allAboveThreshold = true;
+            for (const k of ['hunger','energy','safety','social']) {
+                if (this.needs[k] !== undefined && this.needs[k] <= 0) {
+                    this.needs[k] = 5 + Math.random()*5; // 5〜10回復
+                    revived = true;
+                }
+                if (this.needs[k] === undefined || this.needs[k] < 5) allAboveThreshold = false;
+            }
+            // needsが全て5以上なら必ず復帰
+            if ((revived || allAboveThreshold) && this.state === 'dead' && allAboveThreshold) {
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 0.01;
+                this._skullShown = false;
+                if (this.eyeMeshL && this.eyeMeshR) {
+                    this.eyeMeshL.material.color.setRGB(0,0,0);
+                    this.eyeMeshR.material.color.setRGB(0,0,0);
+                }
+                if (this.mouthMesh) {
+                    this.mouthMesh.material.color.setRGB(0,0,0);
+                }
+                // AI行動決定を即時実行
+                if (typeof this.decideNextAction === 'function') {
+                    setTimeout(() => { this.decideNextAction(isNight); }, 0);
+                }
+            }
+        }
+
+        // --- 完全閉じ込め救済: 周囲8方向すべてブロックで埋まっている場合、強制的に1つ壊す ---
+        let surrounded = true;
+        let breakable = null;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+                if (dx === 0 && dz === 0) continue;
+                const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
+                const key = `${x},${y},${z}`;
+                const blockId = worldData.get(key);
+                if (blockId === undefined || blockId === null || blockId === BLOCK_TYPES.AIR.id) {
+                    surrounded = false;
+                } else if (!breakable) {
+                    // AIRやBED以外なら壊せる
+                    if (blockId !== BLOCK_TYPES.BED.id) breakable = {x, y, z};
+                }
+            }
+        }
+        if (surrounded && breakable) {
+            removeBlock(breakable.x, breakable.y, breakable.z);
+            this.log('Break out: forcibly destroyed block to escape enclosure', breakable);
+        }
         // Visualize owned land
         this.visualizeOwnedLand();
         // Check for land competition if standing on other's land
@@ -676,6 +784,14 @@ class Character {
         if (this.state === 'moving') this.updateMovement(deltaTime);
         this.updateAnimations(deltaTime);
         this.updateThoughtBubble(isNight, camera);
+
+        // --- UI用: 現在のアクション名をwindow.characters配列に同期 ---
+        if (typeof window !== 'undefined' && window.characters) {
+            const idx = window.characters.findIndex(c => c.id === this.id);
+            if (idx !== -1) {
+                window.characters[idx].currentAction = this.action ? this.action.type : (this.state === 'idle' ? 'IDLE' : (this.state || '-'));
+            }
+        }
     }
     die() {
         // 死亡時に持ち物をワールドにドロップ
@@ -1191,20 +1307,66 @@ class Character {
         const wanderSpots = [];
         for (let dx = -2; dx <= 2; dx++) {
             for (let dz = -2; dz <= 2; dz++) {
-                if (dx === 0 && dz === 0) continue;
-                const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
-                const key = `${x},${y},${z}`;
-                const below = `${x},${y-1},${z}`;
-                if (!worldData.has(key) && worldData.has(below)) {
-                    wanderSpots.push({x, y, z});
+                for (let dy = -1; dy <= 1; dy++) { // ±1段の上下も候補
+                    if (dx === 0 && dz === 0 && dy === 0) continue;
+                    const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
+                    if (y < 0 || y > maxHeight) continue;
+                    const key = `${x},${y},${z}`;
+                    const below = `${x},${y-1},${z}`;
+                    // 足場チェック: 下にブロックがある or 今いる場所が地面
+                    if (!worldData.has(key) && worldData.has(below)) {
+                        wanderSpots.push({x, y, z});
+                    }
                 }
             }
         }
         let moveTo = null;
         if (wanderSpots.length > 0) {
             moveTo = wanderSpots[Math.floor(Math.random() * wanderSpots.length)];
+            this.setNextAction('WANDER', null, moveTo);
+        } else {
+            // 周囲の壊せるブロックを探す
+            let destroyable = null;
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx === 0 && dz === 0) continue;
+                    const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
+                    const key = `${x},${y},${z}`;
+                    const blockId = worldData.get(key);
+                    // AIRやBED以外なら壊せるとみなす
+                    if (blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id && blockId !== BLOCK_TYPES.BED.id) {
+                        destroyable = {x, y, z};
+                        break;
+                    }
+                }
+                if (destroyable) break;
+            }
+            if (destroyable) {
+                const adjacentSpot = this.findAdjacentSpot ? this.findAdjacentSpot(destroyable) : this.gridPos;
+                this.setNextAction('DESTROY_BLOCK', destroyable, adjacentSpot);
+            } else {
+                // さらに抜け道: 周囲のどこかに1歩move（地形無視で強制）
+                let foundMove = false;
+                for (let dx = -1; dx <= 1 && !foundMove; dx++) {
+                    for (let dy = -1; dy <= 1 && !foundMove; dy++) {
+                        for (let dz = -1; dz <= 1 && !foundMove; dz++) {
+                            if (dx === 0 && dy === 0 && dz === 0) continue;
+                            const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
+                            if (y < 0 || y > maxHeight) continue;
+                            this.setNextAction('WANDER', null, {x, y, z});
+                            foundMove = true;
+                        }
+                    }
+                }
+                if (!foundMove) {
+                    // それでも無理なら行動不能フラグ＋デバッグログ
+                    this.log('NO_ACTION_POSSIBLE: Character is completely stuck', {id: this.id, gridPos: this.gridPos, state: this.state});
+                    this.actionCooldown = 1.0;
+                }
+            }
+            // さらに、次のAI判定を早めるためactionCooldownを短く
+            this.actionCooldown = 0.5;
         }
-        this.setNextAction('WANDER', null, moveTo);
     }
 
     setNextAction(type, target = null, moveTo = null, item = null) {
@@ -1221,84 +1383,85 @@ class Character {
 
         switch (this.action.type) {
             case 'MEETING': {
-                // リーダーが集会を開く
-                this.state = 'meeting';
-                this.actionCooldown = 3.0;
-                // 吹き出しに集会アイコン
-                if (this.thoughtBubble) {
-                    this.thoughtBubble.textContent = '📢';
-                    this.thoughtBubble.setAttribute('data-show', 'true');
-                }
+                // ...existing code...
                 break;
             }
             case 'GO_TO_MEETING': {
-                // メンバーがリーダーの近くに移動
-                this.state = 'moving';
-                this.actionCooldown = 1.5;
+                // ...existing code...
                 break;
             }
             case 'CRAFT_TOOL': {
-                // Remove STONE block and add STONE_TOOL to inventory
-                const {x, y, z} = this.action.target;
-                let blockId = worldData.get(`${x},${y},${z}`);
-                if (typeof blockId === 'object' && blockId.id !== undefined) blockId = blockId.id;
-                if (blockId === BLOCK_TYPES.STONE.id && this.inventory[0] === null) {
-                    removeBlock(x, y, z);
-                    this.inventory[0] = 'STONE_TOOL';
-                    this.carriedItemMesh.material = ITEM_TYPES.STONE_TOOL.material;
-                    this.carriedItemMesh.visible = true;
-                }
-                this.actionCooldown = 1.5;
+                // ...existing code...
                 break;
             }
             case 'BUILD_WALL': {
-                // 周囲の空きスポットにDIRTまたはSTONEで壁を作る（50%ずつの確率）
-                const wallSpots = this.action.target;
-                for (const spot of wallSpots) {
-                    // 50%でDIRT, 50%でSTONE
-                // 建築カウント
-                if (typeof this.buildCount === 'number') this.buildCount++;
-                    const blockType = Math.random() < 0.5 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.STONE;
-                    addBlock(spot.x, spot.y, spot.z, blockType);
-                }
-                this.actionCooldown = 2.0;
-                this.showActionEffect('build');
+                // ...existing code...
                 break;
             }
             case 'CREATE_SHELTER': {
-                const {x, y, z} = this.action.target;
-                // 掘る・建築カウント
-                if (typeof this.digCount === 'number') this.digCount++;
-                if (typeof this.buildCount === 'number') this.buildCount++;
-                removeBlock(x, y, z);
-                addBlock(x, y, z, BLOCK_TYPES.BED);
-                this.homePosition = {x, y, z};
-                this.actionCooldown = 2.5;
-                this.showActionEffect('build');
+                // ...existing code...
                 break;
             }
             case 'EAT': {
-                const {x, y, z} = this.action.target;
-                // 食事カウント
-                if (typeof this.eatCount === 'number') this.eatCount++;
-                const blockId = worldData.get(`${x},${y},${z}`);
-                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                if (blockType && blockType.isEdible) {
-                    const wasInDanger = this.needs.safety < 70;
-                if (typeof this.digCount === 'number') this.digCount++;
-                    this.needs.hunger = Math.min(100, this.needs.hunger + blockType.foodValue);
-                    removeBlock(x, y, z);
-                    this.learn && this.learn({ type: 'ATE_FOOD', inDanger: wasInDanger });
-                }
-                if (typeof this.digCount === 'number') this.digCount++;
-                this.actionCooldown = 1.2;
-                this.showActionEffect('eat');
+                // ...existing code...
                 break;
             }
-            case 'COLLECT_FOOD':
+            case 'COLLECT_FOOD': {
+                // 食料ブロックを取得し、inventoryに追加＋needs回復
                 if (typeof this.buildCount === 'number') this.buildCount++;
+                let collected = false;
+                if (this.action.target) {
+                    const {x, y, z} = this.action.target;
+                    const blockId = worldData.get(`${x},${y},${z}`);
+                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                    if (blockType && blockType.isEdible && this.inventory[0] === null) {
+                        removeBlock(x, y, z);
+                        this.inventory[0] = 'FRUIT_ITEM';
+                        this.carriedItemMesh.material = ITEM_TYPES.FRUIT_ITEM.material;
+                        this.carriedItemMesh.visible = true;
+                        this.needs.hunger = Math.min(100, this.needs.hunger + (blockType.foodValue || 20));
+                        if (typeof this.eatCount === 'number') this.eatCount++;
+                        collected = true;
+                        // 成功したら失敗リストから除外
+                        Character.failedFoodTargets.delete(`${x},${y},${z}`);
+                    }
+                }
+                if (!collected) {
+                    // 失敗ターゲットを記憶
+                    if (this.action.target) {
+                        const {x, y, z} = this.action.target;
+                        Character.failedFoodTargets.add(`${x},${y},${z}`);
+                    }
+                    // 何も取れなかった場合はWANDERか他の行動を選択
+                    // 50%でWANDER、50%で他の行動（CHOP_WOODやSOCIALIZE等）
+                    if (Math.random() < 0.5) {
+                        this.setNextAction('WANDER');
+                    } else {
+                        // hungerが高ければ木を探す、低ければ社交
+                        if (this.needs.hunger > 60) {
+                            const woodPos = this.findClosestWood && this.findClosestWood();
+                            if (woodPos) {
+                                const adjacentSpot = this.findAdjacentSpot(woodPos);
+                                if (adjacentSpot) {
+                                    this.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
+                                    return;
+                                }
+                            }
+                        }
+                        // それ以外は社交
+                        const partner = this.findClosestPartner && this.findClosestPartner();
+                        if (partner) {
+                            this.setNextAction('SOCIALIZE', partner, partner.gridPos);
+                        } else {
+                            this.setNextAction('WANDER');
+                        }
+                    }
+                    return;
+                }
+                this.actionCooldown = 1.2;
                 this.showActionEffect('dig');
                 break;
+            }
         }
     }
 

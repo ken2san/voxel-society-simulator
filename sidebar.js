@@ -112,14 +112,13 @@ function renderCharacterDetail() {
         groupColor = groupColorMap[char.groupId];
     }
 
-    // 上部：大きなアイコン＋名前＋グループ色＋役割
+    // 上部：大きなアイコン＋全アイコン＋名前＋グループ色＋役割
     const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.alignItems = 'center';
     header.style.gap = '14px';
     header.style.marginBottom = '12px';
-    // アイコン
-    const bigIcon = document.createElement('span');
+    // アイコン配列
     let icons = [];
     if (char.role === 'leader') icons.push('👑');
     if (char.state === 'dead') icons.push('💀');
@@ -129,12 +128,23 @@ function renderCharacterDetail() {
     if (char.needs && char.needs.energy < 30) icons.push('💤');
     if (char.needs && char.needs.social < 30) icons.push('👥');
     if (char.state === 'moving') icons.push('🚶');
+    // メインアイコン（従来通り1つ）
+    const bigIcon = document.createElement('span');
     bigIcon.textContent = icons[0] || (char.role === 'worker' ? '🧑‍🌾' : '🙂');
     bigIcon.style.fontSize = '2.2em';
     bigIcon.style.border = `4px solid ${groupColor}`;
     bigIcon.style.borderRadius = '50%';
     bigIcon.style.padding = '8px';
     header.appendChild(bigIcon);
+    // 全アイコンを横並びで表示
+    if (icons.length > 1) {
+        const allIcons = document.createElement('span');
+        allIcons.style.fontSize = '1.5em';
+        allIcons.style.marginLeft = '4px';
+        allIcons.title = '全ての状態アイコン';
+        allIcons.textContent = icons.join(' ');
+        header.appendChild(allIcons);
+    }
     // 名前・役割
     const nameBox = document.createElement('div');
     nameBox.innerHTML = `<div style="font-size:1.3em;font-weight:bold;color:#222;">${char.id}</div>` +
@@ -293,12 +303,21 @@ let openedCharId = undefined;
 
 document.addEventListener('DOMContentLoaded', () => {
     leftSidebar = document.getElementById('sidebar-left');
-    // 右サイドバーのDOMが残っていれば消去
-    const rightSidebarElem = document.getElementById('sidebar-right');
-    if (rightSidebarElem) rightSidebarElem.remove();
-    // leftSidebarの子要素で詳細カードっぽいものがあれば消去
+    // サイドバーのUIをゲーム画面に溶け込むよう調整（幅を拡張）
     if (leftSidebar) {
-        // 例: .character-detail-row など詳細カード用クラスを全て消す
+        leftSidebar.style.width = '520px';
+        leftSidebar.style.background = 'rgba(255,255,255,0.90)';
+        leftSidebar.style.backdropFilter = 'blur(6px)';
+        leftSidebar.style.borderRight = '2px solid #ccc';
+        leftSidebar.style.boxShadow = '2px 0 16px #0002';
+        leftSidebar.style.zIndex = 20;
+        leftSidebar.style.position = 'absolute';
+        leftSidebar.style.left = '0';
+        leftSidebar.style.top = '0';
+        leftSidebar.style.height = '100vh';
+        leftSidebar.style.overflowY = 'auto';
+        leftSidebar.style.pointerEvents = 'auto';
+        // leftSidebarの子要素で詳細カードっぽいものがあれば消去
         const detailRows = leftSidebar.querySelectorAll('.character-detail-row');
         detailRows.forEach(el => el.remove());
     }
@@ -335,12 +354,31 @@ function renderCharacterList() {
     if (window.characters && window.characters.length > 0) {
         const summaryTable = document.createElement('table');
         summaryTable.className = 'character-summary-table';
-        // ヘッダー
+        // ヘッダー（日本語で分かりやすく＆見やすいスタイル）
         const thead = document.createElement('thead');
         const trh = document.createElement('tr');
-        ['ID','顔','mood','空腹','エネ','安全','社交'].forEach(txt => {
+        const headerLabels = [
+            'ID',
+            '状態',
+            '気分',
+            '空腹',
+            'エネ',
+            '安全',
+            '社交',
+            '行動',
+            '移動'
+        ];
+        headerLabels.forEach(txt => {
             const th = document.createElement('th');
             th.textContent = txt;
+            th.style.background = '#f5f5f5';
+            th.style.fontWeight = 'bold';
+            th.style.fontSize = '0.98em';
+            th.style.color = '#333';
+            th.style.padding = '4px 2px';
+            th.style.borderBottom = '1.5px solid #ddd';
+            th.style.textAlign = 'center';
+            th.style.whiteSpace = 'nowrap';
             trh.appendChild(th);
         });
         thead.appendChild(trh);
@@ -360,7 +398,7 @@ function renderCharacterList() {
                 detailTr.style.display = 'none';
             }
             const detailTd = document.createElement('td');
-            detailTd.colSpan = 7;
+            detailTd.colSpan = 9;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
             detailTd.appendChild(createCharacterDetailCard(char));
@@ -383,44 +421,38 @@ function renderCharacterList() {
             const tdId = document.createElement('td');
             tdId.textContent = char.id;
             tr.appendChild(tdId);
-            // 顔
-            const tdFace = document.createElement('td');
-            let icon = '';
-            if (char.role === 'leader') icon = '👑';
-            else if (char.state === 'dead') icon = '💀';
-            else if (char.state === 'resting') icon = '🛏️';
-            else if (char.state === 'socializing') icon = '💬';
-            else if (char.needs && char.needs.hunger < 30) icon = '🍎';
-            else if (char.needs && char.needs.energy < 30) icon = '💤';
-            else if (char.needs && char.needs.social < 30) icon = '👥';
-            else if (char.state === 'moving') icon = '🚶';
-            else icon = char.role === 'worker' ? '🧑‍🌾' : '🙂';
-            tdFace.textContent = icon;
-            tr.appendChild(tdFace);
-            // mood
+            // 状態アイコン（全アイコンを横並びで表示）
+            const tdIcons = document.createElement('td');
+            let icons = [];
+            if (char.role === 'leader') icons.push('👑');
+            if (char.state === 'dead') icons.push('💀');
+            else if (char.state === 'resting') icons.push('🛏️');
+            else if (char.state === 'socializing') icons.push('💬');
+            // COLLECT_FOOD中は必ず🍎を表示
+            if (char.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
+            else if (char.needs && char.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
+            if (char.needs && char.needs.energy < 30) icons.push('💤');
+            if (char.needs && char.needs.social < 30) icons.push('👥');
+            if (char.state === 'moving') icons.push('🚶');
+            if (icons.length === 0) icons.push(char.role === 'worker' ? '🧑‍🌾' : '🙂');
+            tdIcons.textContent = icons.join(' ');
+            tdIcons.title = icons.join(' ');
+            tr.appendChild(tdIcons);
+            // 気分（moodアイコンのみ）
             const tdMood = document.createElement('td');
             tdMood.className = 'mood-td';
-            const moodSpan = document.createElement('span');
-            let moodIcon = '', moodClass = 'mood-neutral', moodText = '';
+            let moodIcon = '';
             switch (char.mood) {
-                case 'happy':
-                    moodIcon = '😄'; moodClass = 'mood-happy'; moodText = 'happy'; break;
-                case 'tired':
-                    moodIcon = '😪'; moodClass = 'mood-tired'; moodText = 'tired'; break;
-                case 'lonely':
-                    moodIcon = '😢'; moodClass = 'mood-lonely'; moodText = 'lonely'; break;
-                case 'active':
-                    moodIcon = '🚶'; moodClass = 'mood-active'; moodText = 'active'; break;
-                case 'angry':
-                    moodIcon = '😠'; moodClass = 'mood-angry'; moodText = 'angry'; break;
-                case 'sad':
-                    moodIcon = '😔'; moodClass = 'mood-sad'; moodText = 'sad'; break;
-                default:
-                    moodIcon = '🙂'; moodClass = 'mood-neutral'; moodText = 'neutral';
+                case 'happy': moodIcon = '😄'; break;
+                case 'tired': moodIcon = '😪'; break;
+                case 'lonely': moodIcon = '😢'; break;
+                case 'active': moodIcon = '🚶'; break;
+                case 'angry': moodIcon = '😠'; break;
+                case 'sad': moodIcon = '😔'; break;
+                default: moodIcon = '🙂';
             }
-            moodSpan.className = 'mood-badge ' + moodClass;
-            moodSpan.textContent = `${moodIcon} ${moodText}`;
-            tdMood.appendChild(moodSpan);
+            tdMood.textContent = moodIcon;
+            tdMood.title = char.mood || 'neutral';
             tr.appendChild(tdMood);
             // needs
             ['hunger','energy','safety','social'].forEach(k => {
@@ -432,6 +464,14 @@ function renderCharacterList() {
                 }
                 tr.appendChild(td);
             });
+            // 行動
+            const tdAction = document.createElement('td');
+            tdAction.textContent = char.currentAction || '-';
+            tr.appendChild(tdAction);
+            // 移動距離
+            const tdMove = document.createElement('td');
+            tdMove.textContent = (typeof char.moveDistance === 'number') ? char.moveDistance : '-';
+            tr.appendChild(tdMove);
             tbody.appendChild(tr);
             tbody.appendChild(detailTr);
         });
@@ -477,6 +517,15 @@ function createCharacterDetailCard(char) {
     bigIcon.style.borderRadius = '50%';
     bigIcon.style.padding = '7px';
     header.appendChild(bigIcon);
+    // 全アイコンを横並びで表示
+    if (icons.length > 1) {
+        const allIcons = document.createElement('span');
+        allIcons.style.fontSize = '1.3em';
+        allIcons.style.marginLeft = '4px';
+        allIcons.title = '全ての状態アイコン';
+        allIcons.textContent = icons.join(' ');
+        header.appendChild(allIcons);
+    }
     const nameBox = document.createElement('div');
     nameBox.innerHTML = `<div style=\"font-size:1.15em;font-weight:bold;color:#222;\">${char.id}</div>` +
         `<div style=\"color:#888;font-size:0.98em;\">グループ${char.groupId ?? '未所属'}</div>` +
@@ -719,6 +768,12 @@ function createCharacterDetailCard(char) {
     const moveDiv = document.createElement('div');
     moveDiv.innerHTML = `<b>移動距離（合計）:</b> ${moveDistance}`;
     infoBox.appendChild(moveDiv);
+    // 現在のstate
+    if (char.state) {
+        const stateDiv = document.createElement('div');
+        stateDiv.innerHTML = `<b>現在の状態(state):</b> <span style="font-family:monospace;">${char.state}</span>`;
+        infoBox.appendChild(stateDiv);
+    }
     // 現在の行動
     if (char.currentAction) {
         const actDiv = document.createElement('div');
@@ -857,6 +912,12 @@ function createCharacterDetailCard(char) {
             if (char.state === 'moving') icons.push('🚶');
             badge.textContent = icons.slice(0,2).join('');
             if (icons.length === 0) badge.textContent = char.role === 'worker' ? '🧑‍🌾' : '🙂';
+            // 全アイコンをツールチップで表示
+            if (icons.length > 0) {
+                badge.title = icons.join(' ');
+            } else {
+                badge.title = '';
+            }
             li.appendChild(badge);
             // idをそのまま表示
             const numSpan = document.createElement('span');
