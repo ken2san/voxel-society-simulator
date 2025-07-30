@@ -869,6 +869,12 @@ class Character {
             this.path = this.bfsPath(this.gridPos, this.targetPos);
             this.lastTargetPos = { ...this.targetPos };
             if (!this.path || this.path.length === 0) {
+                // --- 追加: COLLECT_FOOD時はターゲットを失敗リストに追加 ---
+                if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target) {
+                    const {x, y, z} = this.action.target;
+                    Character.failedFoodTargets.add(`${x},${y},${z}`);
+                    this.log('Added unreachable food target to failedFoodTargets', {x, y, z});
+                }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
                 if (this.bfsFailCount > 2) {
                     this.log('BFS pathfinding failed multiple times, giving up.');
