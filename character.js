@@ -323,6 +323,13 @@ class Character {
         this.mesh = new THREE.Group();
         this.scene.add(this.mesh);
 
+        // --- 行動カウント系 ---
+        this.childCount = 0;
+        this.digCount = 0;
+        this.buildCount = 0;
+        this.eatCount = 0;
+        this.children = [];
+
         // --- Social role assignment ---
         this.role = 'worker'; // All start as worker; leader emerges via group detection
         this.groupId = null; // Will be set by group detection
@@ -982,6 +989,11 @@ class Character {
             } else if (typeof characters !== 'undefined') {
                 Character.detectGroupsAndElectLeaders(characters);
             }
+            // --- 子供カウント ---
+            if (Array.isArray(this.children)) this.children.push(child.id);
+            if (Array.isArray(partner.children)) partner.children.push(child.id);
+            if (typeof this.childCount === 'number') this.childCount++;
+            if (typeof partner.childCount === 'number') partner.childCount++;
         }
     }
 
@@ -1227,6 +1239,8 @@ class Character {
                 const wallSpots = this.action.target;
                 for (const spot of wallSpots) {
                     // 50%でDIRT, 50%でSTONE
+                // 建築カウント
+                if (typeof this.buildCount === 'number') this.buildCount++;
                     const blockType = Math.random() < 0.5 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.STONE;
                     addBlock(spot.x, spot.y, spot.z, blockType);
                 }
@@ -1235,6 +1249,9 @@ class Character {
             }
             case 'CREATE_SHELTER': {
                 const {x, y, z} = this.action.target;
+                // 掘る・建築カウント
+                if (typeof this.digCount === 'number') this.digCount++;
+                if (typeof this.buildCount === 'number') this.buildCount++;
                 removeBlock(x, y, z);
                 addBlock(x, y, z, BLOCK_TYPES.BED);
                 this.homePosition = {x, y, z};
@@ -1243,18 +1260,23 @@ class Character {
             }
             case 'EAT': {
                 const {x, y, z} = this.action.target;
+                // 食事カウント
+                if (typeof this.eatCount === 'number') this.eatCount++;
                 const blockId = worldData.get(`${x},${y},${z}`);
                 const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
                 if (blockType && blockType.isEdible) {
                     const wasInDanger = this.needs.safety < 70;
+                if (typeof this.digCount === 'number') this.digCount++;
                     this.needs.hunger = Math.min(100, this.needs.hunger + blockType.foodValue);
                     removeBlock(x, y, z);
                     this.learn && this.learn({ type: 'ATE_FOOD', inDanger: wasInDanger });
                 }
+                if (typeof this.digCount === 'number') this.digCount++;
                 this.actionCooldown = 1.2;
                 break;
             }
             case 'COLLECT_FOOD':
+                if (typeof this.buildCount === 'number') this.buildCount++;
             case 'COLLECT_FOR_STORAGE': {
                 const {x, y, z} = this.action.target;
                 const key = `${x},${y},${z}`;

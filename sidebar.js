@@ -1,4 +1,42 @@
 // needs/moodだけ個別に更新する関数
+// --- キャラごとにmood/needs履歴を記録する ---
+if (!window.characterHistory) window.characterHistory = {};
+function recordCharacterHistory() {
+    if (!window.characters) return;
+    window.characters.forEach(char => {
+        if (!window.characterHistory[char.id]) {
+            window.characterHistory[char.id] = [];
+        }
+        const arr = window.characterHistory[char.id];
+        const last = arr[arr.length - 1];
+        const curr = {
+            mood: char.mood,
+            hunger: char.needs?.hunger ?? null,
+            energy: char.needs?.energy ?? null,
+            safety: char.needs?.safety ?? null,
+            social: char.needs?.social ?? null
+        };
+        // 直前と何か変化があった場合のみpush
+        let changed = false;
+        if (!last) changed = true;
+        else {
+            if (last.mood !== curr.mood) changed = true;
+            else if (last.hunger !== curr.hunger) changed = true;
+            else if (last.energy !== curr.energy) changed = true;
+            else if (last.safety !== curr.safety) changed = true;
+            else if (last.social !== curr.social) changed = true;
+        }
+        if (changed) {
+            arr.push({
+                time: Date.now(),
+                ...curr
+            });
+            if (arr.length > 10) arr.shift();
+        }
+    });
+}
+if (window.__characterHistoryInterval) clearInterval(window.__characterHistoryInterval);
+window.__characterHistoryInterval = setInterval(recordCharacterHistory, 1000);
 function renderCharacterNeeds() {
     // サマリー表のtbody内の各trを走査し、needsとmoodだけ更新
     const table = document.querySelector('.character-summary-table');
@@ -42,14 +80,13 @@ function renderCharacterNeeds() {
     }
 }
 
-// setIntervalでopenedCharIdの有無に応じて再描画or個別更新を切り替え
+// openedCharIdの有無だけで自動更新を制御
 if (window.__sidebarNeedsInterval) clearInterval(window.__sidebarNeedsInterval);
 window.__sidebarNeedsInterval = setInterval(() => {
-    if (openedCharId) {
-        window.renderCharacterNeeds && window.renderCharacterNeeds();
-    } else {
-        window.renderCharacterList && window.renderCharacterList();
-    }
+    // 詳細パネル開いている間は一切更新しない
+    if (openedCharId) return;
+    // サマリー表全体を再描画
+    window.renderCharacterList && window.renderCharacterList();
 }, 1000);
 
 // グローバル登録
@@ -246,13 +283,13 @@ function renderCharacterDetail() {
     rightSidebar.appendChild(pinBox);
 }
 
-let selectedCharId = null;
+let selectedCharId = undefined;
 let leftSidebar = null;
 let rightSidebar = null;
 // グループ色マップをグローバル化
 let groupColorMap = {};
 // サマリー表で開いている詳細キャラID
-let openedCharId = null;
+let openedCharId = undefined;
 
 document.addEventListener('DOMContentLoaded', () => {
     leftSidebar = document.getElementById('sidebar-left');
@@ -316,8 +353,8 @@ function renderCharacterList() {
             // 詳細展開用のtr
             const detailTr = document.createElement('tr');
             detailTr.className = 'character-detail-row';
-            // openedCharIdに一致するキャラなら開く
-            if (openedCharId === char.id) {
+            // openedCharIdに一致するキャラなら開く（型を揃えて比較）
+            if (String(openedCharId) === String(char.id)) {
                 detailTr.style.display = '';
             } else {
                 detailTr.style.display = 'none';
@@ -330,16 +367,16 @@ function renderCharacterList() {
             detailTr.appendChild(detailTd);
 
             tr.onclick = (e) => {
+                // すでに開いている詳細パネルを再度クリックした場合は何もしない（点滅防止）
+                if (String(openedCharId) === String(char.id)) {
+                    e.stopPropagation();
+                    return;
+                }
                 // すでに開いている詳細を全て閉じる
                 tbody.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
-                // クリックしたキャラの詳細だけ開く/トグル
-                if (openedCharId === char.id) {
-                    openedCharId = null;
-                    detailTr.style.display = 'none';
-                } else {
-                    openedCharId = char.id;
-                    detailTr.style.display = '';
-                }
+                // クリックしたキャラの詳細だけ開く
+                openedCharId = String(char.id);
+                detailTr.style.display = '';
                 e.stopPropagation();
             };
             // ID
@@ -490,76 +527,185 @@ function createCharacterDetailCard(char) {
         `${idStr}<br>${groupStr} ／ 役割: <b>${roleStr}</b><br>` +
         `bravery: <b>${bravery}</b> ／ diligence: <b>${diligence}</b>`;
     card.appendChild(profileBox);
-    // needsバー
-    if (char.needs) {
-        const statusBox = document.createElement('div');
-        statusBox.style.marginBottom = '10px';
-        const statusList = [
-            { key: 'hunger', label: '空腹', color: 'linear-gradient(90deg,#e57373 60%,#ffd54f 100%)' },
-            { key: 'energy', label: 'エネルギー', color: 'linear-gradient(90deg,#ffd54f 60%,#81c784 100%)' },
-            { key: 'safety', label: '安全', color: 'linear-gradient(90deg,#64b5f6 60%,#ba68c8 100%)' },
-            { key: 'social', label: '社交', color: 'linear-gradient(90deg,#81c784 60%,#f06292 100%)' }
-        ];
-        statusList.forEach(st => {
-            if (typeof char.needs[st.key] === 'number') {
-                const barWrap = document.createElement('div');
-                barWrap.className = 'needs-row';
-                const label = document.createElement('span');
-                label.className = 'needs-label';
-                label.textContent = st.label;
-                const barBg = document.createElement('div');
-                barBg.className = 'needs-bar-bg';
-                const bar = document.createElement('div');
-                bar.className = 'needs-bar';
-                bar.style.background = st.color;
-                bar.style.width = Math.max(0, Math.min(100, char.needs[st.key])) + '%';
-                barBg.appendChild(bar);
-                barWrap.appendChild(label);
-                barWrap.appendChild(barBg);
-                const val = document.createElement('span');
-                val.textContent = Math.round(char.needs[st.key]);
-                val.style.fontSize = '0.95em';
-                val.style.color = '#444';
-                barWrap.appendChild(val);
-                statusBox.appendChild(barWrap);
-            }
+    // 状態推移グラフ（直近10秒）
+    const histArr = window.characterHistory?.[char.id] || [];
+    if (histArr.length > 0) {
+        const histDiv = document.createElement('div');
+        histDiv.style.margin = '16px 0 18px 0';
+        histDiv.style.display = 'flex';
+        histDiv.style.flexDirection = 'column';
+        histDiv.style.alignItems = 'center';
+        // タイトル
+        const title = document.createElement('div');
+        title.textContent = '状態推移グラフ（最新10件）';
+        title.style.fontWeight = 'bold';
+        title.style.fontSize = '1.18em';
+        title.style.color = '#333';
+        title.style.marginBottom = '6px';
+        title.style.textAlign = 'center';
+        histDiv.appendChild(title);
+        // SVGグラフ描画
+        const W = 360, H = 160, P = 38; // 幅・高さ・余白
+        const N = Math.min(10, histArr.length);
+        const data = histArr.slice(-N); // 古→新
+        // needs最大値
+        const maxVal = 100, minVal = 0;
+        // mood色マップ
+        const moodColor = {
+            happy: '#ffe082', tired: '#b0bec5', lonely: '#90caf9', active: '#a5d6a7', angry: '#ef9a9a', sad: '#ce93d8', neutral: '#bdbdbd'
+        };
+        // needs色
+        const needColors = {
+            hunger: 'rgba(229,115,115,0.7)', energy: 'rgba(255,213,79,0.7)', safety: 'rgba(100,181,246,0.7)', social: 'rgba(129,199,132,0.7)'
+        };
+        // needsキー
+        const needKeys = ['hunger','energy','safety','social'];
+        // X座標
+        const xStep = (W-P*2) / (N-1);
+        // mood点座標
+        function moodToColor(mood) {
+            return moodColor[mood] || moodColor['neutral'];
+        }
+        // needs折れ線
+        function getLinePath(key) {
+            let path = '';
+            data.forEach((h, i) => {
+                const v = (typeof h[key] === 'number') ? h[key] : null;
+                if (v === null) return;
+                const x = P + i * xStep;
+                const y = P + (H-P*2) * (1 - (v-minVal)/(maxVal-minVal));
+                path += (i === 0 ? 'M' : 'L') + x + ',' + y + ' ';
+            });
+            return path;
+        }
+        // mood点
+        function getMoodPoints() {
+            return data.map((h,i) => {
+                const x = P + i * xStep;
+                const y = P + 18 + (H-P*2) * 0.08; // needs線より少し上
+                return {x, y, mood: h.mood};
+            });
+        }
+        // SVG要素生成
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('width', W);
+        svg.setAttribute('height', H);
+        svg.style.display = 'block';
+        svg.style.background = '#fff';
+        svg.style.border = '2px solid #e0e0e0';
+        svg.style.borderRadius = '14px';
+        svg.style.boxShadow = '0 2px 8px #0001';
+        svg.style.margin = '0 auto';
+        // needs折れ線
+        needKeys.forEach(key => {
+            const path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', getLinePath(key));
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', needColors[key]);
+            path.setAttribute('stroke-width', 2.2);
+            path.setAttribute('opacity', 0.95);
+            svg.appendChild(path);
         });
-        card.appendChild(statusBox);
+        // mood点
+        getMoodPoints().forEach((pt, i) => {
+            const circ = document.createElementNS(svgNS, 'circle');
+            circ.setAttribute('cx', pt.x);
+            circ.setAttribute('cy', pt.y-12);
+            circ.setAttribute('r', 8);
+            circ.setAttribute('fill', moodToColor(pt.mood));
+            circ.setAttribute('stroke', '#888');
+            circ.setAttribute('stroke-width', 1.1);
+            circ.setAttribute('opacity', 0.92);
+            svg.appendChild(circ);
+        });
+        histDiv.appendChild(svg);
+        // X軸ラベル（時刻）をSVG外に横並びで中央寄せ
+        const timeLabels = document.createElement('div');
+        timeLabels.style.display = 'flex';
+        timeLabels.style.justifyContent = 'center';
+        timeLabels.style.gap = '0px';
+        timeLabels.style.fontSize = '1em';
+        timeLabels.style.color = '#888';
+        timeLabels.style.margin = '4px 0 0 0';
+        timeLabels.style.width = W + 'px';
+        timeLabels.style.maxWidth = W + 'px';
+        timeLabels.style.textAlign = 'center';
+        data.forEach((h,i) => {
+            const t = new Date(h.time).toLocaleTimeString().slice(3,8);
+            const span = document.createElement('span');
+            span.textContent = t;
+            span.style.flex = '1 1 0';
+            span.style.textAlign = 'center';
+            timeLabels.appendChild(span);
+        });
+        histDiv.appendChild(timeLabels);
+        // 凡例
+        const legend = document.createElement('div');
+        legend.style.display = 'flex';
+        legend.style.justifyContent = 'center';
+        legend.style.gap = '18px';
+        legend.style.fontSize = '1em';
+        legend.style.margin = '6px 0 0 0';
+        legend.style.textAlign = 'center';
+        needKeys.forEach(k => {
+            const span = document.createElement('span');
+            span.innerHTML = `<span style=\"display:inline-block;width:18px;height:4px;background:${needColors[k]};margin-right:4px;vertical-align:middle;border-radius:2px;\"></span>${k}`;
+            legend.appendChild(span);
+        });
+        // mood凡例
+        const moodLegend = document.createElement('span');
+        moodLegend.innerHTML = '<span style="display:inline-block;width:15px;height:15px;border-radius:50%;background:#ffe082;border:1px solid #bbb;margin-right:4px;vertical-align:middle;"></span>mood';
+        legend.appendChild(moodLegend);
+        histDiv.appendChild(legend);
+        card.appendChild(histDiv);
     }
-    // 所持アイテム・土地数・行動・履歴
+    // --- カウント系情報 ---
     const infoBox = document.createElement('div');
     infoBox.style.marginBottom = '10px';
+    // 所持アイテム
     if (char.items && Array.isArray(char.items) && char.items.length > 0) {
         const itemDiv = document.createElement('div');
         itemDiv.innerHTML = `<b>所持アイテム:</b> ${char.items.join(', ')}`;
         infoBox.appendChild(itemDiv);
     }
-    if (typeof char.landCount === 'number') {
-        const landDiv = document.createElement('div');
-        landDiv.innerHTML = `<b>所有土地:</b> ${char.landCount}区画`;
-        infoBox.appendChild(landDiv);
-    }
+    // 所有土地数
+    let landCount = '-';
+    if (typeof char.landCount === 'number') landCount = char.landCount;
+    else if (char.ownedLand && typeof char.ownedLand.size === 'number') landCount = char.ownedLand.size;
+    const landDiv = document.createElement('div');
+    landDiv.innerHTML = `<b>所有土地:</b> ${landCount}区画`;
+    infoBox.appendChild(landDiv);
+    // 子供数
+    let childCount = '-';
+    if (typeof char.childCount === 'number') childCount = char.childCount;
+    else if (Array.isArray(char.children)) childCount = char.children.length;
+    const childDiv = document.createElement('div');
+    childDiv.innerHTML = `<b>子供数:</b> ${childCount}`;
+    infoBox.appendChild(childDiv);
+    // 穴を掘った回数
+    let digCount = '-';
+    if (typeof char.digCount === 'number') digCount = char.digCount;
+    const digDiv = document.createElement('div');
+    digDiv.innerHTML = `<b>穴を掘った回数:</b> ${digCount}`;
+    infoBox.appendChild(digDiv);
+    // 建物を建てた回数
+    let buildCount = '-';
+    if (typeof char.buildCount === 'number') buildCount = char.buildCount;
+    const buildDiv = document.createElement('div');
+    buildDiv.innerHTML = `<b>建物を建てた回数:</b> ${buildCount}`;
+    infoBox.appendChild(buildDiv);
+    // 食事の回数
+    let eatCount = '-';
+    if (typeof char.eatCount === 'number') eatCount = char.eatCount;
+    const eatDiv = document.createElement('div');
+    eatDiv.innerHTML = `<b>食事の回数:</b> ${eatCount}`;
+    infoBox.appendChild(eatDiv);
+    // 現在の行動
     if (char.currentAction) {
         const actDiv = document.createElement('div');
         actDiv.innerHTML = `<b>現在の行動:</b> ${char.currentAction}`;
         infoBox.appendChild(actDiv);
-    }
-    // --- 行動履歴（時系列リストで強調） ---
-    if (char.actionHistory && Array.isArray(char.actionHistory) && char.actionHistory.length > 0) {
-        const histDiv = document.createElement('div');
-        histDiv.innerHTML = `<b>行動履歴（新→旧）</b>`;
-        const ul = document.createElement('ul');
-        ul.style.margin = '4px 0 0 0';
-        ul.style.paddingLeft = '1.2em';
-        ul.style.fontSize = '0.98em';
-        // 新しい順で最大7件表示
-        char.actionHistory.slice(-7).reverse().forEach(act => {
-            const li = document.createElement('li');
-            li.textContent = act;
-            ul.appendChild(li);
-        });
-        histDiv.appendChild(ul);
-        infoBox.appendChild(histDiv);
     }
     card.appendChild(infoBox);
     // 関係性リスト
@@ -599,8 +745,8 @@ function createCharacterDetailCard(char) {
 }
 
     // 初期選択キャラが未設定なら自動で最初のキャラを選択
-    if (!selectedCharId && window.characters.length > 0) {
-        selectedCharId = window.characters[0].id;
+    if (selectedCharId === undefined && window.characters.length > 0) {
+        selectedCharId = String(window.characters[0].id);
     }
 
     // グループごとに分類
