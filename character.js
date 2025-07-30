@@ -1194,6 +1194,54 @@ class Character {
     decideNextAction(isNight) {
         // --- Emergency: If needs are critically low, always prioritize survival actions ---
         if (this.needs.hunger <= 10) {
+            // 1. まずインベントリ内の食料を食べる
+            const foodIdx = this.inventory.findIndex(item => item === 'FRUIT_ITEM' || item === 'FRUIT');
+            if (foodIdx !== -1) {
+                // 食べる処理
+                this.inventory[foodIdx] = null;
+                this.carriedItemMesh.visible = false;
+                this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                this.eatCount = (this.eatCount || 0) + 1;
+                this.log('Ate food from inventory');
+                // 食べたらidleに戻る
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 0.5;
+                return;
+            }
+            // 2. 近くのキャラから食料を奪う
+            const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+            let stealTarget = null;
+            for (const char of chars) {
+                if (char.id === this.id) continue;
+                const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+                if (dist <= 1 && char.inventory && (char.inventory.includes('FRUIT_ITEM') || char.inventory.includes('FRUIT'))) {
+                    stealTarget = char;
+                    break;
+                }
+            }
+            if (stealTarget) {
+                // 奪う処理
+                const idx = stealTarget.inventory.findIndex(item => item === 'FRUIT_ITEM' || item === 'FRUIT');
+                if (idx !== -1) {
+                    const stolen = stealTarget.inventory[idx];
+                    stealTarget.inventory[idx] = null;
+                    this.inventory[0] = stolen;
+                    this.carriedItemMesh.visible = true;
+                    this.log('Stole food from character', stealTarget.id);
+                    // すぐ食べる
+                    this.inventory[0] = null;
+                    this.carriedItemMesh.visible = false;
+                    this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                    this.eatCount = (this.eatCount || 0) + 1;
+                    this.log('Ate stolen food');
+                    this.state = 'idle';
+                    this.action = null;
+                    this.actionCooldown = 0.5;
+                    return;
+                }
+            }
+            // 3. ワールド上の食料を探す
             const foodPos = this.findClosestFood && this.findClosestFood();
             if (foodPos) {
                 const adjacentSpot = this.findAdjacentSpot && this.findAdjacentSpot(foodPos);
