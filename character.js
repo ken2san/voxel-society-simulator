@@ -1,3 +1,4 @@
+// --- 落下先が安全か（抜け出せるか）判定 ---
 
 import * as THREE from 'three';
 import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight } from './world.js';
@@ -21,9 +22,88 @@ function toScreenPosition(obj, camera, canvas = null) {
     return { x, y };
 }
 // charactersはグローバル参照のまま（循環参照回避のため）
-// ...existing code...
+
 
 class Character {
+    // --- 夜間に安全かどうか判定 ---
+    isSafe(isNight) {
+        if (!isNight) return true;
+        // 頭上2マス以内にブロックがあれば安全
+        for (let i = 1; i <= 2; i++) {
+            const above = worldData.get(`${this.gridPos.x},${this.gridPos.y + i},${this.gridPos.z}`);
+            if (above && ((typeof above === 'object' && above.cave) || (typeof above === 'number' && above !== BLOCK_TYPES.AIR.id))) {
+                return true;
+            }
+        }
+        // 現在地が洞窟エアブロックなら安全
+        const here = worldData.get(`${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`);
+        if (here && typeof here === 'object' && here.cave) return true;
+        return false;
+    }
+    // --- 現在のアクションを実行する ---
+    performAction() {
+        if (!this.action || !this.action.type) {
+            this.state = 'idle';
+            return;
+        }
+        switch (this.action.type) {
+            case 'WANDER':
+                // ランダムな方向に移動
+                this.state = 'moving';
+                // 近くの空きマスを探して移動
+                const dirs = [
+                    {dx:1,dy:0,dz:0},{dx:-1,dy:0,dz:0},{dx:0,dy:0,dz:1},{dx:0,dy:0,dz:-1},
+                    {dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0}
+                ];
+                let found = false;
+                for (let i = 0; i < dirs.length; i++) {
+                    const d = dirs[Math.floor(Math.random() * dirs.length)];
+                    const x = this.gridPos.x + d.dx;
+                    const y = this.gridPos.y + d.dy;
+                    const z = this.gridPos.z + d.dz;
+                    const key = `${x},${y},${z}`;
+                    const below = `${x},${y-1},${z}`;
+                    if (!worldData.has(key) && worldData.has(below)) {
+                        this.targetPos = {x, y, z};
+                        this.state = 'moving';
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    this.state = 'idle';
+                }
+                break;
+            case 'SOCIALIZE':
+                // 社交状態に遷移
+                this.state = 'socializing';
+                // パートナーも同時に社交状態にする
+                const partner = this.action.target;
+                if (partner && partner !== this && partner.state !== 'socializing') {
+                    partner.setNextAction && partner.setNextAction('SOCIALIZE', this, this.gridPos);
+                }
+                break;
+            // 必要に応じて他のアクションタイプも追加
+            default:
+                this.state = 'idle';
+                break;
+        }
+    }
+    setNextAction(type, target = null, moveTo = null, item = null) {
+        // 行動履歴を記録
+        if (!this.actionHistory) this.actionHistory = [];
+        this.actionHistory.push(type);
+        if (this.actionHistory.length > 20) this.actionHistory.shift();
+        this.log(`Action chosen: ${type}`, {target, moveTo});
+        if (type === 'SOCIALIZE') {
+            this.log('SOCIALIZE action selected', { id: this.id, target: target?.id, pos: this.gridPos });
+        }
+        this.action = { type, target, item };
+        if (moveTo) { this.targetPos = moveTo; this.state = 'moving'; }
+        else { this.performAction(); }
+    }
+
+// Duplicate class declaration removed
     // --- 失敗ターゲット記憶用: 食料採集失敗時に同じ座標を避ける ---
     static failedFoodTargets = new Set();
     // --- Group detection and per-group leader election ---
@@ -315,7 +395,7 @@ class Character {
             }
         }
         return null;
-    }
+   }
 
 // ...existing code...
     constructor(scene, startPos, id, genes = null) {
@@ -465,7 +545,7 @@ class Character {
         for (const char of chars) {
             if (char.id === this.id) continue;
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-            if (dist < minDist) {
+            if (dist < minDist && dist <= 2) { // 2マス以内のみ対象
                 minDist = dist;
                 closest = char;
             }
@@ -625,6 +705,26 @@ class Character {
                 this.needs.social = Math.min(100, this.needs.social + deltaTime * 5);
             }
         }
+        // --- 空中スタック救済: 下にブロックがなければ強制落下 ---
+        if (!worldData.has(`${this.gridPos.x},${this.gridPos.y-1},${this.gridPos.z}`)) {
+            this._airTime = (this._airTime || 0) + deltaTime;
+            if (this._airTime > 1.0) { // 1秒以上空中なら
+                // 1段下に強制移動（地面が見つかるまで）
+                let fallY = this.gridPos.y - 1;
+                while (fallY > 0 && !worldData.has(`${this.gridPos.x},${fallY-1},${this.gridPos.z}`)) {
+                    fallY--;
+                }
+                if (fallY >= 0) {
+                    this.gridPos.y = fallY;
+                    this.mesh.position.y = fallY;
+                    this._airTime = 0;
+                    this.log('Rescued from air: forced drop to ground', {y: fallY});
+                }
+            }
+        } else {
+            this._airTime = 0;
+        }
+
         this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos });
         // Claim land underfoot every update
         this.claimCurrentLand();
@@ -905,14 +1005,22 @@ class Character {
                     const key = `${x},${y},${z}`;
                     const blockId = worldData.get(key);
                     const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                    // 掘る前に落下先が安全か判定
                     if (blockType && blockType.diggable) {
-                        removeBlock(x, y, z);
-                        this.log('Rescue: destroyed nearby diggable block to create path', {x, y, z});
-                        brokeBlock = true;
-                        break;
+                        let fallY = y;
+                        // 掘ったら落下する場合は下まで落ちる
+                        while (fallY > 0 && !worldData.has(`${x},${fallY-1},${z}`)) fallY--;
+                        if (this.isSafeToFallOrDig(x, fallY, z)) {
+                            removeBlock(x, y, z);
+                            this.log('Rescue: destroyed nearby diggable block to create path (safe)', {x, y, z, fallY});
+                            brokeBlock = true;
+                            break;
+                        } else {
+                            this.log('Skip digging: fall destination not safe', {x, y, z, fallY});
+                        }
                     }
                 }
-                // --- 一定回数失敗したら: ランダムな方向に強制掘削 ---
+                // --- 一定回数失敗したら: ランダムな方向に強制掘削（安全な落下先のみ） ---
                 if (!brokeBlock && this.bfsFailCount > 2) {
                     const digDirs = directions.filter(d => {
                         const x = this.gridPos.x + d.dx;
@@ -920,7 +1028,13 @@ class Character {
                         const z = this.gridPos.z + d.dz;
                         const key = `${x},${y},${z}`;
                         const blockId = worldData.get(key);
-                        return blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id;
+                        // 強制掘削も安全な落下先のみ許可
+                        if (blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id) {
+                            let fallY = y;
+                            while (fallY > 0 && !worldData.has(`${x},${fallY-1},${z}`)) fallY--;
+                            return this.isSafeToFallOrDig(x, fallY, z);
+                        }
+                        return false;
                     });
                     if (digDirs.length > 0) {
                         const randDir = digDirs[Math.floor(Math.random() * digDirs.length)];
@@ -953,6 +1067,17 @@ class Character {
             this.path = [];
             this.performAction && this.performAction();
             return;
+        }
+        // --- 落下先が安全か判定してから移動 ---
+        if (next.y < this.gridPos.y) {
+            // 下に降りる場合、落下先が安全か判定
+            if (!this.isSafeToFallOrDig(next.x, next.y, next.z)) {
+                this.log('Skip move: fall destination not safe', {from: this.gridPos, to: next});
+                this.state = 'idle';
+                this.path = [];
+                this.actionCooldown = 0.5;
+                return;
+            }
         }
         const prevGridPos = { ...this.gridPos };
         const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y, next.z + 0.5);
@@ -1192,6 +1317,21 @@ class Character {
     }
 
     decideNextAction(isNight) {
+        // --- 10%の確率で強制的にWANDERまたはSOCIALIZEを選ぶ（ダイナミックな試行錯誤） ---
+        if (Math.random() < 0.10) {
+            const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+            let nearbyPartner = null;
+            for (const char of chars) {
+                if (char.id === this.id) continue;
+                const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+                if (dist <= 2) { nearbyPartner = char; break; }
+            }
+            if (nearbyPartner) {
+                this.setNextAction('SOCIALIZE', nearbyPartner, nearbyPartner.gridPos); return;
+            } else {
+                this.setNextAction('WANDER'); return;
+            }
+        }
         // --- Emergency: If needs are critically low, always prioritize survival actions ---
         if (this.needs.hunger <= 10) {
             // 1. まずインベントリ内の食料を食べる
@@ -1445,6 +1585,21 @@ class Character {
             }
         }
         // --- WANDER時は周囲の空きスポットからランダムに移動先を選ぶ ---
+        // --- WANDER分岐の前に: 近くにキャラがいればSOCIALIZEを優先 ---
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        let nearbyPartner = null;
+        for (const char of chars) {
+            if (char.id === this.id) continue;
+            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+            if (dist <= 2) { // 2マス以内に他キャラがいれば
+                nearbyPartner = char;
+                break;
+            }
+        }
+        if (nearbyPartner) {
+            this.setNextAction('SOCIALIZE', nearbyPartner, nearbyPartner.gridPos); return;
+        }
+        // --- 通常のWANDER分岐 ---
         const wanderSpots = [];
         for (let dx = -2; dx <= 2; dx++) {
             for (let dz = -2; dz <= 2; dz++) {
@@ -1510,168 +1665,6 @@ class Character {
         }
     }
 
-    setNextAction(type, target = null, moveTo = null, item = null) {
-        this.log(`Action chosen: ${type}`, {target, moveTo});
-        this.action = { type, target, item };
-        if (moveTo) { this.targetPos = moveTo; this.state = 'moving'; }
-        else { this.performAction(); }
-    }
-
-    performAction() {
-        if (!this.action) { this.state = 'idle'; this.actionCooldown = 1; return; }
-        this.log(`Performing action: ${this.action.type}`);
-        if(this.action.type !== 'REST' && this.action.type.indexOf('SEEK_SHELTER') === -1) { this.actionAnim.active = true; this.actionAnim.timer = this.actionAnim.duration; }
-
-        switch (this.action.type) {
-            case 'MEETING': {
-                // ...existing code...
-                break;
-            }
-            case 'GO_TO_MEETING': {
-                // ...existing code...
-                break;
-            }
-            case 'CRAFT_TOOL': {
-                // ...existing code...
-                break;
-            }
-            case 'BUILD_WALL': {
-                // ...existing code...
-                break;
-            }
-            case 'CREATE_SHELTER': {
-                // ...existing code...
-                break;
-            }
-            case 'EAT': {
-                // ...existing code...
-                break;
-            }
-            case 'COLLECT_FOOD': {
-                // 食料ブロックを取得し、inventoryに追加＋needs回復
-                if (typeof this.buildCount === 'number') this.buildCount++;
-                let collected = false;
-                if (this.action.target) {
-                    const {x, y, z} = this.action.target;
-                    const blockId = worldData.get(`${x},${y},${z}`);
-                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                    if (blockType && blockType.isEdible && this.inventory[0] === null) {
-                        removeBlock(x, y, z);
-                        this.inventory[0] = 'FRUIT_ITEM';
-                        this.carriedItemMesh.material = ITEM_TYPES.FRUIT_ITEM.material;
-                        this.carriedItemMesh.visible = true;
-                        this.needs.hunger = Math.min(100, this.needs.hunger + (blockType.foodValue || 20));
-                        if (typeof this.eatCount === 'number') this.eatCount++;
-                        collected = true;
-                        // 成功したら失敗リストから除外
-                        Character.failedFoodTargets.delete(`${x},${y},${z}`);
-                    }
-                }
-                if (!collected) {
-                    // 失敗ターゲットを記憶
-                    if (this.action.target) {
-                        const {x, y, z} = this.action.target;
-                        Character.failedFoodTargets.add(`${x},${y},${z}`);
-                    }
-                    // 何も取れなかった場合はWANDERか他の行動を選択
-                    // 50%でWANDER、50%で他の行動（CHOP_WOODやSOCIALIZE等）
-                    if (Math.random() < 0.5) {
-                        this.setNextAction('WANDER');
-                    } else {
-                        // hungerが高ければ木を探す、低ければ社交
-                        if (this.needs.hunger > 60) {
-                            const woodPos = this.findClosestWood && this.findClosestWood();
-                            if (woodPos) {
-                                const adjacentSpot = this.findAdjacentSpot(woodPos);
-                                if (adjacentSpot) {
-                                    this.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
-                                    return;
-                                }
-                            }
-                        }
-                        // それ以外は社交
-                        const partner = this.findClosestPartner && this.findClosestPartner();
-                        if (partner) {
-                            this.setNextAction('SOCIALIZE', partner, partner.gridPos);
-                        } else {
-                            this.setNextAction('WANDER');
-                        }
-                    }
-                    return;
-                }
-                this.actionCooldown = 1.2;
-                this.showActionEffect('dig');
-                break;
-            }
-        }
-    }
-
-    // --- Action effect: icon + color ---
-    showActionEffect(actionType) {
-        // 1. アイコン種別
-        let icon = '';
-        let colorClass = '';
-        switch (actionType) {
-            case 'dig': icon = '⛏️'; colorClass = 'action-dig'; break;
-            case 'build': icon = '🏠'; colorClass = 'action-build'; break;
-            case 'eat': icon = '🍽️'; colorClass = 'action-eat'; break;
-            default: icon = '✨'; colorClass = 'action-generic';
-        }
-        // 2. アイコン表示
-        this.actionIconDiv.textContent = icon;
-        // 頭上座標に配置
-        try {
-            const camera = window.gameCamera || null;
-            const canvas = document.getElementById('gameCanvas');
-            if (camera && this.iconAnchor && typeof toScreenPosition === 'function' && canvas) {
-                const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
-                this.actionIconDiv.style.left = (screenPos.x - 16) + 'px';
-                this.actionIconDiv.style.top = (screenPos.y - 70) + 'px';
-            }
-        } catch(e) {}
-        this.actionIconDiv.style.opacity = 1;
-        this.actionIconDiv.style.transform = 'translateY(-10px) scale(1.2)';
-        setTimeout(() => {
-            this.actionIconDiv.style.opacity = 0;
-            this.actionIconDiv.style.transform = 'translateY(-30px) scale(0.8)';
-        }, 900);
-        // 3. 色変化（bodyにclass付与）
-        if (this.body && this.body.material) {
-            this.body.meshClassTimeout && clearTimeout(this.body.meshClassTimeout);
-            this.body.material.userData = this.body.material.userData || {};
-            if (!this.body.material.userData.origColor) {
-                this.body.material.userData.origColor = this.body.material.color.clone();
-            }
-            // 色を一時的に変化
-            if (actionType === 'dig') {
-                this.body.material.color.set('#b97a57'); // brown
-            } else if (actionType === 'build') {
-                this.body.material.color.set('#ffd54f'); // yellow
-            } else if (actionType === 'eat') {
-                this.body.material.color.set('#81c784'); // green
-            } else {
-                this.body.material.color.set('#90caf9'); // blue
-            }
-            this.body.meshClassTimeout = setTimeout(() => {
-                if (this.body.material.userData && this.body.material.userData.origColor) {
-                    this.body.material.color.copy(this.body.material.userData.origColor);
-                }
-            }, 900);
-        }
-    }
-
-    isSafe(isNight) {
-        // 簡易安全判定
-        if (!isNight) return true;
-        // 周囲にブロックがあるか
-        for (let i = 1; i < 4; i++) {
-            if (worldData.has(`${this.gridPos.x},${this.gridPos.y+i},${this.gridPos.z}`)) return true;
-        }
-        return false;
-    }
-
-    // (Removed duplicate/empty learn method; the real one is above)
-
     updateColorFromPersonality() {
         const r = Math.max(0, Math.min(1, 0.2 + (this.personality.bravery - 0.5)));
         const g = Math.max(0, Math.min(1, 0.2 + (this.personality.diligence - 0.5)));
@@ -1702,6 +1695,29 @@ class Character {
                 : '#888';
             console.log(`%c[Char ${this.id}]`, `color: ${color}`, message, ...args);
         }
+    }
+
+    // 落下先や掘削先が安全か判定する
+    isSafeToFallOrDig(x, y, z) {
+        // y座標が範囲外ならNG
+        if (y < 0 || y > maxHeight) return false;
+        // 落下先の下にブロックがあるか
+        let belowY = y - 1;
+        while (belowY >= 0 && !worldData.has(`${x},${belowY},${z}`)) {
+            belowY--;
+        }
+        // 地面がなければNG
+        if (belowY < 0) return false;
+        // 落下距離が大きすぎる場合はNG（例: 3段以上の落下禁止）
+        if (y - belowY > 3) return false;
+        // 落下先に他キャラがいないか
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        for (const char of chars) {
+            if (char !== this && char.gridPos.x === x && char.gridPos.y === y && char.gridPos.z === z) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 export { Character };

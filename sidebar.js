@@ -217,7 +217,9 @@ function renderCharacterDetail() {
     // 現在の行動
     if (char.currentAction) {
         const actDiv = document.createElement('div');
-        actDiv.innerHTML = `<b>現在の行動:</b> ${char.currentAction}`;
+        let actionLabel = char.currentAction;
+        if (char.state === 'socializing') actionLabel = 'SOCIALIZE';
+        actDiv.innerHTML = `<b>現在の行動:</b> ${actionLabel}`;
         infoBox.appendChild(actDiv);
     }
     // 行動履歴
