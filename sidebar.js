@@ -428,12 +428,12 @@ function renderCharacterList() {
             if (char.state === 'dead') stateIcons.push('💀');
             else if (char.state === 'resting') stateIcons.push('🛏️');
             else if (char.state === 'socializing') stateIcons.push('💬');
+            else if (char.state === 'moving') stateIcons.push('🚶');
             // COLLECT_FOOD中は必ず🍎を表示
             if (char.currentAction === 'COLLECT_FOOD' && !stateIcons.includes('🍎')) stateIcons.push('🍎');
             else if (char.needs && char.needs.hunger < 30 && !stateIcons.includes('🍎')) stateIcons.push('🍎');
             if (char.needs && char.needs.energy < 30) stateIcons.push('💤');
             if (char.needs && char.needs.social < 30) stateIcons.push('👥');
-            // "moving"は気分欄（mood）でのみ表示する（状態アイコンには含めない）
             if (stateIcons.length === 0) stateIcons.push(char.role === 'worker' ? '🧑‍🌾' : '🙂');
             tdIcons.textContent = stateIcons.join(' ');
             tdIcons.title = stateIcons.join(' ');
@@ -446,7 +446,7 @@ function renderCharacterList() {
                 case 'happy': moodIcon = '😄'; break;
                 case 'tired': moodIcon = '😪'; break;
                 case 'lonely': moodIcon = '😢'; break;
-                case 'active': moodIcon = '🚶'; break;
+                case 'scared': moodIcon = '😱'; break;
                 case 'angry': moodIcon = '😠'; break;
                 case 'sad': moodIcon = '😔'; break;
                 default: moodIcon = '🙂';
@@ -508,10 +508,10 @@ function createCharacterDetailCard(char) {
     if (char.state === 'dead') stateIcons.push('💀');
     else if (char.state === 'resting') stateIcons.push('🛏️');
     else if (char.state === 'socializing') stateIcons.push('💬');
+    else if (char.state === 'moving') stateIcons.push('🚶');
     if (char.needs && char.needs.hunger < 30) stateIcons.push('🍎');
-    if (char.needs && char.needs.energy < 30) stateIcons.push('💤');
-    if (char.needs && char.needs.social < 30) stateIcons.push('👥');
-    if (char.state === 'moving') stateIcons.push('🚶');
+    if (char.needs && char.needs.energy < 30) stateIcons.push('�');
+    if (char.needs && char.needs.social < 30) stateIcons.push('�');
     bigIcon.textContent = stateIcons[0] || (char.role === 'worker' ? '🧑‍🌾' : '🙂');
     bigIcon.style.fontSize = '2.1em';
     bigIcon.style.border = '3px solid #bbb';
@@ -541,8 +541,8 @@ function createCharacterDetailCard(char) {
             moodIcon = '😪'; moodClass = 'mood-tired'; moodText = 'tired'; break;
         case 'lonely':
             moodIcon = '😢'; moodClass = 'mood-lonely'; moodText = 'lonely'; break;
-        case 'active':
-            moodIcon = '🚶'; moodClass = 'mood-active'; moodText = 'active'; break;
+        case 'scared':
+            moodIcon = '😱'; moodClass = 'mood-scared'; moodText = 'scared'; break;
         case 'angry':
             moodIcon = '😠'; moodClass = 'mood-angry'; moodText = 'angry'; break;
         case 'sad':
@@ -763,23 +763,11 @@ function createCharacterDetailCard(char) {
     const eatDiv = document.createElement('div');
     eatDiv.innerHTML = `<b>食事の回数:</b> ${eatCount}`;
     infoBox.appendChild(eatDiv);
-    // 移動ブロック距離
-    let moveDistance = '-';
-    if (typeof char.moveDistance === 'number') moveDistance = char.moveDistance;
-    const moveDiv = document.createElement('div');
-    moveDiv.innerHTML = `<b>移動距離（合計）:</b> ${moveDistance}`;
-    infoBox.appendChild(moveDiv);
-    // 現在のstate
+    // 現在のstateのみは残し、移動距離・現在の行動は詳細カードから削除
     if (char.state) {
         const stateDiv = document.createElement('div');
         stateDiv.innerHTML = `<b>現在の状態(state):</b> <span style="font-family:monospace;">${char.state}</span>`;
         infoBox.appendChild(stateDiv);
-    }
-    // 現在の行動
-    if (char.currentAction) {
-        const actDiv = document.createElement('div');
-        actDiv.innerHTML = `<b>現在の行動:</b> ${char.currentAction}`;
-        infoBox.appendChild(actDiv);
     }
     card.appendChild(infoBox);
     // 関係性リスト

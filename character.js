@@ -747,7 +747,10 @@ class Character {
             this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 10);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
-                if (this.provisionalHome === null) { this.provisionalHome = this.gridPos; this.learn && this.learn({ type: 'FOUND_SHELTER' }); }
+                if (this.provisionalHome === null) {
+                    this.provisionalHome = this.gridPos;
+                    this.learn && this.learn({ type: 'FOUND_SHELTER' });
+                }
             }
         }
         if (this.state === 'socializing') {
