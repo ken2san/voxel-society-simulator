@@ -329,6 +329,8 @@ class Character {
         this.buildCount = 0;
         this.eatCount = 0;
         this.children = [];
+        // --- 移動距離カウント ---
+        this.moveDistance = 0;
 
         // --- Social role assignment ---
         this.role = 'worker'; // All start as worker; leader emerges via group detection
@@ -429,6 +431,17 @@ class Character {
 
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
+
+        // --- Action icon (for action effect) ---
+        this.actionIconDiv = document.createElement('div');
+        this.actionIconDiv.className = 'action-icon';
+        this.actionIconDiv.style.position = 'fixed';
+        this.actionIconDiv.style.zIndex = 1000;
+        this.actionIconDiv.style.fontSize = '2em';
+        this.actionIconDiv.style.pointerEvents = 'none';
+        this.actionIconDiv.style.transition = 'opacity 0.3s, transform 0.3s';
+        this.actionIconDiv.style.opacity = 0;
+        document.body.appendChild(this.actionIconDiv);
     }
     // --- AI & Action Methods ---
     findClosestPartner() {
@@ -763,6 +776,7 @@ class Character {
             this.performAction && this.performAction();
             return;
         }
+        const prevGridPos = { ...this.gridPos };
         const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y, next.z + 0.5);
         const direction = targetWorldPos.clone().sub(this.mesh.position);
         // 顔の向き（body/headのrotation.y）を移動方向に合わせる
@@ -775,6 +789,9 @@ class Character {
         if (direction.length() < moveDistance) {
             this.mesh.position.copy(targetWorldPos);
             this.gridPos = {x: next.x, y: next.y, z: next.z};
+            // --- ここで移動距離を加算 ---
+            const dist = Math.abs(prevGridPos.x - next.x) + Math.abs(prevGridPos.y - next.y) + Math.abs(prevGridPos.z - next.z);
+            if (dist > 0) this.moveDistance += dist;
             this.path.shift();
             if (this.path.length === 0) {
                 this.state = 'idle';
@@ -1245,6 +1262,7 @@ class Character {
                     addBlock(spot.x, spot.y, spot.z, blockType);
                 }
                 this.actionCooldown = 2.0;
+                this.showActionEffect('build');
                 break;
             }
             case 'CREATE_SHELTER': {
@@ -1256,6 +1274,7 @@ class Character {
                 addBlock(x, y, z, BLOCK_TYPES.BED);
                 this.homePosition = {x, y, z};
                 this.actionCooldown = 2.5;
+                this.showActionEffect('build');
                 break;
             }
             case 'EAT': {
@@ -1273,84 +1292,67 @@ class Character {
                 }
                 if (typeof this.digCount === 'number') this.digCount++;
                 this.actionCooldown = 1.2;
+                this.showActionEffect('eat');
                 break;
             }
             case 'COLLECT_FOOD':
                 if (typeof this.buildCount === 'number') this.buildCount++;
-            case 'COLLECT_FOR_STORAGE': {
-                const {x, y, z} = this.action.target;
-                const key = `${x},${y},${z}`;
-                const blockId = worldData.get(key);
-                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                if (blockType && blockType.isEdible && this.inventory[0] === null) {
-                    removeBlock(x, y, z);
-                    this.inventory[0] = ITEM_TYPES.FRUIT_ITEM;
-                    this.carriedItemMesh.material = blockMaterials.get(BLOCK_TYPES.FRUIT.id);
-                    this.carriedItemMesh.visible = true;
+                this.showActionEffect('dig');
+                break;
+        }
+    }
+
+    // --- Action effect: icon + color ---
+    showActionEffect(actionType) {
+        // 1. アイコン種別
+        let icon = '';
+        let colorClass = '';
+        switch (actionType) {
+            case 'dig': icon = '⛏️'; colorClass = 'action-dig'; break;
+            case 'build': icon = '🏠'; colorClass = 'action-build'; break;
+            case 'eat': icon = '🍽️'; colorClass = 'action-eat'; break;
+            default: icon = '✨'; colorClass = 'action-generic';
+        }
+        // 2. アイコン表示
+        this.actionIconDiv.textContent = icon;
+        // 頭上座標に配置
+        try {
+            const camera = window.gameCamera || null;
+            const canvas = document.getElementById('gameCanvas');
+            if (camera && this.iconAnchor && typeof toScreenPosition === 'function' && canvas) {
+                const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
+                this.actionIconDiv.style.left = (screenPos.x - 16) + 'px';
+                this.actionIconDiv.style.top = (screenPos.y - 70) + 'px';
+            }
+        } catch(e) {}
+        this.actionIconDiv.style.opacity = 1;
+        this.actionIconDiv.style.transform = 'translateY(-10px) scale(1.2)';
+        setTimeout(() => {
+            this.actionIconDiv.style.opacity = 0;
+            this.actionIconDiv.style.transform = 'translateY(-30px) scale(0.8)';
+        }, 900);
+        // 3. 色変化（bodyにclass付与）
+        if (this.body && this.body.material) {
+            this.body.meshClassTimeout && clearTimeout(this.body.meshClassTimeout);
+            this.body.material.userData = this.body.material.userData || {};
+            if (!this.body.material.userData.origColor) {
+                this.body.material.userData.origColor = this.body.material.color.clone();
+            }
+            // 色を一時的に変化
+            if (actionType === 'dig') {
+                this.body.material.color.set('#b97a57'); // brown
+            } else if (actionType === 'build') {
+                this.body.material.color.set('#ffd54f'); // yellow
+            } else if (actionType === 'eat') {
+                this.body.material.color.set('#81c784'); // green
+            } else {
+                this.body.material.color.set('#90caf9'); // blue
+            }
+            this.body.meshClassTimeout = setTimeout(() => {
+                if (this.body.material.userData && this.body.material.userData.origColor) {
+                    this.body.material.color.copy(this.body.material.userData.origColor);
                 }
-                this.actionCooldown = 1.5;
-                break;
-            }
-            case 'REST': {
-                this.state = 'resting';
-                this.actionCooldown = 2.5;
-                this.carriedItemMesh.visible = false;
-                break;
-            }
-            case 'SOCIALIZE': {
-                this.state = 'socializing';
-                this.actionCooldown = 2.5;
-                break;
-            }
-            case 'SEEK_SHELTER': {
-                this.state = 'resting';
-                this.actionCooldown = 2.5;
-                break;
-            }
-            case 'DIG_SHELTER': {
-                const {x, y, z} = this.action.target;
-                removeBlock(x, y, z);
-                this.actionCooldown = 1.5;
-                break;
-            }
-            case 'BUILD_HOME': {
-                const {x, y, z} = this.action.target;
-                addBlock(x, y, z, BLOCK_TYPES.BED);
-                this.homePosition = {x, y, z};
-                this.inventory[0] = null;
-                this.actionCooldown = 2.5;
-                break;
-            }
-            case 'CHOP_WOOD': {
-                const {x, y, z} = this.action.target;
-                const key = `${x},${y},${z}`;
-                const blockId = worldData.get(key);
-                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                if (blockType && blockType.diggable && blockType.name === '木' && this.inventory[0] === null) {
-                    removeBlock(x, y, z);
-                    this.inventory[0] = ITEM_TYPES.WOOD_LOG;
-                    this.carriedItemMesh.material = blockMaterials.get(BLOCK_TYPES.WOOD.id);
-                    this.carriedItemMesh.visible = true;
-                }
-                this.actionCooldown = 1.5;
-                break;
-            }
-            case 'WANDER': {
-                const dx = Math.floor(Math.random() * 3) - 1;
-                const dz = Math.floor(Math.random() * 3) - 1;
-                const x = Math.max(0, Math.min(gridSize - 1, this.gridPos.x + dx));
-                const z = Math.max(0, Math.min(gridSize - 1, this.gridPos.z + dz));
-                const y = findGroundY(x, z) + 1;
-                this.targetPos = {x, y, z};
-                this.state = 'moving';
-                this.actionCooldown = 1.2;
-                break;
-            }
-            default: {
-                this.state = 'idle';
-                this.actionCooldown = 1.0;
-                break;
-            }
+            }, 900);
         }
     }
 
@@ -1377,7 +1379,6 @@ class Character {
         this.mesh.position.set(this.gridPos.x * 1 + 0.5, this.gridPos.y, this.gridPos.z * 1 + 0.5);
     }
 
-
     log(message, ...args) {
         let debug = false;
         try {
@@ -1399,5 +1400,4 @@ class Character {
         }
     }
 }
-
 export { Character };

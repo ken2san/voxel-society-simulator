@@ -547,6 +547,12 @@ function createCharacterDetailCard(char) {
         // SVGグラフ描画
         const W = 360, H = 160, P = 38; // 幅・高さ・余白
         const N = Math.min(10, histArr.length);
+        if (N < 2) {
+            // データ点が1つ以下ならグラフを描画しない
+            histDiv.appendChild(document.createTextNode('グラフ表示には2件以上の履歴が必要です。'));
+            card.appendChild(histDiv);
+            return card;
+        }
         const data = histArr.slice(-N); // 古→新
         // needs最大値
         const maxVal = 100, minVal = 0;
@@ -561,7 +567,7 @@ function createCharacterDetailCard(char) {
         // needsキー
         const needKeys = ['hunger','energy','safety','social'];
         // X座標
-        const xStep = (W-P*2) / (N-1);
+        const xStep = (N > 1) ? (W-P*2) / (N-1) : 0;
         // mood点座標
         function moodToColor(mood) {
             return moodColor[mood] || moodColor['neutral'];
@@ -573,7 +579,13 @@ function createCharacterDetailCard(char) {
                 const v = (typeof h[key] === 'number') ? h[key] : null;
                 if (v === null) return;
                 const x = P + i * xStep;
-                const y = P + (H-P*2) * (1 - (v-minVal)/(maxVal-minVal));
+                let y;
+                if (maxVal === minVal) {
+                    y = P + (H-P*2)/2;
+                } else {
+                    y = P + (H-P*2) * (1 - (v-minVal)/(maxVal-minVal));
+                }
+                if (isNaN(x) || isNaN(y)) return;
                 path += (i === 0 ? 'M' : 'L') + x + ',' + y + ' ';
             });
             return path;
@@ -701,6 +713,12 @@ function createCharacterDetailCard(char) {
     const eatDiv = document.createElement('div');
     eatDiv.innerHTML = `<b>食事の回数:</b> ${eatCount}`;
     infoBox.appendChild(eatDiv);
+    // 移動ブロック距離
+    let moveDistance = '-';
+    if (typeof char.moveDistance === 'number') moveDistance = char.moveDistance;
+    const moveDiv = document.createElement('div');
+    moveDiv.innerHTML = `<b>移動距離（合計）:</b> ${moveDistance}`;
+    infoBox.appendChild(moveDiv);
     // 現在の行動
     if (char.currentAction) {
         const actDiv = document.createElement('div');
