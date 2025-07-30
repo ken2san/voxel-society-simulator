@@ -869,9 +869,11 @@ class Character {
         if (this.state === 'socializing') {
             const partner = this.action?.target;
             if (partner && partner.state === 'socializing') {
-                this.needs.social = Math.min(100, this.needs.social + deltaTime * 22);
+                // needs.social回復速度を半分に
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 11);
+                // affinity上昇速度を2倍に
                 let affinity = this.relationships.get(partner.id) || 0;
-                affinity += deltaTime * 5;
+                affinity += deltaTime * 10;
                 this.relationships.set(partner.id, affinity);
                 // --- ハートアイコン表示 ---
                 if (affinity > 30) {
@@ -1405,7 +1407,7 @@ class Character {
             }
             this.setNextAction('WANDER'); return;
         }
-        if (this.needs.social <= 10) {
+        if (this.needs.social <= 30) {
             const partner = this.findClosestPartner && this.findClosestPartner();
             if (partner) {
                 this.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
