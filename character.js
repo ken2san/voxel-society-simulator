@@ -50,39 +50,18 @@ class Character {
         }
         switch (this.action.type) {
             case 'WANDER':
-                // ランダムな方向に移動
-                this.state = 'moving';
-                // 近くの空きマスを探して移動
-                const dirs = [
-                    {dx:1,dy:0,dz:0},{dx:-1,dy:0,dz:0},{dx:0,dy:0,dz:1},{dx:0,dy:0,dz:-1},
-                    {dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0}
-                ];
-                let found = false;
-                for (let i = 0; i < dirs.length; i++) {
-                    const d = dirs[Math.floor(Math.random() * dirs.length)];
-                    const x = this.gridPos.x + d.dx;
-                    const y = this.gridPos.y + d.dy;
-                    const z = this.gridPos.z + d.dz;
-                    const key = `${x},${y},${z}`;
-                    const below = `${x},${y-1},${z}`;
-                    if (!worldData.has(key) && worldData.has(below)) {
-                        this.targetPos = {x, y, z};
-                        this.state = 'moving';
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    this.state = 'idle';
-                }
+                // ...existing code...
                 break;
             case 'SOCIALIZE':
                 // 社交状態に遷移
                 this.state = 'socializing';
                 // パートナーも同時に社交状態にする
                 const partner = this.action.target;
-                if (partner && partner !== this && partner.state !== 'socializing') {
-                    partner.setNextAction && partner.setNextAction('SOCIALIZE', this, this.gridPos);
+                if (partner && partner !== this) {
+                    // パートナーがdead/confused以外なら必ずsocializingにする
+                    if (partner.state !== 'socializing' && partner.state !== 'dead' && partner.state !== 'confused') {
+                        partner.setNextAction && partner.setNextAction('SOCIALIZE', this, this.gridPos);
+                    }
                 }
                 break;
             // 必要に応じて他のアクションタイプも追加
@@ -422,6 +401,8 @@ class Character {
         this.children = [];
         // --- 移動距離カウント ---
         this.moveDistance = 0;
+        // --- Love timer for heart mark ---
+        this.loveTimer = 0;
 
         // --- Social role assignment ---
         this.role = 'worker'; // All start as worker; leader emerges via group detection
@@ -946,10 +927,9 @@ class Character {
                 let affinity = this.relationships.get(partner.id) || 0;
                 affinity += deltaTime * affinityRate;
                 this.relationships.set(partner.id, affinity);
-                // --- ハートアイコン表示 ---
+                // --- ハートアイコン表示: loveTimerをセット ---
                 if (affinity > 30) {
-                    this.thoughtBubble.textContent = '❤️';
-                    this.thoughtBubble.setAttribute('data-show', 'true');
+                    this.loveTimer = 2.0; // 2秒間ハートを表示
                 }
                 if (affinity >= 50) {
                     this.reproduceWith && this.reproduceWith(partner);
@@ -974,6 +954,11 @@ class Character {
         }
         if (this.state === 'moving') this.updateMovement(deltaTime);
         this.updateAnimations(deltaTime);
+        // --- loveTimer減少 ---
+        if (this.loveTimer > 0) {
+            this.loveTimer -= deltaTime;
+            if (this.loveTimer < 0) this.loveTimer = 0;
+        }
         this.updateThoughtBubble(isNight, camera);
 
         // --- UI用: 現在のアクション名をwindow.characters配列に同期 ---
@@ -1294,33 +1279,35 @@ class Character {
 
 
     updateThoughtBubble(isNight, camera) {
-        // オシャレなグループバッジ＋リーダー王冠
+        // --- ハートマーク優先表示 ---
+        if (this.loveTimer > 0) {
+            this.thoughtBubble.textContent = '❤️';
+            this.thoughtBubble.setAttribute('data-show', 'true');
+            this.thoughtBubble.style.display = '';
+            // 位置更新
+            if (camera && this.iconAnchor) {
+                const canvas = document.getElementById('gameCanvas');
+                const pos = toScreenPosition(this.iconAnchor, camera, canvas);
+                this.thoughtBubble.style.left = `${pos.x - 18}px`;
+                this.thoughtBubble.style.top = `${pos.y - 48}px`;
+                this.thoughtBubble.style.position = 'fixed';
+            }
+            return;
+        }
+        // --- 既存の吹き出し・バッジ・ムード等の表示ロジック ---
         if (!this.thoughtBubble) return;
         let html = '';
-        // グループバッジ（グループ所属時のみ、idle時も表示）
         if (this.groupId) {
-            // 色分け: グループIDごとに色を決定
             const groupColors = [
-                '#fbbf24', // amber
-                '#60a5fa', // blue
-                '#34d399', // green
-                '#f472b6', // pink
-                '#a78bfa', // purple
-                '#f87171', // red
-                '#38bdf8', // sky
-                '#facc15', // yellow
-                '#4ade80', // emerald
-                '#c084fc'  // violet
+                '#fbbf24', '#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#f87171', '#38bdf8', '#facc15', '#4ade80', '#c084fc'
             ];
             const color = groupColors[(this.groupId-1)%groupColors.length] || '#bbb';
             html += `<span style="display:inline-block;min-width:22px;padding:1.5px 6px 1.5px 6px;border-radius:11px;background:${color};color:#fff;font-size:0.92em;font-weight:bold;box-shadow:0 1px 4px #0002;vertical-align:middle;letter-spacing:0.5px;line-height:1.2;">G${this.groupId}`;
-            // リーダーなら王冠
             if (this.role === 'leader') {
                 html += ` <span style=\"font-size:1.05em;vertical-align:middle;filter:drop-shadow(0 1px 2px #eab30888);\">👑</span>`;
             }
             html += '</span>';
         }
-        // moodや状態に応じたアイコン（従来通り、ただし小さめ）
         let icon = '';
         switch (this.mood) {
             case 'dead': icon = '💀'; break;
@@ -1336,7 +1323,6 @@ class Character {
             case 'neutral': icon = ''; break;
             default: icon = ''; break;
         }
-        // socializing時のハート優先
         if (this.state === 'socializing' && this.thoughtBubble.textContent === '❤️') {
             icon = '❤️';
         }
