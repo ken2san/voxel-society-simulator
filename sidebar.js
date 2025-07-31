@@ -121,6 +121,36 @@ function renderCharacterDetail() {
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
+    // --- AIモード切り替えトグル ---
+    if (window.aiMode === undefined) window.aiMode = 'rule';
+    const aiToggleRow = document.createElement('div');
+    aiToggleRow.style.display = 'flex';
+    aiToggleRow.style.alignItems = 'center';
+    aiToggleRow.style.gap = '10px';
+    const aiToggleLabel = document.createElement('span');
+    aiToggleLabel.textContent = 'AI Mode:';
+    aiToggleLabel.style.width = '140px';
+    aiToggleRow.appendChild(aiToggleLabel);
+    const aiToggleBtn = document.createElement('button');
+    function updateAiToggleBtn() {
+        aiToggleBtn.textContent = (window.aiMode === 'utility') ? 'Utility-based' : 'Rule-based';
+        aiToggleBtn.style.background = (window.aiMode === 'utility')
+            ? 'linear-gradient(90deg,#ffe082 60%,#f8f4fa 100%)'
+            : 'linear-gradient(90deg,#b2ff59 60%,#f8f4fa 100%)';
+    }
+    updateAiToggleBtn();
+    aiToggleBtn.onclick = () => {
+        window.aiMode = (window.aiMode === 'rule') ? 'utility' : 'rule';
+        updateAiToggleBtn();
+    };
+    aiToggleBtn.style.fontWeight = 'bold';
+    aiToggleBtn.style.padding = '4px 18px';
+    aiToggleBtn.style.borderRadius = '8px';
+    aiToggleBtn.style.border = '1.5px solid #b0c8e0';
+    aiToggleBtn.style.color = '#333';
+    aiToggleBtn.style.cursor = 'pointer';
+    aiToggleRow.appendChild(aiToggleBtn);
+    paramBox.appendChild(aiToggleRow);
     paramBox.style.background = 'rgba(255,255,255,0.93)';
     paramBox.style.borderRadius = '18px';
     paramBox.style.boxShadow = '0 2px 12px #b0c8e033';
