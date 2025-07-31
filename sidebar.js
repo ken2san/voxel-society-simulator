@@ -91,6 +91,9 @@ window.__sidebarNeedsInterval = setInterval(() => {
 
 // グローバル登録
 window.renderCharacterNeeds = renderCharacterNeeds;
+// 初期状態で自動スタートしないように明示的に初期化
+window.characters = undefined;
+window.simulationRunning = false;
 // 右サイドバー：選択キャラ詳細
 function renderCharacterDetail() {
     if (!rightSidebar) return;
@@ -188,50 +191,69 @@ function renderCharacterDetail() {
     randomRow.appendChild(randomCheck);
     paramBox.appendChild(randomRow);
 
-    // スタートボタン
-    const startBtn = document.createElement('button');
-    startBtn.textContent = 'Start Simulation';
-    startBtn.style.fontSize = '1.1em';
-    startBtn.style.fontWeight = 'bold';
-    startBtn.style.padding = '8px 24px';
-    startBtn.style.borderRadius = '8px';
-    startBtn.style.border = '1.5px solid #b0c8e0';
-    startBtn.style.background = 'linear-gradient(90deg,#e3f0ff 60%,#f8f4fa 100%)';
-    startBtn.style.color = '#333';
-    startBtn.style.cursor = 'pointer';
-    startBtn.style.marginTop = '8px';
-    startBtn.onclick = () => {
-        // キャラ配列を初期化
-        const num = parseInt(charNumInput.value);
-        const socialTh = parseInt(socialInput.value);
-        const useRandom = randomCheck.checked;
-        window.characters = [];
-        for (let i = 0; i < num; i++) {
-            const char = {
-                id: 'C' + (i+1),
-                needs: {
-                    hunger: 100,
-                    energy: 100,
-                    safety: 100,
-                    social: 100
-                },
-                mood: 'neutral',
-                state: 'idle',
-                role: 'normal',
-                groupId: null,
-                relationships: Array(num).fill(0),
-                actionHistory: [],
-                items: [],
-                landCount: 0
-            };
-            // 閾値をランダムで設定
-            char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
-            window.characters.push(char);
+    // スタート／一時停止トグルボタン
+    if (window.simulationRunning === undefined) window.simulationRunning = false;
+    const toggleBtn = document.createElement('button');
+    function updateToggleBtn() {
+        if (!window.characters || window.characters.length === 0) {
+            toggleBtn.textContent = 'Start';
+            toggleBtn.style.background = 'linear-gradient(90deg,#e3f0ff 60%,#f8f4fa 100%)';
+        } else if (window.simulationRunning) {
+            toggleBtn.textContent = 'Pause';
+            toggleBtn.style.background = 'linear-gradient(90deg,#ffe082 60%,#f8f4fa 100%)';
+        } else {
+            toggleBtn.textContent = 'Start';
+            toggleBtn.style.background = 'linear-gradient(90deg,#b2ff59 60%,#f8f4fa 100%)';
         }
-        selectedCharId = window.characters[0]?.id;
-        window.renderCharacterList && window.renderCharacterList();
+    }
+    toggleBtn.style.fontSize = '1.1em';
+    toggleBtn.style.fontWeight = 'bold';
+    toggleBtn.style.padding = '8px 24px';
+    toggleBtn.style.borderRadius = '8px';
+    toggleBtn.style.border = '1.5px solid #b0c8e0';
+    toggleBtn.style.color = '#333';
+    toggleBtn.style.cursor = 'pointer';
+    toggleBtn.style.marginTop = '8px';
+    updateToggleBtn();
+    toggleBtn.onclick = () => {
+        if (!window.characters || window.characters.length === 0) {
+            // 初回スタート: キャラ配列を初期化
+            const num = parseInt(charNumInput.value);
+            const socialTh = parseInt(socialInput.value);
+            const useRandom = randomCheck.checked;
+            window.characters = [];
+            for (let i = 0; i < num; i++) {
+                const char = {
+                    id: 'C' + (i+1),
+                    needs: {
+                        hunger: 100,
+                        energy: 100,
+                        safety: 100,
+                        social: 100
+                    },
+                    mood: 'neutral',
+                    state: 'idle',
+                    role: 'normal',
+                    groupId: null,
+                    relationships: Array(num).fill(0),
+                    actionHistory: [],
+                    items: [],
+                    landCount: 0
+                };
+                // 閾値をランダムで設定
+                char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
+                window.characters.push(char);
+            }
+            selectedCharId = window.characters[0]?.id;
+            window.simulationRunning = true;
+            window.renderCharacterList && window.renderCharacterList();
+        } else {
+            // 2回目以降は一時停止/再開トグル
+            window.simulationRunning = !window.simulationRunning;
+        }
+        updateToggleBtn();
     };
-    paramBox.appendChild(startBtn);
+    paramBox.appendChild(toggleBtn);
 
     rightSidebar.appendChild(paramBox);
 }
@@ -266,148 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
         detailRows.forEach(el => el.remove());
     }
 
-    // --- 右サイドバー：AIパラメータ調整UI ---
-    function renderAIParamBox() {
-        if (!rightSidebar) return;
-        rightSidebar.innerHTML = '';
-        const paramBox = document.createElement('div');
-        paramBox.style.background = 'rgba(255,255,255,0.93)';
-        paramBox.style.borderRadius = '18px';
-        paramBox.style.boxShadow = '0 2px 12px #b0c8e033';
-        paramBox.style.padding = '18px 18px 14px 18px';
-        paramBox.style.margin = '18px 18px 22px 18px';
-        paramBox.style.display = 'flex';
-        paramBox.style.flexDirection = 'column';
-        paramBox.style.gap = '12px';
-
-        // タイトル
-        const title = document.createElement('div');
-        title.textContent = 'AIパラメータ調整';
-        title.style.fontWeight = 'bold';
-        title.style.fontSize = '1.18em';
-        title.style.color = '#333';
-        title.style.marginBottom = '2px';
-        paramBox.appendChild(title);
-
-        // キャラ数
-        const charNumRow = document.createElement('div');
-        charNumRow.style.display = 'flex';
-        charNumRow.style.alignItems = 'center';
-        charNumRow.style.gap = '10px';
-        const charNumLabel = document.createElement('span');
-        charNumLabel.textContent = 'キャラ数:';
-        charNumLabel.style.width = '70px';
-        charNumRow.appendChild(charNumLabel);
-        const charNumInput = document.createElement('input');
-        charNumInput.type = 'range';
-        charNumInput.min = 3;
-        charNumInput.max = 30;
-        charNumInput.value = 10;
-        charNumInput.style.flex = '1';
-        charNumInput.style.margin = '0 8px';
-        charNumRow.appendChild(charNumInput);
-        const charNumVal = document.createElement('span');
-        charNumVal.textContent = charNumInput.value;
-        charNumVal.style.width = '32px';
-        charNumRow.appendChild(charNumVal);
-        charNumInput.oninput = () => { charNumVal.textContent = charNumInput.value; };
-        paramBox.appendChild(charNumRow);
-
-        // 社交閾値
-        const socialRow = document.createElement('div');
-        socialRow.style.display = 'flex';
-        socialRow.style.alignItems = 'center';
-        socialRow.style.gap = '10px';
-        const socialLabel = document.createElement('span');
-        socialLabel.textContent = '社交閾値:';
-        socialLabel.style.width = '70px';
-        socialRow.appendChild(socialLabel);
-        const socialInput = document.createElement('input');
-        socialInput.type = 'range';
-        socialInput.min = 0;
-        socialInput.max = 100;
-        socialInput.value = 30;
-        socialInput.style.flex = '1';
-        socialInput.style.margin = '0 8px';
-        socialRow.appendChild(socialInput);
-        const socialVal = document.createElement('span');
-        socialVal.textContent = socialInput.value;
-        socialVal.style.width = '32px';
-        socialRow.appendChild(socialVal);
-        socialInput.oninput = () => { socialVal.textContent = socialInput.value; };
-        paramBox.appendChild(socialRow);
-
-        // ランダム生成トグル
-        const randomRow = document.createElement('div');
-        randomRow.style.display = 'flex';
-        randomRow.style.alignItems = 'center';
-        randomRow.style.gap = '10px';
-        const randomLabel = document.createElement('span');
-        randomLabel.textContent = '閾値ランダム:';
-        randomLabel.style.width = '70px';
-        randomRow.appendChild(randomLabel);
-        const randomCheck = document.createElement('input');
-        randomCheck.type = 'checkbox';
-        randomCheck.checked = false;
-        randomRow.appendChild(randomCheck);
-        paramBox.appendChild(randomRow);
-
-        // スタートボタン
-        const startBtn = document.createElement('button');
-        startBtn.textContent = 'スタート';
-        startBtn.style.fontSize = '1.1em';
-        startBtn.style.fontWeight = 'bold';
-        startBtn.style.padding = '8px 24px';
-        startBtn.style.borderRadius = '8px';
-        startBtn.style.border = '1.5px solid #b0c8e0';
-        startBtn.style.background = 'linear-gradient(90deg,#e3f0ff 60%,#f8f4fa 100%)';
-        startBtn.style.color = '#333';
-        startBtn.style.cursor = 'pointer';
-        startBtn.style.marginTop = '8px';
-        startBtn.onclick = () => {
-            // キャラ配列を初期化
-            const num = parseInt(charNumInput.value);
-            const socialTh = parseInt(socialInput.value);
-            const useRandom = randomCheck.checked;
-            window.characters = [];
-            for (let i = 0; i < num; i++) {
-                const char = {
-                    id: 'C' + (i+1),
-                    needs: {
-                        hunger: 100,
-                        energy: 100,
-                        safety: 100,
-                        social: 100
-                    },
-                    mood: 'neutral',
-                    state: 'idle',
-                    role: 'normal',
-                    groupId: null,
-                    relationships: Array(num).fill(0),
-                    actionHistory: [],
-                    items: [],
-                    landCount: 0
-                };
-                // 閾値をランダムで設定
-                char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
-                window.characters.push(char);
-            }
-            selectedCharId = window.characters[0]?.id;
-            // 右サイドバーはキャラ詳細UIに切り替え
-            renderCharacterDetail();
-            renderCharacterList();
-        };
-        paramBox.appendChild(startBtn);
-
-        rightSidebar.appendChild(paramBox);
-    }
-
-    // 初期状態: キャラ未生成ならAIパラメータ調整UIのみ表示
-    if (!window.characters || !Array.isArray(window.characters) || window.characters.length === 0) {
-        renderAIParamBox();
-    } else {
-        renderCharacterList();
-    }
+    // 初期状態: 必ず右サイドバーはキャラ詳細UI（Pause/ResumeトグルUI）
+    renderCharacterDetail();
 });
 console.log('[sidebar.js] loaded');
 // グローバルから呼び出せるように

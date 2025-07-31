@@ -205,6 +205,14 @@ export function drawMinimap() {
 export function animate() {
     requestAnimationFrame(animate);
     const deltaTime = clock.getDelta();
+    // simulationRunningがtrueのときだけ進行
+    if (typeof window !== 'undefined' && window.simulationRunning === false) {
+        // 停止中もワールドの描画・UI更新は継続
+        updateWorldLighting();
+        if (controls) controls.update();
+        renderer.render(scene, camera);
+        return;
+    }
     worldTime += deltaTime;
     updateWorldLighting();
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
