@@ -1,3 +1,7 @@
+#game-container {
+  position: relative;
+  left: 40px;
+}
 /* --- Voxel Society Simulator Styles --- */
 #gameCanvas { width: 100%; height: 65vh; background-color: rgba(255,255,255,0.01); }
 #minimapCanvas { width: 110px; height: 110px; background-color: #232946; border: 2.5px solid #3b82f6; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }

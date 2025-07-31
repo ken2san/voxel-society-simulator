@@ -196,7 +196,7 @@
 #sidebar-left {
   position: fixed;
   top: 0;
-  left: 0;
+  left: 20px;
   width: 480px;
   height: 100vh;
   overflow-y: auto;
@@ -204,21 +204,26 @@
 }
 
 /* 右サイドバー（画面右に固定・縦長） */
+.sidebar-bg-right,
+#sidebar-right {
+  width: 420px;
+}
 #sidebar-right {
   position: fixed;
   top: 0;
-  right: 0;
-  width: 340px;
+  right: 20px;
   height: 100vh;
   overflow-y: auto;
   z-index: 100;
   display: block;
+  background: linear-gradient(135deg, #c7b6f7 0%, #e6e0fa 100%);
+  color: #222;
 }
 .sidebar-bg-right {
-  background: linear-gradient(135deg, #f3e3ff 0%, #f8f4fa 100%);
-  border-left: 2px solid #e0d0f0;
+  background: linear-gradient(135deg, #c7b6f7 0%, #e6e0fa 100%);
+  border-left: 2px solid #a18cd1;
   border-radius: 24px 0 0 24px;
-  box-shadow: -4px 0 16px #c8b0e033;
+  box-shadow: -4px 0 16px #a18cd133;
   min-width: 260px;
   padding-top: 18px;
   height: 100vh;
@@ -227,4 +232,6 @@
   right: 0;
   overflow-y: auto;
   z-index: 100;
+  color: #222;
+}
 }
