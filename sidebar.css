@@ -203,4 +203,28 @@
   z-index: 100;
 }
 
-/* #sidebar-rightは廃止 */
+/* 右サイドバー（画面右に固定・縦長） */
+#sidebar-right {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+  display: block;
+}
+.sidebar-bg-right {
+  background: linear-gradient(135deg, #f3e3ff 0%, #f8f4fa 100%);
+  border-left: 2px solid #e0d0f0;
+  border-radius: 24px 0 0 24px;
+  box-shadow: -4px 0 16px #c8b0e033;
+  min-width: 260px;
+  padding-top: 18px;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  right: 0;
+  overflow-y: auto;
+  z-index: 100;
+}

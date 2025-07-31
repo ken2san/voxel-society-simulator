@@ -94,205 +94,8 @@ window.renderCharacterNeeds = renderCharacterNeeds;
 // 右サイドバー：選択キャラ詳細
 function renderCharacterDetail() {
     if (!rightSidebar) return;
-    // ダミー表示テスト: 条件を満たさない場合はダミーを表示
-    if (selectedCharId === null || selectedCharId === undefined || !window.characters) {
-        rightSidebar.innerHTML = '<div style="padding:24px;color:#888;font-size:1.2em;">[Dummy] No character selected.<br>右サイドバーのテスト表示</div>';
-        return;
-    }
-    const char = window.characters.find(c => c.id == selectedCharId);
-    if (!char) {
-        rightSidebar.innerHTML = '<div style="padding:24px;color:#888;font-size:1.2em;">[Dummy] Character not found.<br>右サイドバーのテスト表示</div>';
-        return;
-    }
+    // 今後ここにパラメータゲージコントローラを実装
     rightSidebar.innerHTML = '';
-
-    // グループ色取得
-    let groupColor = '#bbb';
-    if (char.groupId && typeof groupColorMap === 'object' && groupColorMap[char.groupId]) {
-        groupColor = groupColorMap[char.groupId];
-    }
-
-    // 上部：大きなアイコン＋全アイコン＋名前＋グループ色＋役割
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.alignItems = 'center';
-    header.style.gap = '14px';
-    header.style.marginBottom = '12px';
-    // アイコン配列
-    let icons = [];
-    if (char.role === 'leader') icons.push('👑');
-    if (char.state === 'dead') icons.push('💀');
-    else if (char.state === 'resting') icons.push('🛏️');
-    else if (char.state === 'socializing') icons.push('💬');
-    if (char.needs && char.needs.hunger < 30) icons.push('🍎');
-    if (char.needs && char.needs.energy < 30) icons.push('💤');
-    if (char.needs && char.needs.social < 30) icons.push('👥');
-    if (char.state === 'moving') icons.push('🚶');
-    // メインアイコン（従来通り1つ）
-    const bigIcon = document.createElement('span');
-    bigIcon.textContent = icons[0] || (char.role === 'worker' ? '🧑‍🌾' : '🙂');
-    bigIcon.style.fontSize = '2.2em';
-    bigIcon.style.border = `4px solid ${groupColor}`;
-    bigIcon.style.borderRadius = '50%';
-    bigIcon.style.padding = '8px';
-    header.appendChild(bigIcon);
-    // 全アイコンを横並びで表示
-    if (icons.length > 1) {
-        const allIcons = document.createElement('span');
-        allIcons.style.fontSize = '1.5em';
-        allIcons.style.marginLeft = '4px';
-        allIcons.title = '全ての状態アイコン';
-        allIcons.textContent = icons.join(' ');
-        header.appendChild(allIcons);
-    }
-    // 名前・役割
-    const nameBox = document.createElement('div');
-    nameBox.innerHTML = `<div style="font-size:1.3em;font-weight:bold;color:#222;">${char.id}</div>` +
-        `<div style="color:${groupColor};font-size:1em;">グループ${char.groupId ?? '未所属'}</div>` +
-        `<div style="font-size:1em;color:#666;">${char.role === 'leader' ? 'リーダー' : char.role === 'worker' ? '労働者' : '一般'}</div>`;
-    header.appendChild(nameBox);
-    rightSidebar.appendChild(header);
-
-    // ステータスバー
-    if (char.needs) {
-        const statusBox = document.createElement('div');
-        statusBox.style.marginBottom = '10px';
-        const statusList = [
-            { key: 'hunger', label: '空腹', color: '#e57373' },
-            { key: 'energy', label: 'エネルギー', color: '#ffd54f' },
-            { key: 'safety', label: '安全', color: '#64b5f6' },
-            { key: 'social', label: '社交', color: '#81c784' }
-        ];
-        statusList.forEach(st => {
-            if (typeof char.needs[st.key] === 'number') {
-                const barWrap = document.createElement('div');
-                barWrap.style.display = 'flex';
-                barWrap.style.alignItems = 'center';
-                barWrap.style.gap = '6px';
-                barWrap.style.marginBottom = '2px';
-                const label = document.createElement('span');
-                label.textContent = st.label;
-                label.style.width = '80px'; // さらに幅を広げて折り返し防止
-                label.style.fontSize = '0.98em';
-                label.style.color = '#444';
-                const barBg = document.createElement('div');
-                barBg.style.background = '#eee';
-                barBg.style.width = '110px';
-                barBg.style.height = '13px';
-                barBg.style.borderRadius = '7px';
-                barBg.style.overflow = 'hidden';
-                const bar = document.createElement('div');
-                bar.style.background = st.color;
-                bar.style.height = '100%';
-                bar.style.width = Math.max(0, Math.min(100, char.needs[st.key])) + '%';
-                barBg.appendChild(bar);
-                barWrap.appendChild(label);
-                barWrap.appendChild(barBg);
-                const val = document.createElement('span');
-                val.textContent = Math.round(char.needs[st.key]);
-                val.style.fontSize = '0.95em';
-                val.style.color = '#444';
-                barWrap.appendChild(val);
-                statusBox.appendChild(barWrap);
-            }
-        });
-        rightSidebar.appendChild(statusBox);
-    }
-
-    // 所持アイテム・土地数・行動・履歴
-    const infoBox = document.createElement('div');
-    infoBox.style.marginBottom = '10px';
-    // 所持アイテム
-    if (char.items && Array.isArray(char.items) && char.items.length > 0) {
-        const itemDiv = document.createElement('div');
-        itemDiv.innerHTML = `<b>所持アイテム:</b> ${char.items.join(', ')}`;
-        infoBox.appendChild(itemDiv);
-    }
-    // 所有土地数
-    if (typeof char.landCount === 'number') {
-        const landDiv = document.createElement('div');
-        landDiv.innerHTML = `<b>所有土地:</b> ${char.landCount}区画`;
-        infoBox.appendChild(landDiv);
-    }
-    // 現在の行動
-    if (char.currentAction) {
-        const actDiv = document.createElement('div');
-        let actionLabel = char.currentAction;
-        if (char.state === 'socializing') actionLabel = 'SOCIALIZE';
-        actDiv.innerHTML = `<b>現在の行動:</b> ${actionLabel}`;
-        infoBox.appendChild(actDiv);
-    }
-    // 行動履歴
-    if (char.actionHistory && Array.isArray(char.actionHistory) && char.actionHistory.length > 0) {
-        const histDiv = document.createElement('div');
-        histDiv.innerHTML = `<b>行動履歴:</b> ${char.actionHistory.slice(-5).reverse().join(' → ')}`;
-        infoBox.appendChild(histDiv);
-    }
-    rightSidebar.appendChild(infoBox);
-
-    // 関係性リスト
-    if (char.relationships && Array.isArray(char.relationships) && window.characters) {
-        const relBox = document.createElement('div');
-        relBox.innerHTML = '<b>関係性リスト</b>';
-        relBox.style.marginBottom = '10px';
-        char.relationships.forEach((val, idx) => {
-            const relChar = window.characters[idx];
-            if (!relChar || relChar.id === char.id) return;
-            const relRow = document.createElement('div');
-            relRow.style.display = 'flex';
-            relRow.style.alignItems = 'center';
-            relRow.style.gap = '6px';
-            // 顔アイコン
-            const relIcon = document.createElement('span');
-            relIcon.textContent = relChar.role === 'leader' ? '👑' : relChar.role === 'worker' ? '🧑‍🌾' : '🙂';
-            relIcon.style.fontSize = '1.1em';
-            relRow.appendChild(relIcon);
-            // 名前
-            const relName = document.createElement('span');
-            relName.textContent = relChar.id;
-            relName.style.color = '#222';
-            relName.style.fontSize = '1em';
-            relRow.appendChild(relName);
-            // バー
-            const relBarBg = document.createElement('div');
-            relBarBg.style.background = '#eee';
-            relBarBg.style.width = '70px';
-            relBarBg.style.height = '10px';
-            relBarBg.style.borderRadius = '5px';
-            relBarBg.style.overflow = 'hidden';
-            const relBar = document.createElement('div');
-            relBar.style.background = '#81c784';
-            relBar.style.height = '100%';
-            relBar.style.width = Math.max(0, Math.min(100, val)) + '%';
-            relBarBg.appendChild(relBar);
-            relRow.appendChild(relBarBg);
-            // 数値
-            const relVal = document.createElement('span');
-            relVal.textContent = val;
-            relVal.style.fontSize = '0.95em';
-            relVal.style.color = '#444';
-            relRow.appendChild(relVal);
-            relBox.appendChild(relRow);
-        });
-        rightSidebar.appendChild(relBox);
-    }
-
-    // ピン留めボタン
-    const pinBox = document.createElement('div');
-    pinBox.style.marginTop = '10px';
-    const pinBtn = document.createElement('button');
-    pinBtn.textContent = '★ お気に入り/注目';
-    pinBtn.style.fontSize = '1em';
-    pinBtn.style.padding = '4px 12px';
-    pinBtn.style.borderRadius = '6px';
-    pinBtn.style.border = '1px solid #aaa';
-    pinBtn.style.background = '#fffbe7';
-    pinBtn.style.cursor = 'pointer';
-    pinBtn.onclick = () => {
-        alert('ピン留め機能は今後実装予定です');
-    };
-    pinBox.appendChild(pinBtn);
-    rightSidebar.appendChild(pinBox);
 }
 
 let selectedCharId = undefined;
@@ -305,6 +108,7 @@ let openedCharId = undefined;
 
 document.addEventListener('DOMContentLoaded', () => {
     leftSidebar = document.getElementById('sidebar-left');
+    rightSidebar = document.getElementById('sidebar-right');
     // サイドバーのUIをゲーム画面に溶け込むよう調整（幅を拡張）
     if (leftSidebar) {
         leftSidebar.style.width = '520px';
@@ -323,8 +127,147 @@ document.addEventListener('DOMContentLoaded', () => {
         const detailRows = leftSidebar.querySelectorAll('.character-detail-row');
         detailRows.forEach(el => el.remove());
     }
-    // window.charactersがセットされていれば描画、なければ何もしない
-    if (window.characters && Array.isArray(window.characters) && window.characters.length > 0) {
+
+    // --- 右サイドバー：AIパラメータ調整UI ---
+    function renderAIParamBox() {
+        if (!rightSidebar) return;
+        rightSidebar.innerHTML = '';
+        const paramBox = document.createElement('div');
+        paramBox.style.background = 'rgba(255,255,255,0.93)';
+        paramBox.style.borderRadius = '18px';
+        paramBox.style.boxShadow = '0 2px 12px #b0c8e033';
+        paramBox.style.padding = '18px 18px 14px 18px';
+        paramBox.style.margin = '18px 18px 22px 18px';
+        paramBox.style.display = 'flex';
+        paramBox.style.flexDirection = 'column';
+        paramBox.style.gap = '12px';
+
+        // タイトル
+        const title = document.createElement('div');
+        title.textContent = 'AIパラメータ調整';
+        title.style.fontWeight = 'bold';
+        title.style.fontSize = '1.18em';
+        title.style.color = '#333';
+        title.style.marginBottom = '2px';
+        paramBox.appendChild(title);
+
+        // キャラ数
+        const charNumRow = document.createElement('div');
+        charNumRow.style.display = 'flex';
+        charNumRow.style.alignItems = 'center';
+        charNumRow.style.gap = '10px';
+        const charNumLabel = document.createElement('span');
+        charNumLabel.textContent = 'キャラ数:';
+        charNumLabel.style.width = '70px';
+        charNumRow.appendChild(charNumLabel);
+        const charNumInput = document.createElement('input');
+        charNumInput.type = 'range';
+        charNumInput.min = 3;
+        charNumInput.max = 30;
+        charNumInput.value = 10;
+        charNumInput.style.flex = '1';
+        charNumInput.style.margin = '0 8px';
+        charNumRow.appendChild(charNumInput);
+        const charNumVal = document.createElement('span');
+        charNumVal.textContent = charNumInput.value;
+        charNumVal.style.width = '32px';
+        charNumRow.appendChild(charNumVal);
+        charNumInput.oninput = () => { charNumVal.textContent = charNumInput.value; };
+        paramBox.appendChild(charNumRow);
+
+        // 社交閾値
+        const socialRow = document.createElement('div');
+        socialRow.style.display = 'flex';
+        socialRow.style.alignItems = 'center';
+        socialRow.style.gap = '10px';
+        const socialLabel = document.createElement('span');
+        socialLabel.textContent = '社交閾値:';
+        socialLabel.style.width = '70px';
+        socialRow.appendChild(socialLabel);
+        const socialInput = document.createElement('input');
+        socialInput.type = 'range';
+        socialInput.min = 0;
+        socialInput.max = 100;
+        socialInput.value = 30;
+        socialInput.style.flex = '1';
+        socialInput.style.margin = '0 8px';
+        socialRow.appendChild(socialInput);
+        const socialVal = document.createElement('span');
+        socialVal.textContent = socialInput.value;
+        socialVal.style.width = '32px';
+        socialRow.appendChild(socialVal);
+        socialInput.oninput = () => { socialVal.textContent = socialInput.value; };
+        paramBox.appendChild(socialRow);
+
+        // ランダム生成トグル
+        const randomRow = document.createElement('div');
+        randomRow.style.display = 'flex';
+        randomRow.style.alignItems = 'center';
+        randomRow.style.gap = '10px';
+        const randomLabel = document.createElement('span');
+        randomLabel.textContent = '閾値ランダム:';
+        randomLabel.style.width = '70px';
+        randomRow.appendChild(randomLabel);
+        const randomCheck = document.createElement('input');
+        randomCheck.type = 'checkbox';
+        randomCheck.checked = false;
+        randomRow.appendChild(randomCheck);
+        paramBox.appendChild(randomRow);
+
+        // スタートボタン
+        const startBtn = document.createElement('button');
+        startBtn.textContent = 'スタート';
+        startBtn.style.fontSize = '1.1em';
+        startBtn.style.fontWeight = 'bold';
+        startBtn.style.padding = '8px 24px';
+        startBtn.style.borderRadius = '8px';
+        startBtn.style.border = '1.5px solid #b0c8e0';
+        startBtn.style.background = 'linear-gradient(90deg,#e3f0ff 60%,#f8f4fa 100%)';
+        startBtn.style.color = '#333';
+        startBtn.style.cursor = 'pointer';
+        startBtn.style.marginTop = '8px';
+        startBtn.onclick = () => {
+            // キャラ配列を初期化
+            const num = parseInt(charNumInput.value);
+            const socialTh = parseInt(socialInput.value);
+            const useRandom = randomCheck.checked;
+            window.characters = [];
+            for (let i = 0; i < num; i++) {
+                const char = {
+                    id: 'C' + (i+1),
+                    needs: {
+                        hunger: 100,
+                        energy: 100,
+                        safety: 100,
+                        social: 100
+                    },
+                    mood: 'neutral',
+                    state: 'idle',
+                    role: 'normal',
+                    groupId: null,
+                    relationships: Array(num).fill(0),
+                    actionHistory: [],
+                    items: [],
+                    landCount: 0
+                };
+                // 閾値をランダムで設定
+                char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
+                window.characters.push(char);
+            }
+            selectedCharId = window.characters[0]?.id;
+            // 右サイドバーはキャラ詳細UIに切り替え
+            renderCharacterDetail();
+            renderCharacterList();
+        };
+        paramBox.appendChild(startBtn);
+
+        rightSidebar.appendChild(paramBox);
+    }
+
+    // 初期状態: キャラ未生成ならAIパラメータ調整UIのみ表示
+    if (!window.characters || !Array.isArray(window.characters) || window.characters.length === 0) {
+        renderAIParamBox();
+    } else {
         renderCharacterList();
     }
 });
@@ -336,13 +279,11 @@ window.renderCharacterDetail = renderCharacterDetail;
 function renderCharacterList() {
     console.log('[sidebar.js] window.characters:', window.characters);
     if (!leftSidebar) return;
+    // キャラが未生成なら何も表示しない
     if (!window.characters || !Array.isArray(window.characters) || window.characters.length === 0) {
-        // window.charactersが未セットなら何も表示しない
         leftSidebar.innerHTML = '';
-        rightSidebar && (rightSidebar.innerHTML = '');
         return;
     }
-
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
     leftSidebar.innerHTML = '';
     // タイトルを追加
