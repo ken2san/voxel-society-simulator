@@ -97,6 +97,15 @@ window.simulationRunning = false;
 // 右サイドバー：選択キャラ詳細
 function renderCharacterDetail() {
     if (!rightSidebar) return;
+    // --- sidebarParamsで値を保持 ---
+    if (!window.sidebarParams) {
+        window.sidebarParams = {
+            charNum: 10,
+            socialTh: 30,
+            useRandom: false
+        };
+    }
+    const sidebarParams = window.sidebarParams;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
@@ -131,7 +140,7 @@ function renderCharacterDetail() {
     charNumInput.type = 'range';
     charNumInput.min = 5;
     charNumInput.max = 50;
-    charNumInput.value = 10;
+    charNumInput.value = sidebarParams.charNum;
     charNumInput.style.flex = '1';
     charNumInput.style.margin = '0 8px';
     charNumRow.appendChild(charNumInput);
@@ -139,12 +148,18 @@ function renderCharacterDetail() {
     charNumVal.type = 'number';
     charNumVal.min = 5;
     charNumVal.max = 50;
-    charNumVal.value = 10;
+    charNumVal.value = sidebarParams.charNum;
     charNumVal.style.width = '48px';
     charNumRow.appendChild(charNumVal);
-    // 双方向同期
-    charNumInput.oninput = () => { charNumVal.value = charNumInput.value; };
-    charNumVal.oninput = () => { charNumInput.value = charNumVal.value; };
+    // 双方向同期＋sidebarParams更新
+    charNumInput.oninput = () => {
+        charNumVal.value = charNumInput.value;
+        sidebarParams.charNum = parseInt(charNumInput.value);
+    };
+    charNumVal.oninput = () => {
+        charNumInput.value = charNumVal.value;
+        sidebarParams.charNum = parseInt(charNumVal.value);
+    };
     paramBox.appendChild(charNumRow);
 
     // シミュレーション中はパラメータ欄をdisabledに
@@ -165,7 +180,7 @@ function renderCharacterDetail() {
     socialInput.type = 'range';
     socialInput.min = 0;
     socialInput.max = 100;
-    socialInput.value = 30;
+    socialInput.value = sidebarParams.socialTh;
     socialInput.style.flex = '1';
     socialInput.style.margin = '0 8px';
     socialRow.appendChild(socialInput);
@@ -173,12 +188,18 @@ function renderCharacterDetail() {
     socialVal.type = 'number';
     socialVal.min = 0;
     socialVal.max = 100;
-    socialVal.value = 30;
+    socialVal.value = sidebarParams.socialTh;
     socialVal.style.width = '48px';
     socialRow.appendChild(socialVal);
-    // 双方向同期
-    socialInput.oninput = () => { socialVal.value = socialInput.value; };
-    socialVal.oninput = () => { socialInput.value = socialVal.value; };
+    // 双方向同期＋sidebarParams更新
+    socialInput.oninput = () => {
+        socialVal.value = socialInput.value;
+        sidebarParams.socialTh = parseInt(socialInput.value);
+    };
+    socialVal.oninput = () => {
+        socialInput.value = socialVal.value;
+        sidebarParams.socialTh = parseInt(socialVal.value);
+    };
     paramBox.appendChild(socialRow);
     socialInput.disabled = paramDisabled;
     socialVal.disabled = paramDisabled;
@@ -194,7 +215,10 @@ function renderCharacterDetail() {
     randomRow.appendChild(randomLabel);
     const randomCheck = document.createElement('input');
     randomCheck.type = 'checkbox';
-    randomCheck.checked = false;
+    randomCheck.checked = !!sidebarParams.useRandom;
+    randomCheck.oninput = () => {
+        sidebarParams.useRandom = randomCheck.checked;
+    };
     randomRow.appendChild(randomCheck);
     paramBox.appendChild(randomRow);
     randomCheck.disabled = paramDisabled;
@@ -225,20 +249,18 @@ function renderCharacterDetail() {
     updateToggleBtn();
     toggleBtn.onclick = () => {
         if (!window.simulationRunning) {
-            // Start: パラメータでキャラ配列を再生成（リセット）
-            const num = parseInt(charNumInput.value);
-            const socialTh = parseInt(socialInput.value);
-            const useRandom = randomCheck.checked;
+            // Start: sidebarParamsの値でキャラ配列を再生成（リセット）
+            const num = parseInt(sidebarParams.charNum);
+            const socialTh = parseInt(sidebarParams.socialTh);
+            const useRandom = !!sidebarParams.useRandom;
             // 既存キャラ・IDリセット
             window.characters = [];
-            // world.jsのnextCharacterIdもリセット（必要なら）
             if (window.nextCharacterId !== undefined) window.nextCharacterId = 0;
-            // 既存キャラの3Dオブジェクトも消去（sceneから）
             if (window.scene && window.scene.children) {
                 window.scene.children = window.scene.children.filter(obj => !(obj && obj.type === 'Group' && obj.name && obj.name.startsWith('Character')));
             }
-            // キャラ生成はspawnCharacterを使う
             import('./world.js').then(worldMod => {
+                if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
                 const spawnAll = async () => {
                     for (let i = 0; i < num; i++) {
                         const pos = worldMod.findValidSpawn();
@@ -246,22 +268,27 @@ function renderCharacterDetail() {
                             const char = await worldMod.spawnCharacter(pos);
                             if (char) {
                                 char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
+                                char.needs = {
+                                    hunger: 100,
+                                    energy: 100,
+                                    safety: 100,
+                                    social: socialTh
+                                };
+                                char.mood = 'neutral';
                             }
                         }
                     }
-                    // world.jsのcharacters配列をwindow.charactersに同期
                     window.characters = worldMod.characters;
                     selectedCharId = window.characters[0]?.id;
                     window.simulationRunning = true;
                     window.renderCharacterList && window.renderCharacterList();
-                    renderCharacterDetail(); // UIを再描画してdisabled状態を反映
+                    renderCharacterDetail();
                 };
                 spawnAll();
             });
         } else {
-            // Pause: 一時停止
             window.simulationRunning = false;
-            renderCharacterDetail(); // UIを再描画してdisabled状態を反映
+            renderCharacterDetail();
         }
     };
     paramBox.appendChild(toggleBtn);
