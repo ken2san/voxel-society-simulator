@@ -102,10 +102,15 @@ function renderCharacterDetail() {
         window.sidebarParams = {
             charNum: 10,
             socialTh: 30,
+            groupAffinityTh: 50,
             useRandom: false
         };
     }
     const sidebarParams = window.sidebarParams;
+    // シミュレーション中はパラメータ欄をdisabledに（1回だけ定義）
+    const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
+    // グローバルにも反映
+    window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
@@ -118,6 +123,7 @@ function renderCharacterDetail() {
     paramBox.style.flexDirection = 'column';
     paramBox.style.gap = '12px';
 
+
     // タイトル
     const title = document.createElement('div');
     title.textContent = 'AI Parameter Controls';
@@ -126,6 +132,45 @@ function renderCharacterDetail() {
     title.style.color = '#333';
     title.style.marginBottom = '2px';
     paramBox.appendChild(title);
+
+    // --- グループしきい値スライダー（AI Parameter Controls内に移動） ---
+    const groupThRow = document.createElement('div');
+    groupThRow.style.display = 'flex';
+    groupThRow.style.alignItems = 'center';
+    groupThRow.style.gap = '10px';
+    const groupThLabel = document.createElement('span');
+    groupThLabel.textContent = 'Group Affinity Threshold:';
+    groupThLabel.style.width = '140px';
+    groupThRow.appendChild(groupThLabel);
+    const groupThInput = document.createElement('input');
+    groupThInput.type = 'range';
+    groupThInput.min = 0;
+    groupThInput.max = 100;
+    groupThInput.value = sidebarParams.groupAffinityTh;
+    groupThInput.style.flex = '1';
+    groupThInput.style.margin = '0 8px';
+    groupThRow.appendChild(groupThInput);
+    const groupThVal = document.createElement('input');
+    groupThVal.type = 'number';
+    groupThVal.min = 0;
+    groupThVal.max = 100;
+    groupThVal.value = sidebarParams.groupAffinityTh;
+    groupThVal.style.width = '48px';
+    groupThRow.appendChild(groupThVal);
+    // 双方向同期＋sidebarParams更新
+    groupThInput.oninput = () => {
+        groupThVal.value = groupThInput.value;
+        sidebarParams.groupAffinityTh = parseInt(groupThInput.value);
+        window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+    };
+    groupThVal.oninput = () => {
+        groupThInput.value = groupThVal.value;
+        sidebarParams.groupAffinityTh = parseInt(groupThVal.value);
+        window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+    };
+    paramBox.appendChild(groupThRow);
+    groupThInput.disabled = paramDisabled;
+    groupThVal.disabled = paramDisabled;
 
     // キャラ数
     const charNumRow = document.createElement('div');
@@ -161,9 +206,6 @@ function renderCharacterDetail() {
         sidebarParams.charNum = parseInt(charNumVal.value);
     };
     paramBox.appendChild(charNumRow);
-
-    // シミュレーション中はパラメータ欄をdisabledに
-    const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
 
@@ -252,10 +294,13 @@ function renderCharacterDetail() {
             // Start: sidebarParamsの値でキャラ配列を再生成（リセット）
             const num = parseInt(sidebarParams.charNum);
             const socialTh = parseInt(sidebarParams.socialTh);
+            const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
             const useRandom = !!sidebarParams.useRandom;
             // 既存キャラ・IDリセット
             window.characters = [];
             if (window.nextCharacterId !== undefined) window.nextCharacterId = 0;
+            // グループしきい値をグローバルに反映
+            window.groupAffinityThreshold = groupAffinityTh;
             // world.jsのremoveAllCharacterObjectsを呼び出し
             import('./world.js').then(worldMod => {
                 if (typeof worldMod.removeAllCharacterObjects === 'function') {

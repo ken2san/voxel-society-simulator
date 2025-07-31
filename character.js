@@ -110,7 +110,9 @@ class Character {
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
         if (!characters || characters.length === 0) return;
-        // 1. Build affinity graph (affinity >= 50)
+        // 1. Build affinity graph (affinity >= threshold)
+        const affinityTh = (typeof window !== 'undefined' && window.groupAffinityThreshold !== undefined)
+            ? window.groupAffinityThreshold : 50;
         const visited = new Set();
         let groupIdCounter = 1;
         for (const char of characters) {
@@ -119,14 +121,14 @@ class Character {
         }
         for (const char of characters) {
             if (char.groupId) continue;
-            // BFS to find all connected by affinity >= 50
+            // BFS to find all connected by affinity >= threshold
             const queue = [char];
             char.groupId = groupIdCounter;
             let groupMembers = [char];
             while (queue.length > 0) {
                 const current = queue.shift();
                 for (const [otherId, affinity] of current.relationships.entries()) {
-                    if (affinity < 50) continue;
+                    if (affinity < affinityTh) continue;
                     const other = characters.find(c => c.id === otherId);
                     if (other && !other.groupId) {
                         other.groupId = groupIdCounter;
