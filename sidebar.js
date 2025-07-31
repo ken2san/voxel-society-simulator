@@ -173,6 +173,44 @@ function renderCharacterDetail() {
     groupThInput.disabled = paramDisabled;
     groupThVal.disabled = paramDisabled;
 
+    // --- Perception/Socialize Range Slider ---
+    if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;
+    const perceptionRow = document.createElement('div');
+    perceptionRow.style.display = 'flex';
+    perceptionRow.style.alignItems = 'center';
+    perceptionRow.style.gap = '10px';
+    const perceptionLabel = document.createElement('span');
+    perceptionLabel.textContent = 'Perception Range:';
+    perceptionLabel.style.width = '140px';
+    perceptionRow.appendChild(perceptionLabel);
+    const perceptionInput = document.createElement('input');
+    perceptionInput.type = 'range';
+    perceptionInput.min = 1;
+    perceptionInput.max = 10;
+    perceptionInput.value = sidebarParams.perceptionRange;
+    perceptionInput.style.width = '120px';
+    perceptionInput.disabled = paramDisabled;
+    perceptionInput.addEventListener('input', e => {
+        sidebarParams.perceptionRange = Number(e.target.value);
+        perceptionNumber.value = e.target.value;
+        window.perceptionRange = Number(e.target.value);
+    });
+    perceptionRow.appendChild(perceptionInput);
+    const perceptionNumber = document.createElement('input');
+    perceptionNumber.type = 'number';
+    perceptionNumber.min = 1;
+    perceptionNumber.max = 10;
+    perceptionNumber.value = sidebarParams.perceptionRange;
+    perceptionNumber.disabled = paramDisabled;
+    perceptionNumber.style.width = '48px';
+    perceptionNumber.addEventListener('input', e => {
+        sidebarParams.perceptionRange = Number(e.target.value);
+        perceptionInput.value = e.target.value;
+        window.perceptionRange = Number(e.target.value);
+    });
+    perceptionRow.appendChild(perceptionNumber);
+    paramBox.appendChild(perceptionRow);
+
     // --- 繁殖後の友好度リセット値スライダー ---
     if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 10;
     const affinityResetRow = document.createElement('div');

@@ -597,10 +597,12 @@ class Character {
         let minDist = Infinity;
         // Use global characters array (browser global or fallback)
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        // Use global perception range if set, else default to 2
+        const perceptionRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? window.perceptionRange : 2;
         for (const char of chars) {
             if (char.id === this.id) continue;
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-            if (dist < minDist && dist <= 2) { // 2マス以内のみ対象
+            if (dist < minDist && dist <= perceptionRange) { // perceptionRangeマス以内のみ対象
                 minDist = dist;
                 closest = char;
             }
@@ -751,10 +753,11 @@ class Character {
         if (this.state === 'idle' && this.needs && this.needs.social < 100) {
             const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
             let foundNearby = false;
+            const perceptionRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? window.perceptionRange : 2;
             for (const char of chars) {
                 if (char.id === this.id) continue;
                 const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-                if (dist > 0 && dist <= 2) { foundNearby = true; break; }
+                if (dist > 0 && dist <= perceptionRange) { foundNearby = true; break; }
             }
             if (foundNearby) {
                 this.needs.social = Math.min(100, this.needs.social + deltaTime * 5);
