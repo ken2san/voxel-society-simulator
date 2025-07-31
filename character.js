@@ -79,6 +79,37 @@ class Character {
         if (type === 'SOCIALIZE') {
             this.log('SOCIALIZE action selected', { id: this.id, target: target?.id, pos: this.gridPos });
         }
+        // --- WANDER時は到達可能な候補のみ選ぶ ---
+        if (type === 'WANDER' && !moveTo) {
+            // 周囲の空きマス候補を列挙
+            const candidates = [];
+            for (let dx = -2; dx <= 2; dx++) {
+                for (let dz = -2; dz <= 2; dz++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx === 0 && dz === 0 && dy === 0) continue;
+                        const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
+                        if (y < 0 || y > maxHeight) continue;
+                        const key = `${x},${y},${z}`;
+                        const below = `${x},${y-1},${z}`;
+                        if (!worldData.has(key) && worldData.has(below)) {
+                            // 到達可能かbfsPathで判定
+                            const path = this.bfsPath(this.gridPos, {x, y, z});
+                            if (path && path.length > 0) {
+                                candidates.push({x, y, z});
+                            }
+                        }
+                    }
+                }
+            }
+            if (candidates.length > 0) {
+                const moveTo = candidates[Math.floor(Math.random() * candidates.length)];
+                this.action = { type, target, item };
+                this.targetPos = moveTo;
+                this.state = 'moving';
+                return;
+            }
+            // 到達可能な候補がなければ従来通り
+        }
         this.action = { type, target, item };
         if (moveTo) { this.targetPos = moveTo; this.state = 'moving'; }
         else { this.performAction(); }
