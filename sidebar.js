@@ -111,6 +111,13 @@ function renderCharacterDetail() {
     const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
     // グローバルにも反映
     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+    // 新パラメータ: 初期affinity値と上昇速度
+    if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
+    if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
+    if (sidebarParams.affinityIncreaseRate === undefined) sidebarParams.affinityIncreaseRate = 10;
+    window.initialAffinityMin = sidebarParams.initialAffinityMin;
+    window.initialAffinityMax = sidebarParams.initialAffinityMax;
+    window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
@@ -172,6 +179,84 @@ function renderCharacterDetail() {
     paramBox.appendChild(groupThRow);
     groupThInput.disabled = paramDisabled;
     groupThVal.disabled = paramDisabled;
+
+    // --- 初期affinity値スライダー（min/max） ---
+    const affinityInitRow = document.createElement('div');
+    affinityInitRow.style.display = 'flex';
+    affinityInitRow.style.alignItems = 'center';
+    affinityInitRow.style.gap = '10px';
+    const affinityInitLabel = document.createElement('span');
+    affinityInitLabel.textContent = 'Initial Affinity:';
+    affinityInitLabel.style.width = '140px';
+    affinityInitRow.appendChild(affinityInitLabel);
+    // min
+    const affinityInitMin = document.createElement('input');
+    affinityInitMin.type = 'number';
+    affinityInitMin.min = 0;
+    affinityInitMin.max = 100;
+    affinityInitMin.value = sidebarParams.initialAffinityMin;
+    affinityInitMin.style.width = '48px';
+    affinityInitMin.disabled = paramDisabled;
+    affinityInitMin.addEventListener('input', e => {
+        sidebarParams.initialAffinityMin = Number(e.target.value);
+        window.initialAffinityMin = Number(e.target.value);
+    });
+    affinityInitRow.appendChild(affinityInitMin);
+    // ～
+    const tilde = document.createElement('span');
+    tilde.textContent = '～';
+    affinityInitRow.appendChild(tilde);
+    // max
+    const affinityInitMax = document.createElement('input');
+    affinityInitMax.type = 'number';
+    affinityInitMax.min = 0;
+    affinityInitMax.max = 100;
+    affinityInitMax.value = sidebarParams.initialAffinityMax;
+    affinityInitMax.style.width = '48px';
+    affinityInitMax.disabled = paramDisabled;
+    affinityInitMax.addEventListener('input', e => {
+        sidebarParams.initialAffinityMax = Number(e.target.value);
+        window.initialAffinityMax = Number(e.target.value);
+    });
+    affinityInitRow.appendChild(affinityInitMax);
+    paramBox.appendChild(affinityInitRow);
+
+    // --- affinity上昇速度スライダー ---
+    const affinityRateRow = document.createElement('div');
+    affinityRateRow.style.display = 'flex';
+    affinityRateRow.style.alignItems = 'center';
+    affinityRateRow.style.gap = '10px';
+    const affinityRateLabel = document.createElement('span');
+    affinityRateLabel.textContent = 'Affinity Increase Rate:';
+    affinityRateLabel.style.width = '140px';
+    affinityRateRow.appendChild(affinityRateLabel);
+    const affinityRateInput = document.createElement('input');
+    affinityRateInput.type = 'range';
+    affinityRateInput.min = 1;
+    affinityRateInput.max = 50;
+    affinityRateInput.value = sidebarParams.affinityIncreaseRate;
+    affinityRateInput.style.width = '120px';
+    affinityRateInput.disabled = paramDisabled;
+    affinityRateInput.addEventListener('input', e => {
+        sidebarParams.affinityIncreaseRate = Number(e.target.value);
+        affinityRateNumber.value = e.target.value;
+        window.affinityIncreaseRate = Number(e.target.value);
+    });
+    affinityRateRow.appendChild(affinityRateInput);
+    const affinityRateNumber = document.createElement('input');
+    affinityRateNumber.type = 'number';
+    affinityRateNumber.min = 1;
+    affinityRateNumber.max = 50;
+    affinityRateNumber.value = sidebarParams.affinityIncreaseRate;
+    affinityRateNumber.disabled = paramDisabled;
+    affinityRateNumber.style.width = '48px';
+    affinityRateNumber.addEventListener('input', e => {
+        sidebarParams.affinityIncreaseRate = Number(e.target.value);
+        affinityRateInput.value = e.target.value;
+        window.affinityIncreaseRate = Number(e.target.value);
+    });
+    affinityRateRow.appendChild(affinityRateNumber);
+    paramBox.appendChild(affinityRateRow);
 
     // --- Perception/Socialize Range Slider ---
     if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;
@@ -460,7 +545,7 @@ window.renderCharacterList = renderCharacterList;
 window.renderCharacterDetail = renderCharacterDetail;
 
 function renderCharacterList() {
-    console.log('[sidebar.js] window.characters:', window.characters);
+    // console.log('[sidebar.js] window.characters:', window.characters); // ←デバッグ用ログを一時停止
     if (!leftSidebar) return;
     // キャラが未生成なら何も表示しない
     if (!window.characters || !Array.isArray(window.characters) || window.characters.length === 0) {

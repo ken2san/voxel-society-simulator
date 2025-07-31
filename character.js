@@ -149,6 +149,10 @@ class Character {
         }
         // --- グループ合併処理 ---
         Character.mergeGroupsIfPossible(characters);
+        // --- デバッグ: 各キャラクターのグループIDと役割を出力 ---
+        for (const char of characters) {
+            console.log(`Character ${char.id}: groupId=${char.groupId}, role=${char.role}`);
+        }
     }
 
     // グループ合併: リーダー同士が近く友好度が高い場合グループ統合
@@ -458,12 +462,14 @@ class Character {
         this.bobTime = Math.random() * 100;
         this.actionAnim = { active: false, timer: 0, duration: 0.4 };
         this.relationships = new Map();
-        // --- 初期relationships値を高めに設定（20〜40で他キャラと初期化） ---
+        // --- 初期relationships値をパラメータ化（min/max） ---
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const affinityMin = (typeof window !== 'undefined' && window.initialAffinityMin !== undefined) ? window.initialAffinityMin : 20;
+        const affinityMax = (typeof window !== 'undefined' && window.initialAffinityMax !== undefined) ? window.initialAffinityMax : 40;
         for (const char of chars) {
             if (char.id !== id) {
                 // 双方向で初期値を設定
-                const val = 20 + Math.random() * 20; // 20〜40
+                const val = affinityMin + Math.random() * (affinityMax - affinityMin);
                 this.relationships.set(char.id, val);
                 if (char.relationships && typeof char.relationships.set === 'function') {
                     char.relationships.set(id, val);
@@ -929,9 +935,10 @@ class Character {
             if (partner && partner.state === 'socializing') {
                 // needs.social回復速度を半分に
                 this.needs.social = Math.min(100, this.needs.social + deltaTime * 11);
-                // affinity上昇速度を2倍に
+                // affinity上昇速度をパラメータ化
+                const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? window.affinityIncreaseRate : 10;
                 let affinity = this.relationships.get(partner.id) || 0;
-                affinity += deltaTime * 10;
+                affinity += deltaTime * affinityRate;
                 this.relationships.set(partner.id, affinity);
                 // --- ハートアイコン表示 ---
                 if (affinity > 30) {
