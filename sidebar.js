@@ -147,6 +147,11 @@ function renderCharacterDetail() {
     charNumVal.oninput = () => { charNumInput.value = charNumVal.value; };
     paramBox.appendChild(charNumRow);
 
+    // シミュレーション中はパラメータ欄をdisabledに
+    const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
+    charNumInput.disabled = paramDisabled;
+    charNumVal.disabled = paramDisabled;
+
     // 社交閾値
     const socialRow = document.createElement('div');
     socialRow.style.display = 'flex';
@@ -175,6 +180,8 @@ function renderCharacterDetail() {
     socialInput.oninput = () => { socialVal.value = socialInput.value; };
     socialVal.oninput = () => { socialInput.value = socialVal.value; };
     paramBox.appendChild(socialRow);
+    socialInput.disabled = paramDisabled;
+    socialVal.disabled = paramDisabled;
 
     // ランダム生成トグル
     const randomRow = document.createElement('div');
@@ -190,6 +197,7 @@ function renderCharacterDetail() {
     randomCheck.checked = false;
     randomRow.appendChild(randomCheck);
     paramBox.appendChild(randomRow);
+    randomCheck.disabled = paramDisabled;
 
     // スタート／一時停止トグルボタン
     if (window.simulationRunning === undefined) window.simulationRunning = false;
@@ -216,42 +224,45 @@ function renderCharacterDetail() {
     toggleBtn.style.marginTop = '8px';
     updateToggleBtn();
     toggleBtn.onclick = () => {
-        if (!window.characters || window.characters.length === 0) {
-            // 初回スタート: キャラ配列を初期化
+        if (!window.simulationRunning) {
+            // Start: パラメータでキャラ配列を再生成（リセット）
             const num = parseInt(charNumInput.value);
             const socialTh = parseInt(socialInput.value);
             const useRandom = randomCheck.checked;
+            // 既存キャラ・IDリセット
             window.characters = [];
-            for (let i = 0; i < num; i++) {
-                const char = {
-                    id: 'C' + (i+1),
-                    needs: {
-                        hunger: 100,
-                        energy: 100,
-                        safety: 100,
-                        social: 100
-                    },
-                    mood: 'neutral',
-                    state: 'idle',
-                    role: 'normal',
-                    groupId: null,
-                    relationships: Array(num).fill(0),
-                    actionHistory: [],
-                    items: [],
-                    landCount: 0
-                };
-                // 閾値をランダムで設定
-                char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
-                window.characters.push(char);
+            // world.jsのnextCharacterIdもリセット（必要なら）
+            if (window.nextCharacterId !== undefined) window.nextCharacterId = 0;
+            // 既存キャラの3Dオブジェクトも消去（sceneから）
+            if (window.scene && window.scene.children) {
+                window.scene.children = window.scene.children.filter(obj => !(obj && obj.type === 'Group' && obj.name && obj.name.startsWith('Character')));
             }
-            selectedCharId = window.characters[0]?.id;
-            window.simulationRunning = true;
-            window.renderCharacterList && window.renderCharacterList();
+            // キャラ生成はspawnCharacterを使う
+            import('./world.js').then(worldMod => {
+                const spawnAll = async () => {
+                    for (let i = 0; i < num; i++) {
+                        const pos = worldMod.findValidSpawn();
+                        if (pos) {
+                            const char = await worldMod.spawnCharacter(pos);
+                            if (char) {
+                                char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
+                            }
+                        }
+                    }
+                    // world.jsのcharacters配列をwindow.charactersに同期
+                    window.characters = worldMod.characters;
+                    selectedCharId = window.characters[0]?.id;
+                    window.simulationRunning = true;
+                    window.renderCharacterList && window.renderCharacterList();
+                    renderCharacterDetail(); // UIを再描画してdisabled状態を反映
+                };
+                spawnAll();
+            });
         } else {
-            // 2回目以降は一時停止/再開トグル
-            window.simulationRunning = !window.simulationRunning;
+            // Pause: 一時停止
+            window.simulationRunning = false;
+            renderCharacterDetail(); // UIを再描画してdisabled状態を反映
         }
-        updateToggleBtn();
     };
     paramBox.appendChild(toggleBtn);
 
