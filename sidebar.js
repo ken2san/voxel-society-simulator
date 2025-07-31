@@ -498,10 +498,10 @@ function renderCharacterDetail() {
                     // --- ここでグループ初期化 ---
                     import('./character.js').then(charMod => {
                         if (typeof charMod.Character?.initializeAllRelationships === 'function') {
-                            charMod.Character.initializeAllRelationships();
+                            charMod.Character.initializeAllRelationships(window.characters);
                         }
                         if (typeof charMod.Character?.detectGroupsAndElectLeaders === 'function') {
-                            charMod.Character.detectGroupsAndElectLeaders();
+                            charMod.Character.detectGroupsAndElectLeaders(window.characters);
                         }
                         window.simulationRunning = true;
                         window.renderCharacterList && window.renderCharacterList();
@@ -649,12 +649,24 @@ function renderCharacterList() {
             tr.appendChild(tdId);
             // グループ
             const tdGroup = document.createElement('td');
-            tdGroup.textContent = char.groupId !== undefined && char.groupId !== null ? char.groupId : '-';
+            if (char.groupId !== undefined && char.groupId !== null) {
+                tdGroup.textContent = char.groupId;
+                if (char.role === 'leader') {
+                    const leaderMark = document.createElement('span');
+                    leaderMark.textContent = ' 👑';
+                    leaderMark.style.color = '#eab308';
+                    leaderMark.style.fontWeight = 'bold';
+                    leaderMark.title = 'リーダー';
+                    tdGroup.appendChild(leaderMark);
+                }
+            } else {
+                tdGroup.textContent = '-';
+            }
             tr.appendChild(tdGroup);
             // 状態アイコン（state/needsのみ、気分は含めない）
             const tdIcons = document.createElement('td');
             let stateIcons = [];
-            if (char.role === 'leader') stateIcons.push('👑');
+            // 👑や🧑‍🌾は表示しない（グループ列のみ）
             if (char.state === 'dead') stateIcons.push('💀');
             else if (char.state === 'resting') stateIcons.push('🛏️');
             else if (char.state === 'socializing') stateIcons.push('💬');
@@ -664,7 +676,7 @@ function renderCharacterList() {
             else if (char.needs && char.needs.hunger < 30 && !stateIcons.includes('🍎')) stateIcons.push('🍎');
             if (char.needs && char.needs.energy < 30) stateIcons.push('💤');
             if (char.needs && char.needs.social < 30) stateIcons.push('👥');
-            if (stateIcons.length === 0) stateIcons.push(char.role === 'worker' ? '🧑‍🌾' : '🙂');
+            if (stateIcons.length === 0) stateIcons.push('🙂');
             tdIcons.textContent = stateIcons.join(' ');
             tdIcons.title = stateIcons.join(' ');
             tr.appendChild(tdIcons);
@@ -1032,143 +1044,8 @@ function createCharacterDetailCard(char) {
         selectedCharId = String(window.characters[0].id);
     }
 
-    // グループごとに分類
-    const groupMap = {};
-    const ungrouped = [];
-    window.characters.forEach(char => {
-        if (char.groupId) {
-            if (!groupMap[char.groupId]) groupMap[char.groupId] = [];
-            groupMap[char.groupId].push(char);
-        } else {
-            ungrouped.push(char);
-        }
-    });
-
     // サイドバー初回描画時に右も必ず表示
     if (typeof renderCharacterDetail === 'function') {
         renderCharacterDetail();
     }
-    // グループ色（グループIDごとに色を割り当て）
-    const groupColors = [
-        '#e57373', '#64b5f6', '#81c784', '#ffd54f', '#ba68c8', '#4db6ac', '#ffb74d', '#90a4ae', '#f06292', '#a1887f'
-    ];
-    const groupIdList = Object.keys(groupMap).sort();
-    groupColorMap = {};
-    groupIdList.forEach((gid, idx) => {
-        groupColorMap[gid] = groupColors[idx % groupColors.length];
-    });
-    // グループごとに表示
-    groupIdList.forEach(gid => {
-        const chars = groupMap[gid].slice();
-        chars.sort((a, b) => (b.role === 'leader') - (a.role === 'leader'));
-        const groupBlock = document.createElement('div');
-        groupBlock.className = 'group-block';
-        groupBlock.style.borderLeft = `8px solid ${groupColorMap[gid]}`;
-        const groupTitle = document.createElement('div');
-        groupTitle.className = 'group-title';
-        groupTitle.style.fontWeight = 'bold';
-        groupTitle.style.marginBottom = '8px';
-        groupTitle.style.fontSize = '1.1em';
-        groupTitle.textContent = `グループ${gid}（${chars.length}人）`;
-        groupBlock.appendChild(groupTitle);
-
-        // 追加: リーダー名・平均親密度
-        const leader = chars.find(c => c.role === 'leader');
-        if (leader) {
-            const leaderInfo = document.createElement('div');
-            leaderInfo.style.fontSize = '0.95em';
-            leaderInfo.style.marginBottom = '2px';
-            leaderInfo.innerHTML = `<span style="color:#333;">👑 Leader:</span> <b>${leader.id}</b>`;
-            groupBlock.appendChild(leaderInfo);
-        }
-        // 平均親密度（全員分のrelationships合計/人数）
-        let affinitySum = 0, affinityCount = 0;
-        chars.forEach(c => {
-            if (c.relationships && typeof c.relationships.forEach === 'function') {
-                c.relationships.forEach(val => { affinitySum += val; affinityCount++; });
-            }
-        });
-        if (affinityCount > 0) {
-            const avgAffinity = Math.round(affinitySum / affinityCount);
-            const affinityInfo = document.createElement('div');
-            affinityInfo.style.fontSize = '0.92em';
-            affinityInfo.style.marginBottom = '4px';
-            affinityInfo.innerHTML = `<span style="color:#666;">Avg Affinity:</span> <b>${avgAffinity}</b>`;
-            groupBlock.appendChild(affinityInfo);
-        }
-
-        const ul = document.createElement('ul');
-        ul.style.listStyle = 'none';
-        ul.style.padding = '0';
-        chars.forEach((char, idx) => {
-            const li = document.createElement('li');
-            li.className = 'char-list-item';
-            // グループ色の枠
-            li.style.borderLeft = `5px solid ${groupColorMap[gid]}`;
-            li.style.display = 'flex';
-            li.style.alignItems = 'center';
-            li.style.gap = '6px';
-            const badge = document.createElement('span');
-            badge.className = 'char-badge';
-            badge.style.border = `3px solid ${groupColorMap[gid]}`;
-            let icons = [];
-            if (char.role === 'leader') icons.push('👑');
-            if (char.state === 'dead') icons.push('💀');
-            else if (char.state === 'resting') icons.push('🛏️');
-            else if (char.state === 'socializing') icons.push('💬');
-            if (char.needs && char.needs.hunger < 30) icons.push('🍎');
-            if (char.needs && char.needs.energy < 30) icons.push('💤');
-            if (char.needs && char.needs.social < 30) icons.push('👥');
-            if (char.state === 'moving') icons.push('🚶');
-            badge.textContent = icons.slice(0,2).join('');
-            if (icons.length === 0) badge.textContent = char.role === 'worker' ? '🧑‍🌾' : '🙂';
-            // 全アイコンをツールチップで表示
-            if (icons.length > 0) {
-                badge.title = icons.join(' ');
-            } else {
-                badge.title = '';
-            }
-            li.appendChild(badge);
-            // idをそのまま表示
-            const numSpan = document.createElement('span');
-            numSpan.textContent = `${char.id}`;
-            numSpan.style.color = '#888';
-            numSpan.style.fontWeight = 'bold';
-            numSpan.style.fontSize = '1.05em';
-            li.appendChild(numSpan);
-            // キャラ名（id）
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = char.id;
-            nameSpan.style.color = '#222';
-            nameSpan.style.fontWeight = char.role === 'leader' ? 'bold' : 'normal';
-            nameSpan.style.fontSize = '1.05em';
-            // 労働者の文字色を黒系に強制
-            if (char.role === 'worker') nameSpan.style.color = '#222';
-            li.appendChild(nameSpan);
-            // 状態テキスト
-            const stateSpan = document.createElement('span');
-            stateSpan.style.fontSize = '0.95em';
-            stateSpan.style.marginLeft = '4px';
-            let stateText = '';
-            if (char.state === 'dead') stateText = '死亡';
-            else if (char.role === 'leader') stateText = 'リーダー';
-            else if (char.role === 'worker') stateText = '労働者';
-            else stateText = '生存';
-            if (char.state === 'resting') stateText += '・休憩中';
-            if (char.state === 'socializing') stateText += '・交流中';
-            if (char.state === 'moving') stateText += '・移動中';
-            stateSpan.textContent = stateText;
-            // 労働者の文字色を黒系に強制
-            if (char.role === 'worker') stateSpan.style.color = '#222';
-            li.appendChild(stateSpan);
-            li.onclick = () => {
-                selectedCharId = char.id;
-                renderCharacterDetail();
-            };
-            ul.appendChild(li);
-        });
-        groupBlock.appendChild(ul);
-        leftSidebar.appendChild(groupBlock);
-    });
-    // 未所属キャラのリスト表示は不要なので何も出さない
 }

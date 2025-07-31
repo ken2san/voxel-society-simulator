@@ -1292,13 +1292,34 @@ class Character {
 
 
     updateThoughtBubble(isNight, camera) {
-        // 頭上アイコン: 役割＋状態＋グループID
+        // オシャレなグループバッジ＋リーダー王冠
         if (!this.thoughtBubble) return;
+        let html = '';
+        // グループバッジ（グループ所属時のみ、idle時も表示）
+        if (this.groupId) {
+            // 色分け: グループIDごとに色を決定
+            const groupColors = [
+                '#fbbf24', // amber
+                '#60a5fa', // blue
+                '#34d399', // green
+                '#f472b6', // pink
+                '#a78bfa', // purple
+                '#f87171', // red
+                '#38bdf8', // sky
+                '#facc15', // yellow
+                '#4ade80', // emerald
+                '#c084fc'  // violet
+            ];
+            const color = groupColors[(this.groupId-1)%groupColors.length] || '#bbb';
+            html += `<span style="display:inline-block;min-width:22px;padding:1.5px 6px 1.5px 6px;border-radius:11px;background:${color};color:#fff;font-size:0.92em;font-weight:bold;box-shadow:0 1px 4px #0002;vertical-align:middle;letter-spacing:0.5px;line-height:1.2;">G${this.groupId}`;
+            // リーダーなら王冠
+            if (this.role === 'leader') {
+                html += ` <span style=\"font-size:1.05em;vertical-align:middle;filter:drop-shadow(0 1px 2px #eab30888);\">👑</span>`;
+            }
+            html += '</span>';
+        }
+        // moodや状態に応じたアイコン（従来通り、ただし小さめ）
         let icon = '';
-        let rolePrefix = '';
-        if (this.role === 'leader') rolePrefix = '👑';
-
-        // --- moodに応じたアイコン ---
         switch (this.mood) {
             case 'dead': icon = '💀'; break;
             case 'tired': icon = '🛏️'; break;
@@ -1317,13 +1338,11 @@ class Character {
         if (this.state === 'socializing' && this.thoughtBubble.textContent === '❤️') {
             icon = '❤️';
         }
-
-        let groupStr = '';
-        // idle状態のときはグループIDを表示しない
-        if (this.groupId && this.state !== 'idle') groupStr = `G${this.groupId}`;
-
-        if (rolePrefix || icon || groupStr) {
-            this.thoughtBubble.textContent = `${rolePrefix}${icon}${groupStr}`;
+        if (icon) {
+            html += ` <span style=\"font-size:0.98em;vertical-align:middle;\">${icon}</span>`;
+        }
+        if (html) {
+            this.thoughtBubble.innerHTML = html;
             this.thoughtBubble.setAttribute('data-show', 'true');
             const canvas = document.getElementById('gameCanvas');
             const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
@@ -1331,6 +1350,13 @@ class Character {
             this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
             this.thoughtBubble.style.position = 'fixed';
             this.thoughtBubble.style.display = 'block';
+            this.thoughtBubble.style.background = 'rgba(255,255,255,0.92)';
+            this.thoughtBubble.style.border = '1.2px solid #eee';
+            this.thoughtBubble.style.borderRadius = '16px';
+            this.thoughtBubble.style.boxShadow = '0 2px 8px #0001';
+            this.thoughtBubble.style.padding = '2px 8px';
+            this.thoughtBubble.style.color = '#333';
+            this.thoughtBubble.style.fontSize = '1.08em';
         } else {
             this.thoughtBubble.setAttribute('data-show', 'false');
             this.thoughtBubble.style.display = 'none';
