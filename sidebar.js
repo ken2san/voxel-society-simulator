@@ -133,7 +133,8 @@ function renderCharacterDetail() {
     title.style.marginBottom = '2px';
     paramBox.appendChild(title);
 
-    // --- グループしきい値スライダー（AI Parameter Controls内に移動） ---
+
+    // --- グループしきい値スライダー ---
     const groupThRow = document.createElement('div');
     groupThRow.style.display = 'flex';
     groupThRow.style.alignItems = 'center';
@@ -171,6 +172,46 @@ function renderCharacterDetail() {
     paramBox.appendChild(groupThRow);
     groupThInput.disabled = paramDisabled;
     groupThVal.disabled = paramDisabled;
+
+    // --- 繁殖後の友好度リセット値スライダー ---
+    if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 10;
+    const affinityResetRow = document.createElement('div');
+    affinityResetRow.style.display = 'flex';
+    affinityResetRow.style.alignItems = 'center';
+    affinityResetRow.style.gap = '10px';
+    const affinityResetLabel = document.createElement('span');
+    affinityResetLabel.textContent = 'Affinity After Reproduce:';
+    affinityResetLabel.style.width = '140px';
+    affinityResetRow.appendChild(affinityResetLabel);
+    const affinityResetInput = document.createElement('input');
+    affinityResetInput.type = 'range';
+    affinityResetInput.min = 0;
+    affinityResetInput.max = 50;
+    affinityResetInput.step = 1;
+    affinityResetInput.value = sidebarParams.affinityResetAfterReproduce;
+    affinityResetInput.style.width = '120px';
+    affinityResetInput.disabled = paramDisabled;
+    affinityResetInput.addEventListener('input', e => {
+        sidebarParams.affinityResetAfterReproduce = Number(e.target.value);
+        affinityResetNumber.value = e.target.value;
+        window.affinityResetAfterReproduce = Number(e.target.value);
+    });
+    affinityResetRow.appendChild(affinityResetInput);
+    const affinityResetNumber = document.createElement('input');
+    affinityResetNumber.type = 'number';
+    affinityResetNumber.min = 0;
+    affinityResetNumber.max = 50;
+    affinityResetNumber.step = 1;
+    affinityResetNumber.value = sidebarParams.affinityResetAfterReproduce;
+    affinityResetNumber.disabled = paramDisabled;
+    affinityResetNumber.style.width = '48px';
+    affinityResetNumber.addEventListener('input', e => {
+        sidebarParams.affinityResetAfterReproduce = Number(e.target.value);
+        affinityResetInput.value = e.target.value;
+        window.affinityResetAfterReproduce = Number(e.target.value);
+    });
+    affinityResetRow.appendChild(affinityResetNumber);
+    paramBox.appendChild(affinityResetRow);
 
     // キャラ数
     const charNumRow = document.createElement('div');

@@ -27,6 +27,7 @@ export function removeAllCharacterObjects() {
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PerlinNoise } from './utils.js';
+import { Character } from './character.js';
 
 let scene, camera, renderer, controls, ambientLight, directionalLight;
 let gameCanvas, minimapCanvas, minimapCtx;
@@ -244,6 +245,17 @@ export function animate() {
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
     if (controls) controls.update();
     for (const char of characters) char.update(deltaTime, isNight, camera);
+
+    // --- グループ再判定を1秒ごとに実行 ---
+    if (!animate.lastGroupDetectTime) animate.lastGroupDetectTime = 0;
+    animate.lastGroupDetectTime += deltaTime;
+    if (animate.lastGroupDetectTime >= 1.0) {
+        if (typeof window !== 'undefined' && window.characters && window.characters.length > 0) {
+            Character.detectGroupsAndElectLeaders(window.characters);
+        }
+        animate.lastGroupDetectTime = 0;
+    }
+
     renderer.render(scene, camera);
 }
 export async function spawnCharacter(pos, genes = null) {

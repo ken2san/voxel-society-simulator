@@ -937,8 +937,10 @@ class Character {
                 }
                 if (affinity >= 50) {
                     this.reproduceWith && this.reproduceWith(partner);
-                    this.relationships.set(partner.id, 0);
-                    partner.relationships.set(this.id, 0);
+                    // 友好度リセット値をパラメータ化（デフォルト10）
+                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 10;
+                    this.relationships.set(partner.id, resetVal);
+                    partner.relationships.set(this.id, resetVal);
                 }
             }
             if(this.needs.social >= 100) this.state = 'idle';
