@@ -406,6 +406,7 @@ function renderCharacterList() {
         const trh = document.createElement('tr');
         const headerLabels = [
             'ID',
+            'グル',
             '状態',
             '気分',
             '空腹',
@@ -445,7 +446,7 @@ function renderCharacterList() {
                 detailTr.style.display = 'none';
             }
             const detailTd = document.createElement('td');
-            detailTd.colSpan = 9;
+            detailTd.colSpan = 10;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
             detailTd.appendChild(createCharacterDetailCard(char));
@@ -468,6 +469,10 @@ function renderCharacterList() {
             const tdId = document.createElement('td');
             tdId.textContent = char.id;
             tr.appendChild(tdId);
+            // グループ
+            const tdGroup = document.createElement('td');
+            tdGroup.textContent = char.groupId !== undefined && char.groupId !== null ? char.groupId : '-';
+            tr.appendChild(tdGroup);
             // 状態アイコン（state/needsのみ、気分は含めない）
             const tdIcons = document.createElement('td');
             let stateIcons = [];
@@ -514,6 +519,7 @@ function renderCharacterList() {
             // 行動
             const tdAction = document.createElement('td');
             tdAction.textContent = char.currentAction || '-';
+            tdAction.className = 'action-text';
             tr.appendChild(tdAction);
             // 移動距離
             const tdMove = document.createElement('td');
