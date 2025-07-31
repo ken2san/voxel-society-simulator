@@ -53,7 +53,18 @@ async function init() {
             await spawnCharacter(findValidSpawn());
         }
         // Initialize relationships after all characters are created
+
         Character.initializeAllRelationships(characters);
+
+        // --- 調査用: relationships, affinity, groupId/role のログ出力 ---
+        console.log('=== relationships size ===');
+        characters.forEach(c => console.log(`id:${c.id} relSize:${c.relationships.size}`));
+        console.log('=== affinity values ===');
+        characters.forEach(c => console.log(`id:${c.id} affinities:`, Array.from(c.relationships.values())));
+        // グループ検出も一度呼んでgroupId/roleを確認
+        Character.detectGroupsAndElectLeaders(characters);
+        console.log('=== groupId/role ===');
+        characters.forEach(c => console.log(`id:${c.id} groupId:${c.groupId} role:${c.role}`));
 
         // Make characters array available globally for sidebar.js
         window.characters = characters;
@@ -95,3 +106,9 @@ function main() {
     }
 }
 main();
+// --- デバッグ用: いつでもグループ状態を確認できるグローバル関数 ---
+window.logGroupStatus = function() {
+    Character.detectGroupsAndElectLeaders(characters);
+    console.log('=== groupId/role (on demand) ===');
+    characters.forEach(c => console.log(`id:${c.id} groupId:${c.groupId} role:${c.role}`));
+};

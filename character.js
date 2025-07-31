@@ -150,9 +150,9 @@ class Character {
         // --- グループ合併処理 ---
         Character.mergeGroupsIfPossible(characters);
         // --- デバッグ: 各キャラクターのグループIDと役割を出力 ---
-        for (const char of characters) {
-            console.log(`Character ${char.id}: groupId=${char.groupId}, role=${char.role}`);
-        }
+        // for (const char of characters) {
+        //     console.log(`Character ${char.id}: groupId=${char.groupId}, role=${char.role}`);
+        // }
     }
 
     // グループ合併: リーダー同士が近く友好度が高い場合グループ統合
@@ -294,10 +294,10 @@ class Character {
                 this.ownedLand.add(key);
             }
             otherChar.ownedLand.clear();
-            this.log('Won land contest against', otherChar.id);
+            // this.log('Won land contest against', otherChar.id);
         } else {
             // Retreat (wander)
-            this.log('Lost land contest against', otherChar.id);
+            // this.log('Lost land contest against', otherChar.id);
             this.setNextAction('WANDER');
         }
     }

@@ -490,9 +490,23 @@ function renderCharacterDetail() {
                     }
                     window.characters = worldMod.characters;
                     selectedCharId = window.characters[0]?.id;
-                    window.simulationRunning = true;
-                    window.renderCharacterList && window.renderCharacterList();
-                    renderCharacterDetail();
+                    // --- グループ初期化前にパラメータをwindowに反映 ---
+                    window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+                    window.initialAffinityMin = sidebarParams.initialAffinityMin;
+                    window.initialAffinityMax = sidebarParams.initialAffinityMax;
+                    window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
+                    // --- ここでグループ初期化 ---
+                    import('./character.js').then(charMod => {
+                        if (typeof charMod.Character?.initializeAllRelationships === 'function') {
+                            charMod.Character.initializeAllRelationships();
+                        }
+                        if (typeof charMod.Character?.detectGroupsAndElectLeaders === 'function') {
+                            charMod.Character.detectGroupsAndElectLeaders();
+                        }
+                        window.simulationRunning = true;
+                        window.renderCharacterList && window.renderCharacterList();
+                        renderCharacterDetail();
+                    });
                 };
                 spawnAll();
             });
