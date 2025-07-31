@@ -1,3 +1,29 @@
+// キャラ3Dオブジェクトをsceneから全削除する関数
+export function removeAllCharacterObjects() {
+    if (!scene || !scene.children) return;
+    // nameが'Character'で始まるGroupをすべてremove
+    const toRemove = scene.children.filter(obj => obj.type === 'Group' && obj.name && obj.name.startsWith('Character'));
+    toRemove.forEach(obj => {
+        scene.remove(obj);
+        // メモリリーク防止: dispose
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+        if (obj.children && obj.children.length > 0) {
+            obj.children.forEach(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+        }
+    });
+    // characters配列の各キャラにdisposeメソッドがあれば呼ぶ
+    if (Array.isArray(characters)) {
+        characters.forEach(char => {
+            if (typeof char.dispose === 'function') {
+                char.dispose();
+            }
+        });
+    }
+}
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PerlinNoise } from './utils.js';

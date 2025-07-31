@@ -256,10 +256,11 @@ function renderCharacterDetail() {
             // 既存キャラ・IDリセット
             window.characters = [];
             if (window.nextCharacterId !== undefined) window.nextCharacterId = 0;
-            if (window.scene && window.scene.children) {
-                window.scene.children = window.scene.children.filter(obj => !(obj && obj.type === 'Group' && obj.name && obj.name.startsWith('Character')));
-            }
+            // world.jsのremoveAllCharacterObjectsを呼び出し
             import('./world.js').then(worldMod => {
+                if (typeof worldMod.removeAllCharacterObjects === 'function') {
+                    worldMod.removeAllCharacterObjects();
+                }
                 if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
                 const spawnAll = async () => {
                     for (let i = 0; i < num; i++) {

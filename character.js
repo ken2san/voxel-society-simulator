@@ -403,6 +403,7 @@ class Character {
         this.id = id;
         this.scene = scene;
         this.mesh = new THREE.Group();
+        this.mesh.name = 'Character_' + id;
         this.scene.add(this.mesh);
 
         // --- 行動カウント系 ---
@@ -535,6 +536,58 @@ class Character {
         this.actionIconDiv.style.transition = 'opacity 0.3s, transform 0.3s';
         this.actionIconDiv.style.opacity = 0;
         document.body.appendChild(this.actionIconDiv);
+    }
+
+    // --- キャラ削除時のクリーンアップ ---
+    dispose() {
+        // 頭上アイコン・吹き出しをDOMから除去
+        if (this.thoughtBubble && this.thoughtBubble.parentNode) {
+            this.thoughtBubble.parentNode.removeChild(this.thoughtBubble);
+        }
+        if (this.actionIconDiv && this.actionIconDiv.parentNode) {
+            this.actionIconDiv.parentNode.removeChild(this.actionIconDiv);
+        }
+        // 3Dオブジェクトも念のためdispose
+        if (this.mesh && this.mesh.parent) {
+            this.mesh.parent.remove(this.mesh);
+        }
+        // メッシュのメモリ解放
+        if (this.body) {
+            this.body.geometry && this.body.geometry.dispose();
+            this.body.material && this.body.material.dispose();
+        }
+        if (this.head) {
+            this.head.geometry && this.head.geometry.dispose();
+            this.head.material && this.head.material.dispose();
+        }
+        if (this.leftArm) {
+            this.leftArm.geometry && this.leftArm.geometry.dispose();
+            this.leftArm.material && this.leftArm.material.dispose();
+        }
+        if (this.rightArm) {
+            this.rightArm.geometry && this.rightArm.geometry.dispose();
+            this.rightArm.material && this.rightArm.material.dispose();
+        }
+        if (this.leftEye) {
+            this.leftEye.geometry && this.leftEye.geometry.dispose();
+            this.leftEye.material && this.leftEye.material.dispose();
+        }
+        if (this.rightEye) {
+            this.rightEye.geometry && this.rightEye.geometry.dispose();
+            this.rightEye.material && this.rightEye.material.dispose();
+        }
+        if (this.mouth) {
+            this.mouth.geometry && this.mouth.geometry.dispose();
+            this.mouth.material && this.mouth.material.dispose();
+        }
+        if (this.shadowMesh) {
+            this.shadowMesh.geometry && this.shadowMesh.geometry.dispose();
+            this.shadowMesh.material && this.shadowMesh.material.dispose();
+        }
+        if (this.carriedItemMesh) {
+            this.carriedItemMesh.geometry && this.carriedItemMesh.geometry.dispose();
+            this.carriedItemMesh.material && this.carriedItemMesh.material.dispose();
+        }
     }
     // --- AI & Action Methods ---
     findClosestPartner() {
