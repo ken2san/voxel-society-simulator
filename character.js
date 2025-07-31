@@ -462,20 +462,6 @@ class Character {
         this.bobTime = Math.random() * 100;
         this.actionAnim = { active: false, timer: 0, duration: 0.4 };
         this.relationships = new Map();
-        // --- 初期relationships値をパラメータ化（min/max） ---
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        const affinityMin = (typeof window !== 'undefined' && window.initialAffinityMin !== undefined) ? window.initialAffinityMin : 20;
-        const affinityMax = (typeof window !== 'undefined' && window.initialAffinityMax !== undefined) ? window.initialAffinityMax : 40;
-        for (const char of chars) {
-            if (char.id !== id) {
-                // 双方向で初期値を設定
-                const val = affinityMin + Math.random() * (affinityMax - affinityMin);
-                this.relationships.set(char.id, val);
-                if (char.relationships && typeof char.relationships.set === 'function') {
-                    char.relationships.set(id, val);
-                }
-            }
-        }
         this.bfsFailCount = 0;
 
         // Visuals (haniwa style)
@@ -544,6 +530,24 @@ class Character {
         this.actionIconDiv.style.transition = 'opacity 0.3s, transform 0.3s';
         this.actionIconDiv.style.opacity = 0;
         document.body.appendChild(this.actionIconDiv);
+    }
+
+    // --- 全キャラクターのrelationshipsを一括初期化 ---
+    static initializeAllRelationships(characters) {
+        if (!characters || characters.length === 0) return;
+        const affinityMin = (typeof window !== 'undefined' && window.initialAffinityMin !== undefined) ? window.initialAffinityMin : 20;
+        const affinityMax = (typeof window !== 'undefined' && window.initialAffinityMax !== undefined) ? window.initialAffinityMax : 40;
+        for (let i = 0; i < characters.length; i++) {
+            const a = characters[i];
+            for (let j = i + 1; j < characters.length; j++) {
+                const b = characters[j];
+                if (a.id !== b.id) {
+                    const val = affinityMin + Math.random() * (affinityMax - affinityMin);
+                    a.relationships.set(b.id, val);
+                    b.relationships.set(a.id, val);
+                }
+            }
+        }
     }
 
     // --- キャラ削除時のクリーンアップ ---

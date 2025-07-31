@@ -52,6 +52,8 @@ async function init() {
         for (let i = 0; i < 10; i++) {
             await spawnCharacter(findValidSpawn());
         }
+        // Initialize relationships after all characters are created
+        Character.initializeAllRelationships(characters);
 
         // Make characters array available globally for sidebar.js
         window.characters = characters;
