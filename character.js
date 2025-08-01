@@ -103,8 +103,8 @@ class Character {
                 this.state = 'working';
                 break;
             case 'DESTROY_BLOCK':
-                // ブロック破壊のため移動状態に遷移
-                this.state = 'moving';
+                // ブロック破壊のため作業状態に遷移
+                this.state = 'working';
                 break;
             case 'MEETING':
                 // 会議状態に遷移
@@ -139,12 +139,15 @@ class Character {
                 this.chopWood();
                 break;
             case 'BUILD_HOME':
+                this.log('⚡ BUILD_HOME実行開始');
                 this.buildHome();
                 break;
             case 'CRAFT_TOOL':
+                this.log('⚡ CRAFT_TOOL実行開始');
                 this.craftTool();
                 break;
             case 'DESTROY_BLOCK':
+                this.log('⚡ DESTROY_BLOCK実行開始');
                 this.destroyBlock();
                 break;
             case 'SEEK_SHELTER':
@@ -170,7 +173,8 @@ class Character {
 
         this.actionIconDiv.textContent = iconText;
         this.actionIconDiv.style.opacity = 1;
-        this.actionIconDiv.style.transform = 'scale(1)';
+        this.actionIconDiv.style.transform = 'scale(1.2)'; // 少し大きく表示
+        this.actionIconDiv.style.filter = 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3))';
 
         // キャラクターの頭上に配置
         const screenPos = this.getScreenPosition();
@@ -179,11 +183,15 @@ class Character {
             this.actionIconDiv.style.top = (screenPos.y - 60) + 'px';
         }
 
+        // バウンスアニメーション
+        this.actionIconDiv.style.animation = 'bounce 0.6s ease-out';
+
         // 指定時間後にフェードアウト
         setTimeout(() => {
             if (this.actionIconDiv) {
                 this.actionIconDiv.style.opacity = 0;
-                this.actionIconDiv.style.transform = 'scale(0.8)';
+                this.actionIconDiv.style.transform = 'scale(0.8) translateY(-10px)';
+                this.actionIconDiv.style.animation = '';
             }
         }, duration * 1000);
     }
@@ -247,6 +255,9 @@ class Character {
         if (blockId) {
             const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
             if (blockType && blockType.isEdible) {
+                // 収集アニメーション
+                this.showActionIcon('🍎', 1.0);
+
                 // 食料ブロックを回収
                 removeBlock && removeBlock(x, y, z);
 
@@ -257,13 +268,24 @@ class Character {
 
                 this.log('Successfully collected food', { x, y, z });
 
-                // 即座に食べる
-                this.inventory[0] = null;
-                this.carriedItemMesh.visible = false;
-                this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
-                this.eatCount = (this.eatCount || 0) + 1;
+                // 即座に食べる（美味しそうなアニメーション）
+                setTimeout(() => {
+                    this.showActionIcon('😋', 1.5);
+                    this.inventory[0] = null;
+                    this.carriedItemMesh.visible = false;
+                    this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                    this.eatCount = (this.eatCount || 0) + 1;
+                    this.log(`食事完了！ eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
-                this.log('Ate collected food, hunger restored to', this.needs.hunger);
+                    // 満腹感の表現
+                    setTimeout(() => {
+                        if (this.needs.hunger > 80) {
+                            this.showActionIcon('😊', 1.0);
+                        }
+                    }, 1000);
+
+                    this.log('Ate collected food, hunger restored to', this.needs.hunger);
+                }, 800);
             } else {
                 this.log('COLLECT_FOOD: Target is not edible', { blockId, blockType });
             }
@@ -278,6 +300,7 @@ class Character {
 
     eatFood() {
         // EATアクションはCOLLECT_FOODと同様の処理
+        this.log('EAT_FOOD: 食事開始');
         this.collectFood();
     }
 
@@ -289,8 +312,11 @@ class Character {
             return;
         }
 
-        // ツルハシアイコンを表示
-        this.showActionIcon('⛏️', 1.5);
+        // 段階的な伐採アニメーション
+        if (!this._choppingProgress) {
+            this._choppingProgress = 0;
+            this._choppingStage = 0;
+        }
 
         const { x, y, z } = this.action.target;
         const key = `${x},${y},${z}`;
@@ -299,11 +325,32 @@ class Character {
         if (blockId) {
             const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
             if (blockType && blockType.name === '木') {
-                removeBlock && removeBlock(x, y, z);
-                this.inventory[0] = 'WOOD_LOG';
-                this.updateCarriedItemAppearance('WOOD_LOG'); // 茶色に変更
-                this.carriedItemMesh.visible = true;
-                this.log('Successfully chopped wood', { x, y, z });
+                this._choppingProgress += 1;
+
+                // 段階的なアイコン表示
+                const stages = ['🪓', '⛏️', '🌲💥', '🪵'];
+                const currentStage = Math.floor(this._choppingProgress / 5) % stages.length;
+                if (currentStage !== this._choppingStage) {
+                    this.showActionIcon(stages[currentStage], 0.8);
+                    this._choppingStage = currentStage;
+                }
+
+                // 完了判定
+                if (this._choppingProgress >= 15) {
+                    removeBlock && removeBlock(x, y, z);
+                    this.inventory[0] = 'WOOD_LOG';
+                    this.updateCarriedItemAppearance('WOOD_LOG');
+                    this.carriedItemMesh.visible = true;
+                    this.showActionIcon('✅🪵', 2.0);
+                    this.log('Successfully chopped wood', { x, y, z });
+
+                    this._choppingProgress = 0;
+                    this._choppingStage = 0;
+                    this.state = 'idle';
+                    this.action = null;
+                    this.actionCooldown = 1.0;
+                }
+                return;
             }
         }
 
@@ -320,27 +367,94 @@ class Character {
             return;
         }
 
-        // ツルハシアイコンを表示
-        this.showActionIcon('⛏️', 1.5);
+        // 段階的な採掘アニメーション
+        if (!this._diggingProgress) {
+            this._diggingProgress = 0;
+            this._diggingStage = 0;
+            this.log('DESTROY_BLOCK: 採掘開始');
+        }
 
         const { x, y, z } = this.action.target;
         const key = `${x},${y},${z}`;
         const blockId = worldData.get(key);
 
         if (blockId) {
-            removeBlock && removeBlock(x, y, z);
-            this.digCount = (this.digCount || 0) + 1;
-            this.log('Successfully destroyed block', { x, y, z });
+            this._diggingProgress += 1;
+            this.log(`採掘進行: ${this._diggingProgress}/18`);
+
+            // 段階的なアイコン表示とエフェクト
+            const stages = ['⛏️', '💪⛏️', '💥⛏️', '🔥⛏️', '✨💎'];
+            const currentStage = Math.floor(this._diggingProgress / 4) % stages.length;
+            if (currentStage !== this._diggingStage) {
+                this.showActionIcon(stages[currentStage], 0.6);
+                this._diggingStage = currentStage;
+            }
+
+            // 完了判定
+            if (this._diggingProgress >= 18) {
+                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+
+                removeBlock && removeBlock(x, y, z);
+                this.digCount = (this.digCount || 0) + 1;
+                this.log(`採掘完了！ digCount=${this.digCount}`);
+
+                // 破壊したブロックからアイテムを取得
+                if (blockType) {
+                    if (blockType.name.includes('果実') || blockType.name === 'FRUIT') {
+                        this.inventory[0] = 'FRUIT_ITEM';
+                        this.updateCarriedItemAppearance('FRUIT_ITEM');
+                        this.carriedItemMesh.visible = true;
+                        this.log(`✅ 果実アイテム取得！ inventory=[${this.inventory[0]}] hunger=${this.needs.hunger.toFixed(1)}`);
+                    } else if (blockType.name.includes('石')) {
+                        // 石は直接使用するか、道具作成に使用
+                        this.showActionIcon('🗿💥', 2.0);
+                        this.log('Destroyed stone block');
+                    } else if (blockType.name.includes('土')) {
+                        this.showActionIcon('🟫💨', 1.5);
+                        this.log('Destroyed dirt block');
+                    } else {
+                        this.showActionIcon('✅⛏️', 1.5);
+                        this.log('Destroyed unknown block:', blockType.name);
+                    }
+                } else {
+                    this.showActionIcon('✅⛏️', 1.5);
+                }
+
+                // 破壊したブロックの種類に基づいて異なるエフェクト
+                if (blockType) {
+                    if (blockType.name.includes('石')) {
+                        this.showActionIcon('🗿💥', 2.0);
+                    } else if (blockType.name.includes('土')) {
+                        this.showActionIcon('🟫💨', 1.5);
+                    } else {
+                        this.showActionIcon('✅⛏️', 1.5);
+                    }
+                }
+
+                this.log('Successfully destroyed block', { x, y, z });
+
+                this._diggingProgress = 0;
+                this._diggingStage = 0;
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 1.0;
+            }
+            return;
         }
 
+        this.log('DESTROY_BLOCK: ターゲットブロックが見つからない');
         this.state = 'idle';
         this.action = null;
         this.actionCooldown = 1.0;
     }
 
     craftTool() {
-        // ハンマーアイコンを表示
-        this.showActionIcon('🔨', 2.0);
+        // 段階的な道具作成アニメーション
+        if (!this._craftingProgress) {
+            this._craftingProgress = 0;
+            this._craftingStage = 0;
+            this.log('CRAFT_TOOL: 道具作成開始');
+        }
 
         // 材料チェック: 木材と石が必要
         const hasWood = this.inventory[0] === 'WOOD_LOG';
@@ -368,59 +482,142 @@ class Character {
             return;
         }
 
-        // 材料を消費して道具作成
-        this.inventory[0] = 'STONE_TOOL';
-        this.updateCarriedItemAppearance('STONE_TOOL'); // グレーに変更
-        this.carriedItemMesh.visible = true;
-        this.log('Crafted stone tool using wood and stone');
+        // 段階的な制作プロセス
+        this._craftingProgress += 1;
+        this.log(`作成進行: ${this._craftingProgress}/35`);
 
-        this.state = 'idle';
-        this.action = null;
-        this.actionCooldown = 3.0; // 作成時間を長くする
+        const stages = ['🔨', '🪚', '⚒️', '🛠️', '✨🔧'];
+        const messages = ['材料準備中...', '切削中...', '組み立て中...', '調整中...', '完成！'];
+        const currentStage = Math.floor(this._craftingProgress / 8) % stages.length;
+
+        if (currentStage !== this._craftingStage) {
+            this.showActionIcon(stages[currentStage], 1.0);
+            this._craftingStage = currentStage;
+        }
+
+        // 完了判定
+        if (this._craftingProgress >= 35) {
+            // 材料を消費して道具作成
+            this.inventory[0] = 'STONE_TOOL';
+            this.updateCarriedItemAppearance('STONE_TOOL'); // グレーに変更
+            this.carriedItemMesh.visible = true;
+            this.showActionIcon('🎉⚒️', 2.5);
+            this.log('道具作成完了！', 'STONE_TOOL');
+
+            this._craftingProgress = 0;
+            this._craftingStage = 0;
+            this.state = 'idle';
+            this.action = null;
+            this.actionCooldown = 3.0; // 作成時間を長くする
+        }
     }
 
     buildHome() {
-        // 家建設の処理
-        if (this.inventory[0] === 'WOOD_LOG') {
-            // 建設アイコンを表示
-            this.showActionIcon('🏗️', 2.5);
-
-            // 木材を消費
-            this.inventory[0] = null;
-            this.carriedItemMesh.visible = false;
-
-            // 現在位置に寝床ブロックを設置
-            const bedPos = { ...this.gridPos };
-            if (typeof addBlock === 'function' && BLOCK_TYPES.BED) {
-                addBlock(bedPos.x, bedPos.y, bedPos.z, BLOCK_TYPES.BED, true);
-                this.log('Placed bed block at', bedPos);
-
-                // ベッドを設置したら1マス隣に移動
-                const directions = [
-                    {dx: 1, dz: 0}, {dx: -1, dz: 0},
-                    {dx: 0, dz: 1}, {dx: 0, dz: -1}
-                ];
-                for (const dir of directions) {
-                    const newX = this.gridPos.x + dir.dx;
-                    const newZ = this.gridPos.z + dir.dz;
-                    const newY = this.gridPos.y;
-                    const key = `${newX},${newY},${newZ}`;
-                    const below = `${newX},${newY-1},${newZ}`;
-
-                    // 移動先が空いていて足場があるかチェック
-                    if (!worldData.has(key) && worldData.has(below)) {
-                        this.gridPos = { x: newX, y: newY, z: newZ };
-                        this.updateWorldPosFromGrid();
-                        break;
-                    }
-                }
-            }
-
-            this.homePosition = bedPos;
-            this.buildCount = (this.buildCount || 0) + 1;
-            this.log('Built home at', this.homePosition);
+        // 段階的な建築アニメーション
+        if (!this._buildingProgress) {
+            this._buildingProgress = 0;
+            this._buildingStage = 0;
+            this.log('BUILD_HOME: 建築開始');
         }
 
+        // 家建設の処理
+        if (this.inventory[0] === 'WOOD_LOG') {
+            this._buildingProgress += 1;
+            this.log(`建築進行: ${this._buildingProgress}/25`);
+
+            // 段階的な建築アイコン表示
+            const stages = ['🔨', '🏗️', '🧱', '🏠', '✨🏡'];
+            const messages = ['設計中...', '基礎工事中...', '壁を作成中...', '屋根を設置中...', '完成！'];
+            const currentStage = Math.floor(this._buildingProgress / 6) % stages.length;
+
+            if (currentStage !== this._buildingStage) {
+                this.showActionIcon(stages[currentStage], 1.2);
+                this._buildingStage = currentStage;
+            }
+
+            // 完了判定
+            if (this._buildingProgress >= 25) {
+                // 建設アイコンを表示
+                this.showActionIcon('�🏠', 3.0);
+
+                // 木材を消費
+                this.inventory[0] = null;
+                this.carriedItemMesh.visible = false;
+
+                // 現在位置に寝床ブロックを設置
+                const bedPos = { ...this.gridPos };
+                if (typeof addBlock === 'function' && BLOCK_TYPES.BED) {
+                    addBlock(bedPos.x, bedPos.y, bedPos.z, BLOCK_TYPES.BED, true);
+                    this.log('Placed bed block at', bedPos);
+
+                    // 家らしい構造を作る：壁と屋根を追加
+                    if (BLOCK_TYPES.HOUSE_WALL && BLOCK_TYPES.HOUSE_ROOF) {
+                        const wallPositions = [
+                            {x: bedPos.x - 1, y: bedPos.y, z: bedPos.z},     // 左壁
+                            {x: bedPos.x + 1, y: bedPos.y, z: bedPos.z},     // 右壁
+                            {x: bedPos.x, y: bedPos.y, z: bedPos.z - 1},     // 前壁
+                            {x: bedPos.x, y: bedPos.y, z: bedPos.z + 1},     // 後壁
+                            {x: bedPos.x - 1, y: bedPos.y + 1, z: bedPos.z}, // 左壁上
+                            {x: bedPos.x + 1, y: bedPos.y + 1, z: bedPos.z}, // 右壁上
+                            {x: bedPos.x, y: bedPos.y + 1, z: bedPos.z - 1}, // 前壁上
+                            {x: bedPos.x, y: bedPos.y + 1, z: bedPos.z + 1}  // 後壁上
+                        ];
+
+                        // 壁を設置（空いている場所のみ）
+                        for (const wallPos of wallPositions) {
+                            const key = `${wallPos.x},${wallPos.y},${wallPos.z}`;
+                            if (!worldData.has(key)) {
+                                addBlock(wallPos.x, wallPos.y, wallPos.z, BLOCK_TYPES.HOUSE_WALL, false);
+                            }
+                        }
+
+                        // 屋根を設置
+                        const roofPos = {x: bedPos.x, y: bedPos.y + 2, z: bedPos.z};
+                        const roofKey = `${roofPos.x},${roofPos.y},${roofPos.z}`;
+                        if (!worldData.has(roofKey)) {
+                            addBlock(roofPos.x, roofPos.y, roofPos.z, BLOCK_TYPES.HOUSE_ROOF, false);
+                        }
+
+                        this.log('Built complete house with walls and roof!');
+                    }
+
+                    // ベッドを設置したら1マス隣に移動（壁を避ける）
+                    const directions = [
+                        {dx: 2, dz: 0}, {dx: -2, dz: 0},
+                        {dx: 0, dz: 2}, {dx: 0, dz: -2},
+                        {dx: 1, dz: 0}, {dx: -1, dz: 0},
+                        {dx: 0, dz: 1}, {dx: 0, dz: -1}
+                    ];
+                    for (const dir of directions) {
+                        const newX = this.gridPos.x + dir.dx;
+                        const newZ = this.gridPos.z + dir.dz;
+                        const newY = this.gridPos.y;
+                        const key = `${newX},${newY},${newZ}`;
+                        const below = `${newX},${newY-1},${newZ}`;
+
+                        // 移動先が空いていて足場があるかチェック
+                        if (!worldData.has(key) && worldData.has(below)) {
+                            this.gridPos = { x: newX, y: newY, z: newZ };
+                            this.updateWorldPosFromGrid();
+                            break;
+                        }
+                    }
+                }
+
+                this.homePosition = bedPos;
+                this.buildCount = (this.buildCount || 0) + 1;
+                this.log(`建築完了！ buildCount=${this.buildCount}`, this.homePosition);
+
+                this._buildingProgress = 0;
+                this._buildingStage = 0;
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 3.0;
+            }
+            return;
+        }
+
+        this.log('BUILD_HOME: 木材がない');
         this.state = 'idle';
         this.action = null;
         this.actionCooldown = 3.0;
@@ -438,10 +635,10 @@ class Character {
         if (!this.actionHistory) this.actionHistory = [];
         this.actionHistory.push(type);
         if (this.actionHistory.length > 20) this.actionHistory.shift();
-        this.log(`Action chosen: ${type}`, {target, moveTo});
-        if (type === 'SOCIALIZE') {
-            this.log('SOCIALIZE action selected', { id: this.id, target: target?.id, pos: this.gridPos });
-        }
+        // this.log(`Action chosen: ${type}`, {target, moveTo}); // WANDERログを止める
+        // if (type === 'SOCIALIZE') {
+        //     this.log('SOCIALIZE action selected', { id: this.id, target: target?.id, pos: this.gridPos });
+        // }
         // --- WANDER時は到達可能な候補のみ選ぶ ---
         if (type === 'WANDER' && !moveTo) {
             // 周囲の空きマス候補を列挙
@@ -1246,7 +1443,7 @@ class Character {
             this._stuckCheckCooldown = 0.3; // 0.3秒ごとにチェック
         }
 
-        this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos });
+        // this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos }); // コメントアウト
         // Claim land underfoot every update
         this.claimCurrentLand();
 
@@ -1325,6 +1522,29 @@ class Character {
             if (this.actionCooldown <= 0) {
                 this.state = 'idle';
                 this.action = null;
+            }
+            this.updateThoughtBubble(isNight, camera);
+            return;
+        }
+
+        // --- working状態での段階的処理継続 ---
+        if (this.state === 'working' && this.action) {
+            this.log(`working状態で処理継続: ${this.action.type}`);
+            switch (this.action.type) {
+                case 'BUILD_HOME':
+                    this.buildHome();
+                    break;
+                case 'CRAFT_TOOL':
+                    this.craftTool();
+                    break;
+                case 'DESTROY_BLOCK':
+                    this.destroyBlock();
+                    break;
+                default:
+                    this.log(`未対応のworking action: ${this.action.type}`);
+                    this.state = 'idle';
+                    this.action = null;
+                    break;
             }
             this.updateThoughtBubble(isNight, camera);
             return;
@@ -1466,6 +1686,15 @@ class Character {
             this.actionCooldown -= deltaTime;
             if (this.actionCooldown <= 0) this.decideNextAction && this.decideNextAction(isNight);
         }
+        // moving状態でも定期的にactionCooldownを減少させ、必要に応じて新しいアクションを決定
+        else if (this.state === 'moving') {
+            this.actionCooldown -= deltaTime;
+            if (this.actionCooldown <= 0) {
+                // 移動中でも定期的に新しいアクションを決定（より頻繁に）
+                this.actionCooldown = 2.0;  // 2秒後に再チェック
+                this.decideNextAction && this.decideNextAction(isNight);
+            }
+        }
         // SOCIALIZE状態中は、極端に緊急でない限りAI上書きを防ぐ
         else if (this.state === 'socializing') {
             // 餓死寸前（hunger <= 5）または極度の疲労（energy <= 5）の場合のみ中断
@@ -1572,7 +1801,7 @@ class Character {
     revive() {}
 
     updateMovement(deltaTime) {
-        this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos });
+        // this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos }); // コメントアウト
         if (!this.targetPos) { this.state = 'idle'; return; }
         // --- BFS経路探索 ---
         if (!this.path || this.path.length === 0 || !this.lastTargetPos ||
@@ -2057,12 +2286,23 @@ class Character {
     }
 
     decideNextAction(isNight) {
+        // デバッグ用：現在の状態を記録
+        this.log(`=== ACTION DECISION START ===`);
+        this.log(`Needs: hunger=${this.needs.hunger.toFixed(1)}, energy=${this.needs.energy.toFixed(1)}, social=${this.needs.social.toFixed(1)}`);
+        this.log(`Inventory: [${this.inventory.map(i => i || 'null').join(', ')}]`);
+        this.log(`Home: homePosition=${!!this.homePosition}, provisionalHome=${!!this.provisionalHome}`);
+        this.log(`State: ${this.state}, actionCooldown=${this.actionCooldown.toFixed(2)}`);
+
         // Toggle between rule-based and utility-based AI
         if (typeof window !== 'undefined' && window.aiMode === 'utility') {
             decideNextAction_utility(this, isNight);
         } else {
             decideNextAction_rulebase(this, isNight);
         }
+
+        // デバッグ用：決定後の状態を記録
+        this.log(`Action chosen: ${this.action?.type || this.action || 'null'}`);
+        this.log(`=== ACTION DECISION END ===`);
     }
 
     updateColorFromPersonality() {
@@ -2446,6 +2686,13 @@ class Character {
                     }
                 }
             }
+        }
+    }
+
+    // デバッグログメソッド
+    log(...args) {
+        if (typeof window !== 'undefined' && window.DEBUG_MODE) {
+            console.log(`[Char ${this.id}]`, ...args);
         }
     }
 }

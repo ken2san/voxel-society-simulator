@@ -67,7 +67,9 @@ export const BLOCK_TYPES = {
     FRUIT: { id: 4, name: '果実', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM' },
     WOOD:  { id: 5, name: '木', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG' },
     LEAF:  { id: 6, name: '葉', color: 0x228b22, diggable: true },
-    BED:   { id: 7, name: '寝床', color: 0xffec8b, isBed: true }
+    BED:   { id: 7, name: '寝床', color: 0xffec8b, isBed: true },
+    HOUSE_WALL: { id: 8, name: '家の壁', color: 0xd2b48c, isHouseWall: true },
+    HOUSE_ROOF: { id: 9, name: '家の屋根', color: 0x8b4513, isHouseRoof: true }
 };
 export const ITEM_TYPES = {
     WOOD_LOG: { id: 100, name: '丸太', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.WOOD.color }) },
@@ -131,9 +133,31 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     worldData.set(key, type.id);
     const material = blockMaterials.get(type.id);
     let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-    if (type.isBed) { geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize); }
+
+    // 特別な形状の設定
+    if (type.isBed) {
+        geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
+    } else if (type.isHouseWall) {
+        // 壁は少し厚みのある形状
+        geometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize, blockSize * 0.9);
+    } else if (type.isHouseRoof) {
+        // 屋根は三角屋根風
+        geometry = new THREE.ConeGeometry(blockSize * 0.7, blockSize * 0.8, 4);
+    }
+
     const block = new THREE.Mesh(geometry, material);
-    block.position.set(x + 0.5, y + (type.isBed ? 0.2 : 0.5), z + 0.5);
+
+    // 位置の調整
+    let yOffset = 0.5;
+    if (type.isBed) yOffset = 0.2;
+    else if (type.isHouseRoof) yOffset = 0.4;
+
+    block.position.set(x + 0.5, y + yOffset, z + 0.5);
+
+    // 屋根の向きを調整
+    if (type.isHouseRoof) {
+        block.rotation.y = Math.PI / 4; // 45度回転
+    }
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(block.geometry), edgeMaterial);
     block.add(edges);
     visualBlocks.set(key, block);

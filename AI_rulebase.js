@@ -33,8 +33,8 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // --- Emergency: If needs are critically low, always prioritize survival actions ---
-    const hungerEmergencyThreshold = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? window.hungerEmergencyThreshold : 5;
-    if (character.needs.hunger <= hungerEmergencyThreshold) { // スライダーで調整可能
+    const hungerEmergencyThreshold = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? window.hungerEmergencyThreshold : 2; // 5から2に変更
+    if (character.needs.hunger <= hungerEmergencyThreshold) { // より緊急時のみ
         // 1. まずインベントリ内の食料を食べる
         const foodIdx = character.inventory.findIndex(item => item === 'FRUIT_ITEM' || item === 'FRUIT');
         if (foodIdx !== -1) {
@@ -42,7 +42,7 @@ export function decideNextAction_rulebase(character, isNight) {
             character.carriedItemMesh.visible = false;
             character.needs.hunger = Math.min(100, character.needs.hunger + 40 + Math.random() * 20);
             character.eatCount = (character.eatCount || 0) + 1;
-            character.log('Ate food from inventory');
+            character.log(`緊急時自動食事！ hunger=${character.needs.hunger.toFixed(1)} → 回復`);
             character.state = 'idle';
             character.action = null;
             character.actionCooldown = 0.5;
@@ -131,7 +131,23 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     } else if (character.role === 'worker') {
+        // 家がない場合は積極的に木材収集を優先
+        const woodCollectionPriority = (typeof window !== 'undefined' && window.woodCollectionPriority !== undefined) ? window.woodCollectionPriority : 70;
+        const shouldCollectWood = !character.homePosition && character.needs.hunger > woodCollectionPriority;
+
         if (character.inventory[0] === null) {
+            // 家がない && 空腹度が十分 → 木材優先
+            if (shouldCollectWood) {
+                const woodPos = character.findClosestWood();
+                if (woodPos) {
+                    const adjacentSpot = character.findAdjacentSpot(woodPos);
+                    if(adjacentSpot){
+                        character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot); return;
+                    }
+                }
+            }
+
+            // 通常の食料収集
             const foodPos = character.findClosestFood();
             if (foodPos) {
                 const adjacentSpot = character.findAdjacentSpot(foodPos);
@@ -139,6 +155,8 @@ export function decideNextAction_rulebase(character, isNight) {
                     character.setNextAction('COLLECT_FOOD', foodPos, adjacentSpot); return;
                 }
             }
+
+            // 食料がない場合は木材収集にフォールバック
             const woodPos = character.findClosestWood();
             if (woodPos) {
                 const adjacentSpot = character.findAdjacentSpot(woodPos);
@@ -155,7 +173,8 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    if (!character.inventory.includes('STONE_TOOL')) {
+    // 道具作成: 石の道具を持っていない かつ 木材を持っている場合のみ
+    if (!character.inventory.includes('STONE_TOOL') && character.inventory.includes('WOOD_LOG')) {
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dz = -1; dz <= 1; dz++) {
@@ -208,7 +227,8 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    if (character.needs.hunger < 90) {
+    // 空腹度が高くても時々掘削作業をする（条件を緩和）
+    if (character.needs.hunger < 95) { // 90から95に変更
         const foodPos = character.findClosestFood();
         if (foodPos) {
             const adjacentSpot = character.findAdjacentSpot(foodPos);
@@ -233,6 +253,17 @@ export function decideNextAction_rulebase(character, isNight) {
             character.setNextAction('WANDER'); return;
         }
     }
+
+    // --- 満腹でも時々働く（新規追加）---
+    if (Math.random() < 0.3) { // 30%の確率で働く
+        const digTarget = character.findDiggableBlock();
+        if (digTarget) {
+            const adjacentSpot = character.findAdjacentSpot(digTarget);
+            if (adjacentSpot) {
+                character.setNextAction('DESTROY_BLOCK', digTarget, adjacentSpot); return;
+            }
+        }
+    }
     const diligentRand = Math.random();
     if (diligentRand < character.personality.diligence - 0.5) {
         if (character.inventory[0] !== null) {
@@ -242,8 +273,20 @@ export function decideNextAction_rulebase(character, isNight) {
                 if (storageSpot) {
                     character.setNextAction('STORE_ITEM', storageSpot, character.findAdjacentSpot(storageSpot) || character.gridPos, BLOCK_TYPES.FRUIT); return;
                 }
-            } else if (character.inventory[0] === 'WOOD_LOG' && character.provisionalHome && !character.homePosition) {
-                character.setNextAction('BUILD_HOME', character.provisionalHome, character.provisionalHome); return;
+            } else if (character.inventory[0] === 'WOOD_LOG' && !character.homePosition) {
+                // 木材を持っていて家がない場合は積極的に家を建てる
+                const homeBuildingPriority = (typeof window !== 'undefined' && window.homeBuildingPriority !== undefined) ? window.homeBuildingPriority : 80;
+                const shouldBuildHome = character.needs.hunger > (100 - homeBuildingPriority) && character.needs.energy > 30;
+
+                if (shouldBuildHome) {
+                    character.log(`🏠 木材取得→家建設開始！ inventory=[${character.inventory[0]}] priority=${homeBuildingPriority}`);
+                    if (!character.provisionalHome) {
+                        character.provisionalHome = character.gridPos; // 現在位置を仮の家に設定
+                    }
+                    character.setNextAction('BUILD_HOME', character.provisionalHome, character.provisionalHome); return;
+                } else {
+                    character.log(`🏠 家建設保留: hunger=${character.needs.hunger.toFixed(1)} energy=${character.needs.energy.toFixed(1)} priority=${homeBuildingPriority}`);
+                }
             }
         } else {
             // Rest at home if satisfied and have home

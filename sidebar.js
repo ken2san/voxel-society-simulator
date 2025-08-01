@@ -116,9 +116,13 @@ function renderCharacterDetail() {
     if (sidebarParams.hungerEmergencyThreshold === undefined) sidebarParams.hungerEmergencyThreshold = 5;
     if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 1;
     if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
+    if (sidebarParams.homeBuildingPriority === undefined) sidebarParams.homeBuildingPriority = 80;
+    if (sidebarParams.woodCollectionPriority === undefined) sidebarParams.woodCollectionPriority = 70;
     window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
     window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
     window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
+    window.homeBuildingPriority = sidebarParams.homeBuildingPriority;
+    window.woodCollectionPriority = sidebarParams.woodCollectionPriority;
     // 新パラメータ: 初期affinity値と上昇速度
     if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
     if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
@@ -572,6 +576,88 @@ function renderCharacterDetail() {
     paramBox.appendChild(homeReturnRow);
     homeReturnInput.disabled = paramDisabled;
     homeReturnVal.disabled = paramDisabled;
+
+    // --- Home Building Priority Slider ---
+    if (sidebarParams.homeBuildingPriority === undefined) sidebarParams.homeBuildingPriority = 80;
+    const homeBuildRow = document.createElement('div');
+    homeBuildRow.style.display = 'flex';
+    homeBuildRow.style.alignItems = 'center';
+    homeBuildRow.style.gap = '10px';
+    const homeBuildLabel = document.createElement('span');
+    homeBuildLabel.textContent = '🏠 Home Building Priority:';
+    homeBuildLabel.style.flex = '1';
+    const homeBuildInput = document.createElement('input');
+    homeBuildInput.type = 'range';
+    homeBuildInput.min = 50;
+    homeBuildInput.max = 100;
+    homeBuildInput.step = 1;
+    homeBuildInput.value = sidebarParams.homeBuildingPriority;
+    homeBuildInput.style.flex = '2';
+    const homeBuildVal = document.createElement('input');
+    homeBuildVal.type = 'number';
+    homeBuildVal.min = 50;
+    homeBuildVal.max = 100;
+    homeBuildVal.step = 1;
+    homeBuildVal.value = sidebarParams.homeBuildingPriority;
+    homeBuildVal.style.width = '60px';
+    homeBuildRow.appendChild(homeBuildLabel);
+    homeBuildRow.appendChild(homeBuildInput);
+    homeBuildRow.appendChild(homeBuildVal);
+    // 双方向同期＋sidebarParams更新
+    homeBuildInput.oninput = () => {
+        homeBuildVal.value = homeBuildInput.value;
+        sidebarParams.homeBuildingPriority = parseInt(homeBuildInput.value);
+        window.homeBuildingPriority = parseInt(homeBuildInput.value);
+    };
+    homeBuildVal.oninput = () => {
+        homeBuildInput.value = homeBuildVal.value;
+        sidebarParams.homeBuildingPriority = parseInt(homeBuildVal.value);
+        window.homeBuildingPriority = parseInt(homeBuildVal.value);
+    };
+    paramBox.appendChild(homeBuildRow);
+    homeBuildInput.disabled = paramDisabled;
+    homeBuildVal.disabled = paramDisabled;
+
+    // --- Wood Collection Priority Slider ---
+    if (sidebarParams.woodCollectionPriority === undefined) sidebarParams.woodCollectionPriority = 70;
+    const woodCollectRow = document.createElement('div');
+    woodCollectRow.style.display = 'flex';
+    woodCollectRow.style.alignItems = 'center';
+    woodCollectRow.style.gap = '10px';
+    const woodCollectLabel = document.createElement('span');
+    woodCollectLabel.textContent = '🪵 Wood Collection Priority:';
+    woodCollectLabel.style.flex = '1';
+    const woodCollectInput = document.createElement('input');
+    woodCollectInput.type = 'range';
+    woodCollectInput.min = 30;
+    woodCollectInput.max = 100;
+    woodCollectInput.step = 1;
+    woodCollectInput.value = sidebarParams.woodCollectionPriority;
+    woodCollectInput.style.flex = '2';
+    const woodCollectVal = document.createElement('input');
+    woodCollectVal.type = 'number';
+    woodCollectVal.min = 30;
+    woodCollectVal.max = 100;
+    woodCollectVal.step = 1;
+    woodCollectVal.value = sidebarParams.woodCollectionPriority;
+    woodCollectVal.style.width = '60px';
+    woodCollectRow.appendChild(woodCollectLabel);
+    woodCollectRow.appendChild(woodCollectInput);
+    woodCollectRow.appendChild(woodCollectVal);
+    // 双方向同期＋sidebarParams更新
+    woodCollectInput.oninput = () => {
+        woodCollectVal.value = woodCollectInput.value;
+        sidebarParams.woodCollectionPriority = parseInt(woodCollectInput.value);
+        window.woodCollectionPriority = parseInt(woodCollectInput.value);
+    };
+    woodCollectVal.oninput = () => {
+        woodCollectInput.value = woodCollectVal.value;
+        sidebarParams.woodCollectionPriority = parseInt(woodCollectVal.value);
+        window.woodCollectionPriority = parseInt(woodCollectVal.value);
+    };
+    paramBox.appendChild(woodCollectRow);
+    woodCollectInput.disabled = paramDisabled;
+    woodCollectVal.disabled = paramDisabled;
 
     // ランダム生成トグル
     const randomRow = document.createElement('div');
