@@ -1072,7 +1072,6 @@ class Character {
         // --- BFS経路探索 ---
         if (!this.path || this.path.length === 0 || !this.lastTargetPos ||
             this.lastTargetPos.x !== this.targetPos.x || this.lastTargetPos.y !== this.targetPos.y || this.lastTargetPos.z !== this.targetPos.z) {
-            // 新しい目的地 or 経路消失時は再探索
             this.path = this.bfsPath(this.gridPos, this.targetPos);
             this.lastTargetPos = { ...this.targetPos };
             if (!this.path || this.path.length === 0) {
@@ -1194,6 +1193,47 @@ class Character {
         } else {
             direction.normalize();
             this.mesh.position.add(direction.multiplyScalar(moveDistance));
+        }
+        // --- 角スタック救済ロジック ---
+        // 1. 角スタック検出: 周囲2方向が壁で進めない（L字型や角）
+        // 2. 一定時間（例: 1.5秒）動けなければ強制的に1つ壊す
+        if (!this._cornerStuckTimer) this._cornerStuckTimer = 0;
+        let isCornerStuck = false;
+        let wallCount = 0;
+        let wallPos = null;
+        const directions = [
+            {dx:1, dz:0}, {dx:-1, dz:0}, {dx:0, dz:1}, {dx:0, dz:-1}
+        ];
+        for (const dir of directions) {
+            const x = this.gridPos.x + dir.dx;
+            const z = this.gridPos.z + dir.dz;
+            const y = this.gridPos.y;
+            const key = `${x},${y},${z}`;
+            const blockId = worldData.get(key);
+            if (blockId && blockId !== BLOCK_TYPES.AIR.id) {
+                wallCount++;
+                if (!wallPos) wallPos = {x, y, z};
+            }
+        }
+        // 2方向以上が壁なら角スタックの可能性
+        if (wallCount >= 2) {
+            // 進行方向が壁で進めない場合のみ
+            if (this.state === 'moving' && direction.length() < 0.01) {
+                isCornerStuck = true;
+            }
+        }
+        if (isCornerStuck) {
+            this._cornerStuckTimer += deltaTime;
+            if (this._cornerStuckTimer > 1.5 && wallPos) {
+                // 強制的に壁を壊して脱出
+                removeBlock(wallPos.x, wallPos.y, wallPos.z);
+                this.log('Break out: forcibly destroyed block to escape corner deadlock', wallPos);
+                this._cornerStuckTimer = 0;
+                // 経路再探索
+                this.path = this.bfsPath(this.gridPos, this.targetPos);
+            }
+        } else {
+            this._cornerStuckTimer = 0;
         }
     }
 
