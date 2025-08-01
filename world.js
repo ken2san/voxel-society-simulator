@@ -63,7 +63,7 @@ export const BLOCK_TYPES = {
     AIR:   { id: 0, name: '空気' },
     GRASS: { id: 1, name: '草', color: 0x4CAF50, diggable: true },
     DIRT:  { id: 2, name: '土', color: 0x966c4a, diggable: true },
-    STONE: { id: 3, name: '石', color: 0x888888, diggable: false },
+    STONE: { id: 3, name: '石', color: 0x888888, diggable: true },
     FRUIT: { id: 4, name: '果実', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM' },
     WOOD:  { id: 5, name: '木', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG' },
     LEAF:  { id: 6, name: '葉', color: 0x228b22, diggable: true },
@@ -110,6 +110,8 @@ export function generateTerrain() {
             }
         }
         if (!isPath && Math.random() < 0.3) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false);
+        // 石ブロックを表面に生成（確率15%）
+        if (!isPath && Math.random() < 0.15) addBlock(x, height, z, BLOCK_TYPES.STONE, false);
         if (!isPath && Math.random() < 0.20 && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
             const treeHeight = height + Math.floor(Math.random() * 3) + 3;
             for (let y = height; y < treeHeight; y++) addBlock(x, y, z, BLOCK_TYPES.WOOD, false);

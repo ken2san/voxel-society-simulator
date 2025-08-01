@@ -154,6 +154,75 @@ class Character {
     }
 
     // --- 個別のアクション実行メソッド ---
+
+    // アクションアイコンを表示
+    showActionIcon(iconText, duration = 2.0) {
+        if (!this.actionIconDiv) return;
+
+        this.actionIconDiv.textContent = iconText;
+        this.actionIconDiv.style.opacity = 1;
+        this.actionIconDiv.style.transform = 'scale(1)';
+
+        // キャラクターの頭上に配置
+        const screenPos = this.getScreenPosition();
+        if (screenPos) {
+            this.actionIconDiv.style.left = (screenPos.x - 20) + 'px';
+            this.actionIconDiv.style.top = (screenPos.y - 60) + 'px';
+        }
+
+        // 指定時間後にフェードアウト
+        setTimeout(() => {
+            if (this.actionIconDiv) {
+                this.actionIconDiv.style.opacity = 0;
+                this.actionIconDiv.style.transform = 'scale(0.8)';
+            }
+        }, duration * 1000);
+    }
+
+    // スクリーン座標を取得
+    getScreenPosition() {
+        if (!this.mesh || !window.camera || !window.renderer) return null;
+
+        const vector = new THREE.Vector3();
+        vector.setFromMatrixPosition(this.mesh.matrixWorld);
+        vector.project(window.camera);
+
+        const widthHalf = window.renderer.domElement.clientWidth / 2;
+        const heightHalf = window.renderer.domElement.clientHeight / 2;
+
+        return {
+            x: (vector.x * widthHalf) + widthHalf,
+            y: -(vector.y * heightHalf) + heightHalf
+        };
+    }
+
+    // アイテム種類に応じてcarriedItemMeshのマテリアルを変更
+    updateCarriedItemAppearance(itemType) {
+        if (!this.carriedItemMesh) return;
+
+        let material;
+        switch (itemType) {
+            case 'FRUIT_ITEM':
+                material = new THREE.MeshLambertMaterial({ color: 0xFF6B35 }); // オレンジ色（果実）
+                break;
+            case 'WOOD_LOG':
+                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // 茶色（木材）
+                break;
+            case 'STONE_TOOL':
+                material = new THREE.MeshLambertMaterial({ color: 0x696969 }); // グレー（石）
+                break;
+            default:
+                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // デフォルト茶色
+                break;
+        }
+
+        // 古いマテリアルを破棄して新しいマテリアルを設定
+        if (this.carriedItemMesh.material) {
+            this.carriedItemMesh.material.dispose();
+        }
+        this.carriedItemMesh.material = material;
+    }
+
     collectFood() {
         if (!this.action.target) {
             this.log('COLLECT_FOOD: No target specified');
@@ -174,6 +243,7 @@ class Character {
 
                 // インベントリに追加
                 this.inventory[0] = 'FRUIT_ITEM';
+                this.updateCarriedItemAppearance('FRUIT_ITEM'); // オレンジ色に変更
                 this.carriedItemMesh.visible = true;
 
                 this.log('Successfully collected food', { x, y, z });
@@ -210,6 +280,9 @@ class Character {
             return;
         }
 
+        // ツルハシアイコンを表示
+        this.showActionIcon('⛏️', 1.5);
+
         const { x, y, z } = this.action.target;
         const key = `${x},${y},${z}`;
         const blockId = worldData.get(key);
@@ -219,6 +292,7 @@ class Character {
             if (blockType && blockType.name === '木') {
                 removeBlock && removeBlock(x, y, z);
                 this.inventory[0] = 'WOOD_LOG';
+                this.updateCarriedItemAppearance('WOOD_LOG'); // 茶色に変更
                 this.carriedItemMesh.visible = true;
                 this.log('Successfully chopped wood', { x, y, z });
             }
@@ -237,6 +311,9 @@ class Character {
             return;
         }
 
+        // ツルハシアイコンを表示
+        this.showActionIcon('⛏️', 1.5);
+
         const { x, y, z } = this.action.target;
         const key = `${x},${y},${z}`;
         const blockId = worldData.get(key);
@@ -253,22 +330,84 @@ class Character {
     }
 
     craftTool() {
-        // 道具作成の処理
+        // ハンマーアイコンを表示
+        this.showActionIcon('🔨', 2.0);
+
+        // 材料チェック: 木材と石が必要
+        const hasWood = this.inventory[0] === 'WOOD_LOG';
+        const hasStone = this.hasStoneNearby();
+
+        if (!hasWood) {
+            this.log('CRAFT_TOOL: Need wood log to craft tool');
+            this.state = 'idle';
+            this.action = null;
+            this.actionCooldown = 1.0;
+            return;
+        }
+
+        if (!hasStone) {
+            this.log('CRAFT_TOOL: Need stone nearby to craft tool');
+            // 石を探しに行く
+            const stonePos = this.findClosestStone();
+            if (stonePos) {
+                this.setNextAction('CHOP_WOOD', stonePos, stonePos); // CHOP_WOODを流用して石を取りに行く
+                return;
+            }
+            this.state = 'idle';
+            this.action = null;
+            this.actionCooldown = 1.0;
+            return;
+        }
+
+        // 材料を消費して道具作成
         this.inventory[0] = 'STONE_TOOL';
+        this.updateCarriedItemAppearance('STONE_TOOL'); // グレーに変更
         this.carriedItemMesh.visible = true;
-        this.log('Crafted stone tool');
+        this.log('Crafted stone tool using wood and stone');
 
         this.state = 'idle';
         this.action = null;
-        this.actionCooldown = 2.0;
+        this.actionCooldown = 3.0; // 作成時間を長くする
     }
 
     buildHome() {
         // 家建設の処理
         if (this.inventory[0] === 'WOOD_LOG') {
+            // 建設アイコンを表示
+            this.showActionIcon('🏗️', 2.5);
+
+            // 木材を消費
             this.inventory[0] = null;
             this.carriedItemMesh.visible = false;
-            this.homePosition = { ...this.gridPos };
+
+            // 現在位置に寝床ブロックを設置
+            const bedPos = { ...this.gridPos };
+            if (typeof addBlock === 'function' && BLOCK_TYPES.BED) {
+                addBlock(bedPos.x, bedPos.y, bedPos.z, BLOCK_TYPES.BED, true);
+                this.log('Placed bed block at', bedPos);
+
+                // ベッドを設置したら1マス隣に移動
+                const directions = [
+                    {dx: 1, dz: 0}, {dx: -1, dz: 0},
+                    {dx: 0, dz: 1}, {dx: 0, dz: -1}
+                ];
+                for (const dir of directions) {
+                    const newX = this.gridPos.x + dir.dx;
+                    const newZ = this.gridPos.z + dir.dz;
+                    const newY = this.gridPos.y;
+                    const key = `${newX},${newY},${newZ}`;
+                    const below = `${newX},${newY-1},${newZ}`;
+
+                    // 移動先が空いていて足場があるかチェック
+                    if (!worldData.has(key) && worldData.has(below)) {
+                        this.gridPos = { x: newX, y: newY, z: newZ };
+                        this.updateWorldPosFromGrid();
+                        break;
+                    }
+                }
+            }
+
+            this.homePosition = bedPos;
             this.buildCount = (this.buildCount || 0) + 1;
             this.log('Built home at', this.homePosition);
         }
@@ -745,7 +884,8 @@ class Character {
         this.leftArm = new THREE.Mesh(armGeometry, armMaterial); this.leftArm.position.set(-0.22, 0.65, 0); this.leftArm.rotation.z = Math.PI/2.2; this.body.add(this.leftArm);
         this.rightArm = new THREE.Mesh(armGeometry, armMaterial); this.rightArm.position.set(0.22, 0.65, 0); this.rightArm.rotation.z = -Math.PI/2.2; this.body.add(this.rightArm);
         // Carried item
-        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5)); this.carriedItemMesh.position.set(0, 1.0, 0.3); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
+        const carriedItemMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown color
+        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), carriedItemMaterial); this.carriedItemMesh.position.set(0, 1.0, 0.3); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
         // Shadow
         const shadowGeometry = new THREE.CircleGeometry(0.32, 32);
         const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
@@ -892,6 +1032,41 @@ class Character {
             }
         }
         return closest;
+    }
+
+    findClosestStone() {
+        let minDist = Infinity, closest = null;
+        for (const [key, id] of worldData.entries()) {
+            const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
+            if (type && type.diggable && (type.name === '石' || type.name.includes('石') || type.name === 'STONE')) {
+                const [x, y, z] = key.split(',').map(Number);
+                const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+                if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+            }
+        }
+        return closest;
+    }
+
+    // 周囲に石があるかチェック
+    hasStoneNearby() {
+        for (let dx = -2; dx <= 2; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dz = -2; dz <= 2; dz++) {
+                    const x = this.gridPos.x + dx;
+                    const y = this.gridPos.y + dy;
+                    const z = this.gridPos.z + dz;
+                    const key = `${x},${y},${z}`;
+                    const blockId = worldData.get(key);
+                    if (blockId) {
+                        const type = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                        if (type && type.diggable && (type.name === '石' || type.name.includes('石') || type.name === 'STONE')) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     findDiggableBlock() {

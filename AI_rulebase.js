@@ -1,7 +1,7 @@
 // Rule-based AI logic for voxel society simulator
 // This function is a direct extraction of the original decideNextAction from character.js
 // It is designed to be called as: decideNextAction_rulebase(character, isNight)
-import { worldData, BLOCK_TYPES } from './world.js';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, maxHeight, removeBlock } from './world.js';
 
 export function decideNextAction_rulebase(character, isNight) {
     // --- 10%の確率で強制的にWANDERまたはSOCIALIZEを選ぶ（ダイナミックな試行錯誤） ---
