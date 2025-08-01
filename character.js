@@ -44,6 +44,7 @@ class Character {
     }
     // --- 現在のアクションを実行する ---
     performAction() {
+        this.log('⚡ performAction called:', this.action?.type);
         if (!this.action || !this.action.type) {
             this.state = 'idle';
             return;
@@ -83,11 +84,18 @@ class Character {
                 this.state = 'moving';
                 break;
             case 'CHOP_WOOD':
-                // 木材収集のため移動状態に遷移
-                this.state = 'moving';
+                // 木材収集: targetPosが設定されていない場合は隣接しているので即座に実行
+                if (this.targetPos) {
+                    this.log('⚡ CHOP_WOOD: Moving to target');
+                    this.state = 'moving';
+                } else {
+                    this.log('⚡ CHOP_WOOD: Adjacent target, starting work immediately');
+                    this.state = 'working';
+                }
                 break;
             case 'BUILD_HOME':
                 // 家建設のため作業状態に遷移
+                this.log('⚡ BUILD_HOME: Starting work immediately');
                 this.state = 'working';
                 break;
             case 'SEEK_SHELTER':
@@ -103,8 +111,14 @@ class Character {
                 this.state = 'working';
                 break;
             case 'DESTROY_BLOCK':
-                // ブロック破壊のため作業状態に遷移
-                this.state = 'working';
+                // ブロック破壊: targetPosが設定されていない場合は隣接しているので即座に実行
+                if (this.targetPos) {
+                    this.log('⚡ DESTROY_BLOCK: Moving to target');
+                    this.state = 'moving';
+                } else {
+                    this.log('⚡ DESTROY_BLOCK: Adjacent target, starting work immediately');
+                    this.state = 'working';
+                }
                 break;
             case 'MEETING':
                 // 会議状態に遷移
@@ -121,6 +135,7 @@ class Character {
 
     // --- 目的地到着後の実際のアクション実行 ---
     executeAction() {
+        this.log('⚡ executeAction called:', this.action?.type);
         if (!this.action || !this.action.type) {
             this.state = 'idle';
             return;
@@ -311,6 +326,7 @@ class Character {
     }
 
     chopWood() {
+        this.log('⚡ CHOP_WOOD execution started', this.action);
         if (!this.action.target) {
             this.log('CHOP_WOOD: No target specified');
             this.state = 'idle';
@@ -366,6 +382,7 @@ class Character {
     }
 
     destroyBlock() {
+        this.log('⚡ DESTROY_BLOCK execution started', this.action);
         if (!this.action.target) {
             this.log('DESTROY_BLOCK: No target specified');
             this.state = 'idle';
@@ -438,6 +455,38 @@ class Character {
                 }
 
                 this.log('Successfully destroyed block', { x, y, z });
+
+                // 地下シェルター建設チェック
+                if (this._diggingShelter && this._shelterLocation) {
+                    const shelterKey = `${this._shelterLocation.x},${this._shelterLocation.y},${this._shelterLocation.z}`;
+                    const targetKey = `${x},${y},${z}`;
+                    if (shelterKey === targetKey) {
+                        // 地下シェルター完成
+                        this.homePosition = this._shelterLocation;
+                        this.provisionalHome = null;
+                        this._diggingShelter = false;
+                        this._shelterLocation = null;
+                        this._provisionalHomeCount = 0;
+                        this.log('🏠 Underground shelter completed! Set as homePosition');
+                        this.showActionIcon('🏠✨', 3.0);
+                    }
+                }
+
+                // 石の家建設チェック
+                if (this._buildingStoneHome && this._stoneHomeLocation) {
+                    const stoneKey = `${this._stoneHomeLocation.x},${this._stoneHomeLocation.y},${this._stoneHomeLocation.z}`;
+                    const targetKey = `${x},${y},${z}`;
+                    if (stoneKey === targetKey) {
+                        // 石の家完成
+                        this.homePosition = this._stoneHomeLocation;
+                        this.provisionalHome = null;
+                        this._buildingStoneHome = false;
+                        this._stoneHomeLocation = null;
+                        this._provisionalHomeCount = 0;
+                        this.log('🏠 Stone home completed! Set as homePosition');
+                        this.showActionIcon('🏠🗿', 3.0);
+                    }
+                }
 
                 this._diggingProgress = 0;
                 this._diggingStage = 0;
@@ -637,6 +686,12 @@ class Character {
     }
 
     setNextAction(type, target = null, moveTo = null, item = null) {
+        // Record timestamp for important actions
+        if (['BUILD_HOME', 'CHOP_WOOD', 'DESTROY_BLOCK'].includes(type)) {
+            this._lastActionTime = Date.now();
+            this.log(`⚡ Setting important action: ${type} (protected for 1 second)`);
+        }
+
         // 行動履歴を記録
         if (!this.actionHistory) this.actionHistory = [];
         this.actionHistory.push(type);
@@ -680,8 +735,7 @@ class Character {
         if (moveTo && type !== 'SOCIALIZE') {
             this.targetPos = moveTo;
             this.state = 'moving';
-        }
-        else if (type === 'SOCIALIZE' && moveTo) {
+        } else if (type === 'SOCIALIZE' && moveTo) {
             // SOCIALIZE の場合は距離をチェック
             const dist = Math.abs(this.gridPos.x - moveTo.x) + Math.abs(this.gridPos.y - moveTo.y) + Math.abs(this.gridPos.z - moveTo.z);
             if (dist <= 1) {
@@ -692,8 +746,12 @@ class Character {
                 this.targetPos = moveTo;
                 this.state = 'moving';
             }
+        } else {
+            // moveTo が null または undefined の場合は移動不要
+            // targetPos をクリアして即座にアクション実行
+            this.targetPos = null;
+            this.performAction();
         }
-        else { this.performAction(); }
     }
 
 // Duplicate class declaration removed
@@ -1535,9 +1593,10 @@ class Character {
 
         // --- working状態での段階的処理継続 ---
         if (this.state === 'working' && this.action) {
-            this.log(`working状態で処理継続: ${this.action.type}`);
+            this.log(`⚡ working状態で処理継続: ${this.action.type}`, this.action);
             switch (this.action.type) {
                 case 'BUILD_HOME':
+                    this.log('⚡ Calling buildHome() from working state');
                     this.buildHome();
                     break;
                 case 'CRAFT_TOOL':
@@ -1696,9 +1755,29 @@ class Character {
         else if (this.state === 'moving') {
             this.actionCooldown -= deltaTime;
             if (this.actionCooldown <= 0) {
-                // 移動中でも定期的に新しいアクションを決定（より頻繁に）
-                this.actionCooldown = 2.0;  // 2秒後に再チェック
-                this.decideNextAction && this.decideNextAction(isNight);
+                // 重要なアクション実行中は新しいアクション決定を控える
+                const now = Date.now();
+                const isImportantActionProtected = this._lastImportantActionTime && (now - this._lastImportantActionTime < 3000); // 3秒間保護
+                if (!isImportantActionProtected) {
+                    // 移動中でも定期的に新しいアクションを決定（より頻繁に）
+                    this.actionCooldown = 2.0;  // 2秒後に再チェック
+                    this.decideNextAction && this.decideNextAction(isNight);
+                } else {
+                    this.log('⚡ Moving state: Skipping AI decision due to important action protection');
+                    this.actionCooldown = 1.0;  // 1秒後に再チェック
+                }
+            }
+        }
+        // working状態では作業完了まで新しいアクション決定を控える
+        else if (this.state === 'working') {
+            this.actionCooldown -= deltaTime;
+            if (this.actionCooldown <= 0) {
+                // 作業状態では頻繁にAI呼び出しをしない（5秒間隔）
+                this.actionCooldown = 5.0;
+                // 重要なアクションが進行中でなければ新しいアクションを決定
+                if (!this.action || !['BUILD_HOME', 'CHOP_WOOD', 'DESTROY_BLOCK'].includes(this.action.type)) {
+                    this.decideNextAction && this.decideNextAction(isNight);
+                }
             }
         }
         // SOCIALIZE状態中は、極端に緊急でない限りAI上書きを防ぐ
@@ -2317,6 +2396,15 @@ class Character {
     }
 
     decideNextAction(isNight) {
+        // === IMPORTANT ACTION PROTECTION ===
+        // Don't interrupt important actions that were just set
+        if (this.action && ['BUILD_HOME', 'CHOP_WOOD', 'DESTROY_BLOCK'].includes(this.action.type)) {
+            if (!this._lastActionTime || (Date.now() - this._lastActionTime) < 1000) {
+                this.log(`⚡ Protecting important action: ${this.action.type} (recently set)`);
+                return;
+            }
+        }
+
         // === EMERGENCY SURVIVAL ONLY (Life or Death) ===
 
         // Critical hunger: immediate food collection or die
