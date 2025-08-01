@@ -314,10 +314,19 @@ class Character {
         }
     }
 
-    // ...existing code...
-    // --- BFSパスファインディング（bak_game.js準拠）---
+    // --- 指定座標に他キャラがいるか判定 ---
+    isOccupiedByOther(x, y, z) {
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        for (const char of chars) {
+            if (char.id !== this.id && char.gridPos.x === x && char.gridPos.y === y && char.gridPos.z === z) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // --- BFSパスファインディング（障害物判定強化）---
     bfsPath(start, goal, maxStep = 32) {
-        // 3DグリッドでのBFS経路探索。段差・落下・ジャンプも考慮。
         const queue = [];
         const visited = new Set();
         const parent = new Map();
@@ -345,7 +354,12 @@ class Character {
                 const below = `${nx},${ny-1},${nz}`;
                 const curBelow = `${cur.x},${cur.y-1},${cur.z}`;
                 if (!worldData.has(below) && !worldData.has(curBelow)) continue;
-                if (worldData.has(nkey)) continue;
+                // --- 障害物判定強化 ---
+                const blockId = worldData.get(nkey);
+                // BEDは通過可能、それ以外は障害物
+                if (blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id && blockId !== BLOCK_TYPES.BED?.id) continue;
+                // 他キャラがいる場合も障害物
+                if (this.isOccupiedByOther(nx, ny, nz)) continue;
                 // 段差・ジャンプ: 1段上までOK
                 if (Math.abs(ny - cur.y) > 1) continue;
                 queue.push({x:nx,y:ny,z:nz});
@@ -807,6 +821,16 @@ class Character {
             this._airTime = 0;
         }
 
+        // --- 汎用スタック判定＋救助（最適化版：頻度制限付き）---
+        if (!this._stuckCheckCooldown) this._stuckCheckCooldown = 0;
+        this._stuckCheckCooldown -= deltaTime;
+
+        if (this._stuckCheckCooldown <= 0) {
+            const stuckInfo = this.isStuck();
+            this.rescueStuck(stuckInfo, deltaTime);
+            this._stuckCheckCooldown = 0.3; // 0.3秒ごとにチェック
+        }
+
         this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos });
         // Claim land underfoot every update
         this.claimCurrentLand();
@@ -1099,7 +1123,7 @@ class Character {
                     if (blockType && blockType.diggable) {
                         let fallY = y;
                         // 掘ったら落下する場合は下まで落ちる
-                        while (fallY > 0 && !worldData.has(`${x},${fallY-1},${z}`)) fallY--;
+                        while (fallY > 0 && !worldData.has(`${x},${fallY-1},${this.gridPos.z}`)) fallY--;
                         if (this.isSafeToFallOrDig(x, fallY, z)) {
                             removeBlock(x, y, z);
                             this.log('Rescue: destroyed nearby diggable block to create path (safe)', {x, y, z, fallY});
@@ -1194,6 +1218,9 @@ class Character {
             direction.normalize();
             this.mesh.position.add(direction.multiplyScalar(moveDistance));
         }
+        // --- 汎用スタック判定＋救助（移動中も呼ぶ） ---
+        const stuckInfo = this.isStuck();
+        this.rescueStuck(stuckInfo, deltaTime);
         // --- 角スタック救済ロジック ---
         // 1. 角スタック検出: 周囲2方向が壁で進めない（L字型や角）
         // 2. 一定時間（例: 1.5秒）動けなければ強制的に1つ壊す
@@ -1238,62 +1265,92 @@ class Character {
     }
 
     updateAnimations(deltaTime) {
-        // --- Blinking logic ---
+        // --- Enhanced Blinking logic ---
         if (!this.blinkTimer) this.blinkTimer = 0;
-        if (!this.blinkInterval) this.blinkInterval = 1.5 + Math.random();
+        if (!this.blinkInterval) this.blinkInterval = 1.5 + Math.random() * 2; // More varied intervals
         this.blinkTimer += deltaTime;
-        if (this.blinkTimer > this.blinkInterval) {
+
+        // State-based blinking frequency
+        let blinkModifier = 1.0;
+        if (this.state === 'socializing') blinkModifier = 0.7; // More frequent when social
+        else if (this.state === 'resting') blinkModifier = 3.0; // Less frequent when resting
+        else if (this.needs && this.needs.energy < 30) blinkModifier = 0.5; // Very frequent when tired
+
+        if (this.blinkTimer > this.blinkInterval * blinkModifier) {
             this.eyeMeshes.forEach(e => e.visible = false);
             if (!this.blinking) {
                 this.blinking = true;
-                this.blinkEnd = this.blinkTimer + 0.12;
+                // Varied blink duration based on state
+                const blinkDuration = this.state === 'resting' ? 0.3 : 0.12;
+                this.blinkEnd = this.blinkTimer + blinkDuration;
             }
         }
         if (this.blinking && this.blinkTimer > this.blinkEnd) {
             this.eyeMeshes.forEach(e => e.visible = true);
             this.blinking = false;
-            this.blinkInterval = 1.5 + Math.random();
+            this.blinkInterval = 1.5 + Math.random() * 2;
             this.blinkTimer = 0;
         }
 
-        // --- Facial expression (eyes/mouth color/shape) ---
+        // --- Enhanced Facial expression (eyes/mouth color/shape) ---
         if (this.state === 'dead') {
             this.eyeMaterial.color.set(0x888888);
         } else if (this.state === 'resting') {
             this.eyeMaterial.color.set(0x2222ff);
+            // Sleepy eye effect - slightly smaller
+            this.leftEye.scale.y = 0.7 + Math.sin(this.bobTime * 0.5) * 0.1;
+            this.rightEye.scale.y = 0.7 + Math.sin(this.bobTime * 0.5) * 0.1;
         } else if (this.state === 'socializing') {
             this.eyeMaterial.color.set(0xff33cc);
-        } else if (this.needs.hunger < 30) {
+            // Excited eyes - slightly larger
+            this.leftEye.scale.set(1.2, 1.2, 1.2);
+            this.rightEye.scale.set(1.2, 1.2, 1.2);
+        } else if (this.needs && this.needs.hunger < 30) {
             this.eyeMaterial.color.set(0xff0000);
-        } else if (this.needs.energy < 30) {
+            // Tired/hungry eyes
+            this.leftEye.scale.y = 0.8;
+            this.rightEye.scale.y = 0.8;
+        } else if (this.needs && this.needs.energy < 30) {
             this.eyeMaterial.color.set(0x00aaff);
-        } else if (this.needs.social < 30) {
+            // Very tired eyes
+            this.leftEye.scale.y = 0.6 + Math.sin(this.bobTime) * 0.1;
+            this.rightEye.scale.y = 0.6 + Math.sin(this.bobTime) * 0.1;
+        } else if (this.needs && this.needs.social < 30) {
             this.eyeMaterial.color.set(0x00ff00);
+            // Lonely eyes
+            this.leftEye.scale.set(0.9, 0.9, 0.9);
+            this.rightEye.scale.set(0.9, 0.9, 0.9);
         } else {
             this.eyeMaterial.color.set(0x000000);
+            // Normal eyes
+            this.leftEye.scale.set(1.0, 1.0, 1.0);
+            this.rightEye.scale.set(1.0, 1.0, 1.0);
         }
-        // Mouth color/shape
+        // Enhanced Mouth color/shape with subtle animation
         if (this.state === 'dead') {
             this.mouth.material.color.set(0x888888);
             this.mouth.rotation.z = Math.PI; // frown
         } else if (this.state === 'resting') {
             this.mouth.material.color.set(0x2222ff);
-            this.mouth.rotation.z = 0;
+            this.mouth.rotation.z = Math.sin(this.bobTime * 0.3) * 0.1; // Subtle breathing
         } else if (this.state === 'socializing') {
             this.mouth.material.color.set(0xff33cc);
-            this.mouth.rotation.z = 0;
-        } else if (this.needs.hunger < 30) {
+            this.mouth.rotation.z = Math.sin(this.bobTime * 2) * 0.2; // Talking animation
+            this.mouth.scale.x = 1.0 + Math.sin(this.bobTime * 3) * 0.1; // Mouth movement
+        } else if (this.needs && this.needs.hunger < 30) {
             this.mouth.material.color.set(0xff0000);
-            this.mouth.rotation.z = Math.PI * 0.7; // sad
-        } else if (this.needs.energy < 30) {
+            this.mouth.rotation.z = Math.PI * 0.7 + Math.sin(this.bobTime) * 0.1; // Sad with slight movement
+        } else if (this.needs && this.needs.energy < 30) {
             this.mouth.material.color.set(0x00aaff);
             this.mouth.rotation.z = Math.PI * 0.5;
-        } else if (this.needs.social < 30) {
+            this.mouth.scale.y = 0.8; // Tired mouth
+        } else if (this.needs && this.needs.social < 30) {
             this.mouth.material.color.set(0x00ff00);
-            this.mouth.rotation.z = Math.PI * 0.2;
+            this.mouth.rotation.z = Math.PI * 0.2 + Math.sin(this.bobTime * 0.5) * 0.05;
         } else {
             this.mouth.material.color.set(0x222222);
-            this.mouth.rotation.z = 0;
+            this.mouth.rotation.z = Math.sin(this.bobTime * 0.2) * 0.02; // Very subtle default movement
+            this.mouth.scale.set(1.0, 1.0, 1.0); // Reset scale
         }
 
         // --- Body animation: more charming/expressive ---
@@ -1341,10 +1398,63 @@ class Character {
             this.body.scale.set(1 + (1 - scale) * 0.5, scale, 1 + (1 - scale) * 0.5);
             if (this.actionAnim.timer <= 0) { this.actionAnim.active = false; this.body.scale.set(1, 1, 1); }
         }
+
+        // State-specific body animations
         if (this.state === 'resting') {
+            // Sleeping pose: lowered body, closed eyes occasionally
             this.body.scale.y = 0.6;
+            this.head.rotation.x = Math.sin(this.bobTime * 0.5) * 0.1;
+            // Slow, deep breathing
+            const breathe = Math.sin(this.bobTime * 0.8) * 0.03;
+            this.body.scale.x = 1.0 + breathe;
+            this.body.scale.z = 1.0 + breathe;
+        } else if (this.state === 'socializing') {
+            // Excited, bouncy animation
+            this.bobTime += deltaTime * 4;
+            const excitement = Math.sin(this.bobTime) * 0.08;
+            this.body.position.y = 0.25 + Math.abs(excitement);
+            this.head.position.y = 0.75 + Math.abs(excitement) * 1.2;
+            // Head nodding
+            this.head.rotation.x = Math.sin(this.bobTime * 2) * 0.15;
+            // Happy arm movements
+            this.leftArm.rotation.y = Math.sin(this.bobTime * 1.5) * 0.3;
+            this.rightArm.rotation.y = -Math.sin(this.bobTime * 1.5) * 0.3;
+            if (!this.actionAnim.active) this.body.scale.y = 1.0;
+        } else if (this.state === 'working') {
+            // Focused work animation
+            this.bobTime += deltaTime * 3;
+            const workBob = Math.sin(this.bobTime) * 0.04;
+            this.body.position.y = 0.25 + workBob;
+            this.head.position.y = 0.75 + workBob;
+            // Concentrated head tilt
+            this.head.rotation.z = Math.sin(this.bobTime * 0.3) * 0.05;
+            this.head.rotation.x = -0.1; // Looking down
+            if (!this.actionAnim.active) this.body.scale.y = 1.0;
+        } else if (this.needs && this.needs.hunger < 20) {
+            // Weak, tired animation
+            this.bobTime += deltaTime * 1.5;
+            const weakness = Math.sin(this.bobTime * 0.5) * 0.02;
+            this.body.position.y = 0.22 + weakness; // Lower stance
+            this.head.position.y = 0.72 + weakness;
+            this.mesh.rotation.z = Math.sin(this.bobTime * 0.3) * 0.03; // Slight swaying
+            if (!this.actionAnim.active) this.body.scale.y = 0.95; // Slightly compressed
         } else if (!this.actionAnim.active) {
-            this.body.scale.y = 1.0;
+            this.body.scale.set(1.0, 1.0, 1.0); // Reset scale for other states
+        }
+
+        // Personality-based micro-animations
+        if (this.personality) {
+            // Brave characters stand taller
+            if (this.personality.bravery > 1.0) {
+                this.body.scale.y *= 1.05;
+                this.head.position.y += 0.02;
+            }
+            // Diligent characters have more controlled movements
+            if (this.personality.diligence > 1.0) {
+                const control = 0.8; // Reduce randomness
+                this.mesh.rotation.z *= control;
+                this.head.rotation.z *= control;
+            }
         }
     }
 
@@ -1537,5 +1647,466 @@ class Character {
         }
         return true;
     }
+
+    // --- 汎用スタック判定（改良版：パフォーマンス最適化付き）---
+    isStuck() {
+        // キャッシュで頻繁なチェックを避ける
+        if (!this._stuckCheckTimer) this._stuckCheckTimer = 0;
+        if (this._stuckCheckTimer < 0.5) return this._lastStuckInfo;
+        this._stuckCheckTimer = 0;
+
+        // 空中スタック（優先度高）
+        if (!worldData.has(`${this.gridPos.x},${this.gridPos.y-1},${this.gridPos.z}`)) {
+            this._lastStuckInfo = { type: 'air', pos: { ...this.gridPos } };
+            return this._lastStuckInfo;
+        }
+        // 移動スタック: 同じ位置に長時間いる場合
+        if (!this._positionHistory) this._positionHistory = [];
+        const currentPosKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
+        this._positionHistory.push(currentPosKey);
+        if (this._positionHistory.length > 10) this._positionHistory.shift();
+
+        if (this._positionHistory.length >= 8) {
+            const uniquePositions = new Set(this._positionHistory);
+            if (uniquePositions.size <= 2) {
+                this._lastStuckInfo = { type: 'movement', pos: { ...this.gridPos } };
+                return this._lastStuckInfo;
+            }
+        }
+
+        // 角スタック: 斜め方向に進めない場合（改良版）
+        let openSpaces = 0;
+        let diagonalBlocked = 0;
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+                if (dx === 0 && dz === 0) continue;
+                const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
+                const key = `${x},${y},${z}`;
+                if (!worldData.has(key) && !this.isOccupiedByOther(x, y, z)) {
+                    openSpaces++;
+                } else if (Math.abs(dx) + Math.abs(dz) === 2) { // 斜め方向
+                    diagonalBlocked++;
+                }
+            }
+        }
+
+        if (openSpaces <= 2 && diagonalBlocked >= 2) {
+            this._lastStuckInfo = { type: 'corner', pos: { ...this.gridPos }, openSpaces };
+            return this._lastStuckInfo;
+        }
+        // 完全囲い込み（垂直方向も考慮した改良版）
+        let surrounded = true;
+        let breakable = null;
+        let escapeRoutes = [];
+
+        // 水平方向チェック
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dz = -1; dz <= 1; dz++) {
+                if (dx === 0 && dz === 0) continue;
+                const x = this.gridPos.x + dx, y = this.gridPos.y, z = this.gridPos.z + dz;
+                const key = `${x},${y},${z}`;
+                const blockId = worldData.get(key);
+                if (blockId === undefined || blockId === null || blockId === BLOCK_TYPES.AIR.id) {
+                    surrounded = false;
+                    escapeRoutes.push({x, y, z, type: 'horizontal'});
+                } else if (!this.isOccupiedByOther(x, y, z)) {
+                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                    if (blockType && blockType.diggable && blockId !== BLOCK_TYPES.BED?.id) {
+                        if (!breakable) breakable = {x, y, z, priority: blockType.name === '土' ? 1 : 2};
+                    }
+                }
+            }
+        }
+
+        // 垂直方向の脱出ルートもチェック
+        const upKey = `${this.gridPos.x},${this.gridPos.y+1},${this.gridPos.z}`;
+        const downKey = `${this.gridPos.x},${this.gridPos.y-1},${this.gridPos.z}`;
+        if (!worldData.has(upKey)) {
+            escapeRoutes.push({x: this.gridPos.x, y: this.gridPos.y+1, z: this.gridPos.z, type: 'up'});
+            surrounded = false;
+        }
+        if (this.canDigDown() && this.isSafeToFallOrDig(this.gridPos.x, this.gridPos.y-2, this.gridPos.z)) {
+            escapeRoutes.push({x: this.gridPos.x, y: this.gridPos.y-2, z: this.gridPos.z, type: 'down'});
+            surrounded = false;
+        }
+
+        if (surrounded && breakable) {
+            this._lastStuckInfo = {
+                type: 'enclosure',
+                pos: { ...this.gridPos },
+                breakable,
+                escapeRoutes: escapeRoutes.length
+            };
+            return this._lastStuckInfo;
+        }
+
+        this._lastStuckInfo = null;
+        return null;
+    }
+
+    // --- 汎用スタック救助（改良版：段階的救助）---
+    rescueStuck(stuckInfo, deltaTime) {
+        // スタックチェックタイマーを更新
+        if (this._stuckCheckTimer !== undefined) {
+            this._stuckCheckTimer += deltaTime;
+        }
+
+        if (!stuckInfo) {
+            // スタックしていない場合は救助カウンターをリセット
+            this._airTime = 0;
+            this._cornerStuckTimer = 0;
+            this._movementStuckTimer = 0;
+            return;
+        }
+
+        // 空中スタック救助（既存＋改良）
+        if (stuckInfo.type === 'air') {
+            this._airTime = (this._airTime || 0) + deltaTime;
+            if (this._airTime > 0.8) { // より早く救助
+                let fallY = this.gridPos.y - 1;
+                while (fallY > 0 && !worldData.has(`${this.gridPos.x},${fallY-1},${this.gridPos.z}`)) {
+                    fallY--;
+                }
+                if (fallY >= 0 && this.isSafeToFallOrDig(this.gridPos.x, fallY, this.gridPos.z)) {
+                    this.gridPos.y = fallY;
+                    this.mesh.position.y = fallY;
+                    this._airTime = 0;
+                    this.log('Rescued from air: forced drop to ground', {y: fallY});
+                }
+            }
+            return;
+        }
+
+        // 移動スタック救助（新規）
+        if (stuckInfo.type === 'movement') {
+            this._movementStuckTimer = (this._movementStuckTimer || 0) + deltaTime;
+            if (this._movementStuckTimer > 2.0) {
+                // 強制的にランダムな方向に移動を試す
+                const directions = [
+                    {dx:1, dy:0, dz:0}, {dx:-1, dy:0, dz:0},
+                    {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1},
+                    {dx:0, dy:1, dz:0} // 上方向も試す
+                ];
+
+                for (const dir of directions) {
+                    const x = this.gridPos.x + dir.dx;
+                    const y = this.gridPos.y + dir.dy;
+                    const z = this.gridPos.z + dir.dz;
+                    const key = `${x},${y},${z}`;
+
+                    if (!worldData.has(key) && !this.isOccupiedByOther(x, y, z) && y >= 0) {
+                        // 足場チェック
+                        const below = `${x},${y-1},${z}`;
+                        if (worldData.has(below) || y === 0) {
+                            this.gridPos.x = x;
+                            this.gridPos.y = y;
+                            this.gridPos.z = z;
+                            this.mesh.position.set(x + 0.5, y, z + 0.5);
+                            this._movementStuckTimer = 0;
+                            this._positionHistory = []; // 履歴をクリア
+                            this.log('Rescued from movement stuck: teleported to', {x, y, z});
+                            return;
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        // 角スタック救助（改良版：優先順位付き）
+        if (stuckInfo.type === 'corner') {
+            this._cornerStuckTimer = (this._cornerStuckTimer || 0) + deltaTime;
+
+            // 段階1: 1秒待機後、最適な脱出ルートを探す
+            if (this._cornerStuckTimer > 1.0) {
+                const escapeOptions = [];
+
+                // 水平方向の脱出オプション
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        if (dx === 0 && dz === 0) continue;
+                        const x = this.gridPos.x + dx;
+                        const z = this.gridPos.z + dz;
+                        const y = this.gridPos.y;
+                        const key = `${x},${y},${z}`;
+
+                        if (!worldData.has(key) && !this.isOccupiedByOther(x, y, z)) {
+                            // 足場チェック
+                            const below = `${x},${y-1},${z}`;
+                            if (worldData.has(below)) {
+                                escapeOptions.push({
+                                    x, y, z,
+                                    priority: (Math.abs(dx) + Math.abs(dz) === 1) ? 1 : 2, // 直進方向を優先
+                                    type: 'move'
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // 上方向への脱出
+                const upKey = `${this.gridPos.x},${this.gridPos.y+1},${this.gridPos.z}`;
+                if (!worldData.has(upKey)) {
+                    escapeOptions.push({
+                        x: this.gridPos.x, y: this.gridPos.y+1, z: this.gridPos.z,
+                        priority: 3, type: 'jump'
+                    });
+                }
+
+                // 最優先オプションで脱出
+                if (escapeOptions.length > 0) {
+                    escapeOptions.sort((a, b) => a.priority - b.priority);
+                    const escape = escapeOptions[0];
+
+                    this.gridPos.x = escape.x;
+                    this.gridPos.y = escape.y;
+                    this.gridPos.z = escape.z;
+                    this.mesh.position.set(escape.x + 0.5, escape.y, escape.z + 0.5);
+                    this._cornerStuckTimer = 0;
+                    this.log(`Rescued from corner via ${escape.type}:`, {x: escape.x, y: escape.y, z: escape.z});
+                    return;
+                }
+            }
+
+            // 段階2: 2.5秒後、ブロックを破壊して脱出
+            if (this._cornerStuckTimer > 2.5) {
+                const breakableBlocks = [];
+
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        if (dx === 0 && dz === 0) continue;
+                        const x = this.gridPos.x + dx;
+                        const z = this.gridPos.z + dz;
+                        const y = this.gridPos.y;
+                        const key = `${x},${y},${z}`;
+                        const blockId = worldData.get(key);
+
+                        if (blockId && blockId !== BLOCK_TYPES.BED?.id) {
+                            const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                            if (blockType && blockType.diggable) {
+                                breakableBlocks.push({
+                                    x, y, z,
+                                    priority: blockType.name === '土' ? 1 : 2,
+                                    distance: Math.abs(dx) + Math.abs(dz)
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (breakableBlocks.length > 0) {
+                    // 優先度と距離でソート
+                    breakableBlocks.sort((a, b) => a.priority - b.priority || a.distance - b.distance);
+                    const toBreak = breakableBlocks[0];
+
+                    removeBlock(toBreak.x, toBreak.y, toBreak.z);
+                    this._cornerStuckTimer = 0;
+                    this.log('Rescued from corner: broke block', toBreak);
+                }
+            }
+            return;
+        }
+        // 完全囲い込み救助（改良版：緊急テレポート機能付き）
+        if (stuckInfo.type === 'enclosure') {
+            this._enclosureTimer = (this._enclosureTimer || 0) + deltaTime;
+
+            // 段階1: 最適なブロックを破壊
+            if (this._enclosureTimer > 1.5 && stuckInfo.breakable) {
+                removeBlock(stuckInfo.breakable.x, stuckInfo.breakable.y, stuckInfo.breakable.z);
+                this._enclosureTimer = 0;
+                this.log('Rescued from enclosure: broke priority block', stuckInfo.breakable);
+                return;
+            }
+
+            // 段階2: 緊急テレポート（最後の手段）
+            if (this._enclosureTimer > 5.0) {
+                // 安全な場所を探してテレポート
+                const safeSpots = [];
+                const searchRadius = 5;
+
+                for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+                    for (let dz = -searchRadius; dz <= searchRadius; dz++) {
+                        for (let dy = -2; dy <= 2; dy++) {
+                            const x = this.gridPos.x + dx;
+                            const y = this.gridPos.y + dy;
+                            const z = this.gridPos.z + dz;
+
+                            if (y < 0) continue;
+
+                            const key = `${x},${y},${z}`;
+                            const below = `${x},${y-1},${z}`;
+
+                            // 空きスペースで足場があり、他キャラがいない
+                            if (!worldData.has(key) && worldData.has(below) && !this.isOccupiedByOther(x, y, z)) {
+                                const distance = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
+                                safeSpots.push({x, y, z, distance});
+                            }
+                        }
+                    }
+                }
+
+                if (safeSpots.length > 0) {
+                    // 最も近い安全な場所にテレポート
+                    safeSpots.sort((a, b) => a.distance - b.distance);
+                    const safe = safeSpots[0];
+
+                    this.gridPos.x = safe.x;
+                    this.gridPos.y = safe.y;
+                    this.gridPos.z = safe.z;
+                    this.mesh.position.set(safe.x + 0.5, safe.y, safe.z + 0.5);
+                    this._enclosureTimer = 0;
+                    this.log('Emergency teleport from enclosure to', safe);
+
+                    // 少しエネルギーを消費（ペナルティ）
+                    if (this.needs && this.needs.energy) {
+                        this.needs.energy = Math.max(10, this.needs.energy - 20);
+                    }
+                } else {
+                    // 本当に最後の手段：真上にテレポート
+                    let upY = this.gridPos.y + 1;
+                    while (upY < maxHeight && worldData.has(`${this.gridPos.x},${upY},${this.gridPos.z}`)) {
+                        upY++;
+                    }
+                    if (upY < maxHeight) {
+                        this.gridPos.y = upY;
+                        this.mesh.position.y = upY;
+                        this._enclosureTimer = 0;
+                        this.log('Last resort: teleported upward to', {y: upY});
+                    }
+                }
+            }
+        }
+    }
+
+    // --- 完全なメソッド実装を追加 ---
+
+    // --- 完全なメソッド実装を追加 ---
+    reproduceWith(partner) {
+        // Create child with mixed color and inherited personality
+        this.log('Reproducing with', partner.id);
+        // Mix colors
+        const c1 = this.bodyMaterial.color;
+        const c2 = partner.bodyMaterial.color;
+        const mixedColor = new THREE.Color(
+            (c1.r + c2.r) / 2,
+            (c1.g + c2.g) / 2,
+            (c1.b + c2.b) / 2
+        );
+        // Mix personalities
+        const childGenes = {
+            bravery: (this.personality.bravery + partner.personality.bravery) / 2,
+            diligence: (this.personality.diligence + partner.personality.diligence) / 2
+        };
+        // Find spawn position
+        const spawnPos = this.findAdjacentSpot(this.gridPos) || this.gridPos;
+        // Create child
+        const childId = Math.floor(Math.random() * 10000);
+        if (typeof spawnCharacter === 'function') {
+            const child = spawnCharacter(this.scene, spawnPos, childId, childGenes);
+            if (child) {
+                child.bodyMaterial.color.copy(mixedColor);
+                this.children.push(child);
+                partner.children.push(child);
+                this.childCount++;
+                partner.childCount++;
+            }
+        }
+    }
+
+    decideNextAction(isNight) {
+        // Simple AI decision making
+        if (this.needs.hunger < 30) {
+            const food = this.findClosestFood();
+            if (food) {
+                this.setNextAction('COLLECT_FOOD', food);
+                return;
+            }
+        }
+        if (this.needs.social < 40) {
+            const partner = this.findClosestPartner();
+            if (partner) {
+                this.setNextAction('SOCIALIZE', partner);
+                return;
+            }
+        }
+        if (this.needs.energy < 20) {
+            this.state = 'resting';
+            return;
+        }
+        // Default: wander
+        this.setNextAction('WANDER');
+    }
+
+    updateColorFromPersonality() {
+        // Update character color based on personality
+        const hue = this.personality.bravery * 0.3 + this.personality.diligence * 0.7;
+        this.bodyMaterial.color.setHSL(hue, 0.6, 0.5);
+    }
+
+    updateWorldPosFromGrid() {
+        this.mesh.position.set(this.gridPos.x + 0.5, this.gridPos.y, this.gridPos.z + 0.5);
+    }
+
+    log(message, ...args) {
+        if (typeof window !== 'undefined' && window.debugMode) {
+            console.log(`[Character ${this.id}] ${message}`, ...args);
+        }
+    }
+
+    isSafeToFallOrDig(x, y, z) {
+        // Check if position is safe to fall to or dig at
+        if (y < 0) return false;
+        // Check for lava or other dangerous blocks below
+        let checkY = y;
+        while (checkY > 0) {
+            const belowKey = `${x},${checkY-1},${z}`;
+            const belowId = worldData.get(belowKey);
+            if (belowId) {
+                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === belowId);
+                if (blockType && blockType.name === 'lava') return false;
+                break;
+            }
+            checkY--;
+        }
+        return true;
+    }
+
+    updateThoughtBubble(isNight, camera) {
+        // --- ハートマーク優先表示 ---
+        if (this.loveTimer > 0) {
+            this.thoughtBubble.textContent = '❤️';
+            this.thoughtBubble.setAttribute('data-show', 'true');
+            this.thoughtBubble.style.display = '';
+            // 位置更新
+            if (camera && this.iconAnchor) {
+                const canvas = document.getElementById('gameCanvas');
+                const pos = toScreenPosition(this.iconAnchor, camera, canvas);
+                this.thoughtBubble.style.left = `${pos.x - 18}px`;
+                this.thoughtBubble.style.top = `${pos.y - 48}px`;
+                this.thoughtBubble.style.position = 'fixed';
+            }
+            return;
+        }
+
+        // Update thought bubble display based on current state and needs
+        if (!this.thoughtBubble || !camera) return;
+
+        let icon = null;
+        if (this.loveTimer > 0) icon = '💖';
+        else if (this.state === 'socializing') icon = '👥';
+        else if (this.state === 'moving') icon = '🚶';
+        else if (this.needs.hunger < 30) icon = '🍎';
+        else if (this.needs.energy < 30) icon = '😴';
+
+        if (icon) {
+            this.thoughtBubble.textContent = icon;
+            const screenPos = toScreenPosition(this.iconAnchor, camera);
+            this.thoughtBubble.style.left = `${screenPos.x - 15}px`;
+            this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
+            this.thoughtBubble.style.display = 'block';
+        } else {
+            this.thoughtBubble.style.display = 'none';
+        }
+    }
 }
+
 export { Character };
