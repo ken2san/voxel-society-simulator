@@ -4,10 +4,20 @@
 import { worldData, BLOCK_TYPES, ITEM_TYPES, maxHeight, removeBlock } from './world.js';
 
 export function decideNextAction_rulebase(character, isNight) {
-    // --- 設定値の取得 ---
-    const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
+    // === RULE-BASED AI DECISION SYSTEM ===
+    // Priority Order: Social → Home Building → Role-based → Survival → Work
 
-    // --- 10%の確率で強制的にWANDERまたはSOCIALIZEを選ぶ（ダイナミックな試行錯誤） ---
+    // Debug logging
+    character.log('=== AI DECISION START ===');
+    character.log(`Needs: hunger=${character.needs.hunger.toFixed(1)}, energy=${character.needs.energy.toFixed(1)}, social=${character.needs.social.toFixed(1)}`);
+    character.log(`Home: homePosition=${!!character.homePosition}, provisionalHome=${!!character.provisionalHome}`);
+    character.log(`Role: ${character.role}, Inventory: [${character.inventory.map(i => i || 'null').join(', ')}]`);
+
+    // === CONFIGURATION ===
+    const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
+    const homeBuildingHungerThreshold = (typeof window !== 'undefined' && window.homeBuildingHungerThreshold !== undefined) ? window.homeBuildingHungerThreshold : 80;
+
+    // === PRIORITY 1: RANDOM EXPLORATION (10% chance) ===
     if (Math.random() < 0.10) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         let nearbyPartner = null;
@@ -17,96 +27,116 @@ export function decideNextAction_rulebase(character, isNight) {
             if (dist <= 2) { nearbyPartner = char; break; }
         }
         if (nearbyPartner) {
-            character.setNextAction('SOCIALIZE', nearbyPartner, nearbyPartner.gridPos); return;
+            character.setNextAction('SOCIALIZE', nearbyPartner, nearbyPartner.gridPos);
+            character.log('Action: SOCIALIZE (random exploration)');
+            return;
         } else {
-            character.setNextAction('WANDER'); return;
+            character.setNextAction('WANDER');
+            character.log('Action: WANDER (random exploration)');
+            return;
         }
     }
-    // --- 社交的需要を設定に合わせて調整（優先度を上げる） ---
+
+    // === PRIORITY 2: SOCIAL NEEDS ===
     if (character.needs.social <= socialThreshold) {
         const partner = character.findClosestPartner && character.findClosestPartner();
         if (partner) {
             character.log(`SOCIALIZE selected: social=${character.needs.social}, threshold=${socialThreshold}`);
-            character.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
-        }
-        character.setNextAction('WANDER'); return;
-    }
-
-    // --- Emergency: If needs are critically low, always prioritize survival actions ---
-    const hungerEmergencyThreshold = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? window.hungerEmergencyThreshold : 2; // 5から2に変更
-    if (character.needs.hunger <= hungerEmergencyThreshold) { // より緊急時のみ
-        // 1. まずインベントリ内の食料を食べる
-        const foodIdx = character.inventory.findIndex(item => item === 'FRUIT_ITEM' || item === 'FRUIT');
-        if (foodIdx !== -1) {
-            character.inventory[foodIdx] = null;
-            character.carriedItemMesh.visible = false;
-            character.needs.hunger = Math.min(100, character.needs.hunger + 40 + Math.random() * 20);
-            character.eatCount = (character.eatCount || 0) + 1;
-            character.log(`緊急時自動食事！ hunger=${character.needs.hunger.toFixed(1)} → 回復`);
-            character.state = 'idle';
-            character.action = null;
-            character.actionCooldown = 0.5;
+            character.setNextAction('SOCIALIZE', partner, partner.gridPos);
             return;
         }
-        // 2. 近くのキャラから食料を奪う
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        let stealTarget = null;
-        for (const char of chars) {
-            if (char.id === character.id) continue;
-            const dist = Math.abs(character.gridPos.x - char.gridPos.x) + Math.abs(character.gridPos.y - char.gridPos.y) + Math.abs(character.gridPos.z - char.gridPos.z);
-            if (dist <= 1 && char.inventory && (char.inventory.includes('FRUIT_ITEM') || char.inventory.includes('FRUIT'))) {
-                stealTarget = char;
-                break;
-            }
+        character.setNextAction('WANDER');
+        return;
+    }
+
+    // === PRIORITY 3: HOME BUILDING (If well-fed but homeless) ===
+    if (character.needs.hunger >= homeBuildingHungerThreshold && !character.homePosition && !character.provisionalHome) {
+        character.log('🏠 HOME BUILDING PRIORITY: Well-fed but homeless');
+
+        // Already have wood? Build immediately
+        if (character.inventory[0] === 'WOOD_LOG') {
+            character.log('🏠 Has wood → BUILD_HOME');
+            character.setNextAction('BUILD_HOME');
+            return;
         }
-        if (stealTarget) {
-            const idx = stealTarget.inventory.findIndex(item => item === 'FRUIT_ITEM' || item === 'FRUIT');
-            if (idx !== -1) {
-                const stolen = stealTarget.inventory[idx];
-                stealTarget.inventory[idx] = null;
-                character.inventory[0] = stolen;
-                character.carriedItemMesh.visible = true;
-                character.log('Stole food from character', stealTarget.id);
-                character.inventory[0] = null;
-                character.carriedItemMesh.visible = false;
-                character.needs.hunger = Math.min(100, character.needs.hunger + 40 + Math.random() * 20);
-                character.eatCount = (character.eatCount || 0) + 1;
-                character.log('Ate stolen food');
-                character.state = 'idle';
-                character.action = null;
-                character.actionCooldown = 0.5;
+
+        // Check if we've been stuck trying to get wood (use shared failure tracking)
+        if (!character._woodFailureCount) character._woodFailureCount = 0;
+        if (!character._lastWoodTarget) character._lastWoodTarget = null;
+
+        // Try to find wood and chop it
+        const wood = character.findClosestWood && character.findClosestWood();
+        if (wood) {
+            // Check if we're stuck on the same wood target
+            const woodKey = `${wood.x},${wood.y},${wood.z}`;
+            if (character._lastWoodTarget === woodKey) {
+                character._woodFailureCount++;
+                character.log(`🏠 Stuck on same wood target (${character._woodFailureCount} attempts)`);
+            } else {
+                character._woodFailureCount = 0;
+                character._lastWoodTarget = woodKey;
+            }
+
+            // If we've failed too many times, try alternative strategies
+            if (character._woodFailureCount >= 3) {
+                character.log('🏠 Too many wood failures → alternative strategy');
+
+                // Strategy 1: Create provisional home and try different approach
+                character.provisionalHome = character.gridPos;
+                character._woodFailureCount = 0;
+                character._lastWoodTarget = null;
+                character.log('🏠 Created provisional home due to wood access issues');
+                character.setNextAction('WANDER');
                 return;
             }
-        }
-        // 3. ワールド上の食料を探す
-        const foodPos = character.findClosestFood && character.findClosestFood();
-        if (foodPos) {
-            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(foodPos);
+
+            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(wood);
             if (adjacentSpot) {
-                character.setNextAction('EAT', foodPos, adjacentSpot); return;
+                // Additional check: verify pathfinding will actually work
+                const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
+                if (testPath && testPath.length > 0) {
+                    character.log('🏠 No wood → CHOP_WOOD (reachable with valid path)');
+                    character.setNextAction('CHOP_WOOD', wood, adjacentSpot);
+                    return;
+                } else {
+                    character.log('🏠 Adjacent spot found but no valid path → treating as unreachable');
+                    // Treat as unreachable and proceed to alternative strategies
+                }
+            } else {
+                character.log('🏠 Wood found but unreachable → searching for alternative');
+
+                // Strategy 1: Try to destroy blocking blocks to reach wood
+                const blockingBlocks = character.findBlockingPath && character.findBlockingPath(wood);
+                if (blockingBlocks && blockingBlocks.length > 0) {
+                    const targetBlock = blockingBlocks[0];
+                    const digSpot = character.findAdjacentSpot && character.findAdjacentSpot(targetBlock);
+                    if (digSpot) {
+                        character.log('🏠 Clearing path to wood → DESTROY_BLOCK');
+                        character.setNextAction('DESTROY_BLOCK', targetBlock, digSpot);
+                        return;
+                    }
+                }
+
+                // Strategy 2: Move closer to wood area
+                character.log('🏠 Moving closer to wood area');
+                character.setNextAction('WANDER', null, wood);
+                return;
             }
-        }
-        character.setNextAction('WANDER'); return;
-    }
-    const energyEmergencyThreshold = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? window.energyEmergencyThreshold : 1;
-    if (character.needs.energy <= energyEmergencyThreshold) { // スライダーで調整可能
-        if (character.isSafe && character.isSafe(isNight)) {
-            character.setNextAction('REST'); return;
-        }
-        const shelterPos = character.findShelter && character.findShelter(isNight);
-        if (shelterPos) {
-            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(shelterPos);
-            if (adjacentSpot) {
-                character.setNextAction('SEEK_SHELTER_TO_REST', shelterPos, adjacentSpot); return;
+        } else {
+            character.log('🏠 No wood found → exploring for wood');
+            // Create provisional home to prevent getting stuck in this state
+            if (!character.provisionalHome) {
+                character.provisionalHome = character.gridPos;
+                character.log('🏠 Created provisional home at current position');
             }
+            character.setNextAction('WANDER');
+            return;
         }
-        character.setNextAction('WANDER'); return;
     }
 
-    character.log('decideNextAction', { needs: character.needs, state: character.state, personality: character.personality, role: character.role });
-
-    // --- Role-based AI priority (強化) ---
+    // === PRIORITY 4: ROLE-BASED BEHAVIORS ===
     if (character.role === 'leader') {
+        // Leader: Hold meetings and expand territory
         if (Math.random() < 0.18) {
             character.setNextAction('MEETING');
             const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
@@ -119,6 +149,7 @@ export function decideNextAction_rulebase(character, isNight) {
             }
             return;
         }
+        // Expand owned land
         for (let dx = -1; dx <= 1; dx++) {
             for (let dz = -1; dz <= 1; dz++) {
                 if (dx === 0 && dz === 0) continue;
@@ -131,49 +162,115 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     } else if (character.role === 'worker') {
-        // 家がない場合は積極的に木材収集を優先
-        const woodCollectionPriority = (typeof window !== 'undefined' && window.woodCollectionPriority !== undefined) ? window.woodCollectionPriority : 70;
-        const shouldCollectWood = !character.homePosition && character.needs.hunger > woodCollectionPriority;
-
+        // Worker: Collect resources based on needs
         if (character.inventory[0] === null) {
-            // 家がない && 空腹度が十分 → 木材優先
-            if (shouldCollectWood) {
+            // High priority: If homeless and well-fed, always prefer wood over food
+            if (!character.homePosition && character.needs.hunger >= 70) {
+                // Use shared failure tracking system (same as Priority 3)
+                if (!character._woodFailureCount) character._woodFailureCount = 0;
+                if (!character._lastWoodTarget) character._lastWoodTarget = null;
+
                 const woodPos = character.findClosestWood();
                 if (woodPos) {
-                    const adjacentSpot = character.findAdjacentSpot(woodPos);
-                    if(adjacentSpot){
-                        character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot); return;
+                    // Check if we're stuck on the same wood target
+                    const woodKey = `${woodPos.x},${woodPos.y},${woodPos.z}`;
+                    if (character._lastWoodTarget === woodKey) {
+                        character._woodFailureCount++;
+                        character.log(`Worker: Stuck on same wood target (${character._woodFailureCount} attempts)`);
+                    } else {
+                        character._woodFailureCount = 0;
+                        character._lastWoodTarget = woodKey;
+                    }
+
+                    // If we've failed too many times, skip wood collection temporarily
+                    if (character._woodFailureCount >= 2) {
+                        character.log('Worker: Too many wood failures → skipping wood collection temporarily');
+                        character._woodFailureCount = 0;
+                        character._lastWoodTarget = null;
+                        // Force switch to food collection or wandering
+                    } else if (character._woodFailureCount >= 1) {
+                        // Even one failure means we should try a different approach
+                        character.log('Worker: Previous failure on same wood → trying alternative');
+                        // Don't attempt the same wood again, move on to food collection
+                    } else {
+                        const adjacentSpot = character.findAdjacentSpot(woodPos);
+                        if (adjacentSpot) {
+                            // Additional check: verify pathfinding will actually work
+                            const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
+                            if (testPath && testPath.length > 0) {
+                                character.log('Worker: Prioritizing wood for home building (verified path)');
+                                character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
+                                return;
+                            } else {
+                                character.log('Worker: Adjacent spot found but no valid path → switching strategies');
+                                // Don't attempt, proceed to food collection
+                            }
+                        } else {
+                            character.log('Worker: Wood unreachable, switching to food collection or wandering');
+                            // Don't get stuck on unreachable wood - switch strategies
+                        }
                     }
                 }
             }
 
-            // 通常の食料収集
-            const foodPos = character.findClosestFood();
-            if (foodPos) {
-                const adjacentSpot = character.findAdjacentSpot(foodPos);
-                if(adjacentSpot){
-                    character.setNextAction('COLLECT_FOOD', foodPos, adjacentSpot); return;
+            // Need food? Collect it
+            if (character.needs.hunger < 85) {
+                const foodPos = character.findClosestFood();
+                if (foodPos) {
+                    const adjacentSpot = character.findAdjacentSpot(foodPos);
+                    if (adjacentSpot) {
+                        character.setNextAction('COLLECT_FOOD', foodPos, adjacentSpot);
+                        return;
+                    }
                 }
             }
 
-            // 食料がない場合は木材収集にフォールバック
-            const woodPos = character.findClosestWood();
-            if (woodPos) {
-                const adjacentSpot = character.findAdjacentSpot(woodPos);
-                if(adjacentSpot){
-                    character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot); return;
+            // Fallback: try wood again, but only if we haven't been failing on it
+            if (!character._woodFailureCount || character._woodFailureCount < 2) {
+                const woodPos = character.findClosestWood();
+                if (woodPos) {
+                    // Check if this is the same wood we've been failing on
+                    const woodKey = `${woodPos.x},${woodPos.y},${woodPos.z}`;
+                    if (character._lastWoodTarget === woodKey && character._woodFailureCount >= 1) {
+                        character.log('Worker: Avoiding same failed wood target → exploring');
+                        character.setNextAction('WANDER');
+                        return;
+                    }
+
+                    const adjacentSpot = character.findAdjacentSpot(woodPos);
+                    if (adjacentSpot) {
+                        // Additional check: verify pathfinding will actually work
+                        const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
+                        if (testPath && testPath.length > 0) {
+                            character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
+                            return;
+                        } else {
+                            character.log('Worker: Fallback wood has no valid path → exploring');
+                            character.setNextAction('WANDER');
+                            return;
+                        }
+                    } else {
+                        character.log('Worker: All wood unreachable → exploring');
+                        character.setNextAction('WANDER');
+                        return;
+                    }
                 }
+            } else {
+                character.log('Worker: Skipping wood fallback due to recent failures');
             }
         } else {
+            // Have items? Store them if have home
             if (character.homePosition) {
                 const storageSpot = character.findStorageSpot && character.findStorageSpot();
                 if (storageSpot) {
-                    character.setNextAction('STORE_ITEM', storageSpot, character.findAdjacentSpot(storageSpot) || character.gridPos, BLOCK_TYPES.FRUIT); return;
+                    character.setNextAction('STORE_ITEM', storageSpot, character.findAdjacentSpot(storageSpot) || character.gridPos, BLOCK_TYPES.FRUIT);
+                    return;
                 }
             }
         }
     }
-    // 道具作成: 石の道具を持っていない かつ 木材を持っている場合のみ
+
+    // === PRIORITY 5: TOOL CRAFTING ===
     if (!character.inventory.includes('STONE_TOOL') && character.inventory.includes('WOOD_LOG')) {
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
@@ -191,128 +288,93 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    if (character.needs.safety < 20 * character.personality.bravery && isNight) { // より厳格な判定（50→20）
+
+    // === PRIORITY 6: SAFETY (Night time) ===
+    if (character.needs.safety < 20 * character.personality.bravery && isNight) {
         const shelterPos = character.findShelter(isNight);
         if (shelterPos) {
-            character.setNextAction('SEEK_SHELTER', shelterPos, shelterPos); return;
+            character.setNextAction('SEEK_SHELTER', shelterPos, shelterPos);
+            return;
         }
         const wallSpots = character.findWallSpots && character.findWallSpots();
         if (wallSpots && wallSpots.length > 0) {
-            character.setNextAction('BUILD_WALL', wallSpots, character.gridPos); return;
+            character.setNextAction('BUILD_WALL', wallSpots, character.gridPos);
+            return;
         }
         const digWallTarget = character.findDiggableShelterSpot && character.findDiggableShelterSpot();
         if (digWallTarget) {
             const adjacentSpot = character.findAdjacentSpot(digWallTarget);
             if (adjacentSpot) {
-                character.setNextAction('CREATE_SHELTER', digWallTarget, adjacentSpot); return;
-            }
-        }
-        if (character.canDigDown && character.canDigDown()) {
-            const digDownTarget = { x: character.gridPos.x, y: character.gridPos.y - 1, z: character.gridPos.z };
-            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(character.gridPos);
-            if (adjacentSpot) {
-                character.setNextAction('CREATE_SHELTER', digDownTarget, adjacentSpot); return;
+                character.setNextAction('CREATE_SHELTER', digWallTarget, adjacentSpot);
+                return;
             }
         }
     }
+
+    // === PRIORITY 7: ENERGY MANAGEMENT ===
     if (character.needs.energy < 70 * character.personality.bravery) {
         if (character.isSafe(isNight)) {
-            character.setNextAction('REST'); return;
+            character.setNextAction('REST');
+            return;
         }
         const shelterPos = character.findShelter(isNight) || (character.findDiggableShelterSpot && character.findDiggableShelterSpot());
         if (shelterPos) {
             const adjacentSpot = character.findAdjacentSpot(shelterPos) || shelterPos;
             if (adjacentSpot) {
-                character.setNextAction('SEEK_SHELTER_TO_REST', shelterPos, adjacentSpot); return;
+                character.setNextAction('SEEK_SHELTER_TO_REST', shelterPos, adjacentSpot);
+                return;
             }
         }
     }
-    // 空腹度が高くても時々掘削作業をする（条件を緩和）
-    if (character.needs.hunger < 95) { // 90から95に変更
+
+    // === PRIORITY 8: FOOD COLLECTION (Not quite full) ===
+    if (character.needs.hunger < 95) {
         const foodPos = character.findClosestFood();
         if (foodPos) {
             const adjacentSpot = character.findAdjacentSpot(foodPos);
-            if(adjacentSpot){
-                character.setNextAction('EAT', foodPos, adjacentSpot); return;
-            }
-        }
-        const digTarget = character.findDiggableBlock();
-        if (digTarget) {
-            const adjacentSpot = character.findAdjacentSpot(digTarget);
             if (adjacentSpot) {
-                character.setNextAction('DESTROY_BLOCK', digTarget, adjacentSpot); return;
+                character.setNextAction('EAT', foodPos, adjacentSpot);
+                return;
             }
         }
     }
-    // --- 社交的需要（低優先度）も設定に合わせる ---
-    if (character.needs.social < socialThreshold + 60) { // 閾値+60で低優先度判定
+
+    // === PRIORITY 9: SOCIAL NEEDS (Lower priority) ===
+    if (character.needs.social < socialThreshold + 60) {
         const partner = character.findClosestPartner();
         if (partner) {
-            character.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
+            character.setNextAction('SOCIALIZE', partner, partner.gridPos);
+            return;
         } else {
-            character.setNextAction('WANDER'); return;
+            character.setNextAction('WANDER');
+            return;
         }
     }
 
-    // --- 満腹でも時々働く（新規追加）---
-    if (Math.random() < 0.3) { // 30%の確率で働く
+    // === PRIORITY 10: PRODUCTIVE WORK (Random chance) ===
+    if (Math.random() < 0.3 * character.personality.diligence) {
         const digTarget = character.findDiggableBlock();
         if (digTarget) {
             const adjacentSpot = character.findAdjacentSpot(digTarget);
             if (adjacentSpot) {
-                character.setNextAction('DESTROY_BLOCK', digTarget, adjacentSpot); return;
-            }
-        }
-    }
-    const diligentRand = Math.random();
-    if (diligentRand < character.personality.diligence - 0.5) {
-        if (character.inventory[0] !== null) {
-            const item = ITEM_TYPES[character.inventory[0]];
-            if (item && item.isStorable && character.homePosition) {
-                const storageSpot = character.findStorageSpot && character.findStorageSpot();
-                if (storageSpot) {
-                    character.setNextAction('STORE_ITEM', storageSpot, character.findAdjacentSpot(storageSpot) || character.gridPos, BLOCK_TYPES.FRUIT); return;
-                }
-            } else if (character.inventory[0] === 'WOOD_LOG' && !character.homePosition) {
-                // 木材を持っていて家がない場合は積極的に家を建てる
-                const homeBuildingPriority = (typeof window !== 'undefined' && window.homeBuildingPriority !== undefined) ? window.homeBuildingPriority : 80;
-                const shouldBuildHome = character.needs.hunger > (100 - homeBuildingPriority) && character.needs.energy > 30;
-
-                if (shouldBuildHome) {
-                    character.log(`🏠 木材取得→家建設開始！ inventory=[${character.inventory[0]}] priority=${homeBuildingPriority}`);
-                    if (!character.provisionalHome) {
-                        character.provisionalHome = character.gridPos; // 現在位置を仮の家に設定
-                    }
-                    character.setNextAction('BUILD_HOME', character.provisionalHome, character.provisionalHome); return;
-                } else {
-                    character.log(`🏠 家建設保留: hunger=${character.needs.hunger.toFixed(1)} energy=${character.needs.energy.toFixed(1)} priority=${homeBuildingPriority}`);
-                }
-            }
-        } else {
-            // Rest at home if satisfied and have home
-            const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
-            if (character.needs.hunger > homeReturnHungerLevel && character.homePosition) { // スライダーで調整可能
-                const foodPos = character.findClosestFood();
-                if (foodPos) {
-                    const adjacentSpot = character.findAdjacentSpot(foodPos);
-                    if(adjacentSpot){
-                        character.setNextAction('COLLECT_FOR_STORAGE', foodPos, adjacentSpot); return;
-                    }
-                }
-            }
-            if (character.provisionalHome && !character.homePosition) {
-                const woodPos = character.findClosestWood();
-                if (woodPos) {
-                    const adjacentSpot = character.findAdjacentSpot(woodPos);
-                    if(adjacentSpot){
-                        character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot); return;
-                    }
-                }
+                character.setNextAction('DESTROY_BLOCK', digTarget, adjacentSpot);
+                return;
             }
         }
     }
 
-    // --- Default wandering behavior ---
+    // === PRIORITY 11: EMERGENCY WOOD COLLECTION (If pathfinding consistently fails) ===
+    if (!character.homePosition && character.needs.hunger >= 70 && Math.random() < 0.4) {
+        character.log('🏠 Emergency wood collection attempt');
+        const woodPos = character.findClosestWood();
+        if (woodPos) {
+            // Try a more lenient approach - just move towards wood area
+            character.setNextAction('WANDER', null, woodPos);
+            return;
+        }
+    }
+
+    // === DEFAULT: WANDERING ===
     const wanderSpots = [];
     for (let dx = -2; dx <= 2; dx++) {
         for (let dz = -2; dz <= 2; dz++) {
@@ -328,11 +390,13 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    let moveTo = null;
+
     if (wanderSpots.length > 0) {
-        moveTo = wanderSpots[Math.floor(Math.random() * wanderSpots.length)];
+        const moveTo = wanderSpots[Math.floor(Math.random() * wanderSpots.length)];
         character.setNextAction('WANDER', null, moveTo);
+        character.log('Action: WANDER (default exploration)');
     } else {
+        // Last resort: break blocks to create space
         let destroyable = null;
         for (let dx = -1; dx <= 1; dx++) {
             for (let dz = -1; dz <= 1; dz++) {
@@ -347,27 +411,15 @@ export function decideNextAction_rulebase(character, isNight) {
             }
             if (destroyable) break;
         }
+
         if (destroyable) {
             const adjacentSpot = character.findAdjacentSpot ? character.findAdjacentSpot(destroyable) : character.gridPos;
             character.setNextAction('DESTROY_BLOCK', destroyable, adjacentSpot);
+            character.log('Action: DESTROY_BLOCK (create space)');
         } else {
-            let foundMove = false;
-            for (let dx = -1; dx <= 1 && !foundMove; dx++) {
-                for (let dy = -1; dy <= 1 && !foundMove; dy++) {
-                    for (let dz = -1; dz <= 1 && !foundMove; dz++) {
-                        if (dx === 0 && dy === 0 && dz === 0) continue;
-                        const x = character.gridPos.x + dx, y = character.gridPos.y + dy, z = character.gridPos.z + dz;
-                        if (y < 0 || y > maxHeight) continue;
-                        character.setNextAction('WANDER', null, {x, y, z});
-                        foundMove = true;
-                    }
-                }
-            }
-            if (!foundMove) {
-                character.log('NO_ACTION_POSSIBLE: Character is completely stuck', {id: character.id, gridPos: character.gridPos, state: character.state});
-                character.actionCooldown = 1.0;
-            }
+            // Absolutely last resort
+            character.setNextAction('WANDER', null, {x: character.gridPos.x + 1, y: character.gridPos.y, z: character.gridPos.z});
+            character.log('Action: WANDER (last resort)');
         }
-        character.actionCooldown = 0.5;
     }
 }

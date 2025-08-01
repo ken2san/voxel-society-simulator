@@ -129,6 +129,12 @@ class Character {
         this.log('Executing action:', this.action.type, this.action);
 
         switch (this.action.type) {
+            case 'WANDER':
+                // WANDER action is completed by reaching the destination
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 0.5;
+                break;
             case 'COLLECT_FOOD':
                 this.collectFood();
                 break;
@@ -1838,6 +1844,8 @@ class Character {
                             removeBlock(x, y, z);
                             this.log('Rescue: destroyed nearby diggable block to create path (safe)', {x, y, z, fallY});
                             brokeBlock = true;
+                            // Give more time after rescue digging
+                            this.actionCooldown = 2.0;
                             break;
                         } else {
                             this.log('Skip digging: fall destination not safe', {x, y, z, fallY});
@@ -1868,17 +1876,40 @@ class Character {
                         removeBlock(x, y, z);
                         this.log('Rescue: forcibly dug random direction after multiple path fails', {x, y, z});
                         this.bfsFailCount = 0; // リセット
+                        this.actionCooldown = 2.0; // Give time for the change to take effect
+                        this.state = 'idle';
+                        return;
                     }
                 }
                 if (this.bfsFailCount > 2) {
                     this.log('BFS pathfinding failed multiple times, giving up.');
+
+                    // If this was a wood collection action, increment AI failure counter
+                    if (this.action && this.action.type === 'CHOP_WOOD') {
+                        if (!this._woodFailureCount) this._woodFailureCount = 0;
+                        this._woodFailureCount++;
+                        const woodPos = this.action.target;
+                        this._lastWoodTarget = woodPos ? `${woodPos.x},${woodPos.y},${woodPos.z}` : null;
+                        this.log(`AI: Pathfinding failed for wood collection (${this._woodFailureCount} total failures)`);
+                    }
+
                     this.state = 'idle';
                     this.bfsFailCount = 0;
-                    this.actionCooldown = 1.0;
+                    this.actionCooldown = 2.0; // Longer cooldown when giving up
                     return;
                 }
                 this.log('BFS pathfinding failed, will retry.');
-                this.actionCooldown = 0.5;
+
+                // If this was a wood collection action, increment AI failure counter on first retry too
+                if (this.action && this.action.type === 'CHOP_WOOD' && this.bfsFailCount === 1) {
+                    if (!this._woodFailureCount) this._woodFailureCount = 0;
+                    this._woodFailureCount++;
+                    const woodPos = this.action.target;
+                    this._lastWoodTarget = woodPos ? `${woodPos.x},${woodPos.y},${woodPos.z}` : null;
+                    this.log(`AI: Early pathfinding failure for wood collection (${this._woodFailureCount} total failures)`);
+                }
+
+                this.actionCooldown = brokeBlock ? 2.0 : 1.0; // Longer cooldown if we dug a block
                 this.state = 'idle';
                 return;
             }
@@ -2286,23 +2317,39 @@ class Character {
     }
 
     decideNextAction(isNight) {
-        // デバッグ用：現在の状態を記録
-        this.log(`=== ACTION DECISION START ===`);
-        this.log(`Needs: hunger=${this.needs.hunger.toFixed(1)}, energy=${this.needs.energy.toFixed(1)}, social=${this.needs.social.toFixed(1)}`);
-        this.log(`Inventory: [${this.inventory.map(i => i || 'null').join(', ')}]`);
-        this.log(`Home: homePosition=${!!this.homePosition}, provisionalHome=${!!this.provisionalHome}`);
-        this.log(`State: ${this.state}, actionCooldown=${this.actionCooldown.toFixed(2)}`);
+        // === EMERGENCY SURVIVAL ONLY (Life or Death) ===
 
-        // Toggle between rule-based and utility-based AI
+        // Critical hunger: immediate food collection or die
+        if (this.needs.hunger <= 5) {
+            this.log('🚨 EMERGENCY: Critical hunger, forcing immediate food collection');
+            const food = this.findClosestFood();
+            if (food) {
+                this.setNextAction('COLLECT_FOOD', food, food);
+                return;
+            }
+            this.setNextAction('WANDER'); // Search for food
+            return;
+        }
+
+        // Critical energy: immediate rest or collapse
+        if (this.needs.energy <= 5) {
+            this.log('🚨 EMERGENCY: Critical energy, forcing immediate rest');
+            this.setNextAction('REST');
+            return;
+        }
+
+        // === DELEGATE TO AI SYSTEMS ===
         if (typeof window !== 'undefined' && window.aiMode === 'utility') {
             decideNextAction_utility(this, isNight);
         } else {
             decideNextAction_rulebase(this, isNight);
         }
 
-        // デバッグ用：決定後の状態を記録
-        this.log(`Action chosen: ${this.action?.type || this.action || 'null'}`);
-        this.log(`=== ACTION DECISION END ===`);
+        // Fallback safety
+        if (!this.action || this.action === null) {
+            this.log('⚠️ No action chosen by AI, falling back to WANDER');
+            this.setNextAction('WANDER');
+        }
     }
 
     updateColorFromPersonality() {
@@ -2341,15 +2388,21 @@ class Character {
     isSafeToFallOrDig(x, y, z) {
         // y座標が範囲外ならNG
         if (y < 0 || y > maxHeight) return false;
+
+        // Ground level (y=0) is always safe as it's the bedrock level
+        if (y === 0) return true;
+
         // 落下先の下にブロックがあるか
         let belowY = y - 1;
         while (belowY >= 0 && !worldData.has(`${x},${belowY},${z}`)) {
             belowY--;
         }
-        // 地面がなければNG
-        if (belowY < 0) return false;
+        // 地面がなければNG (but allow if we reach bedrock level)
+        if (belowY < 0 && y > 0) return false;
+
         // 落下距離が大きすぎる場合はNG（例: 3段以上の落下禁止）
         if (y - belowY > 3) return false;
+
         // 落下先に他キャラがいないか
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         for (const char of chars) {
