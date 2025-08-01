@@ -468,6 +468,19 @@ class Character {
                         this._shelterLocation = null;
                         this._provisionalHomeCount = 0;
                         this.log('🏠 Underground shelter completed! Set as homePosition');
+
+                        // 地下シェルターにベッドブロックを設置
+                        if (typeof addBlock === 'function' && BLOCK_TYPES && BLOCK_TYPES.BED) {
+                            addBlock(x, y, z, BLOCK_TYPES.BED, true);
+                            this.log('🏠 Bed block placed in underground shelter');
+
+                            // 上にHOUSE_WALLを設置してより豪華にする
+                            if (BLOCK_TYPES.HOUSE_WALL) {
+                                addBlock(x, y + 1, z, BLOCK_TYPES.HOUSE_WALL, true);
+                                this.log('🏠 House wall placed above bed');
+                            }
+                        }
+
                         this.showActionIcon('🏠✨', 3.0);
                     }
                 }
@@ -484,6 +497,40 @@ class Character {
                         this._stoneHomeLocation = null;
                         this._provisionalHomeCount = 0;
                         this.log('🏠 Stone home completed! Set as homePosition');
+
+                        // 石の家にベッドブロックを設置
+                        if (typeof addBlock === 'function' && BLOCK_TYPES && BLOCK_TYPES.BED) {
+                            addBlock(x, y, z, BLOCK_TYPES.BED, true);
+                            this.log('🏠 Bed block placed in stone home');
+
+                            // 周囲にHOUSE_WALLを設置して家らしくする
+                            if (BLOCK_TYPES.HOUSE_WALL) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    for (let dz = -1; dz <= 1; dz++) {
+                                        if (dx === 0 && dz === 0) continue; // ベッドの位置は除く
+                                        const wallKey = `${x + dx},${y},${z + dz}`;
+                                        if (!worldData.has(wallKey)) {
+                                            addBlock(x + dx, y, z + dz, BLOCK_TYPES.HOUSE_WALL, true);
+                                        }
+                                    }
+                                }
+                                this.log('🏠 House walls placed around stone home');
+                            }
+
+                            // 屋根も設置
+                            if (BLOCK_TYPES.HOUSE_ROOF) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    for (let dz = -1; dz <= 1; dz++) {
+                                        const roofKey = `${x + dx},${y + 1},${z + dz}`;
+                                        if (!worldData.has(roofKey)) {
+                                            addBlock(x + dx, y + 1, z + dz, BLOCK_TYPES.HOUSE_ROOF, true);
+                                        }
+                                    }
+                                }
+                                this.log('🏠 House roof placed on stone home');
+                            }
+                        }
+
                         this.showActionIcon('🏠🗿', 3.0);
                     }
                 }
