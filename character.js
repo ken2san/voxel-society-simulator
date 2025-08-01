@@ -56,13 +56,27 @@ class Character {
             case 'SOCIALIZE':
                 // 社交状態に遷移
                 this.state = 'socializing';
+                console.log(`${this.id} entered socializing state`);
                 // パートナーも同時に社交状態にする
                 const partner = this.action.target;
                 if (partner && partner !== this) {
-                    // パートナーがdead/confused以外なら必ずsocializingにする
+                    console.log(`${this.id} trying to set partner ${partner.id} to socializing. Partner current state: ${partner.state}`);
+                    // パートナーの緊急ニーズをチェック
+                    const partnerCritical = (partner.needs?.hunger <= 10 || partner.needs?.energy <= 10);
+                    if (partnerCritical) {
+                        console.log(`${partner.id} has critical needs (hunger: ${partner.needs?.hunger}, energy: ${partner.needs?.energy}). Socializing cancelled.`);
+                        this.state = 'idle';
+                        this.action = null;
+                        this.actionCooldown = 1.0;
+                        break;
+                    }
+                    // パートナーがdead/confused以外かつ緊急ニーズがなければsocializingにする
                     if (partner.state !== 'socializing' && partner.state !== 'dead' && partner.state !== 'confused') {
                         partner.setNextAction && partner.setNextAction('SOCIALIZE', this, this.gridPos);
                         partner.performAction && partner.performAction();
+                        console.log(`${partner.id} set to socializing state: ${partner.state}`);
+                    } else {
+                        console.log(`${partner.id} already socializing or unavailable (state: ${partner.state})`);
                     }
                 }
                 break;
@@ -466,7 +480,22 @@ class Character {
             // 到達可能な候補がなければ従来通り
         }
         this.action = { type, target, item };
-        if (moveTo) { this.targetPos = moveTo; this.state = 'moving'; }
+        if (moveTo && type !== 'SOCIALIZE') {
+            this.targetPos = moveTo;
+            this.state = 'moving';
+        }
+        else if (type === 'SOCIALIZE' && moveTo) {
+            // SOCIALIZE の場合は距離をチェック
+            const dist = Math.abs(this.gridPos.x - moveTo.x) + Math.abs(this.gridPos.y - moveTo.y) + Math.abs(this.gridPos.z - moveTo.z);
+            if (dist <= 1) {
+                // 隣接していれば即座に実行
+                this.performAction();
+            } else {
+                // 遠い場合は移動
+                this.targetPos = moveTo;
+                this.state = 'moving';
+            }
+        }
         else { this.performAction(); }
     }
 
@@ -803,6 +832,7 @@ class Character {
         this.moveDistance = 0;
         // --- Love timer for heart mark ---
         this.loveTimer = 0;
+        this.lovePhase = null; // 'showing', 'completed', null
 
         // --- Social role assignment ---
         this.role = 'worker'; // All start as worker; leader emerges via group detection
@@ -1141,6 +1171,11 @@ class Character {
     }
 
     update(deltaTime, isNight, camera) {
+        // 基本的な状態ログ（SOCIALIZE状態の場合のみ）
+        if (this.state === 'socializing') {
+            console.log(`📊 Update - ID:${this.id}, state:${this.state}, partner:${this.action?.target?.id || 'none'}`);
+        }
+
         // 死亡以外のstateになったら目・口の色を黒にリセット
         if (this.state !== 'dead') {
             if (this.eyeMeshL && this.eyeMeshR) {
@@ -1308,7 +1343,7 @@ class Character {
         // --- Needs decay (bak_game.js準拠) ---
         const oldSafety = this.needs.safety;
         this.needs.hunger -= deltaTime * 0.7 * this.personality.diligence; // 減少速度を半分に
-        this.needs.social -= deltaTime * 1;
+        this.needs.social -= deltaTime * 1.5; // 社交ニーズの減少を速めて頻繁に交流するように
         if (this.state === 'moving' || this.state === 'working') {
             this.needs.energy -= deltaTime * 2;
         }
@@ -1365,35 +1400,95 @@ class Character {
         }
         if (this.state === 'socializing') {
             const partner = this.action?.target;
+            console.log(`🔍 SOCIALIZE Debug - ${this.id}: partner=${partner?.id || 'none'}, partnerState=${partner?.state || 'none'}`);
+
             if (partner && partner.state === 'socializing') {
-                // needs.social回復速度を半分に
-                this.needs.social = Math.min(100, this.needs.social + deltaTime * 11);
-                // affinity上昇速度をパラメータ化
+                // 双方の緊急ニーズをチェック（中断条件）
+                const myCritical = (this.needs.hunger <= 5 || this.needs.energy <= 5);
+                const partnerCritical = (partner.needs?.hunger <= 5 || partner.needs?.energy <= 5);
+
+                if (myCritical || partnerCritical) {
+                    console.log(`Socializing interrupted due to critical needs. ${this.id}: hunger=${this.needs.hunger}, energy=${this.needs.energy}. ${partner.id}: hunger=${partner.needs?.hunger}, energy=${partner.needs?.energy}`);
+                    this.state = 'idle';
+                    this.action = null;
+                    this.actionCooldown = 0.1;
+                    partner.state = 'idle';
+                    partner.action = null;
+                    partner.actionCooldown = 0.1;
+                    return;
+                }
+
+                console.log(`Both ${this.id} and ${partner.id} are socializing together`);
+                // needs.social回復速度を調整
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 8);
+                // affinity上昇速度をパラメータ化（sidebar.jsで調整可能）
                 const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? window.affinityIncreaseRate : 10;
                 let affinity = this.relationships.get(partner.id) || 0;
+                const prevAffinity = affinity;
                 affinity += deltaTime * affinityRate;
+                console.log(`${this.id} ♥ ${partner.id}: affinity ${prevAffinity.toFixed(1)} → ${affinity.toFixed(1)} (rate: ${affinityRate})`);
                 this.relationships.set(partner.id, affinity);
                 // --- ハートアイコン表示: loveTimerをセット ---
-                // 両者が距離1以内＆loveTimer未セット＆友好度60以上ならloveTimerセット
+                // 両者が距離1以内＆友好度60以上ならloveTimerセット（SOCIALIZE中は常にハート表示）
                 const dist = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
-                if (dist <= 1 && affinity >= 60 && this.loveTimer <= 0 && partner.loveTimer <= 0) {
-                    this.loveTimer = 2.0;
-                    partner.loveTimer = 2.0;
+                console.log(`${this.id} ↔ ${partner.id}: distance=${dist}, affinity=${affinity.toFixed(1)}, loveTimer=${this.loveTimer.toFixed(1)}, lovePhase=${this.lovePhase}`);
+
+                if (dist <= 1 && affinity >= 60) {
+                    console.log(`❤️ Love conditions met for ${this.id} ↔ ${partner.id}!`);
+                    // SOCIALIZE中は常にハート表示
+                    if (this.loveTimer <= 0) {
+                        this.loveTimer = 3.0; // 3秒間ハート表示
+                        this.lovePhase = 'showing'; // ハート表示フェーズ
+                        console.log(`💖 ${this.id} started showing heart (loveTimer=3.0, phase=showing)`);
+                    }
+                    if (partner.loveTimer <= 0) {
+                        partner.loveTimer = 3.0;
+                        partner.lovePhase = 'showing';
+                        console.log(`💖 ${partner.id} started showing heart (loveTimer=3.0, phase=showing)`);
+                    }
+                } else {
+                    console.log(`❌ Love conditions not met: dist=${dist} (need ≤1), affinity=${affinity.toFixed(1)} (need ≥60)`);
                 }
+
                 // loveTimer終了時に子供生成（重複防止）
-                if (this.loveTimer <= 0 && partner.loveTimer <= 0 && affinity >= 60) {
+                if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60) {
+                    console.log(`🍼 Checking child creation: ${this.id} ↔ ${partner.id}, _childCreatedWith=${this._childCreatedWith}`);
                     if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
+                        console.log(`👶 Creating child between ${this.id} and ${partner.id}!`);
                         this.reproduceWith && this.reproduceWith(partner);
                         // 友好度リセット値をパラメータ化（デフォルト10）
                         const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 10;
                         this.relationships.set(partner.id, resetVal);
                         partner.relationships.set(this.id, resetVal);
+                        console.log(`📉 Affinity reset to ${resetVal} for ${this.id} ↔ ${partner.id}`);
                         this._childCreatedWith = partner.id;
                         partner._childCreatedWith = this.id;
+                        this.lovePhase = 'completed'; // 子供生成完了
+                        partner.lovePhase = 'completed';
+                        console.log(`✅ Child creation completed. Phases set to 'completed'`);
+                    } else {
+                        console.log(`⚠️ Child already created between ${this.id} and ${partner.id}, skipping`);
                     }
+                } else {
+                    if (this.loveTimer > 0) console.log(`⏰ Still showing heart: loveTimer=${this.loveTimer.toFixed(1)}`);
                 }
+            } else if (partner) {
+                console.log(`${this.id} is socializing but partner ${partner.id} is not (partner state: ${partner.state}). Ending socialization.`);
+                this.state = 'idle';
+                this.action = null;
+            } else {
+                console.log(`${this.id} is socializing but has no valid partner. Ending socialization.`);
+                this.state = 'idle';
+                this.action = null;
             }
-            if(this.needs.social >= 100) this.state = 'idle';
+            // SOCIALIZE終了条件を緩和：socialニーズが高くても続行（親密度60到達まで優先）
+            const currentAffinity = this.relationships.get(partner?.id) || 0;
+            if(this.needs.social >= 100 && currentAffinity >= 60) {
+                console.log(`${this.id} ending socialization: social satisfied (${this.needs.social}) and affinity reached (${currentAffinity})`);
+                this.state = 'idle';
+            } else if (this.needs.social >= 100) {
+                console.log(`${this.id} continuing socialization despite full social needs to build affinity (current: ${currentAffinity}/60)`);
+            }
         }
         // Death condition（猶予を-10まで）
         if (this.needs.hunger <= -10) {
@@ -1406,12 +1501,35 @@ class Character {
             this.actionCooldown -= deltaTime;
             if (this.actionCooldown <= 0) this.decideNextAction && this.decideNextAction(isNight);
         }
+        // SOCIALIZE状態中は、極端に緊急でない限りAI上書きを防ぐ
+        else if (this.state === 'socializing') {
+            // 餓死寸前（hunger <= 5）または極度の疲労（energy <= 5）の場合のみ中断
+            if (this.needs.hunger <= 5 || this.needs.energy <= 5) {
+                console.log(`${this.id} forced to interrupt socializing due to critical needs (hunger: ${this.needs.hunger}, energy: ${this.needs.energy})`);
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 0.1;
+                // パートナーにも中断を通知
+                const partner = this.action?.target;
+                if (partner && partner.state === 'socializing') {
+                    partner.state = 'idle';
+                    partner.action = null;
+                    partner.actionCooldown = 0.1;
+                }
+            }
+        }
         if (this.state === 'moving') this.updateMovement(deltaTime);
         this.updateAnimations(deltaTime);
         // --- loveTimer減少 ---
         if (this.loveTimer > 0) {
             this.loveTimer -= deltaTime;
-            if (this.loveTimer < 0) this.loveTimer = 0;
+            if (this.loveTimer < 0) {
+                this.loveTimer = 0;
+                // SOCIALIZE状態終了時にlovePhaseをリセット
+                if (this.state !== 'socializing') {
+                    this.lovePhase = null;
+                }
+            }
         }
         this.updateThoughtBubble(isNight, camera);
 
@@ -1902,7 +2020,6 @@ class Character {
         html += icons.map(ic => ` <span style="font-size:0.98em;vertical-align:middle;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">${ic}</span>`).join('');
         if (html) {
             this.thoughtBubble.innerHTML = html;
-            console.log('thoughtBubble HTML:', html);
             this.thoughtBubble.setAttribute('data-show', 'true');
             const canvas = document.getElementById('gameCanvas');
             const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
