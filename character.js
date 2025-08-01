@@ -62,6 +62,7 @@ class Character {
                     // パートナーがdead/confused以外なら必ずsocializingにする
                     if (partner.state !== 'socializing' && partner.state !== 'dead' && partner.state !== 'confused') {
                         partner.setNextAction && partner.setNextAction('SOCIALIZE', this, this.gridPos);
+                        partner.performAction && partner.performAction();
                     }
                 }
                 break;
@@ -1373,15 +1374,23 @@ class Character {
                 affinity += deltaTime * affinityRate;
                 this.relationships.set(partner.id, affinity);
                 // --- ハートアイコン表示: loveTimerをセット ---
-                if (affinity > 30) {
-                    this.loveTimer = 2.0; // 2秒間ハートを表示
+                // 両者が距離1以内＆loveTimer未セット＆友好度60以上ならloveTimerセット
+                const dist = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
+                if (dist <= 1 && affinity >= 60 && this.loveTimer <= 0 && partner.loveTimer <= 0) {
+                    this.loveTimer = 2.0;
+                    partner.loveTimer = 2.0;
                 }
-                if (affinity >= 50) {
-                    this.reproduceWith && this.reproduceWith(partner);
-                    // 友好度リセット値をパラメータ化（デフォルト10）
-                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 10;
-                    this.relationships.set(partner.id, resetVal);
-                    partner.relationships.set(this.id, resetVal);
+                // loveTimer終了時に子供生成（重複防止）
+                if (this.loveTimer <= 0 && partner.loveTimer <= 0 && affinity >= 60) {
+                    if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
+                        this.reproduceWith && this.reproduceWith(partner);
+                        // 友好度リセット値をパラメータ化（デフォルト10）
+                        const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 10;
+                        this.relationships.set(partner.id, resetVal);
+                        partner.relationships.set(this.id, resetVal);
+                        this._childCreatedWith = partner.id;
+                        partner._childCreatedWith = this.id;
+                    }
                 }
             }
             if(this.needs.social >= 100) this.state = 'idle';
