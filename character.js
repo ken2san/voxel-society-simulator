@@ -50,7 +50,8 @@ class Character {
         }
         switch (this.action.type) {
             case 'WANDER':
-                // ...existing code...
+                // 徘徊状態に遷移
+                this.state = 'moving';
                 break;
             case 'SOCIALIZE':
                 // 社交状態に遷移
@@ -64,12 +65,226 @@ class Character {
                     }
                 }
                 break;
+            case 'COLLECT_FOOD':
+                // 食料収集のため移動状態に遷移
+                this.state = 'moving';
+                break;
+            case 'EAT':
+                // 食事のため移動状態に遷移
+                this.state = 'moving';
+                break;
+            case 'CHOP_WOOD':
+                // 木材収集のため移動状態に遷移
+                this.state = 'moving';
+                break;
+            case 'BUILD_HOME':
+                // 家建設のため作業状態に遷移
+                this.state = 'working';
+                break;
+            case 'SEEK_SHELTER':
+                // シェルター探索のため移動状態に遷移
+                this.state = 'moving';
+                break;
+            case 'REST':
+                // 休息状態に遷移
+                this.state = 'resting';
+                break;
+            case 'CRAFT_TOOL':
+                // 道具作成のため作業状態に遷移
+                this.state = 'working';
+                break;
+            case 'DESTROY_BLOCK':
+                // ブロック破壊のため移動状態に遷移
+                this.state = 'moving';
+                break;
+            case 'MEETING':
+                // 会議状態に遷移
+                this.state = 'meeting';
+                this.actionCooldown = 3.0; // 3秒間会議
+                break;
             // 必要に応じて他のアクションタイプも追加
             default:
+                this.log('Unknown action type:', this.action.type);
                 this.state = 'idle';
                 break;
         }
     }
+
+    // --- 目的地到着後の実際のアクション実行 ---
+    executeAction() {
+        if (!this.action || !this.action.type) {
+            this.state = 'idle';
+            return;
+        }
+
+        this.log('Executing action:', this.action.type, this.action);
+
+        switch (this.action.type) {
+            case 'COLLECT_FOOD':
+                this.collectFood();
+                break;
+            case 'EAT':
+                this.eatFood();
+                break;
+            case 'CHOP_WOOD':
+                this.chopWood();
+                break;
+            case 'BUILD_HOME':
+                this.buildHome();
+                break;
+            case 'CRAFT_TOOL':
+                this.craftTool();
+                break;
+            case 'DESTROY_BLOCK':
+                this.destroyBlock();
+                break;
+            case 'SEEK_SHELTER':
+                this.seekShelter();
+                break;
+            case 'REST':
+                this.state = 'resting';
+                break;
+            default:
+                this.log('No execution handler for action:', this.action.type);
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 0.5;
+                break;
+        }
+    }
+
+    // --- 個別のアクション実行メソッド ---
+    collectFood() {
+        if (!this.action.target) {
+            this.log('COLLECT_FOOD: No target specified');
+            this.state = 'idle';
+            this.action = null;
+            return;
+        }
+
+        const { x, y, z } = this.action.target;
+        const key = `${x},${y},${z}`;
+        const blockId = worldData.get(key);
+
+        if (blockId) {
+            const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+            if (blockType && blockType.isEdible) {
+                // 食料ブロックを回収
+                removeBlock && removeBlock(x, y, z);
+
+                // インベントリに追加
+                this.inventory[0] = 'FRUIT_ITEM';
+                this.carriedItemMesh.visible = true;
+
+                this.log('Successfully collected food', { x, y, z });
+
+                // 即座に食べる
+                this.inventory[0] = null;
+                this.carriedItemMesh.visible = false;
+                this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                this.eatCount = (this.eatCount || 0) + 1;
+
+                this.log('Ate collected food, hunger restored to', this.needs.hunger);
+            } else {
+                this.log('COLLECT_FOOD: Target is not edible', { blockId, blockType });
+            }
+        } else {
+            this.log('COLLECT_FOOD: Target block not found', { x, y, z });
+        }
+
+        this.state = 'idle';
+        this.action = null;
+        this.actionCooldown = 1.0;
+    }
+
+    eatFood() {
+        // EATアクションはCOLLECT_FOODと同様の処理
+        this.collectFood();
+    }
+
+    chopWood() {
+        if (!this.action.target) {
+            this.log('CHOP_WOOD: No target specified');
+            this.state = 'idle';
+            this.action = null;
+            return;
+        }
+
+        const { x, y, z } = this.action.target;
+        const key = `${x},${y},${z}`;
+        const blockId = worldData.get(key);
+
+        if (blockId) {
+            const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+            if (blockType && blockType.name === '木') {
+                removeBlock && removeBlock(x, y, z);
+                this.inventory[0] = 'WOOD_LOG';
+                this.carriedItemMesh.visible = true;
+                this.log('Successfully chopped wood', { x, y, z });
+            }
+        }
+
+        this.state = 'idle';
+        this.action = null;
+        this.actionCooldown = 1.0;
+    }
+
+    destroyBlock() {
+        if (!this.action.target) {
+            this.log('DESTROY_BLOCK: No target specified');
+            this.state = 'idle';
+            this.action = null;
+            return;
+        }
+
+        const { x, y, z } = this.action.target;
+        const key = `${x},${y},${z}`;
+        const blockId = worldData.get(key);
+
+        if (blockId) {
+            removeBlock && removeBlock(x, y, z);
+            this.digCount = (this.digCount || 0) + 1;
+            this.log('Successfully destroyed block', { x, y, z });
+        }
+
+        this.state = 'idle';
+        this.action = null;
+        this.actionCooldown = 1.0;
+    }
+
+    craftTool() {
+        // 道具作成の処理
+        this.inventory[0] = 'STONE_TOOL';
+        this.carriedItemMesh.visible = true;
+        this.log('Crafted stone tool');
+
+        this.state = 'idle';
+        this.action = null;
+        this.actionCooldown = 2.0;
+    }
+
+    buildHome() {
+        // 家建設の処理
+        if (this.inventory[0] === 'WOOD_LOG') {
+            this.inventory[0] = null;
+            this.carriedItemMesh.visible = false;
+            this.homePosition = { ...this.gridPos };
+            this.buildCount = (this.buildCount || 0) + 1;
+            this.log('Built home at', this.homePosition);
+        }
+
+        this.state = 'idle';
+        this.action = null;
+        this.actionCooldown = 3.0;
+    }
+
+    seekShelter() {
+        // シェルター到達時の処理
+        this.log('Reached shelter');
+        this.state = 'resting';
+        this.action = null;
+    }
+
     setNextAction(type, target = null, moveTo = null, item = null) {
         // 行動履歴を記録
         if (!this.actionHistory) this.actionHistory = [];
@@ -1211,8 +1426,8 @@ class Character {
             if (dist > 0) this.moveDistance += dist;
             this.path.shift();
             if (this.path.length === 0) {
-                this.state = 'idle';
-                this.performAction && this.performAction();
+                // 目的地に到着したので、実際のアクションを実行
+                this.executeAction();
             }
         } else {
             direction.normalize();
@@ -1974,137 +2189,6 @@ class Character {
                     }
                 }
             }
-        }
-    }
-
-    // --- 完全なメソッド実装を追加 ---
-
-    // --- 完全なメソッド実装を追加 ---
-    reproduceWith(partner) {
-        // Create child with mixed color and inherited personality
-        this.log('Reproducing with', partner.id);
-        // Mix colors
-        const c1 = this.bodyMaterial.color;
-        const c2 = partner.bodyMaterial.color;
-        const mixedColor = new THREE.Color(
-            (c1.r + c2.r) / 2,
-            (c1.g + c2.g) / 2,
-            (c1.b + c2.b) / 2
-        );
-        // Mix personalities
-        const childGenes = {
-            bravery: (this.personality.bravery + partner.personality.bravery) / 2,
-            diligence: (this.personality.diligence + partner.personality.diligence) / 2
-        };
-        // Find spawn position
-        const spawnPos = this.findAdjacentSpot(this.gridPos) || this.gridPos;
-        // Create child
-        const childId = Math.floor(Math.random() * 10000);
-        if (typeof spawnCharacter === 'function') {
-            const child = spawnCharacter(this.scene, spawnPos, childId, childGenes);
-            if (child) {
-                child.bodyMaterial.color.copy(mixedColor);
-                this.children.push(child);
-                partner.children.push(child);
-                this.childCount++;
-                partner.childCount++;
-            }
-        }
-    }
-
-    decideNextAction(isNight) {
-        // Simple AI decision making
-        if (this.needs.hunger < 30) {
-            const food = this.findClosestFood();
-            if (food) {
-                this.setNextAction('COLLECT_FOOD', food);
-                return;
-            }
-        }
-        if (this.needs.social < 40) {
-            const partner = this.findClosestPartner();
-            if (partner) {
-                this.setNextAction('SOCIALIZE', partner);
-                return;
-            }
-        }
-        if (this.needs.energy < 20) {
-            this.state = 'resting';
-            return;
-        }
-        // Default: wander
-        this.setNextAction('WANDER');
-    }
-
-    updateColorFromPersonality() {
-        // Update character color based on personality
-        const hue = this.personality.bravery * 0.3 + this.personality.diligence * 0.7;
-        this.bodyMaterial.color.setHSL(hue, 0.6, 0.5);
-    }
-
-    updateWorldPosFromGrid() {
-        this.mesh.position.set(this.gridPos.x + 0.5, this.gridPos.y, this.gridPos.z + 0.5);
-    }
-
-    log(message, ...args) {
-        if (typeof window !== 'undefined' && window.debugMode) {
-            console.log(`[Character ${this.id}] ${message}`, ...args);
-        }
-    }
-
-    isSafeToFallOrDig(x, y, z) {
-        // Check if position is safe to fall to or dig at
-        if (y < 0) return false;
-        // Check for lava or other dangerous blocks below
-        let checkY = y;
-        while (checkY > 0) {
-            const belowKey = `${x},${checkY-1},${z}`;
-            const belowId = worldData.get(belowKey);
-            if (belowId) {
-                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === belowId);
-                if (blockType && blockType.name === 'lava') return false;
-                break;
-            }
-            checkY--;
-        }
-        return true;
-    }
-
-    updateThoughtBubble(isNight, camera) {
-        // --- ハートマーク優先表示 ---
-        if (this.loveTimer > 0) {
-            this.thoughtBubble.textContent = '❤️';
-            this.thoughtBubble.setAttribute('data-show', 'true');
-            this.thoughtBubble.style.display = '';
-            // 位置更新
-            if (camera && this.iconAnchor) {
-                const canvas = document.getElementById('gameCanvas');
-                const pos = toScreenPosition(this.iconAnchor, camera, canvas);
-                this.thoughtBubble.style.left = `${pos.x - 18}px`;
-                this.thoughtBubble.style.top = `${pos.y - 48}px`;
-                this.thoughtBubble.style.position = 'fixed';
-            }
-            return;
-        }
-
-        // Update thought bubble display based on current state and needs
-        if (!this.thoughtBubble || !camera) return;
-
-        let icon = null;
-        if (this.loveTimer > 0) icon = '💖';
-        else if (this.state === 'socializing') icon = '👥';
-        else if (this.state === 'moving') icon = '🚶';
-        else if (this.needs.hunger < 30) icon = '🍎';
-        else if (this.needs.energy < 30) icon = '😴';
-
-        if (icon) {
-            this.thoughtBubble.textContent = icon;
-            const screenPos = toScreenPosition(this.iconAnchor, camera);
-            this.thoughtBubble.style.left = `${screenPos.x - 15}px`;
-            this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
-            this.thoughtBubble.style.display = 'block';
-        } else {
-            this.thoughtBubble.style.display = 'none';
         }
     }
 }
