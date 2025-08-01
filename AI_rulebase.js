@@ -4,6 +4,9 @@
 import { worldData, BLOCK_TYPES, ITEM_TYPES, maxHeight, removeBlock } from './world.js';
 
 export function decideNextAction_rulebase(character, isNight) {
+    // --- 設定値の取得 ---
+    const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
+
     // --- 10%の確率で強制的にWANDERまたはSOCIALIZEを選ぶ（ダイナミックな試行錯誤） ---
     if (Math.random() < 0.10) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
@@ -19,8 +22,19 @@ export function decideNextAction_rulebase(character, isNight) {
             character.setNextAction('WANDER'); return;
         }
     }
+    // --- 社交的需要を設定に合わせて調整（優先度を上げる） ---
+    if (character.needs.social <= socialThreshold) {
+        const partner = character.findClosestPartner && character.findClosestPartner();
+        if (partner) {
+            character.log(`SOCIALIZE selected: social=${character.needs.social}, threshold=${socialThreshold}`);
+            character.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
+        }
+        character.setNextAction('WANDER'); return;
+    }
+
     // --- Emergency: If needs are critically low, always prioritize survival actions ---
-    if (character.needs.hunger <= 10) {
+    const hungerEmergencyThreshold = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? window.hungerEmergencyThreshold : 5;
+    if (character.needs.hunger <= hungerEmergencyThreshold) { // スライダーで調整可能
         // 1. まずインベントリ内の食料を食べる
         const foodIdx = character.inventory.findIndex(item => item === 'FRUIT_ITEM' || item === 'FRUIT');
         if (foodIdx !== -1) {
@@ -74,7 +88,8 @@ export function decideNextAction_rulebase(character, isNight) {
         }
         character.setNextAction('WANDER'); return;
     }
-    if (character.needs.energy <= 10) {
+    const energyEmergencyThreshold = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? window.energyEmergencyThreshold : 1;
+    if (character.needs.energy <= energyEmergencyThreshold) { // スライダーで調整可能
         if (character.isSafe && character.isSafe(isNight)) {
             character.setNextAction('REST'); return;
         }
@@ -87,14 +102,9 @@ export function decideNextAction_rulebase(character, isNight) {
         }
         character.setNextAction('WANDER'); return;
     }
-    if (character.needs.social <= 30) {
-        const partner = character.findClosestPartner && character.findClosestPartner();
-        if (partner) {
-            character.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
-        }
-        character.setNextAction('WANDER'); return;
-    }
+
     character.log('decideNextAction', { needs: character.needs, state: character.state, personality: character.personality, role: character.role });
+
     // --- Role-based AI priority (強化) ---
     if (character.role === 'leader') {
         if (Math.random() < 0.18) {
@@ -162,7 +172,7 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    if (character.needs.safety < 50 * character.personality.bravery && isNight) {
+    if (character.needs.safety < 20 * character.personality.bravery && isNight) { // より厳格な判定（50→20）
         const shelterPos = character.findShelter(isNight);
         if (shelterPos) {
             character.setNextAction('SEEK_SHELTER', shelterPos, shelterPos); return;
@@ -214,7 +224,8 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    if (character.needs.social < 90) {
+    // --- 社交的需要（低優先度）も設定に合わせる ---
+    if (character.needs.social < socialThreshold + 60) { // 閾値+60で低優先度判定
         const partner = character.findClosestPartner();
         if (partner) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos); return;
@@ -235,7 +246,9 @@ export function decideNextAction_rulebase(character, isNight) {
                 character.setNextAction('BUILD_HOME', character.provisionalHome, character.provisionalHome); return;
             }
         } else {
-            if (character.needs.hunger > 90 && character.homePosition) {
+            // Rest at home if satisfied and have home
+            const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
+            if (character.needs.hunger > homeReturnHungerLevel && character.homePosition) { // スライダーで調整可能
                 const foodPos = character.findClosestFood();
                 if (foodPos) {
                     const adjacentSpot = character.findAdjacentSpot(foodPos);
@@ -255,19 +268,8 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     }
-    const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-    let nearbyPartner = null;
-    for (const char of chars) {
-        if (char.id === character.id) continue;
-        const dist = Math.abs(character.gridPos.x - char.gridPos.x) + Math.abs(character.gridPos.y - char.gridPos.y) + Math.abs(character.gridPos.z - char.gridPos.z);
-        if (dist <= 2) {
-            nearbyPartner = char;
-            break;
-        }
-    }
-    if (nearbyPartner) {
-        character.setNextAction('SOCIALIZE', nearbyPartner, nearbyPartner.gridPos); return;
-    }
+
+    // --- Default wandering behavior ---
     const wanderSpots = [];
     for (let dx = -2; dx <= 2; dx++) {
         for (let dz = -2; dz <= 2; dz++) {

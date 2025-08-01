@@ -111,6 +111,14 @@ function renderCharacterDetail() {
     const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
     // グローバルにも反映
     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+    window.socialThreshold = sidebarParams.socialTh; // ← 初期化時にも設定
+    // Emergency threshold parameters
+    if (sidebarParams.hungerEmergencyThreshold === undefined) sidebarParams.hungerEmergencyThreshold = 5;
+    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 1;
+    if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
+    window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
+    window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
+    window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
     // 新パラメータ: 初期affinity値と上昇速度
     if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
     if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
@@ -431,14 +439,139 @@ function renderCharacterDetail() {
     socialInput.oninput = () => {
         socialVal.value = socialInput.value;
         sidebarParams.socialTh = parseInt(socialInput.value);
+        window.socialThreshold = parseInt(socialInput.value); // ← 即座にwindowに反映
     };
     socialVal.oninput = () => {
         socialInput.value = socialVal.value;
         sidebarParams.socialTh = parseInt(socialVal.value);
+        window.socialThreshold = parseInt(socialVal.value); // ← 即座にwindowに反映
     };
     paramBox.appendChild(socialRow);
     socialInput.disabled = paramDisabled;
     socialVal.disabled = paramDisabled;
+
+    // --- Hunger Emergency Threshold Slider ---
+    if (sidebarParams.hungerEmergencyThreshold === undefined) sidebarParams.hungerEmergencyThreshold = 5;
+    const hungerEmergencyRow = document.createElement('div');
+    hungerEmergencyRow.style.display = 'flex';
+    hungerEmergencyRow.style.alignItems = 'center';
+    hungerEmergencyRow.style.gap = '10px';
+    const hungerEmergencyLabel = document.createElement('span');
+    hungerEmergencyLabel.textContent = 'Hunger Emergency Threshold:';
+    hungerEmergencyLabel.style.flex = '1';
+    const hungerEmergencyInput = document.createElement('input');
+    hungerEmergencyInput.type = 'range';
+    hungerEmergencyInput.min = 0;
+    hungerEmergencyInput.max = 20;
+    hungerEmergencyInput.step = 1;
+    hungerEmergencyInput.value = sidebarParams.hungerEmergencyThreshold;
+    hungerEmergencyInput.style.flex = '2';
+    const hungerEmergencyVal = document.createElement('input');
+    hungerEmergencyVal.type = 'number';
+    hungerEmergencyVal.min = 0;
+    hungerEmergencyVal.max = 20;
+    hungerEmergencyVal.step = 1;
+    hungerEmergencyVal.value = sidebarParams.hungerEmergencyThreshold;
+    hungerEmergencyVal.style.width = '60px';
+    hungerEmergencyRow.appendChild(hungerEmergencyLabel);
+    hungerEmergencyRow.appendChild(hungerEmergencyInput);
+    hungerEmergencyRow.appendChild(hungerEmergencyVal);
+    // 双方向同期＋sidebarParams更新
+    hungerEmergencyInput.oninput = () => {
+        hungerEmergencyVal.value = hungerEmergencyInput.value;
+        sidebarParams.hungerEmergencyThreshold = parseInt(hungerEmergencyInput.value);
+        window.hungerEmergencyThreshold = parseInt(hungerEmergencyInput.value);
+    };
+    hungerEmergencyVal.oninput = () => {
+        hungerEmergencyInput.value = hungerEmergencyVal.value;
+        sidebarParams.hungerEmergencyThreshold = parseInt(hungerEmergencyVal.value);
+        window.hungerEmergencyThreshold = parseInt(hungerEmergencyVal.value);
+    };
+    paramBox.appendChild(hungerEmergencyRow);
+    hungerEmergencyInput.disabled = paramDisabled;
+    hungerEmergencyVal.disabled = paramDisabled;
+
+    // --- Energy Emergency Threshold Slider ---
+    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 1;
+    const energyEmergencyRow = document.createElement('div');
+    energyEmergencyRow.style.display = 'flex';
+    energyEmergencyRow.style.alignItems = 'center';
+    energyEmergencyRow.style.gap = '10px';
+    const energyEmergencyLabel = document.createElement('span');
+    energyEmergencyLabel.textContent = 'Energy Emergency Threshold:';
+    energyEmergencyLabel.style.flex = '1';
+    const energyEmergencyInput = document.createElement('input');
+    energyEmergencyInput.type = 'range';
+    energyEmergencyInput.min = 0;
+    energyEmergencyInput.max = 20;
+    energyEmergencyInput.step = 1;
+    energyEmergencyInput.value = sidebarParams.energyEmergencyThreshold;
+    energyEmergencyInput.style.flex = '2';
+    const energyEmergencyVal = document.createElement('input');
+    energyEmergencyVal.type = 'number';
+    energyEmergencyVal.min = 0;
+    energyEmergencyVal.max = 20;
+    energyEmergencyVal.step = 1;
+    energyEmergencyVal.value = sidebarParams.energyEmergencyThreshold;
+    energyEmergencyVal.style.width = '60px';
+    energyEmergencyRow.appendChild(energyEmergencyLabel);
+    energyEmergencyRow.appendChild(energyEmergencyInput);
+    energyEmergencyRow.appendChild(energyEmergencyVal);
+    // 双方向同期＋sidebarParams更新
+    energyEmergencyInput.oninput = () => {
+        energyEmergencyVal.value = energyEmergencyInput.value;
+        sidebarParams.energyEmergencyThreshold = parseInt(energyEmergencyInput.value);
+        window.energyEmergencyThreshold = parseInt(energyEmergencyInput.value);
+    };
+    energyEmergencyVal.oninput = () => {
+        energyEmergencyInput.value = energyEmergencyVal.value;
+        sidebarParams.energyEmergencyThreshold = parseInt(energyEmergencyVal.value);
+        window.energyEmergencyThreshold = parseInt(energyEmergencyVal.value);
+    };
+    paramBox.appendChild(energyEmergencyRow);
+    energyEmergencyInput.disabled = paramDisabled;
+    energyEmergencyVal.disabled = paramDisabled;
+
+    // --- Home Return Hunger Level Slider ---
+    if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
+    const homeReturnRow = document.createElement('div');
+    homeReturnRow.style.display = 'flex';
+    homeReturnRow.style.alignItems = 'center';
+    homeReturnRow.style.gap = '10px';
+    const homeReturnLabel = document.createElement('span');
+    homeReturnLabel.textContent = 'Home Return Hunger Level:';
+    homeReturnLabel.style.flex = '1';
+    const homeReturnInput = document.createElement('input');
+    homeReturnInput.type = 'range';
+    homeReturnInput.min = 70;
+    homeReturnInput.max = 100;
+    homeReturnInput.step = 1;
+    homeReturnInput.value = sidebarParams.homeReturnHungerLevel;
+    homeReturnInput.style.flex = '2';
+    const homeReturnVal = document.createElement('input');
+    homeReturnVal.type = 'number';
+    homeReturnVal.min = 70;
+    homeReturnVal.max = 100;
+    homeReturnVal.step = 1;
+    homeReturnVal.value = sidebarParams.homeReturnHungerLevel;
+    homeReturnVal.style.width = '60px';
+    homeReturnRow.appendChild(homeReturnLabel);
+    homeReturnRow.appendChild(homeReturnInput);
+    homeReturnRow.appendChild(homeReturnVal);
+    // 双方向同期＋sidebarParams更新
+    homeReturnInput.oninput = () => {
+        homeReturnVal.value = homeReturnInput.value;
+        sidebarParams.homeReturnHungerLevel = parseInt(homeReturnInput.value);
+        window.homeReturnHungerLevel = parseInt(homeReturnInput.value);
+    };
+    homeReturnVal.oninput = () => {
+        homeReturnInput.value = homeReturnVal.value;
+        sidebarParams.homeReturnHungerLevel = parseInt(homeReturnVal.value);
+        window.homeReturnHungerLevel = parseInt(homeReturnVal.value);
+    };
+    paramBox.appendChild(homeReturnRow);
+    homeReturnInput.disabled = paramDisabled;
+    homeReturnVal.disabled = paramDisabled;
 
     // ランダム生成トグル
     const randomRow = document.createElement('div');
@@ -525,6 +658,11 @@ function renderCharacterDetail() {
                     window.initialAffinityMin = sidebarParams.initialAffinityMin;
                     window.initialAffinityMax = sidebarParams.initialAffinityMax;
                     window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
+                    window.socialThreshold = socialTh; // ← これが不足していました！
+                    window.perceptionRange = sidebarParams.perceptionRange;
+                    window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
+                    window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
+                    window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
                     // --- ここでグループ初期化 ---
                     import('./character.js').then(charMod => {
                         if (typeof charMod.Character?.initializeAllRelationships === 'function') {
