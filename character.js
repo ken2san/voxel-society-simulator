@@ -1874,7 +1874,6 @@ class Character {
             }
             return;
         }
-        // --- 既存の吹き出し・バッジ・ムード等の表示ロジック ---
         if (!this.thoughtBubble) return;
         let html = '';
         if (this.groupId) {
@@ -1888,29 +1887,22 @@ class Character {
             }
             html += '</span>';
         }
-        let icon = '';
-        switch (this.mood) {
-            case 'dead': icon = '💀'; break;
-            case 'tired': icon = '🛏️'; break;
-            case 'happy': icon = '😊'; break;
-            case 'social': icon = '💬'; break;
-            case 'hungry': icon = '🍎'; break;
-            case 'scared': icon = '😱'; break;
-            case 'lonely': icon = '😢'; break;
-            case 'excited': icon = '🎉'; break;
-            case 'confused': icon = '❓'; break;
-            case 'active': icon = '🚶'; break;
-            case 'neutral': icon = ''; break;
-            default: icon = ''; break;
-        }
-        if (this.state === 'socializing' && this.thoughtBubble.textContent === '❤️') {
-            icon = '❤️';
-        }
-        if (icon) {
-            html += ` <span style=\"font-size:0.98em;vertical-align:middle;\">${icon}</span>`;
-        }
+        // --- sidebar.jsの状態アイコンロジックを完全コピー ---
+        let icons = [];
+        if (this.state === 'dead') icons.push('💀');
+        else if (this.state === 'resting') icons.push('🛏️');
+        else if (this.state === 'socializing') icons.push('💬');
+        else if (this.state === 'moving' || this.state === 'active') icons.push('🚶');
+        // COLLECT_FOOD中は必ず🍎を表示
+        if (this.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
+        else if (this.needs && this.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
+        if (this.needs && this.needs.energy < 30) icons.push('💤');
+        if (this.needs && this.needs.social < 30) icons.push('👥');
+        if (icons.length === 0) icons.push('🙂');
+        html += icons.map(ic => ` <span style="font-size:0.98em;vertical-align:middle;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">${ic}</span>`).join('');
         if (html) {
             this.thoughtBubble.innerHTML = html;
+            console.log('thoughtBubble HTML:', html);
             this.thoughtBubble.setAttribute('data-show', 'true');
             const canvas = document.getElementById('gameCanvas');
             const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);

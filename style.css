@@ -5,7 +5,7 @@
 /* --- Voxel Society Simulator Styles --- */
 #gameCanvas { width: 100%; height: 65vh; background-color: rgba(255,255,255,0.01); }
 #minimapCanvas { width: 110px; height: 110px; background-color: #232946; border: 2.5px solid #3b82f6; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
-.thought-bubble { position: fixed; pointer-events: none; font-size: 2.1rem; font-weight: bold; text-shadow: 0 2px 8px rgba(0,0,0,0.18); transition: opacity 0.2s; z-index: 10; }
+.thought-bubble { position: fixed; pointer-events: none; font-size: 2.1rem; font-weight: bold; text-shadow: 0 2px 8px rgba(0,0,0,0.18); transition: opacity 0.2s; z-index: 10; display: flex; align-items: center; gap: 0.25em; overflow: visible; flex-wrap: nowrap; }
 .thought-bubble[data-show="true"] { opacity: 1; }
 .thought-bubble[data-show="false"] { opacity: 0; }
 @keyframes iconIn { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
