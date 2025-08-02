@@ -2697,22 +2697,42 @@ class Character {
             return;
         }
 
-        // Emergency: If completely stuck without home and no wood, try basic wood collection
-        if (!this.homePosition && !this.inventory.includes('WOOD_LOG')) {
-            const wood = this.findClosestWood();
-            if (wood && !this._lastWoodAttempt) {
-                this.log('🚨 EMERGENCY: No home, no wood - attempting basic collection');
-                this._lastWoodAttempt = Date.now();
-                this.setNextAction('CHOP_WOOD', wood, wood);
-                return;
+        // Emergency: If completely stuck without home and no wood, try basic wood collection (respecting UI priority)
+        // より厳しい条件: 空腹度が50以下かつ5回以上WANDERした場合のみ
+        if (!this.homePosition && !this.inventory.includes('WOOD_LOG') && this.needs.hunger <= 50) {
+            // カウンターがなければ初期化
+            if (!this._wanderCount) this._wanderCount = 0;
+            if (this.action && this.action.type === 'WANDER') {
+                this._wanderCount++;
             }
-            // Clear emergency flag after 10 seconds
-            if (this._lastWoodAttempt && Date.now() - this._lastWoodAttempt > 10000) {
-                this._lastWoodAttempt = null;
-            }
-        }
 
-        // === DELEGATE TO AI SYSTEMS ===
+            // 5回以上WANDERしてもまだ家がない場合のみ緊急処理
+            if (this._wanderCount >= 5) {
+                // UI優先度設定をチェック（さらに低い確率で実行）
+                const woodPriority = (typeof window !== 'undefined' && window.woodCollectionPriority) ? window.woodCollectionPriority : 50;
+                const shouldCollectWood = Math.random() * 100 < (woodPriority * 0.5); // 確率を半分に
+
+                const wood = this.findClosestWood();
+                if (wood && !this._lastWoodAttempt && shouldCollectWood) {
+                    this.log(`🚨 EMERGENCY: No home, no wood, low hunger - attempting basic collection (priority: ${woodPriority * 0.5}%)`);
+                    this._lastWoodAttempt = Date.now();
+                    this._wanderCount = 0; // リセット
+                    this.setNextAction('CHOP_WOOD', wood, wood);
+                    return;
+                } else if (wood && !shouldCollectWood) {
+                    this.log(`🚨 EMERGENCY: No home, no wood - but wood collection priority too low (${woodPriority * 0.5}%)`);
+                }
+            }
+
+            // Clear emergency flag after 15 seconds (10→15秒に延長)
+            if (this._lastWoodAttempt && Date.now() - this._lastWoodAttempt > 15000) {
+                this._lastWoodAttempt = null;
+                this._wanderCount = 0;
+            }
+        } else if (this.homePosition || this.inventory.includes('WOOD_LOG')) {
+            // 家があるか木材を持っている場合はカウンターリセット
+            this._wanderCount = 0;
+        }        // === DELEGATE TO AI SYSTEMS ===
 
         if (typeof window !== 'undefined' && window.aiMode === 'utility') {
             decideNextAction_utility(this, isNight);

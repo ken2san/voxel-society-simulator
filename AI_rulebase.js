@@ -55,15 +55,24 @@ export function decideNextAction_rulebase(character, isNight) {
     const shouldBuildHome = Math.random() * 100 < homeBuildingPriority;
 
     // デバッグログ
-    if (character.id === 0) {
+    if (character.id === 0 || character.id === 12) {
         character.log(`[DEBUG] homeBuildingPriority: ${homeBuildingPriority}%, shouldBuildHome: ${shouldBuildHome}`);
     }
 
-    // 優先順位が低い場合は家建設をスキップ
-    if (!shouldBuildHome) {
-        character.log(`🏠 HOME BUILDING SKIPPED (priority: ${homeBuildingPriority}%)`);
-    } else if ((character.needs.hunger >= homeBuildingHungerThreshold && !character.homePosition) || (character.provisionalHome && !character.homePosition)) {
-        character.log('🏠 HOME BUILDING PRIORITY: Well-fed but homeless or provisionalHome');
+    // 木材を持っている場合は優先度に関係なく家建設を試行
+    const hasWood = character.inventory[0] === 'WOOD_LOG';
+
+    // より厳格な条件: 優先度設定と満腹状態の両方を満たす場合、または木材を持っている場合
+    if ((shouldBuildHome || hasWood) &&
+        character.needs.hunger >= homeBuildingHungerThreshold &&
+        !character.homePosition &&
+        !character.provisionalHome) {
+
+        if (hasWood) {
+            character.log('🏠 HOME BUILDING PRIORITY: Has wood for construction');
+        } else {
+            character.log('🏠 HOME BUILDING PRIORITY: Well-fed but homeless (strict conditions met)');
+        }
 
         // まだ家が完成していない場合はBUILD_HOMEを継続
         if (character._buildingProgress && character._buildingProgress > 0 && character._buildingProgress < 25) {
@@ -89,6 +98,17 @@ export function decideNextAction_rulebase(character, isNight) {
             character.log('🏠 No wood found → WANDER');
             character.setNextAction('WANDER');
             return;
+        }
+    } else {
+        // より詳細なスキップ理由をログ出力
+        if (!shouldBuildHome && !hasWood) {
+            character.log(`🏠 HOME BUILDING SKIPPED (priority: ${homeBuildingPriority}%, no wood)`);
+        } else if (character.needs.hunger < homeBuildingHungerThreshold) {
+            character.log(`🏠 HOME BUILDING SKIPPED (hunger: ${character.needs.hunger.toFixed(1)} < ${homeBuildingHungerThreshold})`);
+        } else if (character.homePosition) {
+            character.log(`🏠 HOME BUILDING SKIPPED (already has home)`);
+        } else if (character.provisionalHome) {
+            character.log(`🏠 HOME BUILDING SKIPPED (has provisional home)`);
         }
     }
 
@@ -124,8 +144,8 @@ export function decideNextAction_rulebase(character, isNight) {
         if (character.inventory[0] === null) {
 
             // UI優先度設定をチェック
-            const woodPriority = (typeof window !== 'undefined' && window.woodCollectionPriority) ? window.woodCollectionPriority : 5;
-            const shouldCollectWood = Math.random() < (woodPriority / 10);
+            const woodPriority = (typeof window !== 'undefined' && window.woodCollectionPriority) ? window.woodCollectionPriority : 50;
+            const shouldCollectWood = Math.random() * 100 < woodPriority;
 
             // 家がなく、お腹が満たされている場合でも、UI優先度を尊重
             if (!character.homePosition && character.needs.hunger >= 70 && shouldCollectWood) {
