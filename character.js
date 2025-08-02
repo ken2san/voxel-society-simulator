@@ -468,25 +468,50 @@ class Character {
 
         if (blockId) {
             const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-            if (blockType && blockType.name === '木') {
+            // 木ブロックまたは葉ブロックから木材を取得可能
+            if (blockType && (blockType.name === '木' || blockType.name === '葉')) {
                 this._choppingProgress += 1;
 
-                // 段階的なアイコン表示
-                const stages = ['🪓', '⛏️', '🌲💥', '🪵'];
-                const currentStage = Math.floor(this._choppingProgress / 5) % stages.length;
+                // 段階的なアイコン表示（ブロックタイプに応じて変更）
+                let stages;
+                if (blockType.name === '葉') {
+                    stages = ['✂️', '🍃', '🍃💥', '🪵']; // 葉の場合
+                } else {
+                    stages = ['🪓', '⛏️', '🌲💥', '🪵']; // 木の幹の場合
+                }
+                const currentStage = Math.floor(this._choppingProgress / 2) % stages.length;
                 if (currentStage !== this._choppingStage) {
                     this.showActionIcon(stages[currentStage], 0.8);
                     this._choppingStage = currentStage;
                 }
 
-                // 完了判定
-                if (this._choppingProgress >= 15) {
+                // 完了判定（15→8に緩和で伐採時間半分）
+                if (this._choppingProgress >= 8) {
                     removeBlock && removeBlock(x, y, z);
-                    this.inventory[0] = 'WOOD_LOG';
-                    this.updateCarriedItemAppearance('WOOD_LOG');
-                    this.carriedItemMesh.visible = true;
-                    this.showActionIcon('✅🪵', 2.0);
-                    this.log('Successfully chopped wood', { x, y, z });
+
+                    // 2個の木材を取得（家建設を容易にするため）
+                    let woodAdded = 0;
+                    for (let i = 0; i < this.inventory.length && woodAdded < 2; i++) {
+                        if (this.inventory[i] === null) {
+                            this.inventory[i] = 'WOOD_LOG';
+                            woodAdded++;
+                        }
+                    }
+
+                    // carriedItemMeshを最初の非nullアイテムで更新
+                    const firstItem = this.inventory.find(item => item !== null);
+                    if (firstItem) {
+                        this.updateCarriedItemAppearance(firstItem);
+                        this.carriedItemMesh.visible = true;
+                    }
+
+                    // 完了アイコンをブロックタイプに応じて変更
+                    if (blockType.name === '葉') {
+                        this.showActionIcon('✅🍃🪵🪵', 2.0); // 葉から木材2個取得
+                    } else {
+                        this.showActionIcon('✅🪵🪵', 2.0); // 木から木材2個取得
+                    }
+                    this.log(`Successfully chopped ${blockType.name} - got ${woodAdded} logs`, { x, y, z });
 
                     this._choppingProgress = 0;
                     this._choppingStage = 0;
@@ -622,7 +647,7 @@ class Character {
         }
 
         // 材料チェック: 木材と石が必要
-        const hasWood = this.inventory[0] === 'WOOD_LOG';
+        const hasWood = this.inventory.some(item => item === 'WOOD_LOG');
         const hasStone = this.hasStoneNearby();
 
         if (!hasWood) {
@@ -663,7 +688,19 @@ class Character {
         // 完了判定
         if (this._craftingProgress >= 35) {
             // 材料を消費して道具作成
-            this.inventory[0] = 'STONE_TOOL';
+            // 木材を消費
+            const woodIndex = this.inventory.findIndex(item => item === 'WOOD_LOG');
+            if (woodIndex !== -1) {
+                this.inventory[woodIndex] = 'STONE_TOOL';
+                this.log('木材を消費して道具を作成');
+            } else {
+                // 空きスロットに道具を作成
+                const emptyIndex = this.inventory.findIndex(item => item === null);
+                if (emptyIndex !== -1) {
+                    this.inventory[emptyIndex] = 'STONE_TOOL';
+                }
+            }
+
             this.updateCarriedItemAppearance('STONE_TOOL'); // グレーに変更
             this.carriedItemMesh.visible = true;
             this.showActionIcon('🎉⚒️', 2.5);
@@ -685,28 +722,54 @@ class Character {
             this.log('BUILD_HOME: 建築開始');
         }
 
-        // 家建設の処理
-        if (this.inventory[0] === 'WOOD_LOG') {
+        // 家建設の処理 - 木材の在庫数をチェック
+        const woodCount = this.inventory.filter(item => item === 'WOOD_LOG').length;
+
+        if (woodCount > 0) {
             this._buildingProgress += 1;
-            this.log(`建築進行: ${this._buildingProgress}/25`);
+            this.log(`建築進行: ${this._buildingProgress}/20 (木材: ${woodCount}個)`);
 
             // 段階的な建築アイコン表示
             const stages = ['🔨', '🏗️', '🧱', '🏠', '✨🏡'];
             const messages = ['設計中...', '基礎工事中...', '壁を作成中...', '屋根を設置中...', '完成！'];
-            const currentStage = Math.floor(this._buildingProgress / 6) % stages.length;
+            const currentStage = Math.floor(this._buildingProgress / 5) % stages.length;
 
             if (currentStage !== this._buildingStage) {
                 this.showActionIcon(stages[currentStage], 1.2);
                 this._buildingStage = currentStage;
             }
 
-            // 完了判定
-            if (this._buildingProgress >= 25) {
+            // 5進捗ごとに木材を1つ消費（計4個の木材が必要）
+            if (this._buildingProgress % 5 === 0 && woodCount > 0) {
+                // 木材を1つ削除
+                const woodIndex = this.inventory.findIndex(item => item === 'WOOD_LOG');
+                if (woodIndex !== -1) {
+                    this.inventory[woodIndex] = null;
+                    this.log(`木材を1個使用 (残り: ${woodCount - 1}個)`);
+
+                    // 最初のスロットが空になったら見た目を更新
+                    if (woodIndex === 0) {
+                        const nextItem = this.inventory.find(item => item !== null);
+                        if (nextItem) {
+                            this.updateCarriedItemAppearance(nextItem);
+                        } else {
+                            this.carriedItemMesh.visible = false;
+                        }
+                    }
+                }
+            }
+
+            // 完了判定（必要進捗を25から20に削減）
+            if (this._buildingProgress >= 20) {
                 // 建設アイコンを表示
                 this.showActionIcon('�🏠', 3.0);
 
-                // 木材を消費
-                this.inventory[0] = null;
+                // 残りの木材を全部消費
+                for (let i = 0; i < this.inventory.length; i++) {
+                    if (this.inventory[i] === 'WOOD_LOG') {
+                        this.inventory[i] = null;
+                    }
+                }
                 this.carriedItemMesh.visible = false;
 
                 // 共通化メソッドで家完成処理
@@ -1383,7 +1446,8 @@ class Character {
         let minDist = Infinity, closest = null;
         for (const [key, id] of worldData.entries()) {
             const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
-            if (type && type.diggable && type.name === '木') {
+            // 木ブロックまたは葉ブロックを検索対象に
+            if (type && type.diggable && (type.name === '木' || type.name === '葉')) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
                 if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
@@ -1898,7 +1962,7 @@ class Character {
             let dropBlock = null;
             if (this.inventory[0] === 'STONE_TOOL' && BLOCK_TYPES.STONE) {
                 dropBlock = BLOCK_TYPES.STONE;
-            } else if (this.inventory[0] === 'WOOD_LOG' && BLOCK_TYPES.WOOD) {
+            } else if (this.inventory.some(item => item === 'WOOD_LOG') && BLOCK_TYPES.WOOD) {
                 dropBlock = BLOCK_TYPES.WOOD;
             } else if (this.inventory[0] === 'FRUIT_ITEM' && BLOCK_TYPES.FRUIT) {
                 dropBlock = BLOCK_TYPES.FRUIT;
