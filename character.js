@@ -27,6 +27,98 @@ function toScreenPosition(obj, camera, canvas = null) {
 
 
 class Character {
+    // --- 家完成処理の共通化 ---
+    completeHomeBuild(type, pos) {
+        // type: 'wood' | 'stone' | 'underground'
+        // pos: {x, y, z}
+        let bedBlock = BLOCK_TYPES.BED;
+        let wallBlock = BLOCK_TYPES.HOUSE_WALL;
+        let roofBlock = BLOCK_TYPES.HOUSE_ROOF;
+        // ベッド設置
+        if (typeof addBlock === 'function' && bedBlock) {
+            addBlock(pos.x, pos.y, pos.z, bedBlock, true);
+            this.log('Placed bed block at', pos);
+        }
+        // 壁・屋根設置
+        if (wallBlock && roofBlock) {
+            if (type === 'wood') {
+                // 木の家: 小型
+                const wallPositions = [
+                    {x: pos.x - 1, y: pos.y, z: pos.z},
+                    {x: pos.x + 1, y: pos.y, z: pos.z},
+                    {x: pos.x, y: pos.y, z: pos.z - 1},
+                    {x: pos.x, y: pos.y, z: pos.z + 1},
+                    {x: pos.x - 1, y: pos.y + 1, z: pos.z},
+                    {x: pos.x + 1, y: pos.y + 1, z: pos.z},
+                    {x: pos.x, y: pos.y + 1, z: pos.z - 1},
+                    {x: pos.x, y: pos.y + 1, z: pos.z + 1}
+                ];
+                for (const wallPos of wallPositions) {
+                    const key = `${wallPos.x},${wallPos.y},${wallPos.z}`;
+                    if (!worldData.has(key)) {
+                        addBlock(wallPos.x, wallPos.y, wallPos.z, wallBlock, false);
+                    }
+                }
+                const roofPos = {x: pos.x, y: pos.y + 2, z: pos.z};
+                const roofKey = `${roofPos.x},${roofPos.y},${roofPos.z}`;
+                if (!worldData.has(roofKey)) {
+                    addBlock(roofPos.x, roofPos.y, roofPos.z, roofBlock, false);
+                }
+            } else if (type === 'stone') {
+                // 石の家: 周囲1マス壁＋屋根
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        if (dx === 0 && dz === 0) continue;
+                        const wallKey = `${pos.x + dx},${pos.y},${pos.z + dz}`;
+                        if (!worldData.has(wallKey)) {
+                            addBlock(pos.x + dx, pos.y, pos.z + dz, wallBlock, true);
+                        }
+                    }
+                }
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dz = -1; dz <= 1; dz++) {
+                        const roofKey = `${pos.x + dx},${pos.y + 1},${pos.z + dz}`;
+                        if (!worldData.has(roofKey)) {
+                            addBlock(pos.x + dx, pos.y + 1, pos.z + dz, roofBlock, true);
+                        }
+                    }
+                }
+            } else if (type === 'underground') {
+                // 地下シェルター: ベッド＋上に壁
+                addBlock(pos.x, pos.y + 1, pos.z, wallBlock, true);
+            }
+        }
+        // 完了共通処理
+        this.homePosition = pos;
+        this.provisionalHome = null;
+        if (type === 'wood' || type === 'stone') {
+            this.buildCount = (this.buildCount || 0) + 1;
+        }
+        // フラグリセット
+        if (type === 'underground') {
+            this._diggingShelter = false;
+            this._shelterLocation = null;
+            this._provisionalHomeCount = 0;
+            this.showActionIcon('🏠✨', 3.0);
+        } else if (type === 'stone') {
+            this._buildingStoneHome = false;
+            this._stoneHomeLocation = null;
+            this._provisionalHomeCount = 0;
+            this.showActionIcon('🏠🗿', 3.0);
+        } else if (type === 'wood') {
+            this.inventory[0] = null;
+            this.carriedItemMesh.visible = false;
+            this.showActionIcon('🏠', 3.0);
+        }
+        this.log(`建築完了！ type=${type} buildCount=${this.buildCount || 0}`, this.homePosition);
+        this._buildingProgress = 0;
+        this._buildingStage = 0;
+        this._diggingProgress = 0;
+        this._diggingStage = 0;
+        this.state = 'idle';
+        this.action = null;
+        this.actionCooldown = (type === 'wood') ? 3.0 : 1.0;
+    }
     // --- 夜間に安全かどうか判定 ---
     isSafe(isNight) {
         if (!isNight) return true;
@@ -456,84 +548,25 @@ class Character {
 
                 this.log('Successfully destroyed block', { x, y, z });
 
-                // 地下シェルター建設チェック
-                if (this._diggingShelter && this._shelterLocation) {
-                    const shelterKey = `${this._shelterLocation.x},${this._shelterLocation.y},${this._shelterLocation.z}`;
-                    const targetKey = `${x},${y},${z}`;
-                    if (shelterKey === targetKey) {
-                        // 地下シェルター完成
-                        this.homePosition = this._shelterLocation;
-                        this.provisionalHome = null;
-                        this._diggingShelter = false;
-                        this._shelterLocation = null;
-                        this._provisionalHomeCount = 0;
-                        this.log('🏠 Underground shelter completed! Set as homePosition');
+        // 地下シェルター建設チェック
+        if (this._diggingShelter && this._shelterLocation) {
+            const shelterKey = `${this._shelterLocation.x},${this._shelterLocation.y},${this._shelterLocation.z}`;
+            const targetKey = `${x},${y},${z}`;
+            if (shelterKey === targetKey) {
+                // 地下シェルター完成（共通化メソッド呼び出し）
+                this.completeHomeBuild('underground', this._shelterLocation);
+            }
+        }
 
-                        // 地下シェルターにベッドブロックを設置
-                        if (typeof addBlock === 'function' && BLOCK_TYPES && BLOCK_TYPES.BED) {
-                            addBlock(x, y, z, BLOCK_TYPES.BED, true);
-                            this.log('🏠 Bed block placed in underground shelter');
-
-                            // 上にHOUSE_WALLを設置してより豪華にする
-                            if (BLOCK_TYPES.HOUSE_WALL) {
-                                addBlock(x, y + 1, z, BLOCK_TYPES.HOUSE_WALL, true);
-                                this.log('🏠 House wall placed above bed');
-                            }
-                        }
-
-                        this.showActionIcon('🏠✨', 3.0);
-                    }
-                }
-
-                // 石の家建設チェック
-                if (this._buildingStoneHome && this._stoneHomeLocation) {
-                    const stoneKey = `${this._stoneHomeLocation.x},${this._stoneHomeLocation.y},${this._stoneHomeLocation.z}`;
-                    const targetKey = `${x},${y},${z}`;
-                    if (stoneKey === targetKey) {
-                        // 石の家完成
-                        this.homePosition = this._stoneHomeLocation;
-                        this.provisionalHome = null;
-                        this._buildingStoneHome = false;
-                        this._stoneHomeLocation = null;
-                        this._provisionalHomeCount = 0;
-                        this.log('🏠 Stone home completed! Set as homePosition');
-
-                        // 石の家にベッドブロックを設置
-                        if (typeof addBlock === 'function' && BLOCK_TYPES && BLOCK_TYPES.BED) {
-                            addBlock(x, y, z, BLOCK_TYPES.BED, true);
-                            this.log('🏠 Bed block placed in stone home');
-
-                            // 周囲にHOUSE_WALLを設置して家らしくする
-                            if (BLOCK_TYPES.HOUSE_WALL) {
-                                for (let dx = -1; dx <= 1; dx++) {
-                                    for (let dz = -1; dz <= 1; dz++) {
-                                        if (dx === 0 && dz === 0) continue; // ベッドの位置は除く
-                                        const wallKey = `${x + dx},${y},${z + dz}`;
-                                        if (!worldData.has(wallKey)) {
-                                            addBlock(x + dx, y, z + dz, BLOCK_TYPES.HOUSE_WALL, true);
-                                        }
-                                    }
-                                }
-                                this.log('🏠 House walls placed around stone home');
-                            }
-
-                            // 屋根も設置
-                            if (BLOCK_TYPES.HOUSE_ROOF) {
-                                for (let dx = -1; dx <= 1; dx++) {
-                                    for (let dz = -1; dz <= 1; dz++) {
-                                        const roofKey = `${x + dx},${y + 1},${z + dz}`;
-                                        if (!worldData.has(roofKey)) {
-                                            addBlock(x + dx, y + 1, z + dz, BLOCK_TYPES.HOUSE_ROOF, true);
-                                        }
-                                    }
-                                }
-                                this.log('🏠 House roof placed on stone home');
-                            }
-                        }
-
-                        this.showActionIcon('🏠🗿', 3.0);
-                    }
-                }
+        // 石の家建設チェック
+        if (this._buildingStoneHome && this._stoneHomeLocation) {
+            const stoneKey = `${this._stoneHomeLocation.x},${this._stoneHomeLocation.y},${this._stoneHomeLocation.z}`;
+            const targetKey = `${x},${y},${z}`;
+            if (stoneKey === targetKey) {
+                // 石の家完成（共通化メソッド呼び出し）
+                this.completeHomeBuild('stone', this._stoneHomeLocation);
+            }
+        }
 
                 this._diggingProgress = 0;
                 this._diggingStage = 0;
@@ -646,69 +679,31 @@ class Character {
                 this.inventory[0] = null;
                 this.carriedItemMesh.visible = false;
 
-                // 現在位置に寝床ブロックを設置
+                // 共通化メソッドで家完成処理
                 const bedPos = { ...this.gridPos };
-                if (typeof addBlock === 'function' && BLOCK_TYPES.BED) {
-                    addBlock(bedPos.x, bedPos.y, bedPos.z, BLOCK_TYPES.BED, true);
-                    this.log('Placed bed block at', bedPos);
+                this.completeHomeBuild('wood', bedPos);
 
-                    // 家らしい構造を作る：壁と屋根を追加
-                    if (BLOCK_TYPES.HOUSE_WALL && BLOCK_TYPES.HOUSE_ROOF) {
-                        const wallPositions = [
-                            {x: bedPos.x - 1, y: bedPos.y, z: bedPos.z},     // 左壁
-                            {x: bedPos.x + 1, y: bedPos.y, z: bedPos.z},     // 右壁
-                            {x: bedPos.x, y: bedPos.y, z: bedPos.z - 1},     // 前壁
-                            {x: bedPos.x, y: bedPos.y, z: bedPos.z + 1},     // 後壁
-                            {x: bedPos.x - 1, y: bedPos.y + 1, z: bedPos.z}, // 左壁上
-                            {x: bedPos.x + 1, y: bedPos.y + 1, z: bedPos.z}, // 右壁上
-                            {x: bedPos.x, y: bedPos.y + 1, z: bedPos.z - 1}, // 前壁上
-                            {x: bedPos.x, y: bedPos.y + 1, z: bedPos.z + 1}  // 後壁上
-                        ];
+                // ベッドを設置したら1マス隣に移動（壁を避ける）
+                const directions = [
+                    {dx: 2, dz: 0}, {dx: -2, dz: 0},
+                    {dx: 0, dz: 2}, {dx: 0, dz: -2},
+                    {dx: 1, dz: 0}, {dx: -1, dz: 0},
+                    {dx: 0, dz: 1}, {dx: 0, dz: -1}
+                ];
+                for (const dir of directions) {
+                    const newX = this.gridPos.x + dir.dx;
+                    const newZ = this.gridPos.z + dir.dz;
+                    const newY = this.gridPos.y;
+                    const key = `${newX},${newY},${newZ}`;
+                    const below = `${newX},${newY-1},${newZ}`;
 
-                        // 壁を設置（空いている場所のみ）
-                        for (const wallPos of wallPositions) {
-                            const key = `${wallPos.x},${wallPos.y},${wallPos.z}`;
-                            if (!worldData.has(key)) {
-                                addBlock(wallPos.x, wallPos.y, wallPos.z, BLOCK_TYPES.HOUSE_WALL, false);
-                            }
-                        }
-
-                        // 屋根を設置
-                        const roofPos = {x: bedPos.x, y: bedPos.y + 2, z: bedPos.z};
-                        const roofKey = `${roofPos.x},${roofPos.y},${roofPos.z}`;
-                        if (!worldData.has(roofKey)) {
-                            addBlock(roofPos.x, roofPos.y, roofPos.z, BLOCK_TYPES.HOUSE_ROOF, false);
-                        }
-
-                        this.log('Built complete house with walls and roof!');
-                    }
-
-                    // ベッドを設置したら1マス隣に移動（壁を避ける）
-                    const directions = [
-                        {dx: 2, dz: 0}, {dx: -2, dz: 0},
-                        {dx: 0, dz: 2}, {dx: 0, dz: -2},
-                        {dx: 1, dz: 0}, {dx: -1, dz: 0},
-                        {dx: 0, dz: 1}, {dx: 0, dz: -1}
-                    ];
-                    for (const dir of directions) {
-                        const newX = this.gridPos.x + dir.dx;
-                        const newZ = this.gridPos.z + dir.dz;
-                        const newY = this.gridPos.y;
-                        const key = `${newX},${newY},${newZ}`;
-                        const below = `${newX},${newY-1},${newZ}`;
-
-                        // 移動先が空いていて足場があるかチェック
-                        if (!worldData.has(key) && worldData.has(below)) {
-                            this.gridPos = { x: newX, y: newY, z: newZ };
-                            this.updateWorldPosFromGrid();
-                            break;
-                        }
+                    // 移動先が空いていて足場があるかチェック
+                    if (!worldData.has(key) && worldData.has(below)) {
+                        this.gridPos = { x: newX, y: newY, z: newZ };
+                        this.updateWorldPosFromGrid();
+                        break;
                     }
                 }
-
-                this.homePosition = bedPos;
-                this.buildCount = (this.buildCount || 0) + 1;
-                this.log(`建築完了！ buildCount=${this.buildCount}`, this.homePosition);
 
                 this._buildingProgress = 0;
                 this._buildingStage = 0;
