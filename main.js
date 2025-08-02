@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -113,12 +113,14 @@ main();
 // Setup resource generation sliders
 function setupResourceSliders() {
     const treeSlider = document.getElementById('treeSlider');
+    const leafSlider = document.getElementById('leafSlider');
     const fruitSlider = document.getElementById('fruitSlider');
     const stoneSlider = document.getElementById('stoneSlider');
     const caveSlider = document.getElementById('caveSlider');
     const regenerateButton = document.getElementById('regenerateButton');
 
     const treeValue = document.getElementById('treeValue');
+    const leafValue = document.getElementById('leafValue');
     const fruitValue = document.getElementById('fruitValue');
     const stoneValue = document.getElementById('stoneValue');
     const caveValue = document.getElementById('caveValue');
@@ -126,6 +128,7 @@ function setupResourceSliders() {
     // Update display values
     function updateSliderValues() {
         if (treeValue) treeValue.textContent = Math.round(treeSlider.value * 100) + '%';
+        if (leafValue) leafValue.textContent = Math.round(leafSlider.value * 100) + '%';
         if (fruitValue) fruitValue.textContent = Math.round(fruitSlider.value * 100) + '%';
         if (stoneValue) stoneValue.textContent = Math.round(stoneSlider.value * 100) + '%';
         if (caveValue) caveValue.textContent = Math.round(caveSlider.value * 100) + '%';
@@ -135,6 +138,14 @@ function setupResourceSliders() {
     if (treeSlider) {
         treeSlider.addEventListener('input', (e) => {
             setTreeSpawnRate(parseFloat(e.target.value));
+            updateSliderValues();
+        });
+    }
+
+    // Leaf slider
+    if (leafSlider) {
+        leafSlider.addEventListener('input', (e) => {
+            setLeafSpawnRate(parseFloat(e.target.value));
             updateSliderValues();
         });
     }

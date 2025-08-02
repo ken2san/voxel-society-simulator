@@ -62,17 +62,20 @@ export let treeSpawnRate = 0.35; // 35% chance for trees (increased for more woo
 export let fruitSpawnRate = 0.30; // 30% chance for fruit
 export let stoneSpawnRate = 0.15; // 15% chance for stone
 export let caveSpawnRate = 0.10; // 10% chance for caves
+export let leafSpawnRate = 0.70; // 70% chance for leaf generation per position (controls leaf density)
 
 export function setTreeSpawnRate(rate) { treeSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setFruitSpawnRate(rate) { fruitSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setStoneSpawnRate(rate) { stoneSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setCaveSpawnRate(rate) { caveSpawnRate = Math.max(0, Math.min(1, rate)); }
+export function setLeafSpawnRate(rate) { leafSpawnRate = Math.max(0, Math.min(1, rate)); }
 
 // Export getters for current rates
 export function getTreeSpawnRate() { return treeSpawnRate; }
 export function getFruitSpawnRate() { return fruitSpawnRate; }
 export function getStoneSpawnRate() { return stoneSpawnRate; }
 export function getCaveSpawnRate() { return caveSpawnRate; }
+export function getLeafSpawnRate() { return leafSpawnRate; }
 
 export const worldData = new Map();
 export const visualBlocks = new Map();
@@ -134,10 +137,18 @@ export function generateTerrain() {
         if (!isPath && Math.random() < treeSpawnRate && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
             const treeHeight = height + Math.floor(Math.random() * 3) + 3;
             for (let y = height; y < treeHeight; y++) addBlock(x, y, z, BLOCK_TYPES.WOOD, false);
+            // 葉の生成（leafSpawnRateで密度制御）
             for(let dx = -1; dx <= 1; dx++) { for(let dz = -1; dz <= 1; dz++) {
-                if(dx !== 0 || dz !== 0) addBlock(x + dx, treeHeight -1, z + dz, BLOCK_TYPES.LEAF, false);
-                addBlock(x + dx, treeHeight, z + dz, BLOCK_TYPES.LEAF, false);
+                if(dx !== 0 || dz !== 0) {
+                    if (Math.random() < leafSpawnRate) {
+                        addBlock(x + dx, treeHeight -1, z + dz, BLOCK_TYPES.LEAF, false);
+                    }
+                }
+                if (Math.random() < leafSpawnRate) {
+                    addBlock(x + dx, treeHeight, z + dz, BLOCK_TYPES.LEAF, false);
+                }
             }}
+            // 木の頂上の葉（必ず生成）
             addBlock(x, treeHeight + 1, z, BLOCK_TYPES.LEAF, false);
         }
     }}
