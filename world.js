@@ -57,6 +57,23 @@ let DEBUG_MODE = false;
 export function setDEBUG_MODE(val) { DEBUG_MODE = val; }
 export function getDEBUG_MODE() { return DEBUG_MODE; }
 
+// Resource generation settings (controlled by sliders)
+export let treeSpawnRate = 0.35; // 35% chance for trees (increased for more wood)
+export let fruitSpawnRate = 0.30; // 30% chance for fruit
+export let stoneSpawnRate = 0.15; // 15% chance for stone
+export let caveSpawnRate = 0.10; // 10% chance for caves
+
+export function setTreeSpawnRate(rate) { treeSpawnRate = Math.max(0, Math.min(1, rate)); }
+export function setFruitSpawnRate(rate) { fruitSpawnRate = Math.max(0, Math.min(1, rate)); }
+export function setStoneSpawnRate(rate) { stoneSpawnRate = Math.max(0, Math.min(1, rate)); }
+export function setCaveSpawnRate(rate) { caveSpawnRate = Math.max(0, Math.min(1, rate)); }
+
+// Export getters for current rates
+export function getTreeSpawnRate() { return treeSpawnRate; }
+export function getFruitSpawnRate() { return fruitSpawnRate; }
+export function getStoneSpawnRate() { return stoneSpawnRate; }
+export function getCaveSpawnRate() { return caveSpawnRate; }
+
 export const worldData = new Map();
 export const visualBlocks = new Map();
 export const BLOCK_TYPES = {
@@ -92,7 +109,7 @@ export function generateTerrain() {
         const height = Math.floor(normalizedHeight * (maxHeight / 1.5)) + 1;
         // --- Cave generation: randomly carve out horizontal caves at mid-level ---
         let isCave = false;
-        if (!isPath && height > 4 && Math.random() < 0.10) {
+        if (!isPath && height > 4 && Math.random() < caveSpawnRate) {
             // 10% chance to make a cave at y = 2 or 3
             const caveY = 2 + Math.floor(Math.random() * 2);
             for (let y = 0; y < height; y++) {
@@ -111,10 +128,10 @@ export function generateTerrain() {
                 addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
             }
         }
-        if (!isPath && Math.random() < 0.3) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false);
-        // 石ブロックを表面に生成（確率15%）
-        if (!isPath && Math.random() < 0.15) addBlock(x, height, z, BLOCK_TYPES.STONE, false);
-        if (!isPath && Math.random() < 0.20 && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
+        if (!isPath && Math.random() < fruitSpawnRate) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false);
+        // 石ブロックを表面に生成（設定可能な確率）
+        if (!isPath && Math.random() < stoneSpawnRate) addBlock(x, height, z, BLOCK_TYPES.STONE, false);
+        if (!isPath && Math.random() < treeSpawnRate && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
             const treeHeight = height + Math.floor(Math.random() * 3) + 3;
             for (let y = height; y < treeHeight; y++) addBlock(x, y, z, BLOCK_TYPES.WOOD, false);
             for(let dx = -1; dx <= 1; dx++) { for(let dz = -1; dz <= 1; dz++) {

@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -86,6 +86,9 @@ async function init() {
             setDEBUG_MODE(debugToggle.checked);
         }
 
+        // Setup resource generation sliders
+        setupResourceSliders();
+
         animate();
     } catch (error) { console.error("Initialization Error:", error); }
 }
@@ -106,6 +109,108 @@ function main() {
     }
 }
 main();
+
+// Setup resource generation sliders
+function setupResourceSliders() {
+    const treeSlider = document.getElementById('treeSlider');
+    const fruitSlider = document.getElementById('fruitSlider');
+    const stoneSlider = document.getElementById('stoneSlider');
+    const caveSlider = document.getElementById('caveSlider');
+    const regenerateButton = document.getElementById('regenerateButton');
+
+    const treeValue = document.getElementById('treeValue');
+    const fruitValue = document.getElementById('fruitValue');
+    const stoneValue = document.getElementById('stoneValue');
+    const caveValue = document.getElementById('caveValue');
+
+    // Update display values
+    function updateSliderValues() {
+        if (treeValue) treeValue.textContent = Math.round(treeSlider.value * 100) + '%';
+        if (fruitValue) fruitValue.textContent = Math.round(fruitSlider.value * 100) + '%';
+        if (stoneValue) stoneValue.textContent = Math.round(stoneSlider.value * 100) + '%';
+        if (caveValue) caveValue.textContent = Math.round(caveSlider.value * 100) + '%';
+    }
+
+    // Tree slider
+    if (treeSlider) {
+        treeSlider.addEventListener('input', (e) => {
+            setTreeSpawnRate(parseFloat(e.target.value));
+            updateSliderValues();
+        });
+    }
+
+    // Fruit slider
+    if (fruitSlider) {
+        fruitSlider.addEventListener('input', (e) => {
+            setFruitSpawnRate(parseFloat(e.target.value));
+            updateSliderValues();
+        });
+    }
+
+    // Stone slider
+    if (stoneSlider) {
+        stoneSlider.addEventListener('input', (e) => {
+            setStoneSpawnRate(parseFloat(e.target.value));
+            updateSliderValues();
+        });
+    }
+
+    // Cave slider
+    if (caveSlider) {
+        caveSlider.addEventListener('input', (e) => {
+            setCaveSpawnRate(parseFloat(e.target.value));
+            updateSliderValues();
+        });
+    }
+
+    // Regenerate world button
+    if (regenerateButton) {
+        regenerateButton.addEventListener('click', () => {
+            regenerateWorld();
+        });
+    }
+
+    // Initialize display values
+    updateSliderValues();
+}
+
+// Function to regenerate the world with new settings
+function regenerateWorld() {
+    // Clear existing world data and visual blocks
+    worldData.clear();
+
+    // Remove all visual blocks from scene
+    for (const [key, block] of visualBlocks) {
+        if (block && block.parent) {
+            block.parent.remove(block);
+            if (block.geometry) block.geometry.dispose();
+            if (block.material) block.material.dispose();
+        }
+    }
+    visualBlocks.clear();
+
+    // Clear all characters
+    for (const char of characters) {
+        if (char.dispose) char.dispose();
+    }
+    characters.length = 0;
+    window.characters = characters;
+
+    // Regenerate terrain with new settings
+    generateTerrain();
+
+    // Spawn new characters
+    for (let i = 0; i < 8; i++) {
+        const pos = findValidSpawn();
+        if (pos) spawnCharacter(pos);
+    }
+
+    // Update sidebar if available
+    if (window.renderCharacterList) window.renderCharacterList();
+
+    console.log('World regenerated with new resource settings');
+}
+
 // --- デバッグ用: いつでもグループ状態を確認できるグローバル関数 ---
 window.logGroupStatus = function() {
     Character.detectGroupsAndElectLeaders(characters);

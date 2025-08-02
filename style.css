@@ -28,3 +28,64 @@ p { font-size: 1.15rem; color: #e0e7ef; }
 #messageText { color: #60a5fa; }
 #messageBoxCloseBtn { background: #3b82f6; color: #fff; border-radius: 1rem; }
 #debugToggle { accent-color: #3b82f6; }
+
+/* Resource slider styles */
+.range {
+  appearance: none;
+  background: linear-gradient(to right, #374151 0%, #6b7280 100%);
+  border-radius: 0.5rem;
+  height: 8px;
+  outline: none;
+}
+
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+  transition: all 0.2s ease;
+}
+
+.range::-webkit-slider-thumb:hover {
+  background: #60a5fa;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.6);
+}
+
+.range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+  transition: all 0.2s ease;
+}
+
+.range::-moz-range-thumb:hover {
+  background: #60a5fa;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.6);
+}
+
+.range-primary::-webkit-slider-thumb { background: #10b981; }
+.range-primary::-webkit-slider-thumb:hover { background: #34d399; }
+.range-secondary::-webkit-slider-thumb { background: #f59e0b; }
+.range-secondary::-webkit-slider-thumb:hover { background: #fbbf24; }
+.range-accent::-webkit-slider-thumb { background: #8b5cf6; }
+.range-accent::-webkit-slider-thumb:hover { background: #a78bfa; }
+.range-info::-webkit-slider-thumb { background: #06b6d4; }
+.range-info::-webkit-slider-thumb:hover { background: #22d3ee; }
+
+.range-primary::-moz-range-thumb { background: #10b981; }
+.range-primary::-moz-range-thumb:hover { background: #34d399; }
+.range-secondary::-moz-range-thumb { background: #f59e0b; }
+.range-secondary::-moz-range-thumb:hover { background: #fbbf24; }
+.range-accent::-moz-range-thumb { background: #8b5cf6; }
+.range-accent::-moz-range-thumb:hover { background: #a78bfa; }
+.range-info::-moz-range-thumb { background: #06b6d4; }
+.range-info::-moz-range-thumb:hover { background: #22d3ee; }
