@@ -26,65 +26,95 @@ function toScreenPosition(obj, camera, canvas = null) {
 // charactersはグローバル参照のまま（循環参照回避のため）
 
 
+// 家タイプごとの設定（今後拡張しやすい形で）
+const HOME_TYPES = {
+    wood: {
+        bed: 'BED',
+        wall: 'HOUSE_WALL',
+        roof: 'HOUSE_ROOF',
+        wallPositions: [
+            {dx: -1, dy: 0, dz: 0}, {dx: 1, dy: 0, dz: 0},
+            {dx: 0, dy: 0, dz: -1}, {dx: 0, dy: 0, dz: 1},
+            {dx: -1, dy: 1, dz: 0}, {dx: 1, dy: 1, dz: 0},
+            {dx: 0, dy: 1, dz: -1}, {dx: 0, dy: 1, dz: 1}
+        ],
+        roofPosition: {dx: 0, dy: 2, dz: 0}
+    },
+    stone: {
+        bed: 'BED',
+        wall: 'HOUSE_WALL',
+        roof: 'HOUSE_ROOF',
+        wallArea: 1, // 周囲1マス
+        roofArea: 1
+    },
+    underground: {
+        bed: 'BED',
+        wall: 'HOUSE_WALL',
+        roof: null // 屋根なし
+    }
+};
+
 class Character {
     // --- 家完成処理の共通化 ---
     completeHomeBuild(type, pos) {
         // type: 'wood' | 'stone' | 'underground'
         // pos: {x, y, z}
-        let bedBlock = BLOCK_TYPES.BED;
-        let wallBlock = BLOCK_TYPES.HOUSE_WALL;
-        let roofBlock = BLOCK_TYPES.HOUSE_ROOF;
+        const config = HOME_TYPES[type];
+        const bedBlock = BLOCK_TYPES[config.bed];
+        const wallBlock = BLOCK_TYPES[config.wall];
+        const roofBlock = config.roof ? BLOCK_TYPES[config.roof] : null;
         // ベッド設置
         if (typeof addBlock === 'function' && bedBlock) {
             addBlock(pos.x, pos.y, pos.z, bedBlock, true);
             this.log('Placed bed block at', pos);
         }
-        // 壁・屋根設置
-        if (wallBlock && roofBlock) {
+        // 壁・屋根設置（ロジック本体はまだtype分岐のまま）
+        if (wallBlock && (roofBlock !== undefined)) {
             if (type === 'wood') {
-                // 木の家: 小型
-                const wallPositions = [
-                    {x: pos.x - 1, y: pos.y, z: pos.z},
-                    {x: pos.x + 1, y: pos.y, z: pos.z},
-                    {x: pos.x, y: pos.y, z: pos.z - 1},
-                    {x: pos.x, y: pos.y, z: pos.z + 1},
-                    {x: pos.x - 1, y: pos.y + 1, z: pos.z},
-                    {x: pos.x + 1, y: pos.y + 1, z: pos.z},
-                    {x: pos.x, y: pos.y + 1, z: pos.z - 1},
-                    {x: pos.x, y: pos.y + 1, z: pos.z + 1}
-                ];
-                for (const wallPos of wallPositions) {
-                    const key = `${wallPos.x},${wallPos.y},${wallPos.z}`;
+                // 設定駆動で壁設置
+                for (const rel of config.wallPositions) {
+                    const wx = pos.x + rel.dx, wy = pos.y + rel.dy, wz = pos.z + rel.dz;
+                    const key = `${wx},${wy},${wz}`;
                     if (!worldData.has(key)) {
-                        addBlock(wallPos.x, wallPos.y, wallPos.z, wallBlock, false);
+                        addBlock(wx, wy, wz, wallBlock, false);
                     }
                 }
-                const roofPos = {x: pos.x, y: pos.y + 2, z: pos.z};
-                const roofKey = `${roofPos.x},${roofPos.y},${roofPos.z}`;
-                if (!worldData.has(roofKey)) {
-                    addBlock(roofPos.x, roofPos.y, roofPos.z, roofBlock, false);
+                // 設定駆動で屋根設置
+                if (config.roofPosition && roofBlock) {
+                    const rx = pos.x + config.roofPosition.dx, ry = pos.y + config.roofPosition.dy, rz = pos.z + config.roofPosition.dz;
+                    const roofKey = `${rx},${ry},${rz}`;
+                    if (!worldData.has(roofKey)) {
+                        addBlock(rx, ry, rz, roofBlock, false);
+                    }
                 }
             } else if (type === 'stone') {
-                // 石の家: 周囲1マス壁＋屋根
-                for (let dx = -1; dx <= 1; dx++) {
-                    for (let dz = -1; dz <= 1; dz++) {
+                // 設定駆動で壁設置
+                const area = config.wallArea || 1;
+                for (let dx = -area; dx <= area; dx++) {
+                    for (let dz = -area; dz <= area; dz++) {
                         if (dx === 0 && dz === 0) continue;
-                        const wallKey = `${pos.x + dx},${pos.y},${pos.z + dz}`;
+                        const wx = pos.x + dx, wy = pos.y, wz = pos.z + dz;
+                        const wallKey = `${wx},${wy},${wz}`;
                         if (!worldData.has(wallKey)) {
-                            addBlock(pos.x + dx, pos.y, pos.z + dz, wallBlock, true);
+                            addBlock(wx, wy, wz, wallBlock, true);
                         }
                     }
                 }
-                for (let dx = -1; dx <= 1; dx++) {
-                    for (let dz = -1; dz <= 1; dz++) {
-                        const roofKey = `${pos.x + dx},${pos.y + 1},${pos.z + dz}`;
-                        if (!worldData.has(roofKey)) {
-                            addBlock(pos.x + dx, pos.y + 1, pos.z + dz, roofBlock, true);
+                // 設定駆動で屋根設置
+                const roofArea = config.roofArea || 1;
+                if (roofBlock) {
+                    for (let dx = -roofArea; dx <= roofArea; dx++) {
+                        for (let dz = -roofArea; dz <= roofArea; dz++) {
+                            const rx = pos.x + dx, ry = pos.y + 1, rz = pos.z + dz;
+                            const roofKey = `${rx},${ry},${rz}`;
+                            if (!worldData.has(roofKey)) {
+                                addBlock(rx, ry, rz, roofBlock, true);
+                            }
                         }
                     }
                 }
             } else if (type === 'underground') {
-                // 地下シェルター: ベッド＋上に壁
+                // 設定駆動で壁設置（地下シェルターは上に1マス壁）
                 addBlock(pos.x, pos.y + 1, pos.z, wallBlock, true);
             }
         }
