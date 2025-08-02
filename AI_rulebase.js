@@ -49,35 +49,20 @@ export function decideNextAction_rulebase(character, isNight) {
         return;
     }
 
-    // === PRIORITY 3: HOME BUILDING (If well-fed but homeless or provisionalHome) ===
-    // 最善の木材ターゲット選択とprovisionalHomeからの復帰
-    function findClosestReachableWood() {
-        if (!character.findClosestWood) return null;
-        const woods = (typeof worldData !== 'undefined' && worldData) ? Array.from(worldData.entries()).filter(([key, val]) => {
-            if (typeof val === 'object' && val.id !== undefined) val = val.id;
-            return val === BLOCK_TYPES.WOOD.id;
-        }) : [];
-        let best = null;
-        let minDist = Infinity;
-        for (const [key,] of woods) {
-            const [x, y, z] = key.split(',').map(Number);
-            const wood = {x, y, z};
-            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(wood);
-            if (adjacentSpot) {
-                const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
-                if (testPath && testPath.length > 0) {
-                    const dist = Math.abs(character.gridPos.x - x) + Math.abs(character.gridPos.y - y) + Math.abs(character.gridPos.z - z);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        best = wood;
-                    }
-                }
-            }
-        }
-        return best;
+    // === PRIORITY 3: HOME BUILDING (Priority-configurable) ===
+    // UI設定の優先順位をチェック
+    const homeBuildingPriority = (typeof window !== 'undefined' && window.homeBuildingPriority !== undefined) ? window.homeBuildingPriority : 50;
+    const shouldBuildHome = Math.random() * 100 < homeBuildingPriority;
+
+    // デバッグログ
+    if (character.id === 0) {
+        character.log(`[DEBUG] homeBuildingPriority: ${homeBuildingPriority}%, shouldBuildHome: ${shouldBuildHome}`);
     }
 
-    if ((character.needs.hunger >= homeBuildingHungerThreshold && !character.homePosition) || (character.provisionalHome && !character.homePosition)) {
+    // 優先順位が低い場合は家建設をスキップ
+    if (!shouldBuildHome) {
+        character.log(`🏠 HOME BUILDING SKIPPED (priority: ${homeBuildingPriority}%)`);
+    } else if ((character.needs.hunger >= homeBuildingHungerThreshold && !character.homePosition) || (character.provisionalHome && !character.homePosition)) {
         character.log('🏠 HOME BUILDING PRIORITY: Well-fed but homeless or provisionalHome');
 
         // まだ家が完成していない場合はBUILD_HOMEを継続
@@ -91,309 +76,18 @@ export function decideNextAction_rulebase(character, isNight) {
         if (character.inventory[0] === 'WOOD_LOG') {
             character.log('🏠 Has wood → BUILD_HOME');
             character.setNextAction('BUILD_HOME');
-            // provisionalHome解除
-            if (character.provisionalHome) character.provisionalHome = null;
             return;
         }
 
-        // Check if we've been stuck trying to get wood (use shared failure tracking)
-        if (!character._woodFailureCount) character._woodFailureCount = 0;
-        if (!character._lastWoodTarget) character._lastWoodTarget = null;
-
-        // === 優先: 隣接する木材を直接チェック ===
-        character.log('🏠 Checking for adjacent wood blocks...');
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dz = -1; dz <= 1; dz++) {
-                    if (dx === 0 && dy === 0 && dz === 0) continue;
-                    const x = character.gridPos.x + dx, y = character.gridPos.y + dy, z = character.gridPos.z + dz;
-                    const key = `${x},${y},${z}`;
-                    let blockId = worldData.get(key);
-                    if (typeof blockId === 'object' && blockId.id !== undefined) blockId = blockId.id;
-                    if (blockId === BLOCK_TYPES.WOOD.id) {
-                        character.log(`🏠 Found adjacent wood at (${x},${y},${z}) → CHOP_WOOD (no movement needed)`);
-                        const wood = {x, y, z};
-                        character.setNextAction('CHOP_WOOD', wood, null); // moveTo=null で移動不要を明示
-                        if (character.provisionalHome) character.provisionalHome = null;
-                        return;
-                    }
-                }
-            }
-        }
-        character.log('🏠 No adjacent wood found, trying reachable wood...');
-
-        // 最善の木材ターゲットを選択
-        const wood = findClosestReachableWood();
+        // 木材を探す（シンプルなロジック）
+        const wood = character.findClosestWood();
         if (wood) {
-            const woodKey = `${wood.x},${wood.y},${wood.z}`;
-            if (character._lastWoodTarget === woodKey) {
-                character._woodFailureCount++;
-                character.log(`🏠 Stuck on same wood target (${character._woodFailureCount} attempts)`);
-            } else {
-                character._woodFailureCount = 0;
-                character._lastWoodTarget = woodKey;
-            }
-
-            // If we've failed too many times, try alternative strategies
-            if (character._woodFailureCount >= 3) {
-                character.log('🏠 Too many wood failures → alternative strategy');
-                character.provisionalHome = character.gridPos;
-                character._woodFailureCount = 0;
-                character._lastWoodTarget = null;
-                character.log('🏠 Created provisional home due to wood access issues');
-                character.setNextAction('WANDER');
-                return;
-            }
-
-            // 隣接しているかチェック（移動不要で即座に実行可能）
-            const dist = Math.abs(character.gridPos.x - wood.x) +
-                        Math.abs(character.gridPos.y - wood.y) +
-                        Math.abs(character.gridPos.z - wood.z);
-
-            if (dist === 1) {
-                // 隣接している場合は移動不要で即座にCHOP_WOOD実行
-                character.log('🏠 Adjacent wood → CHOP_WOOD (no movement needed)');
-                character.setNextAction('CHOP_WOOD', wood, null); // moveTo=null で移動不要を明示
-                if (character.provisionalHome) character.provisionalHome = null;
-                return;
-            } else {
-                // 隣接していない場合は従来通り移動が必要
-                const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(wood);
-                if (adjacentSpot) {
-                    const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
-                    if (testPath && testPath.length > 0) {
-                        character.log('🏠 No wood → CHOP_WOOD (reachable with valid path)');
-                        character.setNextAction('CHOP_WOOD', wood, adjacentSpot);
-                        // provisionalHome解除
-                        if (character.provisionalHome) character.provisionalHome = null;
-                        return;
-                    }
-                }
-            }
-            // ここに到達することはほぼないが、念のため障害物破壊
-            const blockingBlocks = character.findBlockingPath && character.findBlockingPath(wood);
-            if (blockingBlocks && blockingBlocks.length > 0) {
-                const targetBlock = blockingBlocks[0];
-                const digSpot = character.findAdjacentSpot && character.findAdjacentSpot(targetBlock);
-                if (digSpot) {
-                    character.log('🏠 Clearing path to wood → DESTROY_BLOCK (forced)');
-                    character.setNextAction('DESTROY_BLOCK', targetBlock, digSpot);
-                    return;
-                }
-            }
-            character.log('🏠 No blocking blocks found → exploring');
-            character.setNextAction('WANDER', null, wood);
+            character.log('🏠 Found wood → CHOP_WOOD');
+            character.setNextAction('CHOP_WOOD', wood, wood);
             return;
         } else {
-            character.log('🏠 No reachable wood found → exploring for wood');
-            // Create provisional home to prevent getting stuck in this state
-            if (!character.provisionalHome) {
-                character.provisionalHome = character.gridPos;
-                character.log('🏠 Created provisional home at current position');
-            }
-            // provisionalHome状態が続いた回数をカウント
-            if (!character._provisionalHomeCount) character._provisionalHomeCount = 0;
-            character._provisionalHomeCount++;
-
-            // 木が少ない環境での代替戦略
-            if (character._provisionalHomeCount >= 3) {
-                character.log('🏠 Few trees available: trying alternative home building');
-
-                // 代替戦略1: 石で簡易的な家を建てる
-                const stone = character.findClosestStone && character.findClosestStone();
-                if (stone) {
-                    const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(stone);
-                    if (adjacentSpot) {
-                        const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
-                        if (testPath && testPath.length > 0) {
-                            character.log('🏠 Using stone for emergency home → DESTROY_BLOCK (stone)');
-                            character.setNextAction('DESTROY_BLOCK', stone, adjacentSpot);
-                            character._provisionalHomeCount = 0;
-                            // 石の家建設フラグ
-                            character._buildingStoneHome = true;
-                            character._stoneHomeLocation = stone;
-                            return;
-                        }
-                    }
-                }
-
-                // 代替戦略2: 他のキャラクターから木材を取得
-                if (typeof window !== 'undefined' && window.characters) {
-                    const chars = window.characters.filter(c =>
-                        c.id !== character.id &&
-                        c.inventory[0] === 'WOOD_LOG' &&
-                        Math.abs(c.gridPos.x - character.gridPos.x) + Math.abs(c.gridPos.z - character.gridPos.z) <= 5
-                    );
-                    if (chars.length > 0) {
-                        const nearbyChar = chars[0];
-                        character.log('🏠 Requesting wood from nearby character');
-                        character.setNextAction('SOCIALIZE', nearbyChar, nearbyChar.gridPos);
-                        return;
-                    }
-                }
-
-                // 代替戦略3: 土を掘って地下の家を作る（安全チェック強化）
-                character.log('🏠 Checking for adjacent diggable blocks for shelter...');
-                // まず隣接する掘れるブロックを直接チェック
-                for (let dx = -1; dx <= 1; dx++) {
-                    for (let dy = -1; dy <= 1; dy++) {
-                        for (let dz = -1; dz <= 1; dz++) {
-                            if (dx === 0 && dy === 0 && dz === 0) continue;
-                            const x = character.gridPos.x + dx, y = character.gridPos.y + dy, z = character.gridPos.z + dz;
-                            if (y <= 1) continue; // 地面付近は避ける
-                            const key = `${x},${y},${z}`;
-                            let blockId = worldData.get(key);
-                            if (typeof blockId === 'object' && blockId.id !== undefined) blockId = blockId.id;
-                            if (blockId && blockId !== BLOCK_TYPES.AIR.id && blockId !== BLOCK_TYPES.BED.id) {
-                                // 安全チェック
-                                const isSafeToDigHere = character.isSafeToFallOrDig && character.isSafeToFallOrDig(x, y, z);
-                                if (isSafeToDigHere) {
-                                    // 掘った後のy座標から3段以内に必ずブロックがあるか厳密チェック
-                                    let belowY = y - 1;
-                                    let hasGround = false;
-                                    for (let i = 0; i < 3; i++) {
-                                        if (belowY < 0) break;
-                                        const keyBelow = `${x},${belowY},${z}`;
-                                        if (worldData.has(keyBelow)) {
-                                            hasGround = true;
-                                            break;
-                                        }
-                                        belowY--;
-                                    }
-                                    if (hasGround) {
-                                        character.log(`🏠 Found adjacent diggable block at (${x},${y},${z}) → DESTROY_BLOCK (no movement needed)`);
-                                        const diggableSpot = {x, y, z};
-                                        character.setNextAction('DESTROY_BLOCK', diggableSpot, null); // moveTo=null で移動不要を明示
-                                        character._provisionalHomeCount = 0;
-                                        character._diggingShelter = true;
-                                        character._shelterLocation = diggableSpot;
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                character.log('🏠 No adjacent diggable blocks found, trying findDiggableShelterSpot...');
-
-                const diggableSpot = character.findDiggableShelterSpot && character.findDiggableShelterSpot();
-                if (diggableSpot) {
-                    // 隣接しているかチェック（移動不要で即座に実行可能）
-                    const dist = Math.abs(character.gridPos.x - diggableSpot.x) +
-                                Math.abs(character.gridPos.y - diggableSpot.y) +
-                                Math.abs(character.gridPos.z - diggableSpot.z);
-
-                    if (dist === 1) {
-                        // 隣接している場合は移動不要で即座にDESTROY_BLOCK実行
-                        const isSafeToDigHere = character.isSafeToFallOrDig && character.isSafeToFallOrDig(diggableSpot.x, diggableSpot.y, diggableSpot.z);
-                        if (isSafeToDigHere) {
-                            character.log('🏠 Adjacent underground shelter → DESTROY_BLOCK (no movement needed)');
-                            character.setNextAction('DESTROY_BLOCK', diggableSpot, null); // moveTo=null で移動不要を明示
-                            character._provisionalHomeCount = 0;
-                            character._diggingShelter = true;
-                            character._shelterLocation = diggableSpot;
-                            return;
-                        }
-                    } else {
-                        // 隣接していない場合は従来通り移動が必要
-                        const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(diggableSpot);
-                        if (adjacentSpot) {
-                            // 追加安全チェック: 掘った後にキャラクターが落下しないか確認
-                            const isSafeToDigHere = character.isSafeToFallOrDig && character.isSafeToFallOrDig(diggableSpot.x, diggableSpot.y, diggableSpot.z);
-                            if (isSafeToDigHere) {
-                                character.log('🏠 Building underground shelter → DESTROY_BLOCK (dig shelter)');
-                                character.setNextAction('DESTROY_BLOCK', diggableSpot, adjacentSpot);
-                                character._provisionalHomeCount = 0;
-                                // 地下シェルターを掘ったら、それを家として設定
-                                character._diggingShelter = true;
-                                character._shelterLocation = diggableSpot;
-                                return;
-                            } else {
-                                character.log('🏠 Diggable shelter spot found but not safe to dig');
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 周囲の未探索エリアや木の多い方向へ優先的にWANDER
-            let wanderTarget = null;
-            let maxWoodCount = -1;
-            for (let dx = -5; dx <= 5; dx++) {
-                for (let dz = -5; dz <= 5; dz++) {
-                    if (dx === 0 && dz === 0) continue;
-                    const x = character.gridPos.x + dx, y = character.gridPos.y, z = character.gridPos.z + dz;
-                    let woodCount = 0;
-                    for (let ddx = -1; ddx <= 1; ddx++) {
-                        for (let ddz = -1; ddz <= 1; ddz++) {
-                            const key = `${x+ddx},${y},${z+ddz}`;
-                            let val = worldData.get(key);
-                            if (typeof val === 'object' && val.id !== undefined) val = val.id;
-                            if (val === BLOCK_TYPES.WOOD.id) woodCount++;
-                        }
-                    }
-                    if (woodCount > maxWoodCount) {
-                        maxWoodCount = woodCount;
-                        wanderTarget = {x, y, z};
-                    }
-                }
-            }
-            if (wanderTarget && maxWoodCount > 0) {
-                character.log('🏠 WANDER: moving toward wood-rich area');
-                character.setNextAction('WANDER', null, wanderTarget);
-            } else {
-                // 木が全くない場合は、より広範囲を探索
-                const expandedWanderSpots = [];
-                for (let dx = -8; dx <= 8; dx++) {
-                    for (let dz = -8; dz <= 8; dz++) {
-                        if (Math.abs(dx) < 3 && Math.abs(dz) < 3) continue;
-                        const x = character.gridPos.x + dx, y = character.gridPos.y, z = character.gridPos.z + dz;
-                        const key = `${x},${y},${z}`;
-                        const below = `${x},${y-1},${z}`;
-                        if (!worldData.has(key) && worldData.has(below)) {
-                            expandedWanderSpots.push({x, y, z});
-                        }
-                    }
-                }
-                if (expandedWanderSpots.length > 0) {
-                    const moveTo = expandedWanderSpots[Math.floor(Math.random() * expandedWanderSpots.length)];
-                    character.log('🏠 WANDER: expanding search for wood');
-                    character.setNextAction('WANDER', null, moveTo);
-                } else {
-                    character.setNextAction('WANDER');
-                }
-            }
-
-            // パスファインディング失敗が多発している場合の緊急対策
-            if (character._provisionalHomeCount >= 3) { // 5から3に変更してより早く発動
-                character.log('🏠 Pathfinding issues detected: trying emergency home building');
-                // 現在位置の足元にベッドを直接設置（移動不要）
-                const currentPos = character.gridPos;
-                const belowKey = `${currentPos.x},${currentPos.y-1},${currentPos.z}`;
-                if (worldData.has(belowKey)) {
-                    character.log('🏠 Emergency: Creating home at current position (no movement needed)');
-                    character.homePosition = currentPos;
-                    character.provisionalHome = null;
-                    character._provisionalHomeCount = 0;
-
-                    // 可能であればベッドブロックを設置
-                    if (typeof addBlock === 'function' && BLOCK_TYPES.BED) {
-                        addBlock(currentPos.x, currentPos.y, currentPos.z, BLOCK_TYPES.BED, true);
-                        character.log('🏠 Emergency bed placed at current position');
-                    }
-                    return;
-                }
-            }
-
-            // provisionalHome状態が長期間続いたら強制的な解決策
-            if (character._provisionalHomeCount >= 6) { // 8から6に変更
-                character.log('🏠 Long-term provisionalHome: accepting current location as home');
-                character.homePosition = character.provisionalHome;
-                character.provisionalHome = null;
-                character._provisionalHomeCount = 0;
-                character.log('🏠 Emergency: Set current location as home');
-                return;
-            }
+            character.log('🏠 No wood found → WANDER');
+            character.setNextAction('WANDER');
             return;
         }
     }
@@ -426,104 +120,40 @@ export function decideNextAction_rulebase(character, isNight) {
             }
         }
     } else if (character.role === 'worker') {
-        // Worker: Collect resources based on needs
+        // Worker: Collect resources based on UI priority settings
         if (character.inventory[0] === null) {
-            // High priority: If homeless and well-fed, always prefer wood over food
-            if (!character.homePosition && character.needs.hunger >= 70) {
-                // Use shared failure tracking system (same as Priority 3)
-                if (!character._woodFailureCount) character._woodFailureCount = 0;
-                if (!character._lastWoodTarget) character._lastWoodTarget = null;
 
+            // UI優先度設定をチェック
+            const woodPriority = (typeof window !== 'undefined' && window.woodCollectionPriority) ? window.woodCollectionPriority : 5;
+            const shouldCollectWood = Math.random() < (woodPriority / 10);
+
+            // 家がなく、お腹が満たされている場合でも、UI優先度を尊重
+            if (!character.homePosition && character.needs.hunger >= 70 && shouldCollectWood) {
                 const woodPos = character.findClosestWood();
                 if (woodPos) {
-                    // Check if we're stuck on the same wood target
-                    const woodKey = `${woodPos.x},${woodPos.y},${woodPos.z}`;
-                    if (character._lastWoodTarget === woodKey) {
-                        character._woodFailureCount++;
-                        character.log(`Worker: Stuck on same wood target (${character._woodFailureCount} attempts)`);
-                    } else {
-                        character._woodFailureCount = 0;
-                        character._lastWoodTarget = woodKey;
-                    }
-
-                    // If we've failed too many times, skip wood collection temporarily
-                    if (character._woodFailureCount >= 2) {
-                        character.log('Worker: Too many wood failures → skipping wood collection temporarily');
-                        character._woodFailureCount = 0;
-                        character._lastWoodTarget = null;
-                        // Force switch to food collection or wandering
-                    } else if (character._woodFailureCount >= 1) {
-                        // Even one failure means we should try a different approach
-                        character.log('Worker: Previous failure on same wood → trying alternative');
-                        // Don't attempt the same wood again, move on to food collection
-                    } else {
-                        const adjacentSpot = character.findAdjacentSpot(woodPos);
-                        if (adjacentSpot) {
-                            // Additional check: verify pathfinding will actually work
-                            const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
-                            if (testPath && testPath.length > 0) {
-                                character.log('Worker: Prioritizing wood for home building (verified path)');
-                                character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
-                                return;
-                            } else {
-                                character.log('Worker: Adjacent spot found but no valid path → switching strategies');
-                                // Don't attempt, proceed to food collection
-                            }
-                        } else {
-                            character.log('Worker: Wood unreachable, switching to food collection or wandering');
-                            // Don't get stuck on unreachable wood - switch strategies
-                        }
+                    const adjacentSpot = character.findAdjacentSpot(woodPos);
+                    if (adjacentSpot) {
+                        character.log(`Worker: Collecting wood (priority: ${woodPriority})`);
+                        character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
+                        return;
                     }
                 }
             }
 
-            // Need food? Collect it
+            // 食料が必要な場合は収集
             if (character.needs.hunger < 85) {
                 const foodPos = character.findClosestFood();
                 if (foodPos) {
                     const adjacentSpot = character.findAdjacentSpot(foodPos);
                     if (adjacentSpot) {
+                        character.log('Worker: Collecting food');
                         character.setNextAction('COLLECT_FOOD', foodPos, adjacentSpot);
                         return;
                     }
                 }
             }
-
-            // Fallback: try wood again, but only if we haven't been failing on it
-            if (!character._woodFailureCount || character._woodFailureCount < 2) {
-                const woodPos = character.findClosestWood();
-                if (woodPos) {
-                    // Check if this is the same wood we've been failing on
-                    const woodKey = `${woodPos.x},${woodPos.y},${woodPos.z}`;
-                    if (character._lastWoodTarget === woodKey && character._woodFailureCount >= 1) {
-                        character.log('Worker: Avoiding same failed wood target → exploring');
-                        character.setNextAction('WANDER');
-                        return;
-                    }
-
-                    const adjacentSpot = character.findAdjacentSpot(woodPos);
-                    if (adjacentSpot) {
-                        // Additional check: verify pathfinding will actually work
-                        const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
-                        if (testPath && testPath.length > 0) {
-                            character.setNextAction('CHOP_WOOD', woodPos, adjacentSpot);
-                            return;
-                        } else {
-                            character.log('Worker: Fallback wood has no valid path → exploring');
-                            character.setNextAction('WANDER');
-                            return;
-                        }
-                    } else {
-                        character.log('Worker: All wood unreachable → exploring');
-                        character.setNextAction('WANDER');
-                        return;
-                    }
-                }
-            } else {
-                character.log('Worker: Skipping wood fallback due to recent failures');
-            }
         } else {
-            // Have items? Store them if have home
+            // アイテムを持っている場合、家があれば保管
             if (character.homePosition) {
                 const storageSpot = character.findStorageSpot && character.findStorageSpot();
                 if (storageSpot) {
@@ -649,17 +279,6 @@ export function decideNextAction_rulebase(character, isNight) {
                     character.log('PRODUCTIVE WORK: Unsafe to dig here or no ground below, skipping');
                 }
             }
-        }
-    }
-
-    // === PRIORITY 11: EMERGENCY WOOD COLLECTION (If pathfinding consistently fails) ===
-    if (!character.homePosition && character.needs.hunger >= 70 && Math.random() < 0.4) {
-        character.log('🏠 Emergency wood collection attempt');
-        const woodPos = character.findClosestWood();
-        if (woodPos) {
-            // Try a more lenient approach - just move towards wood area
-            character.setNextAction('WANDER', null, woodPos);
-            return;
         }
     }
 

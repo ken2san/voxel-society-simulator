@@ -68,15 +68,16 @@ class Character {
             addBlock(pos.x, pos.y, pos.z, bedBlock, true);
             this.log('Placed bed block at', pos);
         }
-        // 壁・屋根設置（ロジック本体はまだtype分岐のまま）
-        if (wallBlock && (roofBlock !== undefined)) {
+        // 壁・屋根設置
+        if (wallBlock) {
             if (type === 'wood') {
                 // 設定駆動で壁設置
                 for (const rel of config.wallPositions) {
                     const wx = pos.x + rel.dx, wy = pos.y + rel.dy, wz = pos.z + rel.dz;
                     const key = `${wx},${wy},${wz}`;
                     if (!worldData.has(key)) {
-                        addBlock(wx, wy, wz, wallBlock, false);
+                        addBlock(wx, wy, wz, wallBlock, true);
+                        this.log('Placed wall block at', { x: wx, y: wy, z: wz });
                     }
                 }
                 // 設定駆動で屋根設置
@@ -84,7 +85,8 @@ class Character {
                     const rx = pos.x + config.roofPosition.dx, ry = pos.y + config.roofPosition.dy, rz = pos.z + config.roofPosition.dz;
                     const roofKey = `${rx},${ry},${rz}`;
                     if (!worldData.has(roofKey)) {
-                        addBlock(rx, ry, rz, roofBlock, false);
+                        addBlock(rx, ry, rz, roofBlock, true);
+                        this.log('Placed roof block at', { x: rx, y: ry, z: rz });
                     }
                 }
             } else if (type === 'stone') {
@@ -136,8 +138,7 @@ class Character {
             this._provisionalHomeCount = 0;
             this.showActionIcon('🏠🗿', 3.0);
         } else if (type === 'wood') {
-            this.inventory[0] = null;
-            this.carriedItemMesh.visible = false;
+            // 木の家完成時はインベントリクリア処理を削除（buildHome内で既に処理済み）
             this.showActionIcon('🏠', 3.0);
         }
         this.log(`建築完了！ type=${type} buildCount=${this.buildCount || 0}`, this.homePosition);
@@ -206,12 +207,23 @@ class Character {
                 this.state = 'moving';
                 break;
             case 'CHOP_WOOD':
-                // 木材収集: targetPosが設定されていない場合は隣接しているので即座に実行
-                if (this.targetPos) {
-                    this.log('⚡ CHOP_WOOD: Moving to target');
-                    this.state = 'moving';
+                // 木材収集: 2ブロック以内なら即座に実行、それ以外は移動
+                if (this.action.target) {
+                    const dist = Math.abs(this.gridPos.x - this.action.target.x) +
+                                Math.abs(this.gridPos.y - this.action.target.y) +
+                                Math.abs(this.gridPos.z - this.action.target.z);
+                    if (dist <= 2) {
+                        this.log('⚡ CHOP_WOOD: Within range, starting work immediately');
+                        this.state = 'working';
+                    } else if (this.targetPos) {
+                        this.log('⚡ CHOP_WOOD: Moving to target');
+                        this.state = 'moving';
+                    } else {
+                        this.log('⚡ CHOP_WOOD: No path, starting work anyway');
+                        this.state = 'working';
+                    }
                 } else {
-                    this.log('⚡ CHOP_WOOD: Adjacent target, starting work immediately');
+                    this.log('⚡ CHOP_WOOD: No target, starting work anyway');
                     this.state = 'working';
                 }
                 break;
@@ -466,6 +478,16 @@ class Character {
         const key = `${x},${y},${z}`;
         const blockId = worldData.get(key);
 
+        // 範囲内チェック（2ブロック以内なら伐採可能）
+        const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+        if (dist > 2) {
+            this.log('CHOP_WOOD: Target too far, distance:', dist);
+            this.state = 'idle';
+            this.action = null;
+            this.actionCooldown = 1.0;
+            return;
+        }
+
         if (blockId) {
             const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
             // 木ブロックまたは葉ブロックから木材を取得可能
@@ -485,20 +507,18 @@ class Character {
                     this._choppingStage = currentStage;
                 }
 
-                // 完了判定（15→8に緩和で伐採時間半分）
-                if (this._choppingProgress >= 8) {
-                    removeBlock && removeBlock(x, y, z);
+            // 完了判定（7→10に変更でさらに時間をかける）
+            if (this._choppingProgress >= 10) {
+                removeBlock && removeBlock(x, y, z);
 
-                    // 2個の木材を取得（家建設を容易にするため）
-                    let woodAdded = 0;
-                    for (let i = 0; i < this.inventory.length && woodAdded < 2; i++) {
-                        if (this.inventory[i] === null) {
-                            this.inventory[i] = 'WOOD_LOG';
-                            woodAdded++;
-                        }
+                // 1個の木材を取得（さらに控えめに調整）
+                let woodAdded = 0;
+                for (let i = 0; i < this.inventory.length && woodAdded < 1; i++) {
+                    if (this.inventory[i] === null) {
+                        this.inventory[i] = 'WOOD_LOG';
+                        woodAdded++;
                     }
-
-                    // carriedItemMeshを最初の非nullアイテムで更新
+                }                    // carriedItemMeshを最初の非nullアイテムで更新
                     const firstItem = this.inventory.find(item => item !== null);
                     if (firstItem) {
                         this.updateCarriedItemAppearance(firstItem);
@@ -507,9 +527,9 @@ class Character {
 
                     // 完了アイコンをブロックタイプに応じて変更
                     if (blockType.name === '葉') {
-                        this.showActionIcon('✅🍃🪵🪵', 2.0); // 葉から木材2個取得
+                        this.showActionIcon('✅🍃🪵', 3.0); // 葉から木材1個取得
                     } else {
-                        this.showActionIcon('✅🪵🪵', 2.0); // 木から木材2個取得
+                        this.showActionIcon('✅🪵', 3.0); // 木から木材1個取得
                     }
                     this.log(`Successfully chopped ${blockType.name} - got ${woodAdded} logs`, { x, y, z });
 
@@ -517,7 +537,7 @@ class Character {
                     this._choppingStage = 0;
                     this.state = 'idle';
                     this.action = null;
-                    this.actionCooldown = 1.0;
+                    this.actionCooldown = 5.0; // クールダウンをさらに長く（3→5秒）
                 }
                 return;
             }
@@ -674,19 +694,19 @@ class Character {
 
         // 段階的な制作プロセス
         this._craftingProgress += 1;
-        this.log(`作成進行: ${this._craftingProgress}/35`);
+        this.log(`作成進行: ${this._craftingProgress}/20`);
 
         const stages = ['🔨', '🪚', '⚒️', '🛠️', '✨🔧'];
         const messages = ['材料準備中...', '切削中...', '組み立て中...', '調整中...', '完成！'];
-        const currentStage = Math.floor(this._craftingProgress / 8) % stages.length;
+        const currentStage = Math.floor(this._craftingProgress / 4) % stages.length;
 
         if (currentStage !== this._craftingStage) {
             this.showActionIcon(stages[currentStage], 1.0);
             this._craftingStage = currentStage;
         }
 
-        // 完了判定
-        if (this._craftingProgress >= 35) {
+        // 完了判定（35→20に短縮で道具作成を高速化）
+        if (this._craftingProgress >= 20) {
             // 材料を消費して道具作成
             // 木材を消費
             const woodIndex = this.inventory.findIndex(item => item === 'WOOD_LOG');
@@ -726,43 +746,43 @@ class Character {
         const woodCount = this.inventory.filter(item => item === 'WOOD_LOG').length;
 
         if (woodCount > 0) {
+            // より慎重な建築進行（+1）
             this._buildingProgress += 1;
-            this.log(`建築進行: ${this._buildingProgress}/20 (木材: ${woodCount}個)`);
+            this.log(`建築進行: ${this._buildingProgress}/15 (木材: ${woodCount}個)`);
 
             // 段階的な建築アイコン表示
             const stages = ['🔨', '🏗️', '🧱', '🏠', '✨🏡'];
             const messages = ['設計中...', '基礎工事中...', '壁を作成中...', '屋根を設置中...', '完成！'];
-            const currentStage = Math.floor(this._buildingProgress / 5) % stages.length;
+            const currentStage = Math.floor(this._buildingProgress / 3) % stages.length;
 
             if (currentStage !== this._buildingStage) {
-                this.showActionIcon(stages[currentStage], 1.2);
+                this.showActionIcon(stages[currentStage], 1.0);
                 this._buildingStage = currentStage;
             }
 
-            // 5進捗ごとに木材を1つ消費（計4個の木材が必要）
-            if (this._buildingProgress % 5 === 0 && woodCount > 0) {
+            // 15進捗で木材を1つ消費（木材1個で家完成）
+            if (this._buildingProgress >= 15 && woodCount > 0) {
                 // 木材を1つ削除
                 const woodIndex = this.inventory.findIndex(item => item === 'WOOD_LOG');
                 if (woodIndex !== -1) {
                     this.inventory[woodIndex] = null;
                     this.log(`木材を1個使用 (残り: ${woodCount - 1}個)`);
 
-                    // 最初のスロットが空になったら見た目を更新
-                    if (woodIndex === 0) {
-                        const nextItem = this.inventory.find(item => item !== null);
-                        if (nextItem) {
-                            this.updateCarriedItemAppearance(nextItem);
-                        } else {
-                            this.carriedItemMesh.visible = false;
-                        }
+                    // インベントリの表示を更新（10スロット対応）
+                    const nextItem = this.inventory.find(item => item !== null);
+                    if (nextItem) {
+                        this.updateCarriedItemAppearance(nextItem);
+                        this.carriedItemMesh.visible = true;
+                    } else {
+                        this.carriedItemMesh.visible = false;
                     }
                 }
             }
 
-            // 完了判定（必要進捗を25から20に削減）
-            if (this._buildingProgress >= 20) {
+            // 完了判定（必要進捗を15に変更、より長い建設時間）
+            if (this._buildingProgress >= 15) {
                 // 建設アイコンを表示
-                this.showActionIcon('�🏠', 3.0);
+                this.showActionIcon('🏠', 3.0);
 
                 // 残りの木材を全部消費
                 for (let i = 0; i < this.inventory.length; i++) {
@@ -770,7 +790,14 @@ class Character {
                         this.inventory[i] = null;
                     }
                 }
-                this.carriedItemMesh.visible = false;
+                // インベントリに何か残っていれば表示、なければ非表示
+                const remainingItem = this.inventory.find(item => item !== null);
+                if (remainingItem) {
+                    this.updateCarriedItemAppearance(remainingItem);
+                    this.carriedItemMesh.visible = true;
+                } else {
+                    this.carriedItemMesh.visible = false;
+                }
 
                 // 共通化メソッドで家完成処理
                 const bedPos = { ...this.gridPos };
@@ -802,7 +829,7 @@ class Character {
                 this._buildingStage = 0;
                 this.state = 'idle';
                 this.action = null;
-                this.actionCooldown = 3.0;
+                this.actionCooldown = 12.0; // 建設後は非常に長い休憩（8→12秒）
             }
             return;
         }
@@ -1099,8 +1126,15 @@ class Character {
         return false;
     }
 
-    // --- BFSパスファインディング（障害物判定強化）---
-    bfsPath(start, goal, maxStep = 32) {
+    // --- BFSパスファインディング（超簡素化・必ず成功版）---
+    bfsPath(start, goal, maxStep = 128) {
+        // 距離が近い場合は直接移動を試す
+        const directDist = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y) + Math.abs(start.z - goal.z);
+        if (directDist <= 3) {
+            // 直接移動できそうな場合は簡単なパスを返す
+            return [goal];
+        }
+
         const queue = [];
         const visited = new Set();
         const parent = new Map();
@@ -1109,39 +1143,100 @@ class Character {
         visited.add(key(start));
         let found = false;
         let final = null;
-        while (queue.length > 0 && !found) {
+        let steps = 0;
+
+        while (queue.length > 0 && !found && steps < maxStep) {
             const cur = queue.shift();
+            steps++;
+
             if (cur.x === goal.x && cur.y === goal.y && cur.z === goal.z) {
                 found = true; final = cur; break;
             }
-            // 6方向+段差考慮
+
+            // 8方向の移動（上下左右前後斜め）+ より柔軟な移動
             const dirs = [
+                // 基本6方向
                 {dx:1,dy:0,dz:0},{dx:-1,dy:0,dz:0},{dx:0,dy:0,dz:1},{dx:0,dy:0,dz:-1},
-                {dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0}
+                {dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0},
+                // 斜め移動も追加
+                {dx:1,dy:0,dz:1},{dx:1,dy:0,dz:-1},{dx:-1,dy:0,dz:1},{dx:-1,dy:0,dz:-1},
+                // 段差移動
+                {dx:1,dy:1,dz:0},{dx:-1,dy:1,dz:0},{dx:0,dy:1,dz:1},{dx:0,dy:1,dz:-1}
             ];
+
             for (const d of dirs) {
                 let nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
-                if (ny < 0 || ny > maxHeight) continue;
+
+                // 高さ制限チェック（より緩い）
+                if (ny < -5 || ny > maxHeight + 5) continue;
+
                 const nkey = `${nx},${ny},${nz}`;
                 if (visited.has(nkey)) continue;
-                // 足場チェック: 下にブロックがある or 今いる場所が地面
-                const below = `${nx},${ny-1},${nz}`;
-                const curBelow = `${cur.x},${cur.y-1},${cur.z}`;
-                if (!worldData.has(below) && !worldData.has(curBelow)) continue;
-                // --- 障害物判定強化 ---
+
+                // 移動先の障害物チェック（さらに簡素化）
                 const blockId = worldData.get(nkey);
-                // BEDは通過可能、それ以外は障害物
-                if (blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id && blockId !== BLOCK_TYPES.BED?.id) continue;
-                // 他キャラがいる場合も障害物
-                if (this.isOccupiedByOther(nx, ny, nz)) continue;
-                // 段差・ジャンプ: 1段上までOK
-                if (Math.abs(ny - cur.y) > 1) continue;
+                if (blockId !== undefined && blockId !== null) {
+                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                    // 木や葉ブロックは通れる（伐採対象のため）
+                    if (blockType && blockType.name !== '木' && blockType.name !== '葉' &&
+                        blockId !== BLOCK_TYPES.AIR?.id && blockId !== BLOCK_TYPES.BED?.id) {
+                        continue;
+                    }
+                }
+
+                // 足場チェックを大幅に緩和
+                if (d.dy >= 0 && ny > 0) { // 上昇移動の場合のみチェック
+                    const below = `${nx},${ny-1},${nz}`;
+                    const hasFooting = worldData.has(below) || ny <= 2; // 地面から2ブロック以内はOK
+                    if (!hasFooting && Math.random() > 0.7) continue; // 30%の確率で足場なしでも通る
+                }
+
+                // 段差制限を緩和：5ブロック以上の上昇は不可
+                if (d.dy > 0 && Math.abs(ny - cur.y) > 5) continue;
+
                 queue.push({x:nx,y:ny,z:nz});
                 visited.add(nkey);
                 parent.set(nkey, cur);
             }
         }
-        if (!found) return null;
+
+        // 見つからない場合でも部分的なパスを返す
+        if (!found && queue.length > 0) {
+            // 目標に最も近いポイントを選ぶ
+            let bestNode = null;
+            let bestDistance = Infinity;
+            for (const node of queue) {
+                const dist = Math.abs(node.x - goal.x) + Math.abs(node.y - goal.y) + Math.abs(node.z - goal.z);
+                if (dist < bestDistance) {
+                    bestDistance = dist;
+                    bestNode = node;
+                }
+            }
+            if (bestNode) {
+                final = bestNode;
+                found = true;
+            }
+        }
+
+        if (!found) {
+            // 最後の手段：直線的なパスを生成
+            const path = [];
+            const dx = goal.x > start.x ? 1 : goal.x < start.x ? -1 : 0;
+            const dz = goal.z > start.z ? 1 : goal.z < start.z ? -1 : 0;
+            const dy = goal.y > start.y ? 1 : goal.y < start.y ? -1 : 0;
+
+            let currentX = start.x, currentY = start.y, currentZ = start.z;
+            let steps = 0;
+            while ((currentX !== goal.x || currentY !== goal.y || currentZ !== goal.z) && steps < 20) {
+                if (currentX !== goal.x) currentX += dx;
+                if (currentZ !== goal.z) currentZ += dz;
+                if (currentY !== goal.y) currentY += dy;
+                path.push({x: currentX, y: currentY, z: currentZ});
+                steps++;
+            }
+            return path.length > 0 ? path : null;
+        }
+
         // 経路復元
         const path = [];
         let cur = final;
@@ -1233,7 +1328,7 @@ class Character {
         // AI & State
         this.gridPos = startPos;
         this.homePosition = null; this.provisionalHome = null;
-        this.inventory = [null];
+        this.inventory = [null, null, null, null, null, null, null, null, null, null]; // 10スロットに拡張
         this.needs = {
             hunger: 80 + Math.random() * 10,
             energy: 80 + Math.random() * 10,
@@ -1444,15 +1539,21 @@ class Character {
 
     findClosestWood() {
         let minDist = Infinity, closest = null;
+        // 認識範囲を元に戻す（5→4に調整）
+        const searchRange = 4;
         for (const [key, id] of worldData.entries()) {
             const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
             // 木ブロックまたは葉ブロックを検索対象に
             if (type && type.diggable && (type.name === '木' || type.name === '葉')) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+                if (dist < minDist && dist <= searchRange) {
+                    minDist = dist;
+                    closest = {x, y, z};
+                }
             }
         }
+
         return closest;
     }
 
@@ -2030,6 +2131,40 @@ class Character {
             this.path = this.bfsPath(this.gridPos, this.targetPos);
             this.lastTargetPos = { ...this.targetPos };
             if (!this.path || this.path.length === 0) {
+                // --- CHOP_WOOD特化: 木材収集失敗時の積極的対処 ---
+                if (this.action && this.action.type === 'CHOP_WOOD') {
+                    this.log('CHOP_WOOD pathfinding failed, trying alternative approach');
+
+                    // 近くの木材を再検索（範囲を拡大）
+                    const alternativeWood = this.findClosestWood();
+                    if (alternativeWood && alternativeWood !== this.action.target) {
+                        this.log('Found alternative wood target, switching');
+                        this.action.target = alternativeWood;
+                        this.targetPos = alternativeWood;
+                        this.path = this.bfsPath(this.gridPos, this.targetPos);
+                        if (this.path && this.path.length > 0) {
+                            this.bfsFailCount = 0;
+                            return; // 成功した場合は続行
+                        }
+                    }
+
+                    // それでも失敗した場合、近距離なら強制実行
+                    const currentTarget = this.action.target || alternativeWood;
+                    if (currentTarget) {
+                        const dist = Math.abs(this.gridPos.x - currentTarget.x) +
+                                    Math.abs(this.gridPos.y - currentTarget.y) +
+                                    Math.abs(this.gridPos.z - currentTarget.z);
+                        if (dist <= 3) { // 3ブロック以内なら強制実行
+                            this.log('CHOP_WOOD: Force execution within 3 blocks, distance:', dist);
+                            this.state = 'working';
+                            this.targetPos = null;
+                            this.path = null;
+                            this.executeAction();
+                            return;
+                        }
+                    }
+                }
+
                 // --- 追加: COLLECT_FOOD時はターゲットを失敗リストに追加 ---
                 if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target) {
                     const {x, y, z} = this.action.target;
@@ -2562,7 +2697,23 @@ class Character {
             return;
         }
 
+        // Emergency: If completely stuck without home and no wood, try basic wood collection
+        if (!this.homePosition && !this.inventory.includes('WOOD_LOG')) {
+            const wood = this.findClosestWood();
+            if (wood && !this._lastWoodAttempt) {
+                this.log('🚨 EMERGENCY: No home, no wood - attempting basic collection');
+                this._lastWoodAttempt = Date.now();
+                this.setNextAction('CHOP_WOOD', wood, wood);
+                return;
+            }
+            // Clear emergency flag after 10 seconds
+            if (this._lastWoodAttempt && Date.now() - this._lastWoodAttempt > 10000) {
+                this._lastWoodAttempt = null;
+            }
+        }
+
         // === DELEGATE TO AI SYSTEMS ===
+
         if (typeof window !== 'undefined' && window.aiMode === 'utility') {
             decideNextAction_utility(this, isNight);
         } else {
@@ -2574,9 +2725,7 @@ class Character {
             this.log('⚠️ No action chosen by AI, falling back to WANDER');
             this.setNextAction('WANDER');
         }
-    }
-
-    updateColorFromPersonality() {
+    }    updateColorFromPersonality() {
         const r = Math.max(0, Math.min(1, 0.2 + (this.personality.bravery - 0.5)));
         const g = Math.max(0, Math.min(1, 0.2 + (this.personality.diligence - 0.5)));
         const b = 0.3;
