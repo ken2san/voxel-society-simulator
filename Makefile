@@ -13,4 +13,8 @@ deploy:
 	  --region $(REGION) \
 	  --allow-unauthenticated
 
+clean:
+	docker image prune -f
+	docker rmi $(IMAGE) 2>/dev/null || true
+
 all: build deploy

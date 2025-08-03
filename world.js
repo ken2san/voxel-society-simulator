@@ -1,3 +1,8 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { PerlinNoise } from './utils.js';
+import { Character } from './character.js';
+
 // キャラ3Dオブジェクトをsceneから全削除する関数
 export function removeAllCharacterObjects() {
     if (!scene || !scene.children) return;
@@ -24,10 +29,6 @@ export function removeAllCharacterObjects() {
         });
     }
 }
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { PerlinNoise } from './utils.js';
-import { Character } from './character.js';
 
 let scene, camera, renderer, controls, ambientLight, directionalLight;
 let gameCanvas, minimapCanvas, minimapCtx;
