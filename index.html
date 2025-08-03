@@ -28,7 +28,15 @@
     </style>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="sidebar.css">
-    <!-- three.jsとOrbitControlsはESMでimportするためscriptタグ不要 -->
+    <!-- Import map for Three.js ESM imports -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://esm.sh/three@0.178.0",
+            "three/examples/jsm/controls/OrbitControls.js": "https://esm.sh/three@0.178.0/examples/jsm/controls/OrbitControls.js"
+        }
+    }
+    </script>
     <script type="module" src="main.js"></script>
     <script type="module" src="sidebar.js"></script>
 </head>
