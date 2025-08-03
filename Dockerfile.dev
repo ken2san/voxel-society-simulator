@@ -2,10 +2,18 @@ FROM node:20
 
 WORKDIR /app
 
-COPY package*.json ./
+# Use development package.json with Three.js dependency
+COPY package.dev.json package.json
+COPY package-lock.json* ./
 RUN npm ci
 
 COPY . .
+
+# Use development vite config
+COPY vite.config.dev.js vite.config.js
+
+# Clear Vite cache to ensure clean start
+RUN rm -rf node_modules/.vite 2>/dev/null || true
 
 EXPOSE 8080
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

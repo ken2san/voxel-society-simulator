@@ -18,7 +18,8 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    exclude: ['three', 'three/examples/jsm/controls/OrbitControls.js']
+    exclude: ['three', 'three/examples/jsm/controls/OrbitControls.js'],
+    force: true // Force re-optimization to ensure import maps work
   },
   define: {
     // Cloud Run environment detection
