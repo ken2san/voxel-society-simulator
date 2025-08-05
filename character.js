@@ -1177,6 +1177,36 @@ class Character {
         return dirs;
     }
 
+    // --- 当たり判定ヘルパーメソッド ---
+    isBlockPassable(blockId) {
+        if (blockId === undefined || blockId === null) return true;
+
+        const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+        if (!blockType) return true;
+
+        const passableBlocks = ['空気', '木', '葉', '果実'];
+        return passableBlocks.includes(blockType.name) ||
+               blockType.isBed ||
+               blockId === BLOCK_TYPES.AIR?.id;
+    }
+
+    // --- 移動可能性チェック（当たり判定＋頭上チェック） ---
+    canMoveToPosition(x, y, z) {
+        // 移動先の障害物チェック
+        const blockId = worldData.get(`${x},${y},${z}`);
+        if (!this.isBlockPassable(blockId)) {
+            return { canMove: false, reason: 'blocked_by_solid' };
+        }
+
+        // 頭上チェック（キャラクターの高さを考慮）
+        const aboveBlockId = worldData.get(`${x},${y + 1},${z}`);
+        if (!this.isBlockPassable(aboveBlockId)) {
+            return { canMove: false, reason: 'blocked_by_ceiling' };
+        }
+
+        return { canMove: true };
+    }
+
     // --- 統一された経路探索システム ---
     findPathTo(destination, options = {}) {
         const {
@@ -1230,19 +1260,8 @@ class Character {
 
                 // 移動先の障害物チェック（より厳密に）
                 const blockId = worldData.get(nkey);
-                if (blockId !== undefined && blockId !== null) {
-                    const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                    if (blockType) {
-                        // 通行可能なブロックタイプを明示的に定義
-                        const passableBlocks = ['空気', '木', '葉', '果実'];
-                        const isPassable = passableBlocks.includes(blockType.name) ||
-                                         blockType.isBed ||
-                                         blockId === BLOCK_TYPES.AIR?.id;
-
-                        if (!isPassable) {
-                            continue; // ソリッドブロックは通れない
-                        }
-                    }
+                if (!this.isBlockPassable(blockId)) {
+                    continue; // ソリッドブロックは通れない
                 }
 
                 // 足場チェック（下降・水平移動時も適用）
@@ -1256,14 +1275,9 @@ class Character {
                 }
 
                 // 頭上チェック（キャラクターの高さを考慮）
-                const above = `${nx},${ny+1},${nz}`;
-                const aboveBlockId = worldData.get(above);
-                if (aboveBlockId !== undefined && aboveBlockId !== null) {
-                    const aboveBlockType = Object.values(BLOCK_TYPES).find(t => t.id === aboveBlockId);
-                    if (aboveBlockType && !['空気', '木', '葉', '果実'].includes(aboveBlockType.name) &&
-                        aboveBlockId !== BLOCK_TYPES.AIR?.id) {
-                        continue; // 頭上にソリッドブロックがある場合は移動不可
-                    }
+                const aboveBlockId = worldData.get(`${nx},${ny+1},${nz}`);
+                if (!this.isBlockPassable(aboveBlockId)) {
+                    continue; // 頭上にソリッドブロックがある場合は移動不可
                 }
 
                 // 段差制限：2ブロック以上の上昇は不可
@@ -2220,11 +2234,7 @@ class Character {
 
         // メッシュ位置更新
         if (updateMesh && this.mesh) {
-            this.mesh.position.set(
-                newGridPos.x * gridSize,
-                newGridPos.y * gridSize,
-                newGridPos.z * gridSize
-            );
+            this.updateWorldPosFromGrid();
         }
 
         // 移動距離記録
@@ -2445,41 +2455,13 @@ class Character {
         const moveDistance = this.movementSpeed * deltaTime;
         if (direction.length() < moveDistance) {
             // 移動実行前の最終当たり判定チェック
-            const nextKey = `${next.x},${next.y},${next.z}`;
-            const blockId = worldData.get(nextKey);
-
-            // ソリッドブロックが移動先にある場合は移動をキャンセル
-            if (blockId !== undefined && blockId !== null) {
-                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                if (blockType) {
-                    const passableBlocks = ['空気', '木', '葉', '果実'];
-                    const isPassable = passableBlocks.includes(blockType.name) ||
-                                     blockType.isBed ||
-                                     blockId === BLOCK_TYPES.AIR?.id;
-
-                    if (!isPassable) {
-                        this.log('Movement blocked by solid block at target position:', next);
-                        this.path = []; // パスをクリアして再計算を促す
-                        this.state = 'idle';
-                        this.actionCooldown = 0.5;
-                        return;
-                    }
-                }
-            }
-
-            // 頭上チェック
-            const aboveKey = `${next.x},${next.y + 1},${next.z}`;
-            const aboveBlockId = worldData.get(aboveKey);
-            if (aboveBlockId !== undefined && aboveBlockId !== null) {
-                const aboveBlockType = Object.values(BLOCK_TYPES).find(t => t.id === aboveBlockId);
-                if (aboveBlockType && !['空気', '木', '葉', '果実'].includes(aboveBlockType.name) &&
-                    aboveBlockId !== BLOCK_TYPES.AIR?.id) {
-                    this.log('Movement blocked by ceiling at target position:', next);
-                    this.path = [];
-                    this.state = 'idle';
-                    this.actionCooldown = 0.5;
-                    return;
-                }
+            const moveCheck = this.canMoveToPosition(next.x, next.y, next.z);
+            if (!moveCheck.canMove) {
+                this.log(`Movement blocked: ${moveCheck.reason} at target position:`, next);
+                this.path = []; // パスをクリアして再計算を促す
+                this.state = 'idle';
+                this.actionCooldown = 0.5;
+                return;
             }
 
             this.mesh.position.copy(targetWorldPos);
@@ -3149,7 +3131,7 @@ class Character {
                             this.gridPos.x = x;
                             this.gridPos.y = y;
                             this.gridPos.z = z;
-                            this.mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
+                this.updateWorldPosFromGrid();
                             this._movementStuckTimer = 0;
                             this._positionHistory = []; // 履歴をクリア
                             this.log('Rescued from movement stuck: teleported to', {x, y, z});
@@ -3208,7 +3190,7 @@ class Character {
                     this.gridPos.x = escape.x;
                     this.gridPos.y = escape.y;
                     this.gridPos.z = escape.z;
-                    this.mesh.position.set(escape.x + 0.5, escape.y + 0.5, escape.z + 0.5);
+            this.updateWorldPosFromGrid();
                     this._cornerStuckTimer = 0;
                     this.log(`Rescued from corner via ${escape.type}:`, {x: escape.x, y: escape.y, z: escape.z});
                     return;
@@ -3300,7 +3282,7 @@ class Character {
                     this.gridPos.x = safe.x;
                     this.gridPos.y = safe.y;
                     this.gridPos.z = safe.z;
-                    this.mesh.position.set(safe.x + 0.5, safe.y + 0.5, safe.z + 0.5);
+            this.updateWorldPosFromGrid();
                     this._enclosureTimer = 0;
                     this.log('Emergency teleport from enclosure to', safe);
 
