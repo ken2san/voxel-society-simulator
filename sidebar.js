@@ -199,6 +199,8 @@ function renderCharacterDetail() {
     groupThInput.value = sidebarParams.groupAffinityTh;
     groupThInput.style.flex = '1';
     groupThInput.style.margin = '0 8px';
+    groupThInput.id = 'groupThInput';
+    groupThInput.name = 'groupThInput';
     groupThRow.appendChild(groupThInput);
     const groupThVal = document.createElement('input');
     groupThVal.type = 'number';
@@ -206,6 +208,8 @@ function renderCharacterDetail() {
     groupThVal.max = 100;
     groupThVal.value = sidebarParams.groupAffinityTh;
     groupThVal.style.width = '48px';
+    groupThVal.id = 'groupThVal';
+    groupThVal.name = 'groupThVal';
     groupThRow.appendChild(groupThVal);
     // 双方向同期＋sidebarParams更新
     groupThInput.oninput = () => {
@@ -239,6 +243,8 @@ function renderCharacterDetail() {
     affinityInitMin.value = sidebarParams.initialAffinityMin;
     affinityInitMin.style.width = '48px';
     affinityInitMin.disabled = paramDisabled;
+    affinityInitMin.id = 'affinityInitMin';
+    affinityInitMin.name = 'affinityInitMin';
     affinityInitMin.addEventListener('input', e => {
         sidebarParams.initialAffinityMin = Number(e.target.value);
         window.initialAffinityMin = Number(e.target.value);
@@ -256,6 +262,8 @@ function renderCharacterDetail() {
     affinityInitMax.value = sidebarParams.initialAffinityMax;
     affinityInitMax.style.width = '48px';
     affinityInitMax.disabled = paramDisabled;
+    affinityInitMax.id = 'affinityInitMax';
+    affinityInitMax.name = 'affinityInitMax';
     affinityInitMax.addEventListener('input', e => {
         sidebarParams.initialAffinityMax = Number(e.target.value);
         window.initialAffinityMax = Number(e.target.value);
@@ -279,6 +287,8 @@ function renderCharacterDetail() {
     affinityRateInput.value = sidebarParams.affinityIncreaseRate;
     affinityRateInput.style.width = '120px';
     affinityRateInput.disabled = paramDisabled;
+    affinityRateInput.id = 'affinityRateInput';
+    affinityRateInput.name = 'affinityRateInput';
     affinityRateInput.addEventListener('input', e => {
         sidebarParams.affinityIncreaseRate = Number(e.target.value);
         affinityRateNumber.value = e.target.value;
@@ -292,6 +302,8 @@ function renderCharacterDetail() {
     affinityRateNumber.value = sidebarParams.affinityIncreaseRate;
     affinityRateNumber.disabled = paramDisabled;
     affinityRateNumber.style.width = '48px';
+    affinityRateNumber.id = 'affinityRateNumber';
+    affinityRateNumber.name = 'affinityRateNumber';
     affinityRateNumber.addEventListener('input', e => {
         sidebarParams.affinityIncreaseRate = Number(e.target.value);
         affinityRateInput.value = e.target.value;
@@ -317,6 +329,8 @@ function renderCharacterDetail() {
     perceptionInput.value = sidebarParams.perceptionRange;
     perceptionInput.style.width = '120px';
     perceptionInput.disabled = paramDisabled;
+    perceptionInput.id = 'perceptionInput';
+    perceptionInput.name = 'perceptionInput';
     perceptionInput.addEventListener('input', e => {
         sidebarParams.perceptionRange = Number(e.target.value);
         perceptionNumber.value = e.target.value;
@@ -330,6 +344,8 @@ function renderCharacterDetail() {
     perceptionNumber.value = sidebarParams.perceptionRange;
     perceptionNumber.disabled = paramDisabled;
     perceptionNumber.style.width = '48px';
+    perceptionNumber.id = 'perceptionNumber';
+    perceptionNumber.name = 'perceptionNumber';
     perceptionNumber.addEventListener('input', e => {
         sidebarParams.perceptionRange = Number(e.target.value);
         perceptionInput.value = e.target.value;
@@ -356,6 +372,8 @@ function renderCharacterDetail() {
     affinityResetInput.value = sidebarParams.affinityResetAfterReproduce;
     affinityResetInput.style.width = '120px';
     affinityResetInput.disabled = paramDisabled;
+    affinityResetInput.id = 'affinityResetInput';
+    affinityResetInput.name = 'affinityResetInput';
     affinityResetInput.addEventListener('input', e => {
         sidebarParams.affinityResetAfterReproduce = Number(e.target.value);
         affinityResetNumber.value = e.target.value;
@@ -370,6 +388,8 @@ function renderCharacterDetail() {
     affinityResetNumber.value = sidebarParams.affinityResetAfterReproduce;
     affinityResetNumber.disabled = paramDisabled;
     affinityResetNumber.style.width = '48px';
+    affinityResetNumber.id = 'affinityResetNumber';
+    affinityResetNumber.name = 'affinityResetNumber';
     affinityResetNumber.addEventListener('input', e => {
         sidebarParams.affinityResetAfterReproduce = Number(e.target.value);
         affinityResetInput.value = e.target.value;
@@ -394,6 +414,8 @@ function renderCharacterDetail() {
     charNumInput.value = sidebarParams.charNum;
     charNumInput.style.flex = '1';
     charNumInput.style.margin = '0 8px';
+    charNumInput.id = 'charNumInput';
+    charNumInput.name = 'charNumInput';
     charNumRow.appendChild(charNumInput);
     const charNumVal = document.createElement('input');
     charNumVal.type = 'number';
@@ -401,6 +423,8 @@ function renderCharacterDetail() {
     charNumVal.max = 50;
     charNumVal.value = sidebarParams.charNum;
     charNumVal.style.width = '48px';
+    charNumVal.id = 'charNumVal';
+    charNumVal.name = 'charNumVal';
     charNumRow.appendChild(charNumVal);
     // 双方向同期＋sidebarParams更新
     charNumInput.oninput = () => {
@@ -431,6 +455,8 @@ function renderCharacterDetail() {
     socialInput.value = sidebarParams.socialTh;
     socialInput.style.flex = '1';
     socialInput.style.margin = '0 8px';
+    socialInput.id = 'socialInput';
+    socialInput.name = 'socialInput';
     socialRow.appendChild(socialInput);
     const socialVal = document.createElement('input');
     socialVal.type = 'number';
@@ -438,6 +464,8 @@ function renderCharacterDetail() {
     socialVal.max = 100;
     socialVal.value = sidebarParams.socialTh;
     socialVal.style.width = '48px';
+    socialVal.id = 'socialVal';
+    socialVal.name = 'socialVal';
     socialRow.appendChild(socialVal);
     // 双方向同期＋sidebarParams更新
     socialInput.oninput = () => {
@@ -470,6 +498,8 @@ function renderCharacterDetail() {
     hungerEmergencyInput.step = 1;
     hungerEmergencyInput.value = sidebarParams.hungerEmergencyThreshold;
     hungerEmergencyInput.style.flex = '2';
+    hungerEmergencyInput.id = 'hungerEmergencyInput';
+    hungerEmergencyInput.name = 'hungerEmergencyInput';
     const hungerEmergencyVal = document.createElement('input');
     hungerEmergencyVal.type = 'number';
     hungerEmergencyVal.min = 0;
@@ -477,6 +507,8 @@ function renderCharacterDetail() {
     hungerEmergencyVal.step = 1;
     hungerEmergencyVal.value = sidebarParams.hungerEmergencyThreshold;
     hungerEmergencyVal.style.width = '60px';
+    hungerEmergencyVal.id = 'hungerEmergencyVal';
+    hungerEmergencyVal.name = 'hungerEmergencyVal';
     hungerEmergencyRow.appendChild(hungerEmergencyLabel);
     hungerEmergencyRow.appendChild(hungerEmergencyInput);
     hungerEmergencyRow.appendChild(hungerEmergencyVal);
@@ -511,6 +543,8 @@ function renderCharacterDetail() {
     energyEmergencyInput.step = 1;
     energyEmergencyInput.value = sidebarParams.energyEmergencyThreshold;
     energyEmergencyInput.style.flex = '2';
+    energyEmergencyInput.id = 'energyEmergencyInput';
+    energyEmergencyInput.name = 'energyEmergencyInput';
     const energyEmergencyVal = document.createElement('input');
     energyEmergencyVal.type = 'number';
     energyEmergencyVal.min = 0;
@@ -518,6 +552,8 @@ function renderCharacterDetail() {
     energyEmergencyVal.step = 1;
     energyEmergencyVal.value = sidebarParams.energyEmergencyThreshold;
     energyEmergencyVal.style.width = '60px';
+    energyEmergencyVal.id = 'energyEmergencyVal';
+    energyEmergencyVal.name = 'energyEmergencyVal';
     energyEmergencyRow.appendChild(energyEmergencyLabel);
     energyEmergencyRow.appendChild(energyEmergencyInput);
     energyEmergencyRow.appendChild(energyEmergencyVal);
@@ -552,6 +588,8 @@ function renderCharacterDetail() {
     homeReturnInput.step = 1;
     homeReturnInput.value = sidebarParams.homeReturnHungerLevel;
     homeReturnInput.style.flex = '2';
+    homeReturnInput.id = 'homeReturnInput';
+    homeReturnInput.name = 'homeReturnInput';
     const homeReturnVal = document.createElement('input');
     homeReturnVal.type = 'number';
     homeReturnVal.min = 70;
@@ -559,6 +597,8 @@ function renderCharacterDetail() {
     homeReturnVal.step = 1;
     homeReturnVal.value = sidebarParams.homeReturnHungerLevel;
     homeReturnVal.style.width = '60px';
+    homeReturnVal.id = 'homeReturnVal';
+    homeReturnVal.name = 'homeReturnVal';
     homeReturnRow.appendChild(homeReturnLabel);
     homeReturnRow.appendChild(homeReturnInput);
     homeReturnRow.appendChild(homeReturnVal);
@@ -593,6 +633,8 @@ function renderCharacterDetail() {
     homeBuildInput.step = 1;
     homeBuildInput.value = sidebarParams.homeBuildingPriority;
     homeBuildInput.style.flex = '2';
+    homeBuildInput.id = 'homeBuildInput';
+    homeBuildInput.name = 'homeBuildInput';
     const homeBuildVal = document.createElement('input');
     homeBuildVal.type = 'number';
     homeBuildVal.min = 0;
@@ -600,6 +642,8 @@ function renderCharacterDetail() {
     homeBuildVal.step = 1;
     homeBuildVal.value = sidebarParams.homeBuildingPriority;
     homeBuildVal.style.width = '60px';
+    homeBuildVal.id = 'homeBuildVal';
+    homeBuildVal.name = 'homeBuildVal';
     homeBuildRow.appendChild(homeBuildLabel);
     homeBuildRow.appendChild(homeBuildInput);
     homeBuildRow.appendChild(homeBuildVal);
@@ -634,6 +678,8 @@ function renderCharacterDetail() {
     woodCollectInput.step = 1;
     woodCollectInput.value = sidebarParams.woodCollectionPriority;
     woodCollectInput.style.flex = '2';
+    woodCollectInput.id = 'woodCollectInput';
+    woodCollectInput.name = 'woodCollectInput';
     const woodCollectVal = document.createElement('input');
     woodCollectVal.type = 'number';
     woodCollectVal.min = 0;
@@ -641,6 +687,8 @@ function renderCharacterDetail() {
     woodCollectVal.step = 1;
     woodCollectVal.value = sidebarParams.woodCollectionPriority;
     woodCollectVal.style.width = '60px';
+    woodCollectVal.id = 'woodCollectVal';
+    woodCollectVal.name = 'woodCollectVal';
     woodCollectRow.appendChild(woodCollectLabel);
     woodCollectRow.appendChild(woodCollectInput);
     woodCollectRow.appendChild(woodCollectVal);
@@ -671,6 +719,8 @@ function renderCharacterDetail() {
     const randomCheck = document.createElement('input');
     randomCheck.type = 'checkbox';
     randomCheck.checked = !!sidebarParams.useRandom;
+    randomCheck.id = 'randomCheck';
+    randomCheck.name = 'randomCheck';
     randomCheck.oninput = () => {
         sidebarParams.useRandom = randomCheck.checked;
     };
