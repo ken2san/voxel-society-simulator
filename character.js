@@ -858,41 +858,20 @@ class Character {
         if (!this.actionHistory) this.actionHistory = [];
         this.actionHistory.push(type);
         if (this.actionHistory.length > 20) this.actionHistory.shift();
-        // this.log(`Action chosen: ${type}`, {target, moveTo}); // WANDERログを止める
-        // if (type === 'SOCIALIZE') {
-        //     this.log('SOCIALIZE action selected', { id: this.id, target: target?.id, pos: this.gridPos });
-        // }
-        // --- WANDER時は到達可能な候補のみ選ぶ ---
+
+        // --- WANDER時は到達可能な候補のみ選ぶ（新システム使用） ---
         if (type === 'WANDER' && !moveTo) {
-            // 周囲の空きマス候補を列挙
-            const candidates = [];
-            for (let dx = -2; dx <= 2; dx++) {
-                for (let dz = -2; dz <= 2; dz++) {
-                    for (let dy = -1; dy <= 1; dy++) {
-                        if (dx === 0 && dz === 0 && dy === 0) continue;
-                        const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
-                        if (y < 0 || y > maxHeight) continue;
-                        const key = `${x},${y},${z}`;
-                        const below = `${x},${y-1},${z}`;
-                        if (!worldData.has(key) && worldData.has(below)) {
-                            // 到達可能かbfsPathで判定
-                            const path = this.bfsPath(this.gridPos, {x, y, z});
-                            if (path && path.length > 0) {
-                                candidates.push({x, y, z});
-                            }
-                        }
-                    }
-                }
-            }
+            const candidates = this._getReachableGridCandidates(2, true, 10);
             if (candidates.length > 0) {
-                const moveTo = candidates[Math.floor(Math.random() * candidates.length)];
+                const selectedMoveTo = candidates[Math.floor(Math.random() * candidates.length)];
                 this.action = { type, target, item };
-                this.targetPos = moveTo;
+                this.targetPos = selectedMoveTo;
                 this.state = 'moving';
                 return;
             }
             // 到達可能な候補がなければ従来通り
         }
+
         this.action = { type, target, item };
         if (moveTo && type !== 'SOCIALIZE') {
             this.targetPos = moveTo;
@@ -1127,10 +1106,94 @@ class Character {
     }
 
     // --- BFSパスファインディング（超簡素化・必ず成功版）---
-    bfsPath(start, goal, maxStep = 128) {
+    // --- 移動候補列挙関数 ---
+    _getMovableGridCandidates(range = 2, includeVertical = true) {
+        const candidates = [];
+        for (let dx = -range; dx <= range; dx++) {
+            for (let dz = -range; dz <= range; dz++) {
+                const dyRange = includeVertical ? [-1, 0, 1] : [0];
+                for (const dy of dyRange) {
+                    if (dx === 0 && dz === 0 && dy === 0) continue;
+                    const x = this.gridPos.x + dx;
+                    const y = this.gridPos.y + dy;
+                    const z = this.gridPos.z + dz;
+
+                    if (y < 0 || y > maxHeight) continue;
+
+                    const key = `${x},${y},${z}`;
+                    const below = `${x},${y-1},${z}`;
+
+                    // 空きマスで、かつ足場がある場所
+                    if (!worldData.has(key) && worldData.has(below)) {
+                        candidates.push({x, y, z});
+                    }
+                }
+            }
+        }
+        return candidates;
+    }
+
+    // --- 到達可能な移動候補のみ取得 ---
+    _getReachableGridCandidates(range = 2, includeVertical = true, maxPathLength = 10) {
+        const candidates = this._getMovableGridCandidates(range, includeVertical);
+        const reachable = [];
+
+        for (const candidate of candidates) {
+            const path = this.bfsPath(this.gridPos, candidate, maxPathLength);
+            if (path && path.length > 0) {
+                reachable.push(candidate);
+            }
+        }
+        return reachable;
+    }
+
+    // --- 移動方向を設定に基づいて構築 ---
+    _getMovementDirections(allowDiagonal = true, allowVertical = true) {
+        const dirs = [
+            // 基本4方向（水平）
+            {dx:1,dy:0,dz:0},{dx:-1,dy:0,dz:0},{dx:0,dy:0,dz:1},{dx:0,dy:0,dz:-1}
+        ];
+
+        // 垂直移動を許可する場合
+        if (allowVertical) {
+            dirs.push({dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0});
+        }
+
+        // 斜め移動を許可する場合
+        if (allowDiagonal) {
+            dirs.push(
+                {dx:1,dy:0,dz:1},{dx:1,dy:0,dz:-1},{dx:-1,dy:0,dz:1},{dx:-1,dy:0,dz:-1}
+            );
+
+            // 垂直斜め移動
+            if (allowVertical) {
+                dirs.push(
+                    {dx:1,dy:1,dz:0},{dx:-1,dy:1,dz:0},{dx:0,dy:1,dz:1},{dx:0,dy:1,dz:-1},
+                    {dx:1,dy:-1,dz:0},{dx:-1,dy:-1,dz:0},{dx:0,dy:-1,dz:1},{dx:0,dy:-1,dz:-1}
+                );
+            }
+        }
+
+        return dirs;
+    }
+
+    // --- 統一された経路探索システム ---
+    findPathTo(destination, options = {}) {
+        const {
+            maxSteps = 128,
+            allowDiagonal = true,
+            allowVertical = true,
+            directMoveThreshold = 3
+        } = options;
+
+        return this.bfsPath(this.gridPos, destination, maxSteps, allowDiagonal, allowVertical, directMoveThreshold);
+    }
+
+    // --- BFS経路探索（統合版） ---
+    bfsPath(start, goal, maxStep = 128, allowDiagonal = true, allowVertical = true, directMoveThreshold = 3) {
         // 距離が近い場合は直接移動を試す
         const directDist = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y) + Math.abs(start.z - goal.z);
-        if (directDist <= 3) {
+        if (directDist <= directMoveThreshold) {
             // 直接移動できそうな場合は簡単なパスを返す
             return [goal];
         }
@@ -1153,16 +1216,8 @@ class Character {
                 found = true; final = cur; break;
             }
 
-            // 8方向の移動（上下左右前後斜め）+ より柔軟な移動
-            const dirs = [
-                // 基本6方向
-                {dx:1,dy:0,dz:0},{dx:-1,dy:0,dz:0},{dx:0,dy:0,dz:1},{dx:0,dy:0,dz:-1},
-                {dx:0,dy:1,dz:0},{dx:0,dy:-1,dz:0},
-                // 斜め移動も追加
-                {dx:1,dy:0,dz:1},{dx:1,dy:0,dz:-1},{dx:-1,dy:0,dz:1},{dx:-1,dy:0,dz:-1},
-                // 段差移動
-                {dx:1,dy:1,dz:0},{dx:-1,dy:1,dz:0},{dx:0,dy:1,dz:1},{dx:0,dy:1,dz:-1}
-            ];
+            // 移動方向を設定に基づいて動的に構築
+            const dirs = this._getMovementDirections(allowDiagonal, allowVertical);
 
             for (const d of dirs) {
                 let nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
@@ -2122,13 +2177,87 @@ class Character {
     // 死亡時に消滅する仕様のため、revive()は無効化
     revive() {}
 
+    // --- 移動実行の一元化 ---
+    moveToGridPos(newGridPos, updateMesh = true) {
+        if (!newGridPos) return false;
+
+        // 座標検証
+        if (typeof newGridPos.x !== 'number' || typeof newGridPos.y !== 'number' || typeof newGridPos.z !== 'number') {
+            this.log('Invalid grid position:', newGridPos);
+            return false;
+        }
+
+        // 移動可能性チェック
+        const key = `${newGridPos.x},${newGridPos.y},${newGridPos.z}`;
+        if (worldData.has(key)) {
+            this.log('Cannot move to occupied position:', newGridPos);
+            return false;
+        }
+
+        // 座標更新
+        const oldPos = { ...this.gridPos };
+        this.gridPos = { ...newGridPos };
+
+        // メッシュ位置更新
+        if (updateMesh && this.mesh) {
+            this.mesh.position.set(
+                newGridPos.x * gridSize,
+                newGridPos.y * gridSize,
+                newGridPos.z * gridSize
+            );
+        }
+
+        // 移動距離記録
+        if (typeof this.moveDistance === 'number') {
+            this.moveDistance += Math.abs(newGridPos.x - oldPos.x) +
+                               Math.abs(newGridPos.y - oldPos.y) +
+                               Math.abs(newGridPos.z - oldPos.z);
+        }
+
+        this.log('Moved from', oldPos, 'to', newGridPos);
+        return true;
+    }
+
+    // --- 経路に沿った移動実行（安全判定付き） ---
+    moveAlongPath() {
+        if (!this.path || this.path.length === 0) return false;
+
+        const nextPos = this.path[0];
+        if (!nextPos) return false;
+
+        // 落下先が安全か判定してから移動
+        if (nextPos.y < this.gridPos.y) {
+            // 下に降りる場合、落下先が安全か判定
+            if (!this.isSafeToFallOrDig(nextPos.x, nextPos.y, nextPos.z)) {
+                this.log('Skip move: fall destination not safe', {from: this.gridPos, to: nextPos});
+                return false;
+            }
+        }
+
+        // 移動実行
+        const success = this.moveToGridPos(nextPos);
+        if (success) {
+            this.path.shift(); // パスから次の位置を削除
+        }
+
+        return success;
+    }
+
     updateMovement(deltaTime) {
         // this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos }); // コメントアウト
         if (!this.targetPos) { this.state = 'idle'; return; }
-        // --- BFS経路探索 ---
+        // --- BFS経路探索（新システム使用） ---
         if (!this.path || this.path.length === 0 || !this.lastTargetPos ||
             this.lastTargetPos.x !== this.targetPos.x || this.lastTargetPos.y !== this.targetPos.y || this.lastTargetPos.z !== this.targetPos.z) {
-            this.path = this.bfsPath(this.gridPos, this.targetPos);
+
+            // 新しい統一された経路探索システムを使用
+            this.path = this.findPathTo(this.targetPos, {
+                maxSteps: 128,
+                allowDiagonal: true,
+                allowVertical: true,
+                directMoveThreshold: 3
+            });
+
             this.lastTargetPos = { ...this.targetPos };
             if (!this.path || this.path.length === 0) {
                 // --- CHOP_WOOD特化: 木材収集失敗時の積極的対処 ---
