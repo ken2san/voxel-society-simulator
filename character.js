@@ -1222,32 +1222,52 @@ class Character {
             for (const d of dirs) {
                 let nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
 
-                // 高さ制限チェック（より緩い）
-                if (ny < -5 || ny > maxHeight + 5) continue;
+                // 高さ制限チェック
+                if (ny < 0 || ny > maxHeight) continue;
 
                 const nkey = `${nx},${ny},${nz}`;
                 if (visited.has(nkey)) continue;
 
-                // 移動先の障害物チェック（さらに簡素化）
+                // 移動先の障害物チェック（より厳密に）
                 const blockId = worldData.get(nkey);
                 if (blockId !== undefined && blockId !== null) {
                     const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                    // 木や葉ブロックは通れる（伐採対象のため）
-                    if (blockType && blockType.name !== '木' && blockType.name !== '葉' &&
-                        blockId !== BLOCK_TYPES.AIR?.id && blockId !== BLOCK_TYPES.BED?.id) {
-                        continue;
+                    if (blockType) {
+                        // 通行可能なブロックタイプを明示的に定義
+                        const passableBlocks = ['空気', '木', '葉', '果実'];
+                        const isPassable = passableBlocks.includes(blockType.name) ||
+                                         blockType.isBed ||
+                                         blockId === BLOCK_TYPES.AIR?.id;
+
+                        if (!isPassable) {
+                            continue; // ソリッドブロックは通れない
+                        }
                     }
                 }
 
-                // 足場チェックを大幅に緩和
-                if (d.dy >= 0 && ny > 0) { // 上昇移動の場合のみチェック
+                // 足場チェック（下降・水平移動時も適用）
+                if (ny > 0) {
                     const below = `${nx},${ny-1},${nz}`;
-                    const hasFooting = worldData.has(below) || ny <= 2; // 地面から2ブロック以内はOK
-                    if (!hasFooting && Math.random() > 0.7) continue; // 30%の確率で足場なしでも通る
+                    const hasFooting = worldData.has(below);
+                    // 地面レベル（y=0）以外では足場が必要
+                    if (!hasFooting && ny > 1) {
+                        continue; // 足場がない場合は移動不可
+                    }
                 }
 
-                // 段差制限を緩和：5ブロック以上の上昇は不可
-                if (d.dy > 0 && Math.abs(ny - cur.y) > 5) continue;
+                // 頭上チェック（キャラクターの高さを考慮）
+                const above = `${nx},${ny+1},${nz}`;
+                const aboveBlockId = worldData.get(above);
+                if (aboveBlockId !== undefined && aboveBlockId !== null) {
+                    const aboveBlockType = Object.values(BLOCK_TYPES).find(t => t.id === aboveBlockId);
+                    if (aboveBlockType && !['空気', '木', '葉', '果実'].includes(aboveBlockType.name) &&
+                        aboveBlockId !== BLOCK_TYPES.AIR?.id) {
+                        continue; // 頭上にソリッドブロックがある場合は移動不可
+                    }
+                }
+
+                // 段差制限：2ブロック以上の上昇は不可
+                if (d.dy > 0 && Math.abs(ny - cur.y) > 2) continue;
 
                 queue.push({x:nx,y:ny,z:nz});
                 visited.add(nkey);
@@ -2414,7 +2434,7 @@ class Character {
             }
         }
         const prevGridPos = { ...this.gridPos };
-        const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y, next.z + 0.5);
+        const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y + 0.5, next.z + 0.5);
         const direction = targetWorldPos.clone().sub(this.mesh.position);
         // 顔の向き（body/headのrotation.y）を移動方向に合わせる
         if (direction.lengthSq() > 0.0001) {
@@ -2424,6 +2444,44 @@ class Character {
         }
         const moveDistance = this.movementSpeed * deltaTime;
         if (direction.length() < moveDistance) {
+            // 移動実行前の最終当たり判定チェック
+            const nextKey = `${next.x},${next.y},${next.z}`;
+            const blockId = worldData.get(nextKey);
+
+            // ソリッドブロックが移動先にある場合は移動をキャンセル
+            if (blockId !== undefined && blockId !== null) {
+                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                if (blockType) {
+                    const passableBlocks = ['空気', '木', '葉', '果実'];
+                    const isPassable = passableBlocks.includes(blockType.name) ||
+                                     blockType.isBed ||
+                                     blockId === BLOCK_TYPES.AIR?.id;
+
+                    if (!isPassable) {
+                        this.log('Movement blocked by solid block at target position:', next);
+                        this.path = []; // パスをクリアして再計算を促す
+                        this.state = 'idle';
+                        this.actionCooldown = 0.5;
+                        return;
+                    }
+                }
+            }
+
+            // 頭上チェック
+            const aboveKey = `${next.x},${next.y + 1},${next.z}`;
+            const aboveBlockId = worldData.get(aboveKey);
+            if (aboveBlockId !== undefined && aboveBlockId !== null) {
+                const aboveBlockType = Object.values(BLOCK_TYPES).find(t => t.id === aboveBlockId);
+                if (aboveBlockType && !['空気', '木', '葉', '果実'].includes(aboveBlockType.name) &&
+                    aboveBlockId !== BLOCK_TYPES.AIR?.id) {
+                    this.log('Movement blocked by ceiling at target position:', next);
+                    this.path = [];
+                    this.state = 'idle';
+                    this.actionCooldown = 0.5;
+                    return;
+                }
+            }
+
             this.mesh.position.copy(targetWorldPos);
             this.gridPos = {x: next.x, y: next.y, z: next.z};
             // --- ここで移動距離を加算 ---
@@ -2882,7 +2940,10 @@ class Character {
     }
 
     updateWorldPosFromGrid() {
-        this.mesh.position.set(this.gridPos.x * 1 + 0.5, this.gridPos.y, this.gridPos.z * 1 + 0.5);
+        // ブロックとキャラクターの座標系を一致させる
+        // ブロックは (x+0.5, y+0.5, z+0.5) に配置されているため、
+        // キャラクターも同じ基準で配置する
+        this.mesh.position.set(this.gridPos.x + 0.5, this.gridPos.y + 0.5, this.gridPos.z + 0.5);
     }
 
     log(message, ...args) {
@@ -3088,7 +3149,7 @@ class Character {
                             this.gridPos.x = x;
                             this.gridPos.y = y;
                             this.gridPos.z = z;
-                            this.mesh.position.set(x + 0.5, y, z + 0.5);
+                            this.mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
                             this._movementStuckTimer = 0;
                             this._positionHistory = []; // 履歴をクリア
                             this.log('Rescued from movement stuck: teleported to', {x, y, z});
@@ -3147,7 +3208,7 @@ class Character {
                     this.gridPos.x = escape.x;
                     this.gridPos.y = escape.y;
                     this.gridPos.z = escape.z;
-                    this.mesh.position.set(escape.x + 0.5, escape.y, escape.z + 0.5);
+                    this.mesh.position.set(escape.x + 0.5, escape.y + 0.5, escape.z + 0.5);
                     this._cornerStuckTimer = 0;
                     this.log(`Rescued from corner via ${escape.type}:`, {x: escape.x, y: escape.y, z: escape.z});
                     return;
@@ -3239,7 +3300,7 @@ class Character {
                     this.gridPos.x = safe.x;
                     this.gridPos.y = safe.y;
                     this.gridPos.z = safe.z;
-                    this.mesh.position.set(safe.x + 0.5, safe.y, safe.z + 0.5);
+                    this.mesh.position.set(safe.x + 0.5, safe.y + 0.5, safe.z + 0.5);
                     this._enclosureTimer = 0;
                     this.log('Emergency teleport from enclosure to', safe);
 
