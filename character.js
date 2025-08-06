@@ -1814,7 +1814,7 @@ class Character {
                 }
                 if (fallY >= 0) {
                     this.gridPos.y = fallY;
-                    this.mesh.position.y = fallY;
+                    this.updateWorldPosFromGrid();
                     this._airTime = 0;
                     this.log('Rescued from air: forced drop to ground', {y: fallY});
                 }
@@ -3099,7 +3099,7 @@ class Character {
                 }
                 if (fallY >= 0 && this.isSafeToFallOrDig(this.gridPos.x, fallY, this.gridPos.z)) {
                     this.gridPos.y = fallY;
-                    this.mesh.position.y = fallY;
+                    this.updateWorldPosFromGrid();
                     this._airTime = 0;
                     this.log('Rescued from air: forced drop to ground', {y: fallY});
                 }
@@ -3298,7 +3298,7 @@ class Character {
                     }
                     if (upY < maxHeight) {
                         this.gridPos.y = upY;
-                        this.mesh.position.y = upY;
+                        this.updateWorldPosFromGrid();
                         this._enclosureTimer = 0;
                         this.log('Last resort: teleported upward to', {y: upY});
                     }
