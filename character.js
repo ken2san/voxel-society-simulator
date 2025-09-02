@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight } from './world.js';
 import { decideNextAction_rulebase } from './AI_rulebase.js';
 import { decideNextAction_utility } from './AI_utility.js';
+import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
 
 // --- Helper: 3Dオブジェクトのワールド座標をスクリーン座標に変換 ---
 function toScreenPosition(obj, camera, canvas = null) {
