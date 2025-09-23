@@ -134,6 +134,9 @@ function renderCharacterDetail() {
     if (sidebarParams.reproductionCooldownSeconds === undefined) sidebarParams.reproductionCooldownSeconds = 10;
     if (sidebarParams.autoRecoverStall === undefined) sidebarParams.autoRecoverStall = true;
     if (sidebarParams.recoverActionCooldown === undefined) sidebarParams.recoverActionCooldown = 0.5;
+    if (sidebarParams.fallbackBackoffMs === undefined) sidebarParams.fallbackBackoffMs = 1500;
+    if (sidebarParams.pathInvalidationBackoffFactor === undefined) sidebarParams.pathInvalidationBackoffFactor = 0.2;
+    if (sidebarParams.pathInvalidationBackoffMax === undefined) sidebarParams.pathInvalidationBackoffMax = 2.0;
     window.initialAffinityMin = sidebarParams.initialAffinityMin;
     window.initialAffinityMax = sidebarParams.initialAffinityMax;
     window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
@@ -144,6 +147,9 @@ function renderCharacterDetail() {
     window.reproductionCooldownSeconds = sidebarParams.reproductionCooldownSeconds;
     window.autoRecoverStall = sidebarParams.autoRecoverStall;
     window.recoverActionCooldown = sidebarParams.recoverActionCooldown;
+    window.fallbackBackoffMs = sidebarParams.fallbackBackoffMs;
+    window.pathInvalidationBackoffFactor = sidebarParams.pathInvalidationBackoffFactor;
+    window.pathInvalidationBackoffMax = sidebarParams.pathInvalidationBackoffMax;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
@@ -368,6 +374,71 @@ function renderCharacterDetail() {
     });
     affinityDecayRow.appendChild(affinityDecayNumber);
     paramBox.appendChild(affinityDecayRow);
+
+    // --- Backoff: fallback/backoff tuning ---
+    const backoffRow = document.createElement('div');
+    backoffRow.style.display = 'flex';
+    backoffRow.style.flexDirection = 'column';
+    backoffRow.style.gap = '8px';
+
+    const fallbackRow = document.createElement('div');
+    fallbackRow.style.display = 'flex';
+    fallbackRow.style.alignItems = 'center';
+    fallbackRow.style.gap = '10px';
+    const fallbackLabel = document.createElement('span');
+    fallbackLabel.textContent = 'Fallback Backoff (ms):';
+    fallbackLabel.style.width = '140px';
+    fallbackRow.appendChild(fallbackLabel);
+    const fallbackInput = document.createElement('input');
+    fallbackInput.type = 'number';
+    fallbackInput.min = 0;
+    fallbackInput.max = 10000;
+    fallbackInput.value = sidebarParams.fallbackBackoffMs;
+    fallbackInput.style.width = '100px';
+    fallbackInput.disabled = paramDisabled;
+    fallbackInput.addEventListener('input', e => {
+        sidebarParams.fallbackBackoffMs = Number(e.target.value);
+        window.fallbackBackoffMs = Number(e.target.value);
+    });
+    fallbackRow.appendChild(fallbackInput);
+    backoffRow.appendChild(fallbackRow);
+
+    const pinvRow = document.createElement('div');
+    pinvRow.style.display = 'flex';
+    pinvRow.style.alignItems = 'center';
+    pinvRow.style.gap = '10px';
+    const pinvLabel = document.createElement('span');
+    pinvLabel.textContent = 'Path Invalidate Factor:';
+    pinvLabel.style.width = '140px';
+    pinvRow.appendChild(pinvLabel);
+    const pinvInput = document.createElement('input');
+    pinvInput.type = 'range';
+    pinvInput.min = 0;
+    pinvInput.max = 1;
+    pinvInput.step = 0.05;
+    pinvInput.value = sidebarParams.pathInvalidationBackoffFactor;
+    pinvInput.style.width = '120px';
+    pinvInput.disabled = paramDisabled;
+    pinvInput.addEventListener('input', e => {
+        sidebarParams.pathInvalidationBackoffFactor = Number(e.target.value);
+        window.pathInvalidationBackoffFactor = Number(e.target.value);
+    });
+    pinvRow.appendChild(pinvInput);
+    const pinvMaxInput = document.createElement('input');
+    pinvMaxInput.type = 'number';
+    pinvMaxInput.min = 0;
+    pinvMaxInput.max = 10;
+    pinvMaxInput.step = 0.1;
+    pinvMaxInput.value = sidebarParams.pathInvalidationBackoffMax;
+    pinvMaxInput.style.width = '64px';
+    pinvMaxInput.disabled = paramDisabled;
+    pinvMaxInput.addEventListener('input', e => {
+        sidebarParams.pathInvalidationBackoffMax = Number(e.target.value);
+        window.pathInvalidationBackoffMax = Number(e.target.value);
+    });
+    pinvRow.appendChild(pinvMaxInput);
+    backoffRow.appendChild(pinvRow);
+    paramBox.appendChild(backoffRow);
 
     // --- Perception/Socialize Range Slider ---
     if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;

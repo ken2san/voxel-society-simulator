@@ -2899,10 +2899,12 @@ class Character {
             this.releaseReservedSidestep && this.releaseReservedSidestep();
             this.path = [];
             this.state = 'idle';
-            // path invalidation backoff: avoid immediate recompute loops
+            // path invalidation backoff: avoid immediate recompute loops (tunable)
             if (!this._pathInvalidationCount) this._pathInvalidationCount = 0;
             this._pathInvalidationCount++;
-            const extra = Math.min(2.0, 0.2 * this._pathInvalidationCount);
+            const factor = (typeof window !== 'undefined' && window.pathInvalidationBackoffFactor !== undefined) ? Number(window.pathInvalidationBackoffFactor) : 0.2;
+            const maxExtra = (typeof window !== 'undefined' && window.pathInvalidationBackoffMax !== undefined) ? Number(window.pathInvalidationBackoffMax) : 2.0;
+            const extra = Math.min(maxExtra, factor * this._pathInvalidationCount);
             this.actionCooldown = 0.4 + extra + Math.random() * 0.2;
             // if we've had many invalidations recently, reset counters and add longer cooldown
             if (this._pathInvalidationCount > 6) {
@@ -3635,7 +3637,8 @@ class Character {
         if (!this.action || this.action === null) {
             // Avoid immediately falling back to WANDER repeatedly (causes trembling)
             const now = Date.now();
-            if (!this._lastFallbackTime || (now - this._lastFallbackTime) > 1500) {
+            const fallbackBackoffMs = (typeof window !== 'undefined' && window.fallbackBackoffMs !== undefined) ? Number(window.fallbackBackoffMs) : 1500;
+            if (!this._lastFallbackTime || (now - this._lastFallbackTime) > fallbackBackoffMs) {
                 this.log('⚠️ No action chosen by AI, falling back to WANDER');
                 this.setNextAction('WANDER');
                 this._lastFallbackTime = now;
