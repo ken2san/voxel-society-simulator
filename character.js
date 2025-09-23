@@ -426,7 +426,8 @@ class Character {
                 this.showActionIcon('🍎', 1.0);
 
                 // 食料ブロックを回収
-                removeBlock && removeBlock(x, y, z);
+                // Use reservation-based remove to avoid races
+                this.reserveAndRemoveBlock(x, y, z);
 
                 // インベントリに追加
                 this.inventory[0] = 'FRUIT_ITEM';
@@ -521,7 +522,8 @@ class Character {
 
             // 完了判定（7→10に変更でさらに時間をかける）
             if (this._choppingProgress >= 10) {
-                removeBlock && removeBlock(x, y, z);
+                // Use reservation-based remove to avoid races
+                this.reserveAndRemoveBlock(x, y, z);
 
                 // 1個の木材を取得（さらに控えめに調整）
                 let woodAdded = 0;
@@ -596,7 +598,8 @@ class Character {
             if (this._diggingProgress >= 18) {
                 const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
 
-                removeBlock && removeBlock(x, y, z);
+                // Use reservation-based remove to avoid races
+                this.reserveAndRemoveBlock(x, y, z);
                 this.digCount = (this.digCount || 0) + 1;
                 this.log(`採掘完了！ digCount=${this.digCount}`);
 
@@ -1075,6 +1078,66 @@ class Character {
                 this._reservedSidestepKey = null;
             }
         } catch (e) { /* ignore */ }
+    }
+
+    // Try to reserve a block for digging, remove it if reserved, and release reservation.
+    // Returns true if a block was actually removed, false otherwise.
+    reserveAndRemoveBlock(x, y, z, opts = {}) {
+        try {
+            if (y <= 0) {
+                // Protect bottom layer from being turned into a hole
+                this.log('reserveAndRemoveBlock: prevented removal at bottom layer', {x, y, z});
+                return false;
+            }
+
+            const key = `${x},${y},${z}`;
+            // Ensure recent-dig map exists
+            if (typeof window !== 'undefined' && !window._recentlyDug) window._recentlyDug = new Map();
+            const recentMs = (typeof window !== 'undefined' && window.recentDigCooldownMs !== undefined) ? window.recentDigCooldownMs : 10000;
+            const lastT = window._recentlyDug.get(key) || 0;
+            if (Date.now() - lastT < recentMs) {
+                this.log('Skip digging: recently attempted', key);
+                // small cooldown to avoid busy loop
+                this.actionCooldown = (typeof window !== 'undefined' && window.digActionCooldown !== undefined) ? window.digActionCooldown / 1000.0 : 1.5;
+                return false;
+            }
+
+            // Try to reserve the target
+            const ttl = (opts.ttl !== undefined) ? opts.ttl : ((typeof window !== 'undefined' && window.worldReservationTTL) ? window.worldReservationTTL : 5000);
+            const reserved = Character.reserveTarget(key, this.id, ttl);
+            if (!reserved) {
+                this.log('reserveAndRemoveBlock: target reserved by other, skipping', key);
+                this.actionCooldown = (typeof window !== 'undefined' && window.reservationFallbackCooldown !== undefined) ? window.reservationFallbackCooldown : 1.0;
+                return false;
+            }
+
+            // Double-check the block still exists and is diggable
+            const blockId = worldData.get(key);
+            if (!blockId) {
+                this.log('reserveAndRemoveBlock: block already gone', key);
+                Character.releaseReservation(key, this.id);
+                return false;
+            }
+            const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+            if (blockType && blockType.diggable) {
+                // Perform the removal
+                removeBlock && removeBlock(x, y, z);
+                // Mark recent dig timestamp
+                window._recentlyDug.set(key, Date.now());
+                // Release reservation (only if we still own it)
+                Character.releaseReservation(key, this.id);
+                this.log('reserveAndRemoveBlock: removed block', {x, y, z});
+                return true;
+            }
+
+            // Not diggable: release and return
+            Character.releaseReservation(key, this.id);
+            this.log('reserveAndRemoveBlock: block not diggable', key);
+            return false;
+        } catch (e) {
+            try { Character.releaseReservation(`${x},${y},${z}`, this.id); } catch (e2) {}
+            return false;
+        }
     }
     // --- Group detection and per-group leader election ---
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
@@ -2079,8 +2142,9 @@ class Character {
             }
         }
         if (surrounded && breakable) {
-            removeBlock(breakable.x, breakable.y, breakable.z);
-            this.log('Break out: forcibly destroyed block to escape enclosure', breakable);
+            // Use reservation-based removal to avoid races
+            this.reserveAndRemoveBlock(breakable.x, breakable.y, breakable.z);
+            this.log('Break out: forcibly removed block to escape enclosure (reserved)', breakable);
         }
         // Visualize owned land
         this.visualizeOwnedLand();
@@ -2797,7 +2861,8 @@ class Character {
                         // 掘ったら落下する場合は下まで落ちる
                         while (fallY > 0 && !worldData.has(`${x},${fallY-1},${this.gridPos.z}`)) fallY--;
                         if (this.isSafeToFallOrDig(x, fallY, z)) {
-                            removeBlock(x, y, z);
+                            // use reservation-based removal
+                            this.reserveAndRemoveBlock(x, y, z);
                             // record recent dig attempt to avoid repetition
                             try {
                                 if (typeof window !== 'undefined' && window._recentlyDug) {
@@ -2836,7 +2901,8 @@ class Character {
                         const x = this.gridPos.x + randDir.dx;
                         const y = this.gridPos.y + randDir.dy;
                         const z = this.gridPos.z + randDir.dz;
-                        removeBlock(x, y, z);
+                        // use reservation-based removal
+                        this.reserveAndRemoveBlock(x, y, z);
                         this.log('Rescue: forcibly dug random direction after multiple path fails', {x, y, z});
                         this.bfsFailCount = 0; // リセット
                         this.actionCooldown = 2.0; // Give time for the change to take effect
@@ -3026,7 +3092,8 @@ class Character {
             this._cornerStuckTimer += deltaTime;
             if (this._cornerStuckTimer > 1.5 && wallPos) {
                 // 強制的に壁を壊して脱出
-                removeBlock(wallPos.x, wallPos.y, wallPos.z);
+                // use reservation-based removal for wall break
+                this.reserveAndRemoveBlock(wallPos.x, wallPos.y, wallPos.z);
                 this.log('Break out: forcibly destroyed block to escape corner deadlock', wallPos);
                 this._cornerStuckTimer = 0;
                 // 経路再探索
@@ -3983,9 +4050,10 @@ class Character {
                     breakableBlocks.sort((a, b) => a.priority - b.priority || a.distance - b.distance);
                     const toBreak = breakableBlocks[0];
 
-                    removeBlock(toBreak.x, toBreak.y, toBreak.z);
+                    // Reservation-based removal
+                    this.reserveAndRemoveBlock(toBreak.x, toBreak.y, toBreak.z);
                     this._cornerStuckTimer = 0;
-                    this.log('Rescued from corner: broke block', toBreak);
+                    this.log('Rescued from corner: removed block (reserved)', toBreak);
                 }
             }
             return;
@@ -3996,9 +4064,10 @@ class Character {
 
             // 段階1: 最適なブロックを破壊
             if (this._enclosureTimer > 1.5 && stuckInfo.breakable) {
-                removeBlock(stuckInfo.breakable.x, stuckInfo.breakable.y, stuckInfo.breakable.z);
+                // Reservation-based removal to avoid races
+                this.reserveAndRemoveBlock(stuckInfo.breakable.x, stuckInfo.breakable.y, stuckInfo.breakable.z);
                 this._enclosureTimer = 0;
-                this.log('Rescued from enclosure: broke priority block', stuckInfo.breakable);
+                this.log('Rescued from enclosure: removed priority block (reserved)', stuckInfo.breakable);
                 return;
             }
 

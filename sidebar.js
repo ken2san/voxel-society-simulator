@@ -136,6 +136,8 @@ function renderCharacterDetail() {
     if (sidebarParams.recoverActionCooldown === undefined) sidebarParams.recoverActionCooldown = 0.5;
     if (sidebarParams.recentDigCooldownMs === undefined) sidebarParams.recentDigCooldownMs = 10000;
     if (sidebarParams.digActionCooldown === undefined) sidebarParams.digActionCooldown = 2200;
+    if (sidebarParams.worldReservationTTL === undefined) sidebarParams.worldReservationTTL = 5000;
+    if (sidebarParams.reservationFallbackCooldown === undefined) sidebarParams.reservationFallbackCooldown = 1000;
     if (sidebarParams.fallbackBackoffMs === undefined) sidebarParams.fallbackBackoffMs = 1500;
     if (sidebarParams.pathInvalidationBackoffFactor === undefined) sidebarParams.pathInvalidationBackoffFactor = 0.2;
     if (sidebarParams.pathInvalidationBackoffMax === undefined) sidebarParams.pathInvalidationBackoffMax = 2.0;
@@ -151,6 +153,8 @@ function renderCharacterDetail() {
     window.recoverActionCooldown = sidebarParams.recoverActionCooldown;
     window.recentDigCooldownMs = sidebarParams.recentDigCooldownMs;
     window.digActionCooldown = sidebarParams.digActionCooldown;
+    window.worldReservationTTL = sidebarParams.worldReservationTTL;
+    window.reservationFallbackCooldown = sidebarParams.reservationFallbackCooldown;
     window.fallbackBackoffMs = sidebarParams.fallbackBackoffMs;
     window.pathInvalidationBackoffFactor = sidebarParams.pathInvalidationBackoffFactor;
     window.pathInvalidationBackoffMax = sidebarParams.pathInvalidationBackoffMax;
@@ -417,6 +421,47 @@ function renderCharacterDetail() {
     });
     digRow.appendChild(digActionInput);
     paramBox.appendChild(digRow);
+
+    // --- Reservation controls (prevent multiple chars from digging same block) ---
+    const reservationRow = document.createElement('div');
+    reservationRow.style.display = 'flex';
+    reservationRow.style.alignItems = 'center';
+    reservationRow.style.gap = '10px';
+    const reservationLabel = document.createElement('span');
+    reservationLabel.textContent = 'Reservation TTL (ms):';
+    reservationLabel.style.width = '140px';
+    reservationRow.appendChild(reservationLabel);
+    // use an input element for numeric TTL
+    const reservationNum = document.createElement('input');
+    reservationNum.type = 'number';
+    reservationNum.min = 100;
+    reservationNum.max = 60000;
+    reservationNum.value = sidebarParams.worldReservationTTL;
+    reservationNum.style.width = '120px';
+    reservationNum.disabled = paramDisabled;
+    reservationNum.addEventListener('input', e => {
+        sidebarParams.worldReservationTTL = Number(e.target.value);
+        window.worldReservationTTL = Number(e.target.value);
+    });
+    reservationRow.appendChild(reservationNum);
+
+    const reservationFallbackLabel = document.createElement('span');
+    reservationFallbackLabel.textContent = 'Fallback Cooldown (ms):';
+    reservationFallbackLabel.style.width = '160px';
+    reservationRow.appendChild(reservationFallbackLabel);
+    const fallbackNum = document.createElement('input');
+    fallbackNum.type = 'number';
+    fallbackNum.min = 0;
+    fallbackNum.max = 10000;
+    fallbackNum.value = sidebarParams.reservationFallbackCooldown;
+    fallbackNum.style.width = '120px';
+    fallbackNum.disabled = paramDisabled;
+    fallbackNum.addEventListener('input', e => {
+        sidebarParams.reservationFallbackCooldown = Number(e.target.value);
+        window.reservationFallbackCooldown = Number(e.target.value);
+    });
+    reservationRow.appendChild(fallbackNum);
+    paramBox.appendChild(reservationRow);
 
     // --- Backoff: fallback/backoff tuning ---
     const backoffRow = document.createElement('div');
