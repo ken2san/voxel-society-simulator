@@ -2778,15 +2778,37 @@ class Character {
                     const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
                     // 掘る前に落下先が安全か判定
                     if (blockType && blockType.diggable) {
+                        // Avoid repeatedly digging the same block: keep a recent-dig map with TTL
+                        try {
+                            if (typeof window !== 'undefined') {
+                                if (!window._recentlyDug) window._recentlyDug = new Map();
+                            }
+                            const digKey = `${x},${y},${z}`;
+                            const now = Date.now();
+                            const recentMs = (typeof window !== 'undefined' && window.recentDigCooldownMs !== undefined) ? window.recentDigCooldownMs : 10000;
+                            const lastAttempt = (typeof window !== 'undefined' && window._recentlyDug) ? window._recentlyDug.get(digKey) : null;
+                            if (lastAttempt && (now - lastAttempt) < recentMs) {
+                                this.log('Skip digging: recently attempted', digKey);
+                                continue;
+                            }
+                        } catch (e) { /* ignore */ }
+
                         let fallY = y;
                         // 掘ったら落下する場合は下まで落ちる
                         while (fallY > 0 && !worldData.has(`${x},${fallY-1},${this.gridPos.z}`)) fallY--;
                         if (this.isSafeToFallOrDig(x, fallY, z)) {
                             removeBlock(x, y, z);
+                            // record recent dig attempt to avoid repetition
+                            try {
+                                if (typeof window !== 'undefined' && window._recentlyDug) {
+                                    window._recentlyDug.set(`${x},${y},${z}`, Date.now());
+                                }
+                            } catch (e) {}
                             this.log('Rescue: destroyed nearby diggable block to create path (safe)', {x, y, z, fallY});
                             brokeBlock = true;
-                            // Give more time after rescue digging
-                            this.actionCooldown = 2.0;
+                            // Give more time after rescue digging so other chars/world update
+                            const digCooldown = (typeof window !== 'undefined' && window.digActionCooldown !== undefined) ? window.digActionCooldown : 2200;
+                            this.actionCooldown = (digCooldown / 1000) + Math.random() * 0.5;
                             break;
                         } else {
                             this.log('Skip digging: fall destination not safe', {x, y, z, fallY});

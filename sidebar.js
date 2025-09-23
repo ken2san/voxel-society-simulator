@@ -134,6 +134,8 @@ function renderCharacterDetail() {
     if (sidebarParams.reproductionCooldownSeconds === undefined) sidebarParams.reproductionCooldownSeconds = 10;
     if (sidebarParams.autoRecoverStall === undefined) sidebarParams.autoRecoverStall = true;
     if (sidebarParams.recoverActionCooldown === undefined) sidebarParams.recoverActionCooldown = 0.5;
+    if (sidebarParams.recentDigCooldownMs === undefined) sidebarParams.recentDigCooldownMs = 10000;
+    if (sidebarParams.digActionCooldown === undefined) sidebarParams.digActionCooldown = 2200;
     if (sidebarParams.fallbackBackoffMs === undefined) sidebarParams.fallbackBackoffMs = 1500;
     if (sidebarParams.pathInvalidationBackoffFactor === undefined) sidebarParams.pathInvalidationBackoffFactor = 0.2;
     if (sidebarParams.pathInvalidationBackoffMax === undefined) sidebarParams.pathInvalidationBackoffMax = 2.0;
@@ -147,6 +149,8 @@ function renderCharacterDetail() {
     window.reproductionCooldownSeconds = sidebarParams.reproductionCooldownSeconds;
     window.autoRecoverStall = sidebarParams.autoRecoverStall;
     window.recoverActionCooldown = sidebarParams.recoverActionCooldown;
+    window.recentDigCooldownMs = sidebarParams.recentDigCooldownMs;
+    window.digActionCooldown = sidebarParams.digActionCooldown;
     window.fallbackBackoffMs = sidebarParams.fallbackBackoffMs;
     window.pathInvalidationBackoffFactor = sidebarParams.pathInvalidationBackoffFactor;
     window.pathInvalidationBackoffMax = sidebarParams.pathInvalidationBackoffMax;
@@ -374,6 +378,45 @@ function renderCharacterDetail() {
     });
     affinityDecayRow.appendChild(affinityDecayNumber);
     paramBox.appendChild(affinityDecayRow);
+
+    // --- Dig cooldown controls ---
+    const digRow = document.createElement('div');
+    digRow.style.display = 'flex';
+    digRow.style.alignItems = 'center';
+    digRow.style.gap = '10px';
+    const digLabel = document.createElement('span');
+    digLabel.textContent = 'Recent Dig Cooldown (ms):';
+    digLabel.style.width = '140px';
+    digRow.appendChild(digLabel);
+    const digInput = document.createElement('input');
+    digInput.type = 'number';
+    digInput.min = 0;
+    digInput.max = 60000;
+    digInput.value = sidebarParams.recentDigCooldownMs;
+    digInput.style.width = '100px';
+    digInput.disabled = paramDisabled;
+    digInput.addEventListener('input', e => {
+        sidebarParams.recentDigCooldownMs = Number(e.target.value);
+        window.recentDigCooldownMs = Number(e.target.value);
+    });
+    digRow.appendChild(digInput);
+    const digActionLabel = document.createElement('span');
+    digActionLabel.textContent = ' Dig Action Cooldown (ms):';
+    digActionLabel.style.width = '160px';
+    digRow.appendChild(digActionLabel);
+    const digActionInput = document.createElement('input');
+    digActionInput.type = 'number';
+    digActionInput.min = 200;
+    digActionInput.max = 10000;
+    digActionInput.value = sidebarParams.digActionCooldown;
+    digActionInput.style.width = '100px';
+    digActionInput.disabled = paramDisabled;
+    digActionInput.addEventListener('input', e => {
+        sidebarParams.digActionCooldown = Number(e.target.value);
+        window.digActionCooldown = Number(e.target.value);
+    });
+    digRow.appendChild(digActionInput);
+    paramBox.appendChild(digRow);
 
     // --- Backoff: fallback/backoff tuning ---
     const backoffRow = document.createElement('div');
