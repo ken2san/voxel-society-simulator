@@ -2716,6 +2716,11 @@ class Character {
                 this.path = this.bfsPath(this.gridPos, this.targetPos);
             }
 
+            // If we obtained a valid path, reset invalidation counter
+            if (this.path && this.path.length > 0 && this.validatePath(this.path)) {
+                this._pathInvalidationCount = 0;
+            }
+
             if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
                 // --- CHOP_WOOD特化: 木材収集失敗時の積極的対処 ---
                 if (this.action && this.action.type === 'CHOP_WOOD') {
@@ -2894,7 +2899,16 @@ class Character {
             this.releaseReservedSidestep && this.releaseReservedSidestep();
             this.path = [];
             this.state = 'idle';
-            this.actionCooldown = 0.4;
+            // path invalidation backoff: avoid immediate recompute loops
+            if (!this._pathInvalidationCount) this._pathInvalidationCount = 0;
+            this._pathInvalidationCount++;
+            const extra = Math.min(2.0, 0.2 * this._pathInvalidationCount);
+            this.actionCooldown = 0.4 + extra + Math.random() * 0.2;
+            // if we've had many invalidations recently, reset counters and add longer cooldown
+            if (this._pathInvalidationCount > 6) {
+                this._pathInvalidationCount = 0;
+                this.actionCooldown += 0.8 + Math.random() * 0.8;
+            }
             return;
         }
         // --- 落下先が安全か判定してから移動 ---
@@ -3619,8 +3633,16 @@ class Character {
 
         // Fallback safety
         if (!this.action || this.action === null) {
-            this.log('⚠️ No action chosen by AI, falling back to WANDER');
-            this.setNextAction('WANDER');
+            // Avoid immediately falling back to WANDER repeatedly (causes trembling)
+            const now = Date.now();
+            if (!this._lastFallbackTime || (now - this._lastFallbackTime) > 1500) {
+                this.log('⚠️ No action chosen by AI, falling back to WANDER');
+                this.setNextAction('WANDER');
+                this._lastFallbackTime = now;
+            } else {
+                // small idle cooldown to prevent tight loop
+                this.actionCooldown = Math.max(this.actionCooldown, 0.6 + Math.random() * 0.6);
+            }
         }
     }    updateColorFromPersonality() {
         const r = Math.max(0, Math.min(1, 0.2 + (this.personality.bravery - 0.5)));
