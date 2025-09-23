@@ -127,9 +127,21 @@ function renderCharacterDetail() {
     if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
     if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
     if (sidebarParams.affinityIncreaseRate === undefined) sidebarParams.affinityIncreaseRate = 10;
+    // 新しいコントロールのデフォルト
+    if (sidebarParams.pairReproductionCooldownSeconds === undefined) sidebarParams.pairReproductionCooldownSeconds = 60;
+    if (sidebarParams.maxAffinity === undefined) sidebarParams.maxAffinity = 100;
+    if (sidebarParams.reproductionCooldownSeconds === undefined) sidebarParams.reproductionCooldownSeconds = 10;
+    if (sidebarParams.autoRecoverStall === undefined) sidebarParams.autoRecoverStall = true;
+    if (sidebarParams.recoverActionCooldown === undefined) sidebarParams.recoverActionCooldown = 0.5;
     window.initialAffinityMin = sidebarParams.initialAffinityMin;
     window.initialAffinityMax = sidebarParams.initialAffinityMax;
     window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
+    // Expose new knobs to global window for runtime tuning
+    window.pairReproductionCooldownSeconds = sidebarParams.pairReproductionCooldownSeconds;
+    window.maxAffinity = sidebarParams.maxAffinity;
+    window.reproductionCooldownSeconds = sidebarParams.reproductionCooldownSeconds;
+    window.autoRecoverStall = sidebarParams.autoRecoverStall;
+    window.recoverActionCooldown = sidebarParams.recoverActionCooldown;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
@@ -397,6 +409,156 @@ function renderCharacterDetail() {
     });
     affinityResetRow.appendChild(affinityResetNumber);
     paramBox.appendChild(affinityResetRow);
+
+    // --- Pair reproduction cooldown slider ---
+    const pairCooldownRow = document.createElement('div');
+    pairCooldownRow.style.display = 'flex';
+    pairCooldownRow.style.alignItems = 'center';
+    pairCooldownRow.style.gap = '10px';
+    const pairCooldownLabel = document.createElement('span');
+    pairCooldownLabel.textContent = 'Pair Cooldown (s):';
+    pairCooldownLabel.style.width = '140px';
+    pairCooldownRow.appendChild(pairCooldownLabel);
+    const pairCooldownInput = document.createElement('input');
+    pairCooldownInput.type = 'range';
+    pairCooldownInput.min = 0;
+    pairCooldownInput.max = 300;
+    pairCooldownInput.step = 1;
+    pairCooldownInput.value = sidebarParams.pairReproductionCooldownSeconds;
+    pairCooldownInput.style.width = '120px';
+    pairCooldownInput.disabled = paramDisabled;
+    pairCooldownInput.addEventListener('input', e => {
+        sidebarParams.pairReproductionCooldownSeconds = Number(e.target.value);
+        pairCooldownNumber.value = e.target.value;
+        window.pairReproductionCooldownSeconds = Number(e.target.value);
+    });
+    pairCooldownRow.appendChild(pairCooldownInput);
+    const pairCooldownNumber = document.createElement('input');
+    pairCooldownNumber.type = 'number';
+    pairCooldownNumber.min = 0;
+    pairCooldownNumber.max = 300;
+    pairCooldownNumber.step = 1;
+    pairCooldownNumber.value = sidebarParams.pairReproductionCooldownSeconds;
+    pairCooldownNumber.style.width = '56px';
+    pairCooldownNumber.disabled = paramDisabled;
+    pairCooldownNumber.addEventListener('input', e => {
+        sidebarParams.pairReproductionCooldownSeconds = Number(e.target.value);
+        pairCooldownInput.value = e.target.value;
+        window.pairReproductionCooldownSeconds = Number(e.target.value);
+    });
+    pairCooldownRow.appendChild(pairCooldownNumber);
+    paramBox.appendChild(pairCooldownRow);
+
+    // --- Max affinity slider ---
+    const maxAffinityRow = document.createElement('div');
+    maxAffinityRow.style.display = 'flex';
+    maxAffinityRow.style.alignItems = 'center';
+    maxAffinityRow.style.gap = '10px';
+    const maxAffinityLabel = document.createElement('span');
+    maxAffinityLabel.textContent = 'Max Affinity:';
+    maxAffinityLabel.style.width = '140px';
+    maxAffinityRow.appendChild(maxAffinityLabel);
+    const maxAffinityInput = document.createElement('input');
+    maxAffinityInput.type = 'range';
+    maxAffinityInput.min = 50;
+    maxAffinityInput.max = 500;
+    maxAffinityInput.step = 1;
+    maxAffinityInput.value = sidebarParams.maxAffinity;
+    maxAffinityInput.style.width = '120px';
+    maxAffinityInput.disabled = paramDisabled;
+    maxAffinityInput.addEventListener('input', e => {
+        sidebarParams.maxAffinity = Number(e.target.value);
+        maxAffinityNumber.value = e.target.value;
+        window.maxAffinity = Number(e.target.value);
+    });
+    maxAffinityRow.appendChild(maxAffinityInput);
+    const maxAffinityNumber = document.createElement('input');
+    maxAffinityNumber.type = 'number';
+    maxAffinityNumber.min = 50;
+    maxAffinityNumber.max = 500;
+    maxAffinityNumber.step = 1;
+    maxAffinityNumber.value = sidebarParams.maxAffinity;
+    maxAffinityNumber.style.width = '56px';
+    maxAffinityNumber.disabled = paramDisabled;
+    maxAffinityNumber.addEventListener('input', e => {
+        sidebarParams.maxAffinity = Number(e.target.value);
+        maxAffinityInput.value = e.target.value;
+        window.maxAffinity = Number(e.target.value);
+    });
+    maxAffinityRow.appendChild(maxAffinityNumber);
+    paramBox.appendChild(maxAffinityRow);
+
+    // --- Parent reproduction cooldown slider ---
+    const parentCooldownRow = document.createElement('div');
+    parentCooldownRow.style.display = 'flex';
+    parentCooldownRow.style.alignItems = 'center';
+    parentCooldownRow.style.gap = '10px';
+    const parentCooldownLabel = document.createElement('span');
+    parentCooldownLabel.textContent = 'Parent Cooldown (s):';
+    parentCooldownLabel.style.width = '140px';
+    parentCooldownRow.appendChild(parentCooldownLabel);
+    const parentCooldownInput = document.createElement('input');
+    parentCooldownInput.type = 'range';
+    parentCooldownInput.min = 0;
+    parentCooldownInput.max = 120;
+    parentCooldownInput.step = 1;
+    parentCooldownInput.value = sidebarParams.reproductionCooldownSeconds;
+    parentCooldownInput.style.width = '120px';
+    parentCooldownInput.disabled = paramDisabled;
+    parentCooldownInput.addEventListener('input', e => {
+        sidebarParams.reproductionCooldownSeconds = Number(e.target.value);
+        parentCooldownNumber.value = e.target.value;
+        window.reproductionCooldownSeconds = Number(e.target.value);
+    });
+    parentCooldownRow.appendChild(parentCooldownInput);
+    const parentCooldownNumber = document.createElement('input');
+    parentCooldownNumber.type = 'number';
+    parentCooldownNumber.min = 0;
+    parentCooldownNumber.max = 120;
+    parentCooldownNumber.step = 1;
+    parentCooldownNumber.value = sidebarParams.reproductionCooldownSeconds;
+    parentCooldownNumber.style.width = '56px';
+    parentCooldownNumber.disabled = paramDisabled;
+    parentCooldownNumber.addEventListener('input', e => {
+        sidebarParams.reproductionCooldownSeconds = Number(e.target.value);
+        parentCooldownInput.value = e.target.value;
+        window.reproductionCooldownSeconds = Number(e.target.value);
+    });
+    parentCooldownRow.appendChild(parentCooldownNumber);
+    paramBox.appendChild(parentCooldownRow);
+
+    // --- Auto recover stall toggle + recovery cooldown ---
+    const autoRecoverRow = document.createElement('div');
+    autoRecoverRow.style.display = 'flex';
+    autoRecoverRow.style.alignItems = 'center';
+    autoRecoverRow.style.gap = '10px';
+    const autoRecoverLabel = document.createElement('span');
+    autoRecoverLabel.textContent = 'Auto Recover Stall:';
+    autoRecoverLabel.style.width = '140px';
+    autoRecoverRow.appendChild(autoRecoverLabel);
+    const autoRecoverCheckbox = document.createElement('input');
+    autoRecoverCheckbox.type = 'checkbox';
+    autoRecoverCheckbox.checked = !!sidebarParams.autoRecoverStall;
+    autoRecoverCheckbox.disabled = paramDisabled;
+    autoRecoverCheckbox.addEventListener('change', e => {
+        sidebarParams.autoRecoverStall = !!e.target.checked;
+        window.autoRecoverStall = !!e.target.checked;
+    });
+    autoRecoverRow.appendChild(autoRecoverCheckbox);
+    const recoverCooldownNumber = document.createElement('input');
+    recoverCooldownNumber.type = 'number';
+    recoverCooldownNumber.min = 0;
+    recoverCooldownNumber.max = 5;
+    recoverCooldownNumber.step = 0.1;
+    recoverCooldownNumber.value = sidebarParams.recoverActionCooldown;
+    recoverCooldownNumber.style.width = '64px';
+    recoverCooldownNumber.disabled = paramDisabled;
+    recoverCooldownNumber.addEventListener('input', e => {
+        sidebarParams.recoverActionCooldown = Number(e.target.value);
+        window.recoverActionCooldown = Number(e.target.value);
+    });
+    autoRecoverRow.appendChild(recoverCooldownNumber);
+    paramBox.appendChild(autoRecoverRow);
 
     // キャラ数
     const charNumRow = document.createElement('div');
