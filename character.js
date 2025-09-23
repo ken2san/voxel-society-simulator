@@ -271,6 +271,17 @@ class Character {
     // --- 目的地到着後の実際のアクション実行 ---
     executeAction() {
         this.log('⚡ executeAction called:', this.action?.type);
+        // Release reservation for this target (if we reserved it)
+        if (this.action && this.action.target) {
+            const rt = this.action.target;
+            const rkey = `${rt.x},${rt.y},${rt.z}`;
+            if (typeof window !== 'undefined' && window.worldReservations) {
+                const res = window.worldReservations.get(rkey);
+                if (res && res.owner === this.id) {
+                    window.worldReservations.delete(rkey);
+                }
+            }
+        }
         if (!this.action || !this.action.type) {
             this.state = 'idle';
             return;
@@ -873,6 +884,41 @@ class Character {
             // 到達可能な候補がなければ従来通り
         }
 
+        // Reservation and failed-target avoidance: if the target is a grid position, check reservations and failure counts
+        if (target && target.x !== undefined && target.y !== undefined && target.z !== undefined) {
+            const tkey = `${target.x},${target.y},${target.z}`;
+            // If this target is known to have repeated failures, skip it
+            // Check temporary blacklist first
+            if (Character.isBlacklisted(tkey)) {
+                this.log('Skipping blacklisted target:', tkey);
+                this.setNextAction('WANDER');
+                return;
+            }
+            const failCount = Character.getFailedCount(tkey) || 0;
+            if (failCount >= 3) {
+                this.log('Skipping frequently failing target:', tkey, 'failCount=', failCount);
+                // Fallback to wander
+                this.setNextAction('WANDER');
+                return;
+            }
+
+            // Use reservation utility which performs TTL cleanup
+            const existing = Character.getReservation(tkey);
+            if (existing && existing.owner !== this.id) {
+                this.log('Target reserved by another, falling back to WANDER:', tkey);
+                this.setNextAction('WANDER');
+                return;
+            }
+
+            // Try to reserve; if reservation fails (race), fallback
+            const reserved = Character.reserveTarget(tkey, this.id, 3000);
+            if (!reserved) {
+                this.log('Failed to reserve target (race), falling back to WANDER:', tkey);
+                this.setNextAction('WANDER');
+                return;
+            }
+        }
+
         this.action = { type, target, item };
         if (moveTo && type !== 'SOCIALIZE') {
             this.targetPos = moveTo;
@@ -899,6 +945,137 @@ class Character {
 // Duplicate class declaration removed
     // --- 失敗ターゲット記憶用: 食料採集失敗時に同じ座標を避ける ---
     static failedFoodTargets = new Set();
+    // --- 汎用失敗ターゲットカウント: 失敗回数をカウントして一時的にブラックリスト化 ---
+    static failedTargetCounts = new Map();
+
+    // --- Failed target counter with TTL/decay ---
+    // Stores entries as key -> { count, lastFailTs }
+    static incrFailedTarget(key) {
+        const now = Date.now();
+        const prev = Character.failedTargetCounts.get(key) || { count: 0, lastFailTs: 0 };
+        const decayInterval = (typeof window !== 'undefined' && window.failedDecayIntervalMs) ? window.failedDecayIntervalMs : 30000;
+        const delta = (now - (prev.lastFailTs || 0));
+        // If last failure was long ago, decay the count
+        let base = prev.count || 0;
+        if (delta > decayInterval) {
+            base = Math.max(0, base - Math.floor(delta / decayInterval));
+        }
+        const next = { count: base + 1, lastFailTs: now };
+        Character.failedTargetCounts.set(key, next);
+        // If threshold reached, mark temporary blacklist
+    const threshold = (typeof window !== 'undefined' && window.failedTargetThreshold) ? window.failedTargetThreshold : 3;
+    const blacklistMs = (typeof window !== 'undefined' && window.failedTargetBlacklistMs) ? window.failedTargetBlacklistMs : 30000;
+        if (next.count >= threshold) {
+            // attach blacklistUntil to entry
+            next.blacklistUntil = now + blacklistMs;
+            Character.failedTargetCounts.set(key, next);
+            // store in separate quick lookup if desired (we keep it on same entry)
+            return -1; // signal that blacklist was set
+        }
+        return next.count;
+    }
+
+    static getFailedCount(key) {
+        const entry = Character.failedTargetCounts.get(key);
+        if (!entry) return 0;
+        // Apply decay on read
+        const now = Date.now();
+        const decayInterval = (typeof window !== 'undefined' && window.failedDecayIntervalMs) ? window.failedDecayIntervalMs : 30000;
+        const delta = now - entry.lastFailTs;
+        let count = entry.count;
+        if (delta > decayInterval) {
+            count = Math.max(0, count - Math.floor(delta / decayInterval));
+        }
+        return count;
+    }
+
+    static clearFailedTarget(key) {
+        Character.failedTargetCounts.delete(key);
+    }
+
+    // --- Blacklist helpers ---
+    static isBlacklisted(key) {
+        const entry = Character.failedTargetCounts.get(key);
+        if (!entry) return false;
+        if (entry.blacklistUntil && Date.now() < entry.blacklistUntil) return true;
+        // expired? remove blacklistUntil
+        if (entry.blacklistUntil && Date.now() >= entry.blacklistUntil) {
+            delete entry.blacklistUntil;
+            // optionally decay count a bit
+            entry.count = Math.max(0, entry.count - 1);
+            Character.failedTargetCounts.set(key, entry);
+            return false;
+        }
+        return false;
+    }
+
+    static clearBlacklist(key) {
+        const entry = Character.failedTargetCounts.get(key);
+        if (!entry) return;
+        delete entry.blacklistUntil;
+        Character.failedTargetCounts.set(key, entry);
+    }
+
+    // --- Reservation utilities (global lightweight reservation system) ---
+    // Reservations are stored in window.worldReservations as key -> { owner, ts, ttl }
+    static reserveTarget(key, owner, ttl) {
+        if (typeof window === 'undefined') return false;
+        if (!window.worldReservations) window.worldReservations = new Map();
+        // allow runtime override of default TTL
+        if (ttl === undefined) ttl = (typeof window !== 'undefined' && window.worldReservationTTL) ? window.worldReservationTTL : 3000;
+        // cleanup expired before reserving
+        Character.cleanupReservations();
+        const existing = window.worldReservations.get(key);
+        if (existing && (Date.now() - existing.ts) < (existing.ttl || 0) && existing.owner !== owner) {
+            return false; // already reserved by someone else
+        }
+        window.worldReservations.set(key, { owner, ts: Date.now(), ttl });
+        return true;
+    }
+
+    static getReservation(key) {
+        if (typeof window === 'undefined' || !window.worldReservations) return null;
+        const r = window.worldReservations.get(key);
+        if (!r) return null;
+        if (Date.now() - r.ts > (r.ttl || 0)) {
+            window.worldReservations.delete(key);
+            return null;
+        }
+        return r;
+    }
+
+    static isReserved(key) {
+        return !!Character.getReservation(key);
+    }
+
+    static releaseReservation(key, owner) {
+        if (typeof window === 'undefined' || !window.worldReservations) return;
+        const r = window.worldReservations.get(key);
+        if (!r) return;
+        // Only owner can release to avoid accidental deletions; allow release if owner matches
+        if (!owner || r.owner === owner) {
+            window.worldReservations.delete(key);
+        }
+    }
+
+    static cleanupReservations() {
+        if (typeof window === 'undefined' || !window.worldReservations) return;
+        const now = Date.now();
+        for (const [k, v] of Array.from(window.worldReservations.entries())) {
+            if (!v || (v.ttl && (now - v.ts > v.ttl))) {
+                window.worldReservations.delete(k);
+            }
+        }
+    }
+    // Instance helper: release any sidestep reservation this character currently holds
+    releaseReservedSidestep() {
+        try {
+            if (this._reservedSidestepKey) {
+                Character.releaseReservation(this._reservedSidestepKey, this.id);
+                this._reservedSidestepKey = null;
+            }
+        } catch (e) { /* ignore */ }
+    }
     // --- Group detection and per-group leader election ---
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
@@ -1205,6 +1382,29 @@ class Character {
             return { canMove: false, reason: 'blocked_by_ceiling' };
         }
 
+        // Allow stepping up by 1 block if footing exists at destination or one below
+        const dy = y - this.gridPos.y;
+        if (dy > 1) return { canMove: false, reason: 'too_high' };
+        if (dy === 1) {
+            // require that destination has footing (block under it) or it's ground level
+            const belowDest = `${x},${y-1},${z}`;
+            if (!worldData.has(belowDest) && y !== 0) {
+                return { canMove: false, reason: 'no_footing_for_step' };
+            }
+        }
+
+        // Prevent walking into unsupported mid-air cells: require footing under destination
+        // unless the destination itself is cave air or ground level
+        const belowKey = `${x},${y-1},${z}`;
+        const destVal = worldData.get(`${x},${y},${z}`);
+        const destIsCave = destVal && typeof destVal === 'object' && destVal.cave;
+        if (y > 0 && !worldData.has(belowKey) && !destIsCave) {
+            return { canMove: false, reason: 'no_footing' };
+        }
+
+        // Don't step into a cell occupied by another character
+        if (this.isOccupiedByOther(x, y, z)) return { canMove: false, reason: 'occupied_by_char' };
+
         return { canMove: true };
     }
 
@@ -1222,120 +1422,88 @@ class Character {
 
     // --- BFS経路探索（統合版） ---
     bfsPath(start, goal, maxStep = 128, allowDiagonal = true, allowVertical = true, directMoveThreshold = 3) {
-        // 距離が近い場合は直接移動を試す
+        // Greedy best-first search using heuristic (Manhattan). This is a small, low-risk change
+        // that focuses exploration toward the goal and generally yields shorter, more natural paths
+        // without full A* bookkeeping.
         const directDist = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y) + Math.abs(start.z - goal.z);
-        if (directDist <= directMoveThreshold) {
-            // 直接移動できそうな場合は簡単なパスを返す
-            return [goal];
-        }
+        if (directDist <= directMoveThreshold) return [goal];
 
-        const queue = [];
-        const visited = new Set();
-        const parent = new Map();
         const key = (p) => `${p.x},${p.y},${p.z}`;
-        queue.push(start);
+        const open = [{ pos: start, parent: null }];
+        const parent = new Map();
+        const visited = new Set();
         visited.add(key(start));
-        let found = false;
-        let final = null;
         let steps = 0;
+        let bestCandidate = start;
 
-        while (queue.length > 0 && !found && steps < maxStep) {
-            const cur = queue.shift();
+        const heuristic = (p) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) + Math.abs(p.z - goal.z);
+
+        while (open.length > 0 && steps < maxStep) {
+            // sort by heuristic ascending (closest to goal first)
+            open.sort((a, b) => heuristic(a.pos) - heuristic(b.pos));
+            const node = open.shift();
+            const cur = node.pos;
             steps++;
+            const curKey = key(cur);
+
+            const curH = heuristic(cur);
+            if (curH < heuristic(bestCandidate)) bestCandidate = cur;
 
             if (cur.x === goal.x && cur.y === goal.y && cur.z === goal.z) {
-                found = true; final = cur; break;
+                // reached goal
+                const path = [];
+                let c = cur;
+                while (c && (c.x !== start.x || c.y !== start.y || c.z !== start.z)) {
+                    path.push(c);
+                    c = parent.get(key(c));
+                }
+                path.reverse();
+                return path;
             }
 
-            // 移動方向を設定に基づいて動的に構築
+            // expand neighbors
             const dirs = this._getMovementDirections(allowDiagonal, allowVertical);
-
             for (const d of dirs) {
-                let nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
-
-                // 高さ制限チェック
+                const nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
                 if (ny < 0 || ny > maxHeight) continue;
-
                 const nkey = `${nx},${ny},${nz}`;
                 if (visited.has(nkey)) continue;
 
-                // 移動先の障害物チェック（より厳密に）
+                // basic filters same as before
                 const blockId = worldData.get(nkey);
-                if (!this.isBlockPassable(blockId)) {
-                    continue; // ソリッドブロックは通れない
-                }
-
-                // 足場チェック（下降・水平移動時も適用）
+                if (!this.isBlockPassable(blockId)) continue;
                 if (ny > 0) {
                     const below = `${nx},${ny-1},${nz}`;
                     const hasFooting = worldData.has(below);
-                    // 地面レベル（y=0）以外では足場が必要
-                    if (!hasFooting && ny > 1) {
-                        continue; // 足場がない場合は移動不可
-                    }
+                    if (!hasFooting && ny > 1) continue;
                 }
-
-                // 頭上チェック（キャラクターの高さを考慮）
                 const aboveBlockId = worldData.get(`${nx},${ny+1},${nz}`);
-                if (!this.isBlockPassable(aboveBlockId)) {
-                    continue; // 頭上にソリッドブロックがある場合は移動不可
-                }
-
-                // 段差制限：2ブロック以上の上昇は不可
+                if (!this.isBlockPassable(aboveBlockId)) continue;
                 if (d.dy > 0 && Math.abs(ny - cur.y) > 2) continue;
+                // avoid stepping into a cell occupied by other characters
+                if (this.isOccupiedByOther(nx, ny, nz)) continue;
+                // diagonal corner check
+                if (this._isDiagonalCornerMoveBlocked(cur, {x:nx,y:ny,z:nz})) continue;
 
-                queue.push({x:nx,y:ny,z:nz});
                 visited.add(nkey);
                 parent.set(nkey, cur);
+                open.push({ pos: { x: nx, y: ny, z: nz }, parent: cur });
             }
         }
 
-        // 見つからない場合でも部分的なパスを返す
-        if (!found && queue.length > 0) {
-            // 目標に最も近いポイントを選ぶ
-            let bestNode = null;
-            let bestDistance = Infinity;
-            for (const node of queue) {
-                const dist = Math.abs(node.x - goal.x) + Math.abs(node.y - goal.y) + Math.abs(node.z - goal.z);
-                if (dist < bestDistance) {
-                    bestDistance = dist;
-                    bestNode = node;
-                }
-            }
-            if (bestNode) {
-                final = bestNode;
-                found = true;
-            }
-        }
-
-        if (!found) {
-            // 最後の手段：直線的なパスを生成
+        // no path found: try to return best candidate toward goal
+        if (bestCandidate && (bestCandidate.x !== start.x || bestCandidate.y !== start.y || bestCandidate.z !== start.z)) {
             const path = [];
-            const dx = goal.x > start.x ? 1 : goal.x < start.x ? -1 : 0;
-            const dz = goal.z > start.z ? 1 : goal.z < start.z ? -1 : 0;
-            const dy = goal.y > start.y ? 1 : goal.y < start.y ? -1 : 0;
-
-            let currentX = start.x, currentY = start.y, currentZ = start.z;
-            let steps = 0;
-            while ((currentX !== goal.x || currentY !== goal.y || currentZ !== goal.z) && steps < 20) {
-                if (currentX !== goal.x) currentX += dx;
-                if (currentZ !== goal.z) currentZ += dz;
-                if (currentY !== goal.y) currentY += dy;
-                path.push({x: currentX, y: currentY, z: currentZ});
-                steps++;
+            let c = bestCandidate;
+            while (c && (c.x !== start.x || c.y !== start.y || c.z !== start.z)) {
+                path.push(c);
+                c = parent.get(key(c));
             }
+            path.reverse();
             return path.length > 0 ? path : null;
         }
 
-        // 経路復元
-        const path = [];
-        let cur = final;
-        while (cur && (cur.x !== start.x || cur.y !== start.y || cur.z !== start.z)) {
-            path.push(cur);
-            cur = parent.get(key(cur));
-        }
-        path.reverse();
-        return path;
+        return null;
     }
 
     // --- シェルター探索（bak_game.js準拠）---
@@ -1509,6 +1677,23 @@ class Character {
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
 
+    // --- Liveliness: breathing and glance state ---
+    this._breathPhase = Math.random() * Math.PI * 2;
+    this._breathRate = 0.6 + Math.random() * 0.8; // slow cycle
+    this._breathAmp = 0.02 + Math.random() * 0.03; // small scale amplitude
+    this._lookTargetPos = null; // {x,y,z} or null
+    this._lookLerp = 0.12; // smoothing for head turns
+    this._idleGlanceTimer = Math.random() * 6 + 2;
+    this._idleGlanceInterval = 4 + Math.random() * 6;
+    this._lookHoldTimer = 0;
+    this._randomHeadOffset = 0;
+    // --- Step / gait state (for foot-bob & arm sync) ---
+    this._stepPhase = Math.random() * Math.PI * 2;
+    this._stepOffset = Math.random() * Math.PI * 2;
+    this._stepFreqBase = 6.0; // base step freq multiplier for movement
+    this._stepAmp = 0.10; // vertical bob amplitude (grid units)
+    this._swayAmp = 0.06; // lateral sway amplitude
+
         // --- Action icon (for action effect) ---
         this.actionIconDiv = document.createElement('div');
         this.actionIconDiv.className = 'action-icon';
@@ -1519,6 +1704,11 @@ class Character {
         this.actionIconDiv.style.transition = 'opacity 0.3s, transform 0.3s';
         this.actionIconDiv.style.opacity = 0;
         document.body.appendChild(this.actionIconDiv);
+
+        // Ensure a global lightweight reservation map exists to avoid duplicate targets
+        if (typeof window !== 'undefined') {
+            if (!window.worldReservations) window.worldReservations = new Map();
+        }
     }
 
     // --- 全キャラクターのrelationshipsを一括初期化 ---
@@ -2024,34 +2214,41 @@ class Character {
                 let affinity = this.relationships.get(partner.id) || 0;
                 affinity += deltaTime * affinityRate;
                 this.relationships.set(partner.id, affinity);
-                // --- ハートアイコン表示: loveTimerをセット ---
-                // 両者が距離1以内＆友好度60以上ならloveTimerセット（SOCIALIZE中は常にハート表示）
+                // --- ハート表示 & reproduction logic ---
+                // 両者が距離1以内＆友好度60以上でハート表示。もし既にlovePhaseが'showing'かつ
+                // loveTimerが<=0ならreproduceを先に実行する（timerリセットを防ぐため）。
                 const dist = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
 
-                if (dist <= 1 && affinity >= 60) {
-                    // SOCIALIZE中は常にハート表示
-                    if (this.loveTimer <= 0) {
-                        this.loveTimer = 3.0; // 3秒間ハート表示
-                        this.lovePhase = 'showing'; // ハート表示フェーズ
-                    }
-                    if (partner.loveTimer <= 0) {
-                        partner.loveTimer = 3.0;
-                        partner.lovePhase = 'showing';
-                    }
-                }
-
-                // loveTimer終了時に子供生成（重複防止）
+                // If timer expired while still in socializing and conditions met, reproduce first
                 if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60) {
                     if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
+                        try { console.log(`[LOVE] ${this.id} loveTimer expired, reproducing with ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                         this.reproduceWith && this.reproduceWith(partner);
-                        // 友好度リセット値をパラメータ化（デフォルト10）
-                        const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 10;
+                        const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
                         this.relationships.set(partner.id, resetVal);
                         partner.relationships.set(this.id, resetVal);
                         this._childCreatedWith = partner.id;
                         partner._childCreatedWith = this.id;
-                        this.lovePhase = 'completed'; // 子供生成完了
+                        this.lovePhase = 'completed';
                         partner.lovePhase = 'completed';
+                    }
+                }
+
+                // Set or refresh heart display if in proximity and affinity high enough
+                if (dist <= 1 && affinity >= 60) {
+                    // Only start the timer if it's not currently 'showing'
+                    if (this.loveTimer <= 0 && this.lovePhase !== 'showing') {
+                        this.loveTimer = 3.0; // 3 seconds showing
+                        this.lovePhase = 'showing';
+                        // persist partner id so expiry logic can find the partner even if action cleared
+                        this._lovePartnerId = partner.id;
+                        try { console.log(`[LOVE] ${this.id} started loveTimer with partner ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
+                    }
+                    if (partner.loveTimer <= 0 && partner.lovePhase !== 'showing') {
+                        partner.loveTimer = 3.0;
+                        partner.lovePhase = 'showing';
+                        partner._lovePartnerId = this.id;
+                        try { console.log(`[LOVE] ${partner.id} started loveTimer with partner ${this.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                     }
                 }
             } else if (partner) {
@@ -2125,11 +2322,62 @@ class Character {
         }
         if (this.state === 'moving') this.updateMovement(deltaTime);
         this.updateAnimations(deltaTime);
+        // Child aging: increase age and mature when reaching maturityAge
+        if (this.isChild) {
+            if (typeof this.age !== 'number') this.age = 0;
+            this.age += deltaTime;
+            if (this.age >= (this.maturityAge || 60)) {
+                // mature: restore movement, scale, and clear child flag
+                this.isChild = false;
+                if (typeof this._preChildMovementSpeed === 'number') this.movementSpeed = this._preChildMovementSpeed;
+                if (this.mesh && this.mesh.scale) this.mesh.scale.set(1,1,1);
+                if (this.body && this.body.scale) this.body.scale.set(1,1,1);
+                if (this.head && this.head.scale) this.head.scale.set(1,1,1);
+                if (this.shadowMesh && this.shadowMesh.scale) this.shadowMesh.scale.multiplyScalar(1.3333);
+                try { console.log(`[GROW] ${this.id} matured after ${Math.round(this.age)}s`); } catch(e){}
+            }
+        }
         // --- loveTimer減少 ---
         if (this.loveTimer > 0) {
+            const prev = this.loveTimer;
             this.loveTimer -= deltaTime;
             if (this.loveTimer < 0) {
                 this.loveTimer = 0;
+                // debug: loveTimer expired — print context to diagnose reproduction issues
+                try {
+                    // prefer persisted partner id but fallback to current action target
+                    const partnerId = this._lovePartnerId || (this.action && this.action.target ? this.action.target.id : null);
+                    const affinity = partnerId ? (this.relationships.get(partnerId) || 0) : null;
+                    console.log(`[LOVE-TIMER] ${this.id} expired (prev=${prev.toFixed(2)}). lovePhase=${this.lovePhase} state=${this.state} partner=${partnerId} affinity=${affinity}`);
+
+                    // Attempt reproduction if conditions met and partner still exists
+                    if (partnerId && affinity >= ((typeof window !== 'undefined' && window.reproduceAffinityThreshold !== undefined) ? window.reproduceAffinityThreshold : 60)) {
+                        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+                        const partner = chars.find(c => c.id === partnerId);
+                        if (partner) {
+                            // allow reproduction if partner is socializing OR still showing love OR physically adjacent
+                            const prox = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
+                            const partnerShowingLove = (partner.lovePhase === 'showing' || (partner.loveTimer && partner.loveTimer > 0));
+                            if (partner.state === 'socializing' || partnerShowingLove || prox <= 1) {
+                                if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
+                                    console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
+                                    this.reproduceWith && this.reproduceWith(partner);
+                                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
+                                    this.relationships.set(partner.id, resetVal);
+                                    partner.relationships.set(this.id, resetVal);
+                                    this._childCreatedWith = partner.id;
+                                    partner._childCreatedWith = this.id;
+                                    this.lovePhase = 'completed';
+                                    partner.lovePhase = 'completed';
+                                }
+                            } else {
+                                console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner exists but not socializing/nearby (state=${partner.state} prox=${prox} lovePhase=${partner.lovePhase})`);
+                            }
+                        } else {
+                            console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner not found or not socializing`);
+                        }
+                    }
+                } catch (e) {}
                 // SOCIALIZE状態終了時にlovePhaseをリセット
                 if (this.state !== 'socializing') {
                     this.lovePhase = null;
@@ -2137,6 +2385,53 @@ class Character {
             }
         }
         this.updateThoughtBubble(isNight, camera);
+
+        // --- Stall detection and optional auto-recovery ---
+        try {
+            // config via window for runtime tuning
+            const maxCooldown = (typeof window !== 'undefined' && window.maxActionCooldown !== undefined) ? window.maxActionCooldown : 8;
+            const recoverCooldown = (typeof window !== 'undefined' && window.recoverActionCooldown !== undefined) ? window.recoverActionCooldown : 0.5;
+            const autoRecover = (typeof window !== 'undefined' && window.autoRecoverStall !== undefined) ? window.autoRecoverStall : true;
+
+            if (!this._stallState) this._stallState = { logged: false, cooldownLogged: false };
+
+            // Only treat long cooldowns as stalls when the character isn't intentionally in a long-blocking state
+            // e.g., working / meeting / resting are expected to have longer actionCooldown values
+            const stallEligibleStates = new Set(['idle', 'moving', 'socializing', 'confused']);
+            const isEligibleForStall = stallEligibleStates.has(this.state);
+
+            // Diagnostic: if actionCooldown is very large, log once to help track where it's coming from
+            const bigThreshold = maxCooldown * 2;
+            if (this.actionCooldown && this.actionCooldown > bigThreshold && !this._stallState.cooldownLogged) {
+                console.warn(`[ACTION-COOLDOWN] Char ${this.id} unusually large actionCooldown=${(this.actionCooldown||0).toFixed(2)} state=${this.state} action=${this.action?this.action.type:'-'} pathLen=${this.path?this.path.length:0}`);
+                this._stallState.cooldownLogged = true;
+            }
+            if (this.actionCooldown && this.actionCooldown <= maxCooldown && this._stallState.cooldownLogged) {
+                // reset the one-time diagnostic when cooldown returns to normal
+                this._stallState.cooldownLogged = false;
+            }
+
+            if ((this.actionCooldown && this.actionCooldown > maxCooldown && isEligibleForStall) || (this._microPauseTimer && this._microPauseTimer > 1.2)) {
+                if (!this._stallState.logged) {
+                    console.warn(`[STALL] Char ${this.id} appears stalled: state=${this.state} actionCooldown=${(this.actionCooldown||0).toFixed(2)} microPause=${(this._microPauseTimer||0).toFixed(2)} pathLen=${this.path?this.path.length:0}`);
+                    this._stallState.logged = true;
+                }
+                if (autoRecover && isEligibleForStall) {
+                    // nudge recovery: lower cooldown and force AI decision
+                    this.actionCooldown = recoverCooldown;
+                    // clear micro pause so movement can resume
+                    this._microPauseTimer = 0;
+                    // reset some stuck counters to allow rescue logic to operate again
+                    this.bfsFailCount = 0;
+                    if (this.state !== 'dead') {
+                        try { this.decideNextAction && this.decideNextAction(isNight); } catch (e) {}
+                    }
+                }
+            } else if (this._stallState.logged) {
+                console.log(`[STALL] Char ${this.id} recovered: actionCooldown=${(this.actionCooldown||0).toFixed(2)}`);
+                this._stallState.logged = false;
+            }
+        } catch (e) {}
 
         // --- UI用: 現在のアクション名をwindow.characters配列に同期 ---
         if (typeof window !== 'undefined' && window.characters) {
@@ -2274,9 +2569,80 @@ class Character {
         return success;
     }
 
+    // Validate a computed path step-by-step for current passability and corner-cutting
+    validatePath(path) {
+        if (!path || path.length === 0) return false;
+        let from = { ...this.gridPos };
+        for (const step of path) {
+            // occupancy check
+            const key = `${step.x},${step.y},${step.z}`;
+            if (worldData.has(key)) return false;
+
+            // Avoid stepping into a cell occupied by another character/entity
+            if (this.isOccupiedByOther(step.x, step.y, step.z)) return false;
+
+            // basic can-move check
+            const check = this.canMoveToPosition(step.x, step.y, step.z);
+            if (!check.canMove) return false;
+
+            // diagonal corner cutting: prevent moving diagonally between two blocked orthogonals
+            if (this._isDiagonalCornerMoveBlocked(from, step)) return false;
+
+            from = { x: step.x, y: step.y, z: step.z };
+        }
+        return true;
+    }
+
+    // Detect diagonal corner moves that would cut through solid corners
+    _isDiagonalCornerMoveBlocked(from, to) {
+        const dx = to.x - from.x;
+        const dz = to.z - from.z;
+        // only consider pure horizontal diagonal (no vertical)
+        if (Math.abs(dx) === 1 && Math.abs(dz) === 1 && to.y === from.y) {
+            // orthogonal neighbours
+            const key1 = `${from.x + dx},${from.y},${from.z}`;
+            const key2 = `${from.x},${from.y},${from.z + dz}`;
+            const blocked1 = (worldData.has(key1) && worldData.get(key1) !== BLOCK_TYPES.AIR.id) || this.isOccupiedByOther(from.x + dx, from.y, from.z);
+            const blocked2 = (worldData.has(key2) && worldData.get(key2) !== BLOCK_TYPES.AIR.id) || this.isOccupiedByOther(from.x, from.y, from.z + dz);
+            // if both orthogonals blocked, diagonal should be blocked
+            if (blocked1 && blocked2) return true;
+        }
+        return false;
+    }
+
     updateMovement(deltaTime) {
         // this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos }); // コメントアウト
         if (!this.targetPos) { this.state = 'idle'; return; }
+        // --- small "alive" movement tweaks ---
+        // variable speed (updated intermittently), micro-pauses (hesitation), and short arrival delay
+        if (!this._speedTicker) {
+            this._speedTicker = 0;
+            this._nextSpeedChange = 0.8 + Math.random() * 1.7;
+            this._speedMultiplier = 1.0;
+        }
+        this._speedTicker += deltaTime;
+        if (this._speedTicker > this._nextSpeedChange) {
+            this._speedMultiplier = 0.92 + Math.random() * 0.16; // between ~0.92 and ~1.08
+            this._speedTicker = 0;
+            this._nextSpeedChange = 0.8 + Math.random() * 2.0;
+        }
+
+        // arrival delay processing: if waiting to perform action after arriving
+        if (this._arrivalDelay && this._arrivalDelay > 0) {
+            this._arrivalDelay -= deltaTime;
+            if (this._arrivalDelay <= 0) {
+                this._arrivalDelay = 0;
+                this.executeAction && this.executeAction();
+            }
+            return; // pause movement while thinking/performing arrival delay
+        }
+
+        // micro-pause timer decrement (hesitation while moving)
+        if (this._microPauseTimer && this._microPauseTimer > 0) {
+            this._microPauseTimer -= deltaTime;
+            if (this._microPauseTimer > 0) return;
+            this._microPauseTimer = 0;
+        }
         // --- BFS経路探索（新システム使用） ---
         if (!this.path || this.path.length === 0 || !this.lastTargetPos ||
             this.lastTargetPos.x !== this.targetPos.x || this.lastTargetPos.y !== this.targetPos.y || this.lastTargetPos.z !== this.targetPos.z) {
@@ -2290,7 +2656,13 @@ class Character {
             });
 
             this.lastTargetPos = { ...this.targetPos };
-            if (!this.path || this.path.length === 0) {
+            // Validate path immediately after computation to avoid outdated/blocked routes
+            if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
+                // try fallback to bfsPath (older but sometimes more permissive)
+                this.path = this.bfsPath(this.gridPos, this.targetPos);
+            }
+
+            if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
                 // --- CHOP_WOOD特化: 木材収集失敗時の積極的対処 ---
                 if (this.action && this.action.type === 'CHOP_WOOD') {
                     this.log('CHOP_WOOD pathfinding failed, trying alternative approach');
@@ -2406,6 +2778,18 @@ class Character {
                     this.state = 'idle';
                     this.bfsFailCount = 0;
                     this.actionCooldown = 2.0; // Longer cooldown when giving up
+                    // Release reservation for this target if we reserved it and increment failure count
+                    if (this.action && this.action.target) {
+                        const tx = this.action.target.x, ty = this.action.target.y, tz = this.action.target.z;
+                        const tkey = `${tx},${ty},${tz}`;
+                        Character.releaseReservation(tkey, this.id);
+                        const res = Character.incrFailedTarget(tkey);
+                        if (res === -1) {
+                            this.log('Target reached blacklist threshold, blacklisting until TTL:', tkey);
+                        }
+                    }
+                    // release any sidestep reservation held by this character
+                    this.releaseReservedSidestep && this.releaseReservedSidestep();
                     return;
                 }
                 this.log('BFS pathfinding failed, will retry.');
@@ -2427,10 +2811,36 @@ class Character {
         }
         // 1マスずつ進む
         const next = this.path[0];
-        if (!next) {
+            if (!next) {
+            // clear any sidestep reservation when path emptied
+            this.releaseReservedSidestep && this.releaseReservedSidestep();
             this.state = 'idle';
             this.path = [];
             this.performAction && this.performAction();
+            return;
+        }
+        // If the next cell is occupied by another character, try a local avoidance sidestep
+        if (this.isOccupiedByOther(next.x, next.y, next.z)) {
+            const sidestep = this.tryLocalAvoidance(next);
+            if (sidestep) {
+                // Prepend sidestep to path so we move there first
+                this.path.unshift(sidestep);
+            } else {
+                // Can't avoid locally: clear path to force recompute
+                this.releaseReservedSidestep && this.releaseReservedSidestep();
+                this.path = [];
+                this.state = 'idle';
+                this.actionCooldown = 0.4;
+                return;
+            }
+        }
+        // Re-validate remaining path in case world changed while moving
+        if (!this.validatePath(this.path)) {
+            this.log('Path invalidated mid-move, clearing and will recompute');
+            this.releaseReservedSidestep && this.releaseReservedSidestep();
+            this.path = [];
+            this.state = 'idle';
+            this.actionCooldown = 0.4;
             return;
         }
         // --- 落下先が安全か判定してから移動 ---
@@ -2453,7 +2863,9 @@ class Character {
             this.body.rotation.y = angle;
             this.head.rotation.y = angle;
         }
-        const moveDistance = this.movementSpeed * deltaTime;
+    // apply speed multiplier for slight variation
+    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0);
+    const moveDistance = effectiveSpeed * deltaTime;
         if (direction.length() < moveDistance) {
             // 移動実行前の最終当たり判定チェック
             const moveCheck = this.canMoveToPosition(next.x, next.y, next.z);
@@ -2465,15 +2877,23 @@ class Character {
                 return;
             }
 
-            this.mesh.position.copy(targetWorldPos);
+                this.mesh.position.copy(targetWorldPos);
             this.gridPos = {x: next.x, y: next.y, z: next.z};
             // --- ここで移動距離を加算 ---
             const dist = Math.abs(prevGridPos.x - next.x) + Math.abs(prevGridPos.y - next.y) + Math.abs(prevGridPos.z - next.z);
             if (dist > 0) this.moveDistance += dist;
             this.path.shift();
+            // If we moved into a reserved sidestep position we held, clear that reservation now
+            if (this._reservedSidestepKey) {
+                const arrivedKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
+                if (arrivedKey === this._reservedSidestepKey) {
+                    this.releaseReservedSidestep && this.releaseReservedSidestep();
+                }
+            }
             if (this.path.length === 0) {
-                // 目的地に到着したので、実際のアクションを実行
-                this.executeAction();
+                // arrived: short thinking pause before action to feel alive
+                this._arrivalDelay = 0.12 + Math.random() * 0.22; // 120-340ms
+                return;
             }
         } else {
             direction.normalize();
@@ -2525,6 +2945,42 @@ class Character {
         }
     }
 
+    // Try a very small local avoidance: look for adjacent free tile (same y) that's not occupied
+    tryLocalAvoidance(target) {
+    // prefer sidesteps perpendicular to direction to target; if target is higher, prefer upward step
+    const dirX = Math.sign(target.x - this.gridPos.x);
+    const dirZ = Math.sign(target.z - this.gridPos.z);
+    const preferUp = target.y > this.gridPos.y;
+    const lateral = [];
+    if (dirX !== 0) lateral.push({dx:0,dy:0,dz:1}, {dx:0,dy:0,dz:-1});
+    if (dirZ !== 0) lateral.push({dx:1,dy:0,dz:0}, {dx:-1,dy:0,dz:0});
+    // fallback sequence
+    const candidates = [...lateral, {dx: -dirX, dy:0, dz: -dirZ}, {dx: dirX, dy:0, dz: dirZ}];
+    if (preferUp) candidates.unshift({dx:0,dy:1,dz:0});
+
+    for (const c of candidates) {
+            const nx = this.gridPos.x + c.dx;
+            const ny = this.gridPos.y + c.dy;
+            const nz = this.gridPos.z + c.dz;
+            if (ny < 0 || ny > maxHeight) continue;
+            const posKey = `${nx},${ny},${nz}`;
+            if (worldData.has(posKey)) continue;
+            if (this.isOccupiedByOther(nx, ny, nz)) continue;
+            // ensure footing
+            const below = `${nx},${ny-1},${nz}`;
+            if (ny > 0 && !worldData.has(below)) continue;
+            // attempt to reserve this sidestep to avoid races
+            const sidestepKey = posKey;
+            const reserved = Character.reserveTarget(sidestepKey, this.id, (typeof window !== 'undefined' && window.sidestepReserveMs) ? window.sidestepReserveMs : 2000);
+            if (reserved) {
+                // remember reserved sidestep to release later if needed
+                this._reservedSidestepKey = sidestepKey;
+                return { x: nx, y: ny, z: nz };
+            }
+        }
+        return null;
+    }
+
     updateAnimations(deltaTime) {
         // --- Enhanced Blinking logic ---
         if (!this.blinkTimer) this.blinkTimer = 0;
@@ -2551,6 +3007,116 @@ class Character {
             this.blinking = false;
             this.blinkInterval = 1.5 + Math.random() * 2;
             this.blinkTimer = 0;
+        }
+
+        // --- Breathing (subtle body scale) ---
+        if (!this._breathPhase) this._breathPhase = Math.random() * Math.PI * 2;
+    this._breathPhase += deltaTime * (this._breathRate || 0.8);
+    const breathMul = (typeof window !== 'undefined' && window.breathAmpMultiplier) ? window.breathAmpMultiplier : 1.0;
+    const breathScale = 1 + ((this._breathAmp || 0.025) * breathMul) * Math.sin(this._breathPhase);
+        // Slightly squash/stretch on Y and compensate X/Z
+        if (this.body) {
+            this.body.scale.set(1 / Math.sqrt(breathScale), breathScale, 1 / Math.sqrt(breathScale));
+        }
+
+        // --- Head look smoothing and idle glances ---
+        // Decide look target: prioritize action target, then nearest interesting object (food/char)
+        if (!this._lookTargetPos || (this.state === 'idle' && this._idleGlanceTimer <= 0)) {
+            if (this.action && this.action.target && this.action.target.x !== undefined) {
+                this._lookTargetPos = { ...this.action.target };
+            } else if (this.state === 'idle') {
+                // idle glance: occasionally look at a nearby char or food
+                if (this._idleGlanceTimer <= 0) {
+                    // find nearby char or food
+                    let found = null;
+                    const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+                    for (const c of chars) {
+                        if (c.id === this.id) continue;
+                        const dist = Math.abs(this.gridPos.x - c.gridPos.x) + Math.abs(this.gridPos.y - c.gridPos.y) + Math.abs(this.gridPos.z - c.gridPos.z);
+                        if (dist <= 4) { found = c; break; }
+                    }
+                    if (found) this._lookTargetPos = { ...found.gridPos };
+                    else {
+                        // look at random nearby offset
+                        const rx = this.gridPos.x + (Math.random() * 3 - 1.5);
+                        const rz = this.gridPos.z + (Math.random() * 3 - 1.5);
+                        this._lookTargetPos = { x: rx, y: this.gridPos.y, z: rz };
+                    }
+                    this._lookHoldTimer = 0.6 + Math.random() * 1.2;
+                    this._idleGlanceTimer = this._idleGlanceInterval;
+                }
+            }
+        }
+
+        // decrement idle timer
+        this._idleGlanceTimer -= deltaTime;
+
+        // Smoothly lerp head rotation toward look target if present
+        if (this._lookTargetPos && this.head) {
+            // compute desired angle on Y axis
+            const worldTarget = new THREE.Vector3(this._lookTargetPos.x + 0.5, (this._lookTargetPos.y || this.gridPos.y) + 0.5, this._lookTargetPos.z + 0.5);
+            const headWorldPos = new THREE.Vector3();
+            this.head.getWorldPosition(headWorldPos);
+            const dir = worldTarget.clone().sub(headWorldPos);
+            if (dir.lengthSq() > 0.0001) {
+                let desired = Math.atan2(dir.x, dir.z);
+                // lerp angle
+                let current = this.head.rotation.y;
+                // normalize
+                while (desired - current > Math.PI) desired -= Math.PI * 2;
+                while (current - desired > Math.PI) desired += Math.PI * 2;
+                // apply look lerp multiplier (live-tunable)
+                const lookMul = (typeof window !== 'undefined' && window.lookLerpMultiplier) ? window.lookLerpMultiplier : 1.0;
+                const lerp = (this._lookLerp || 0.12) * Math.min(2.0, Math.max(0.1, lookMul));
+                current = current + (desired - current) * lerp;
+                this.head.rotation.y = current;
+
+                // Head pitch: look up/down based on vertical component
+                const maxPitch = 0.45; // radians (~26deg)
+                const horizDist = Math.sqrt(dir.x * dir.x + dir.z * dir.z) + 1e-6;
+                let desiredPitch = -Math.atan2(dir.y, horizDist) * 0.8; // invert for natural tilt
+                desiredPitch = Math.max(-maxPitch, Math.min(maxPitch, desiredPitch));
+                // lerp pitch a bit slower
+                const pitchLerp = 0.06 * Math.min(2.0, Math.max(0.2, lookMul));
+                this.head.rotation.x += (desiredPitch - this.head.rotation.x) * pitchLerp;
+
+                // Eye micro-tracking: lazy-init base positions, then offset slightly toward target
+                try {
+                    if (this.leftEye && this.rightEye) {
+                        if (!this._eyeBaseLeftPos) this._eyeBaseLeftPos = this.leftEye.position.clone();
+                        if (!this._eyeBaseRightPos) this._eyeBaseRightPos = this.rightEye.position.clone();
+                        const eyeMul = (typeof window !== 'undefined' && window.eyeAmpMultiplier) ? window.eyeAmpMultiplier : 1.0;
+                        const ex = Math.max(-0.035, Math.min(0.035, dir.x * 0.02)) * eyeMul;
+                        const ey = Math.max(-0.02, Math.min(0.02, dir.y * 0.02)) * eyeMul;
+                        this.leftEye.position.x = this._eyeBaseLeftPos.x + ex;
+                        this.rightEye.position.x = this._eyeBaseRightPos.x + ex;
+                        this.leftEye.position.y = this._eyeBaseLeftPos.y + ey;
+                        this.rightEye.position.y = this._eyeBaseRightPos.y + ey;
+                    }
+                } catch (e) {
+                    // ignore eye adjustment errors
+                }
+            }
+            // hold time countdown
+            if (this._lookHoldTimer > 0) {
+                this._lookHoldTimer -= deltaTime;
+            } else {
+                // release look after hold
+                this._lookTargetPos = null;
+            }
+        }
+
+        // Shadow scaling based on bob / height
+        if (this.shadowMesh) {
+            const shadowBase = (typeof window !== 'undefined' && window.shadowBaseScale) ? window.shadowBaseScale : 1.0;
+            const h = (this.body && this.body.position) ? this.body.position.y : 0.25;
+            const scale = Math.max(0.6, 1.0 - (h - 0.25) * 0.8) * shadowBase;
+            this.shadowMesh.scale.set(scale, scale, scale);
+            try {
+                if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
+                    this.shadowMesh.material.opacity = Math.max(0.08, Math.min(0.5, 0.25 * scale));
+                }
+            } catch (e) {}
         }
 
         // --- Enhanced Facial expression (eyes/mouth color/shape) ---
@@ -2629,18 +3195,26 @@ class Character {
             // Head: slight tilt
             this.head.rotation.z = Math.sin(this.bobTime * 0.5) * 0.08;
         } else if (this.state === 'moving') {
-            // More pronounced walk bob, tilt, and arm swing
-            this.bobTime += deltaTime * 8;
-            const walkBob = Math.abs(Math.sin(this.bobTime)) * 0.10 + Math.sin(this.bobTime * 0.5) * 0.02;
-            const walkTilt = Math.cos(this.bobTime) * 0.25;
-            const armSwing = Math.sin(this.bobTime) * 1.0;
+            // Step-synced walk bob and arm swing
+            const globalStepFreq = (typeof window !== 'undefined' && window.stepFreqMultiplier) ? (window.stepFreqMultiplier) : 1.0;
+            const breathMul = (typeof window !== 'undefined' && window.breathAmpMultiplier) ? (window.breathAmpMultiplier) : 1.0;
+            const lookMul = (typeof window !== 'undefined' && window.lookLerpMultiplier) ? (window.lookLerpMultiplier) : 1.0;
+            // advance step phase proportional to movement speed
+            const speed = Math.min(1.5, Math.max(0.0, this.movementSpeed || 1.0));
+            const stepAdvance = deltaTime * (this._stepFreqBase * globalStepFreq) * (speed / 1.5);
+            this._stepPhase += stepAdvance;
+            const step = Math.sin(this._stepPhase + this._stepOffset);
+            // vertical bob and lateral sway
+            const walkBob = Math.abs(step) * (this._stepAmp || 0.1);
+            const sway = Math.sin(this._stepPhase * 0.5) * (this._swayAmp || 0.06);
             this.body.position.y = 0.25 + walkBob;
-            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1) * 0.04;
-            this.mesh.rotation.z = walkTilt;
-            this.leftArm.rotation.x = armSwing * 0.7;
-            this.rightArm.rotation.x = -armSwing * 0.7;
-            // Head: more energetic tilt
-            this.head.rotation.z = Math.sin(this.bobTime * 0.7) * 0.13;
+            this.head.position.y = 0.75 + Math.sin(this._stepPhase + 1) * 0.04;
+            this.mesh.rotation.z = sway;
+            // arms swing opposite phase
+            this.leftArm.rotation.x = (Math.sin(this._stepPhase) * 0.9) * 0.7;
+            this.rightArm.rotation.x = (Math.sin(this._stepPhase + Math.PI) * 0.9) * 0.7;
+            // Head: slight energetic tilt
+            this.head.rotation.z = Math.sin(this._stepPhase * 0.7) * 0.13;
         } else {
             // Smoothly return to neutral pose
             this.mesh.rotation.z *= 0.85;
@@ -2785,8 +3359,25 @@ class Character {
     }
 
     reproduceWith(partner) {
+        // Prevent children from reproducing
+        if (this.isChild || (partner && partner.isChild)) {
+            this.log('Attempted reproduction blocked because one partner is a child', {self: this.id, partner: partner && partner.id});
+            try { console.log(`[REPRO] reproduction blocked: ${this.id} or ${partner && partner.id} is a child`); } catch(e){}
+            return;
+        }
+
         // Create child with mixed color and inherited personality
         this.log('Reproducing with', partner.id);
+        // reproduction cooldown per parent to avoid rapid repeated births
+        const cooldownSec = (typeof window !== 'undefined' && window.reproductionCooldownSeconds !== undefined) ? window.reproductionCooldownSeconds : 20;
+        if (this._lastReproductionTime && (Date.now() - this._lastReproductionTime) < cooldownSec * 1000) {
+            try { console.log(`[REPRO] ${this.id} reproduction aborted: cooldown active (${Math.round((cooldownSec*1000 - (Date.now()-this._lastReproductionTime))/1000)}s left)`); } catch(e){}
+            return;
+        }
+        if (partner && partner._lastReproductionTime && (Date.now() - partner._lastReproductionTime) < cooldownSec * 1000) {
+            try { console.log(`[REPRO] ${this.id} reproduction aborted: partner ${partner.id} cooldown active`); } catch(e){}
+            return;
+        }
         // Mix colors
         const c1 = this.bodyMaterial.color;
         const c2 = partner.bodyMaterial.color;
@@ -2808,8 +3399,9 @@ class Character {
             if (spot) { spawnPos = spot; break; }
         }
         if (!spawnPos) spawnPos = this.gridPos;
-        // Spawn child
-        spawnCharacter(spawnPos, childGenes);
+    // Spawn child
+    try { console.log(`[REPRO] ${this.id} calling spawnCharacter at`, spawnPos, 'genes=', childGenes); } catch(e){}
+    spawnCharacter(spawnPos, childGenes);
         // Set child color and initial needs after spawn
         const child = typeof characters !== 'undefined' ? characters[characters.length-1] : null;
         if (child && child.bodyMaterial && child.bodyMaterial.color) {
@@ -2833,10 +3425,71 @@ class Character {
             if (Array.isArray(partner.children)) partner.children.push(child.id);
             if (typeof this.childCount === 'number') this.childCount++;
             if (typeof partner.childCount === 'number') partner.childCount++;
+            // --- Mark as child and apply lightweight visual/behavior tweaks ---
+            try {
+                child.isChild = true;
+                // record parent references for follow behavior
+                child.parentIds = [this.id, partner.id];
+                // prevent immediate group/role assignment - keep child as a neutral worker until maturity
+                child.groupId = null;
+                child.role = 'worker';
+                // optional age fields for growth system
+                child.age = 0;
+                child.maturityAge = (typeof window !== 'undefined' && window.childMaturitySeconds !== undefined) ? window.childMaturitySeconds : 60;
+                // store pre-child movement speed so we can restore on maturity
+                if (typeof child.movementSpeed === 'number') child._preChildMovementSpeed = child.movementSpeed;
+                // shrink overall mesh and main body/head to look like a child
+                if (child.mesh && child.mesh.scale) child.mesh.scale.set(0.72, 0.72, 0.72);
+                if (child.body && child.body.scale) child.body.scale.set(0.72, 0.72, 0.72);
+                if (child.head && child.head.scale) child.head.scale.set(0.72, 0.72, 0.72);
+                // smaller shadow
+                if (child.shadowMesh && child.shadowMesh.scale) child.shadowMesh.scale.multiplyScalar(0.75);
+                // slightly slower movement/less bob for child feel
+                if (typeof child.movementSpeed === 'number') child.movementSpeed *= 0.88;
+                if (child._stepAmp) child._stepAmp *= 0.6;
+                // record last reproduction time for both parents
+                this._lastReproductionTime = Date.now();
+                partner._lastReproductionTime = Date.now();
+                try { console.log(`[REPRO] ${this.id} spawned child ${child.id} at ${JSON.stringify(spawnPos)} parents=${JSON.stringify(child.parentIds)}`); } catch(e){}
+            } catch (e) { /* ignore visual tweak errors */ }
         }
     }
 
     decideNextAction(isNight) {
+        // Child-specific behavior: simpler decision-making and no adult tasks
+        if (this.isChild) {
+            // If parents exist, attempt to stay near them or follow briefly
+            const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+            if (this.parentIds && this.parentIds.length > 0) {
+                let nearestParent = null;
+                let pdist = 1e9;
+                for (const pid of this.parentIds) {
+                    const p = chars.find(c => c.id === pid);
+                    if (p) {
+                        const d = Math.abs(this.gridPos.x - p.gridPos.x) + Math.abs(this.gridPos.y - p.gridPos.y) + Math.abs(this.gridPos.z - p.gridPos.z);
+                        if (d < pdist) { pdist = d; nearestParent = p; }
+                    }
+                }
+                if (nearestParent) {
+                    if (pdist > 3) {
+                        // move closer to parent
+                        this.setNextAction('MOVE', nearestParent, nearestParent.gridPos);
+                        return;
+                    } else if (Math.random() < 0.4) {
+                        // sometimes play or wander nearby
+                        this.setNextAction('WANDER');
+                        return;
+                    } else {
+                        this.setNextAction('REST');
+                        return;
+                    }
+                }
+            }
+            // No parents or can't find them: idle/wander/play
+            if (Math.random() < 0.5) { this.setNextAction('WANDER'); return; }
+            this.setNextAction('REST');
+            return;
+        }
         // === IMPORTANT ACTION PROTECTION ===
         // Don't interrupt important actions that were just set
         if (this.action && ['BUILD_HOME', 'CHOP_WOOD', 'DESTROY_BLOCK'].includes(this.action.type)) {

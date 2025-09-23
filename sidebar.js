@@ -355,7 +355,7 @@ function renderCharacterDetail() {
     paramBox.appendChild(perceptionRow);
 
     // --- 繁殖後の友好度リセット値スライダー ---
-    if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 10;
+    if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 30;
     const affinityResetRow = document.createElement('div');
     affinityResetRow.style.display = 'flex';
     affinityResetRow.style.alignItems = 'center';

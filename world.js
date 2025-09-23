@@ -194,6 +194,8 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     if(updateMinimap) drawMinimap();
 }
 export function removeBlock(x, y, z, updateMinimap = true) {
+    // Prevent removing the bottom-most floor (bedrock layer)
+    if (y <= 0) return;
     const key = `${x},${y},${z}`;
     if (worldData.has(key)) {
         worldData.delete(key);
@@ -206,6 +208,34 @@ export function removeBlock(x, y, z, updateMinimap = true) {
         }
         if(updateMinimap) drawMinimap();
     }
+
+        // After removing block, ensure no characters are left floating above an emptied block column.
+        // If a character has no block directly below their gridPos, drop them to the nearest ground at that x,z.
+        try {
+            if (Array.isArray(characters) && characters.length > 0) {
+                for (const char of characters) {
+                    if (!char || !char.gridPos) continue;
+                    // If character is above the removed block column (same x,z) and has no footing
+                    if (char.gridPos.x === x && char.gridPos.z === z) {
+                        let belowKey = `${char.gridPos.x},${char.gridPos.y-1},${char.gridPos.z}`;
+                        if (!worldData.has(belowKey)) {
+                            // find nearest ground below
+                            let fallY = char.gridPos.y - 1;
+                            while (fallY > 0 && !worldData.has(`${char.gridPos.x},${fallY-1},${char.gridPos.z}`)) {
+                                fallY--;
+                            }
+                            if (fallY < 0) fallY = 0;
+                            // assign new y and update mesh
+                            char.gridPos.y = fallY;
+                            if (typeof char.updateWorldPosFromGrid === 'function') char.updateWorldPosFromGrid();
+                            if (typeof char.log === 'function') char.log && char.log('World.removeBlock: dropped character to ground after block removal', {id: char.id, newY: fallY});
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Error while dropping characters after removeBlock', e);
+        }
 }
 export function findGroundY(x, z) {
     for (let y = maxHeight - 1; y >= 0; y--) { if (worldData.has(`${x},${y},${z}`)) return y; } return -1;
@@ -316,8 +346,9 @@ export function animate() {
 export async function spawnCharacter(pos, genes = null) {
     if (pos) {
         const { Character } = await import('./character.js');
-        const char = new Character(scene, pos, nextCharacterId++, genes);
-        characters.push(char);
+    try { console.log('[SPAWN] spawnCharacter called at', pos, 'genes=', genes); } catch(e){}
+    const char = new Character(scene, pos, nextCharacterId++, genes);
+    characters.push(char);
     }
 }
 // ...other world functions as needed...
