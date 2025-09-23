@@ -2191,6 +2191,27 @@ class Character {
                 }
             }
         }
+        // --- Affinity decay: slowly reduce affinity over time to stabilize long-term behavior ---
+        try {
+            const decayRate = (typeof window !== 'undefined' && window.affinityDecayRate !== undefined) ? Number(window.affinityDecayRate) : 0;
+            if (decayRate > 0 && this.relationships && this.relationships.size > 0) {
+                const keysToRemove = [];
+                for (const [otherId, aff] of this.relationships.entries()) {
+                    let newAff = aff - decayRate * deltaTime;
+                    // clamp and removal
+                    if (newAff <= 0) {
+                        keysToRemove.push(otherId);
+                    } else {
+                        const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
+                        if (newAff > maxAffinity) newAff = maxAffinity;
+                        this.relationships.set(otherId, newAff);
+                    }
+                }
+                for (const k of keysToRemove) {
+                    this.relationships.delete(k);
+                }
+            }
+        } catch (e) { /* non-fatal */ }
         if (this.state === 'socializing') {
             const partner = this.action?.target;
 

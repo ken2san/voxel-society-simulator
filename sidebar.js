@@ -127,6 +127,7 @@ function renderCharacterDetail() {
     if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
     if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
     if (sidebarParams.affinityIncreaseRate === undefined) sidebarParams.affinityIncreaseRate = 10;
+    if (sidebarParams.affinityDecayRate === undefined) sidebarParams.affinityDecayRate = 0.01; // affinity units per second
     // 新しいコントロールのデフォルト
     if (sidebarParams.pairReproductionCooldownSeconds === undefined) sidebarParams.pairReproductionCooldownSeconds = 60;
     if (sidebarParams.maxAffinity === undefined) sidebarParams.maxAffinity = 100;
@@ -136,6 +137,7 @@ function renderCharacterDetail() {
     window.initialAffinityMin = sidebarParams.initialAffinityMin;
     window.initialAffinityMax = sidebarParams.initialAffinityMax;
     window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
+    window.affinityDecayRate = sidebarParams.affinityDecayRate;
     // Expose new knobs to global window for runtime tuning
     window.pairReproductionCooldownSeconds = sidebarParams.pairReproductionCooldownSeconds;
     window.maxAffinity = sidebarParams.maxAffinity;
@@ -323,6 +325,49 @@ function renderCharacterDetail() {
     });
     affinityRateRow.appendChild(affinityRateNumber);
     paramBox.appendChild(affinityRateRow);
+
+    // --- affinity decay rate slider ---
+    const affinityDecayRow = document.createElement('div');
+    affinityDecayRow.style.display = 'flex';
+    affinityDecayRow.style.alignItems = 'center';
+    affinityDecayRow.style.gap = '10px';
+    const affinityDecayLabel = document.createElement('span');
+    affinityDecayLabel.textContent = 'Affinity Decay (/s):';
+    affinityDecayLabel.style.width = '140px';
+    affinityDecayRow.appendChild(affinityDecayLabel);
+    const affinityDecayInput = document.createElement('input');
+    affinityDecayInput.type = 'range';
+    affinityDecayInput.min = 0;
+    affinityDecayInput.max = 1;
+    affinityDecayInput.step = 0.01;
+    affinityDecayInput.value = sidebarParams.affinityDecayRate;
+    affinityDecayInput.style.width = '120px';
+    affinityDecayInput.disabled = paramDisabled;
+    affinityDecayInput.id = 'affinityDecayInput';
+    affinityDecayInput.name = 'affinityDecayInput';
+    affinityDecayInput.addEventListener('input', e => {
+        sidebarParams.affinityDecayRate = Number(e.target.value);
+        affinityDecayNumber.value = e.target.value;
+        window.affinityDecayRate = Number(e.target.value);
+    });
+    affinityDecayRow.appendChild(affinityDecayInput);
+    const affinityDecayNumber = document.createElement('input');
+    affinityDecayNumber.type = 'number';
+    affinityDecayNumber.min = 0;
+    affinityDecayNumber.max = 1;
+    affinityDecayNumber.step = 0.01;
+    affinityDecayNumber.value = sidebarParams.affinityDecayRate;
+    affinityDecayNumber.disabled = paramDisabled;
+    affinityDecayNumber.style.width = '64px';
+    affinityDecayNumber.id = 'affinityDecayNumber';
+    affinityDecayNumber.name = 'affinityDecayNumber';
+    affinityDecayNumber.addEventListener('input', e => {
+        sidebarParams.affinityDecayRate = Number(e.target.value);
+        affinityDecayInput.value = e.target.value;
+        window.affinityDecayRate = Number(e.target.value);
+    });
+    affinityDecayRow.appendChild(affinityDecayNumber);
+    paramBox.appendChild(affinityDecayRow);
 
     // --- Perception/Socialize Range Slider ---
     if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;
