@@ -1714,8 +1714,10 @@ class Character {
     // --- 全キャラクターのrelationshipsを一括初期化 ---
     static initializeAllRelationships(characters) {
         if (!characters || characters.length === 0) return;
-        const affinityMin = (typeof window !== 'undefined' && window.initialAffinityMin !== undefined) ? window.initialAffinityMin : 20;
-        const affinityMax = (typeof window !== 'undefined' && window.initialAffinityMax !== undefined) ? window.initialAffinityMax : 40;
+    const affinityMin = (typeof window !== 'undefined' && window.initialAffinityMin !== undefined) ? window.initialAffinityMin : 20;
+    let affinityMax = (typeof window !== 'undefined' && window.initialAffinityMax !== undefined) ? window.initialAffinityMax : 40;
+    const globalMaxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
+    if (affinityMax > globalMaxAffinity) affinityMax = globalMaxAffinity;
         for (let i = 0; i < characters.length; i++) {
             const a = characters[i];
             for (let j = i + 1; j < characters.length; j++) {
@@ -2213,6 +2215,9 @@ class Character {
                 const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? window.affinityIncreaseRate : 10;
                 let affinity = this.relationships.get(partner.id) || 0;
                 affinity += deltaTime * affinityRate;
+                // clamp affinity to avoid runaway values
+                const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
+                if (affinity > maxAffinity) affinity = maxAffinity;
                 this.relationships.set(partner.id, affinity);
                 // --- ハート表示 & reproduction logic ---
                 // 両者が距離1以内＆友好度60以上でハート表示。もし既にlovePhaseが'showing'かつ
@@ -2360,15 +2365,43 @@ class Character {
                             const partnerShowingLove = (partner.lovePhase === 'showing' || (partner.loveTimer && partner.loveTimer > 0));
                             if (partner.state === 'socializing' || partnerShowingLove || prox <= 1) {
                                 if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
-                                    console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
-                                    this.reproduceWith && this.reproduceWith(partner);
-                                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
-                                    this.relationships.set(partner.id, resetVal);
-                                    partner.relationships.set(this.id, resetVal);
-                                    this._childCreatedWith = partner.id;
-                                    partner._childCreatedWith = this.id;
-                                    this.lovePhase = 'completed';
-                                    partner.lovePhase = 'completed';
+                                    // per-pair cooldown check
+                                    if (typeof window !== 'undefined') {
+                                        if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
+                                        if (window.pairReproductionCooldownSeconds === undefined) window.pairReproductionCooldownSeconds = 60;
+                                        const a = Math.min(this.id, partner.id);
+                                        const b = Math.max(this.id, partner.id);
+                                        const key = `${a}-${b}`;
+                                        const last = window._pairReproTimestamps.get(key) || 0;
+                                        const now = Date.now() / 1000;
+                                        const left = Math.max(0, Math.ceil(window.pairReproductionCooldownSeconds - (now - last)));
+                                        if (last > 0 && (now - last) < window.pairReproductionCooldownSeconds) {
+                                            console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
+                                        } else {
+                                            console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
+                                            this.reproduceWith && this.reproduceWith(partner);
+                                            // record pair timestamp
+                                            window._pairReproTimestamps.set(key, now);
+                                            const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
+                                            this.relationships.set(partner.id, resetVal);
+                                            partner.relationships.set(this.id, resetVal);
+                                            this._childCreatedWith = partner.id;
+                                            partner._childCreatedWith = this.id;
+                                            this.lovePhase = 'completed';
+                                            partner.lovePhase = 'completed';
+                                        }
+                                    } else {
+                                        // fallback: no window available
+                                        console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (no window)`);
+                                        this.reproduceWith && this.reproduceWith(partner);
+                                        const resetVal = 30;
+                                        this.relationships.set(partner.id, resetVal);
+                                        partner.relationships.set(this.id, resetVal);
+                                        this._childCreatedWith = partner.id;
+                                        partner._childCreatedWith = this.id;
+                                        this.lovePhase = 'completed';
+                                        partner.lovePhase = 'completed';
+                                    }
                                 }
                             } else {
                                 console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner exists but not socializing/nearby (state=${partner.state} prox=${prox} lovePhase=${partner.lovePhase})`);
