@@ -80,6 +80,8 @@ export function getLeafSpawnRate() { return leafSpawnRate; }
 
 export const worldData = new Map();
 export const visualBlocks = new Map();
+// Incremented whenever blocks are added/removed so characters can detect world changes
+export let worldChangeCounter = 0;
 export const BLOCK_TYPES = {
     AIR:   { id: 0, name: '空気' },
     GRASS: { id: 1, name: '草', color: 0x4CAF50, diggable: true },
@@ -192,6 +194,8 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     visualBlocks.set(key, block);
     scene.add(block);
     if(updateMinimap) drawMinimap();
+    // signal world change
+    try { worldChangeCounter++; if (typeof window !== 'undefined') window.worldChangeCounter = (window.worldChangeCounter || 0) + 1; } catch (e) {}
 }
 export function removeBlock(x, y, z, updateMinimap = true) {
     // Prevent removing the bottom-most floor (bedrock layer)
@@ -207,6 +211,8 @@ export function removeBlock(x, y, z, updateMinimap = true) {
             visualBlocks.delete(key);
         }
         if(updateMinimap) drawMinimap();
+        // signal world change
+        try { worldChangeCounter++; if (typeof window !== 'undefined') window.worldChangeCounter = (window.worldChangeCounter || 0) + 1; } catch (e) {}
     }
 
         // After removing block, ensure no characters are left floating above an emptied block column.

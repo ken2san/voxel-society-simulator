@@ -97,6 +97,18 @@ window.simulationRunning = false;
 // 右サイドバー：選択キャラ詳細
 function renderCharacterDetail() {
     if (!rightSidebar) return;
+
+    // If the user is currently editing an input inside the right sidebar,
+    // avoid re-rendering the entire panel which would steal focus.
+    try {
+        const active = document.activeElement;
+        if (active && rightSidebar.contains(active) &&
+            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+            return; // keep current focus and avoid clobbering user's typing
+        }
+    } catch (e) {
+        // ignore environment errors
+    }
     // --- sidebarParamsで値を保持 ---
     if (!window.sidebarParams) {
         window.sidebarParams = {
@@ -507,11 +519,34 @@ function renderCharacterDetail() {
     pinvInput.value = sidebarParams.pathInvalidationBackoffFactor;
     pinvInput.style.width = '120px';
     pinvInput.disabled = paramDisabled;
-    pinvInput.addEventListener('input', e => {
-        sidebarParams.pathInvalidationBackoffFactor = Number(e.target.value);
-        window.pathInvalidationBackoffFactor = Number(e.target.value);
+    // numeric input for precise editing and two-way sync
+    const pinvNumber = document.createElement('input');
+    pinvNumber.type = 'number';
+    pinvNumber.min = 0;
+    pinvNumber.max = 1;
+    pinvNumber.step = 0.01;
+    pinvNumber.value = sidebarParams.pathInvalidationBackoffFactor;
+    pinvNumber.style.width = '64px';
+    pinvNumber.disabled = paramDisabled;
+    pinvNumber.addEventListener('input', e => {
+        let v = Number(e.target.value);
+        if (isNaN(v)) v = 0;
+        v = Math.max(0, Math.min(1, v));
+        sidebarParams.pathInvalidationBackoffFactor = v;
+        window.pathInvalidationBackoffFactor = v;
+        pinvInput.value = v;
     });
+
+    pinvInput.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.pathInvalidationBackoffFactor = v;
+        window.pathInvalidationBackoffFactor = v;
+        pinvNumber.value = v;
+    });
+
     pinvRow.appendChild(pinvInput);
+    pinvRow.appendChild(pinvNumber);
+
     const pinvMaxInput = document.createElement('input');
     pinvMaxInput.type = 'number';
     pinvMaxInput.min = 0;
@@ -1231,6 +1266,16 @@ window.renderCharacterDetail = renderCharacterDetail;
 function renderCharacterList() {
     // console.log('[sidebar.js] window.characters:', window.characters); // ←デバッグ用ログを一時停止
     if (!leftSidebar) return;
+    // If the user is currently editing an input inside the right sidebar,
+    // avoid re-rendering the character list which may toggle detail panels
+    // and steal focus from the input.
+    try {
+        const active = document.activeElement;
+        if (active && rightSidebar && rightSidebar.contains(active) &&
+            (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
+            return; // keep user's typing uninterrupted
+        }
+    } catch (e) {}
     // キャラが未生成なら何も表示しない
     if (!window.characters || !Array.isArray(window.characters) || window.characters.length === 0) {
         leftSidebar.innerHTML = '';

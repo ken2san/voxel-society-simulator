@@ -2690,24 +2690,45 @@ class Character {
     // Validate a computed path step-by-step for current passability and corner-cutting
     validatePath(path) {
         if (!path || path.length === 0) return false;
+        // configurable lookahead: only validate the first N steps strictly
+        const lookahead = (typeof window !== 'undefined' && window.pathValidateLookahead !== undefined) ? Number(window.pathValidateLookahead) : 8;
         let from = { ...this.gridPos };
-        for (const step of path) {
+        const stepsToCheck = Math.min(path.length, Math.max(1, lookahead));
+        for (let i = 0; i < stepsToCheck; i++) {
+            const step = path[i];
             // occupancy check
             const key = `${step.x},${step.y},${step.z}`;
-            if (worldData.has(key)) return false;
+            if (worldData.has(key)) {
+                try { if (typeof window !== 'undefined') {
+                    window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 };
+                    window.pathInvalidationStats.worldBlocked++;
+                }} catch(e){}
+                return false;
+            }
 
             // Avoid stepping into a cell occupied by another character/entity
-            if (this.isOccupiedByOther(step.x, step.y, step.z)) return false;
+            if (this.isOccupiedByOther(step.x, step.y, step.z)) {
+                try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.occupied++; } } catch(e){}
+                return false;
+            }
 
             // basic can-move check
             const check = this.canMoveToPosition(step.x, step.y, step.z);
-            if (!check.canMove) return false;
+            if (!check.canMove) {
+                try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.cannotMove++; } } catch(e){}
+                return false;
+            }
 
             // diagonal corner cutting: prevent moving diagonally between two blocked orthogonals
-            if (this._isDiagonalCornerMoveBlocked(from, step)) return false;
+            if (this._isDiagonalCornerMoveBlocked(from, step)) {
+                try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.cornerBlocked++; } } catch(e){}
+                return false;
+            }
 
             from = { x: step.x, y: step.y, z: step.z };
         }
+
+        // For steps beyond lookahead, assume they'll be checked later during movement.
         return true;
     }
 
@@ -2773,6 +2794,9 @@ class Character {
                 directMoveThreshold: 3
             });
 
+            // stamp the world state when we computed this path to avoid needless recompute
+            try { if (typeof window !== 'undefined') { this._pathWorldStamp = window.worldChangeCounter || 0; } } catch (e) { this._pathWorldStamp = undefined; }
+
             this.lastTargetPos = { ...this.targetPos };
             // Validate path immediately after computation to avoid outdated/blocked routes
             if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
@@ -2827,6 +2851,7 @@ class Character {
                     this.log('Added unreachable food target to failedFoodTargets', {x, y, z});
                 }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
+                this.log('BFS failed, incrementing bfsFailCount', this.bfsFailCount);
                 // --- 経路が見つからないとき: 近くの壊せるブロックを壊して道を作る ---
                 let brokeBlock = false;
                 const directions = [
@@ -2851,9 +2876,15 @@ class Character {
                             const now = Date.now();
                             const recentMs = (typeof window !== 'undefined' && window.recentDigCooldownMs !== undefined) ? window.recentDigCooldownMs : 10000;
                             const lastAttempt = (typeof window !== 'undefined' && window._recentlyDug) ? window._recentlyDug.get(digKey) : null;
-                            if (lastAttempt && (now - lastAttempt) < recentMs) {
+                            // allow override of recent-dig throttle when we've repeatedly failed to find a path
+                            const allowOverrideAfterFails = (typeof window !== 'undefined' && window.recentDigAllowAfterBfsFailCount !== undefined) ? Number(window.recentDigAllowAfterBfsFailCount) : 1;
+                            const shouldOverride = (this.bfsFailCount && this.bfsFailCount > allowOverrideAfterFails);
+                            if (lastAttempt && (now - lastAttempt) < recentMs && !shouldOverride) {
                                 this.log('Skip digging: recently attempted', digKey);
                                 continue;
+                            }
+                            if (lastAttempt && (now - lastAttempt) < recentMs && shouldOverride) {
+                                this.log('Override recent-dig throttle due to repeated BFS failures', digKey, {bfsFailCount: this.bfsFailCount});
                             }
                         } catch (e) { /* ignore */ }
 
@@ -2982,10 +3013,25 @@ class Character {
             }
         }
         // Re-validate remaining path in case world changed while moving
-        if (!this.validatePath(this.path)) {
-            this.log('Path invalidated mid-move, clearing and will recompute');
-            this.releaseReservedSidestep && this.releaseReservedSidestep();
-            this.path = [];
+        // Check if world changed since we computed the path; if not, proceed to validate.
+        const currentWorldStamp = (typeof window !== 'undefined') ? (window.worldChangeCounter || 0) : 0;
+        if (this._pathWorldStamp !== undefined && this._pathWorldStamp === currentWorldStamp) {
+            if (!this.validatePath(this.path)) {
+                this.log('Path invalidated mid-move, clearing and will recompute');
+                this.releaseReservedSidestep && this.releaseReservedSidestep();
+                this.path = [];
+            } else {
+                // path still valid under same world stamp
+            }
+        } else {
+            // world changed since path was computed -> be conservative: revalidate fully
+            if (!this.validatePath(this.path)) {
+                this.log('World changed since path computed; path invalid, clearing');
+                this.releaseReservedSidestep && this.releaseReservedSidestep();
+                this.path = [];
+            }
+        }
+        if (!this.path || this.path.length === 0) {
             this.state = 'idle';
             // path invalidation backoff: avoid immediate recompute loops (tunable)
             if (!this._pathInvalidationCount) this._pathInvalidationCount = 0;
@@ -3728,9 +3774,24 @@ class Character {
             const now = Date.now();
             const fallbackBackoffMs = (typeof window !== 'undefined' && window.fallbackBackoffMs !== undefined) ? Number(window.fallbackBackoffMs) : 1500;
             if (!this._lastFallbackTime || (now - this._lastFallbackTime) > fallbackBackoffMs) {
-                this.log('⚠️ No action chosen by AI, falling back to WANDER');
-                this.setNextAction('WANDER');
-                this._lastFallbackTime = now;
+                // Prefer collecting nearby food first, then chopping wood, before defaulting to WANDER
+                const food = this.findClosestFood ? this.findClosestFood() : null;
+                if (food) {
+                    this.log('Fallback: found nearby food, switching to COLLECT_FOOD');
+                    this.setNextAction('COLLECT_FOOD', food, food);
+                    this._lastFallbackTime = now;
+                } else {
+                    const wood = this.findClosestWood ? this.findClosestWood() : null;
+                    if (wood) {
+                        this.log('Fallback: found nearby wood, switching to CHOP_WOOD');
+                        this.setNextAction('CHOP_WOOD', wood, wood);
+                        this._lastFallbackTime = now;
+                    } else {
+                        this.log('⚠️ No action chosen by AI, falling back to WANDER');
+                        this.setNextAction('WANDER');
+                        this._lastFallbackTime = now;
+                    }
+                }
             } else {
                 // small idle cooldown to prevent tight loop
                 this.actionCooldown = Math.max(this.actionCooldown, 0.6 + Math.random() * 0.6);

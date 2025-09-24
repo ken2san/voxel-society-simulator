@@ -228,3 +228,7 @@ window.logGroupStatus = function() {
     console.log('=== groupId/role (on demand) ===');
     characters.forEach(c => console.log(`id:${c.id} groupId:${c.groupId} role:${c.role}`));
 };
+
+// Global runtime tuning defaults (can be overridden in DevTools)
+window.pathValidateLookahead = window.pathValidateLookahead || 8;
+window.recentDigAllowAfterBfsFailCount = window.recentDigAllowAfterBfsFailCount || 1;
