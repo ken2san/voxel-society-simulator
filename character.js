@@ -338,6 +338,29 @@ class Character {
     showActionIcon(iconText, duration = 2.0) {
         if (!this.actionIconDiv) return;
 
+        // Debounce rapid icon switches to avoid visual flicker.
+        try {
+            if (!this._lastActionIconTs) this._lastActionIconTs = 0;
+            if (!this._lastActionIcon) this._lastActionIcon = null;
+            const now = Date.now();
+            const minIntervalMs = (typeof window !== 'undefined' && window.actionIconMinIntervalMs !== undefined) ? Number(window.actionIconMinIntervalMs) : 350;
+
+            // If same icon being set too quickly, ignore to prevent flicker
+            if (this._lastActionIcon === iconText && (now - this._lastActionIconTs) < minIntervalMs) {
+                return;
+            }
+
+            // update last icon/time
+            this._lastActionIcon = iconText;
+            this._lastActionIconTs = now;
+        } catch (e) { /* ignore */ }
+
+        // Cancel any pending fade-out so we don't flicker or prematurely hide
+        if (this._actionIconTimeout) {
+            clearTimeout(this._actionIconTimeout);
+            this._actionIconTimeout = null;
+        }
+
         this.actionIconDiv.textContent = iconText;
         this.actionIconDiv.style.opacity = 1;
         this.actionIconDiv.style.transform = 'scale(1.2)'; // 少し大きく表示
@@ -350,16 +373,24 @@ class Character {
             this.actionIconDiv.style.top = (screenPos.y - 60) + 'px';
         }
 
-        // バウンスアニメーション
-        this.actionIconDiv.style.animation = 'bounce 0.6s ease-out';
+        // バウンスアニメーション: only re-run animation when enough time passed since last animation
+        try {
+            const animMinMs = (typeof window !== 'undefined' && window.actionIconAnimMinMs !== undefined) ? Number(window.actionIconAnimMinMs) : 300;
+            if (!this._lastActionAnimTs) this._lastActionAnimTs = 0;
+            if ((Date.now() - this._lastActionAnimTs) >= animMinMs) {
+                this.actionIconDiv.style.animation = 'bounce 0.6s ease-out';
+                this._lastActionAnimTs = Date.now();
+            }
+        } catch (e) { this.actionIconDiv.style.animation = 'bounce 0.6s ease-out'; }
 
         // 指定時間後にフェードアウト
-        setTimeout(() => {
+        this._actionIconTimeout = setTimeout(() => {
             if (this.actionIconDiv) {
                 this.actionIconDiv.style.opacity = 0;
                 this.actionIconDiv.style.transform = 'scale(0.8) translateY(-10px)';
                 this.actionIconDiv.style.animation = '';
             }
+            this._actionIconTimeout = null;
         }, duration * 1000);
     }
 
@@ -1084,8 +1115,8 @@ class Character {
     // Returns true if a block was actually removed, false otherwise.
     reserveAndRemoveBlock(x, y, z, opts = {}) {
         try {
-            if (y <= 0) {
-                // Protect bottom layer from being turned into a hole
+            // Protect bottom layer from general deletion, but allow an explicit rescue override
+            if (y <= 0 && !(opts && opts.allowBottomRescue)) {
                 this.log('reserveAndRemoveBlock: prevented removal at bottom layer', {x, y, z});
                 return false;
             }
@@ -1107,6 +1138,14 @@ class Character {
             const reserved = Character.reserveTarget(key, this.id, ttl);
             if (!reserved) {
                 this.log('reserveAndRemoveBlock: target reserved by other, skipping', key);
+                try {
+                    if (typeof window !== 'undefined') {
+                        if (!window._digBlockFailCounts) window._digBlockFailCounts = new Map();
+                        // mark failed attempt with a future-until timestamp (backoff) so others avoid retrying immediately
+                        const backoff = (typeof window !== 'undefined' && window.digFailSkipMs !== undefined) ? Number(window.digFailSkipMs) : 4000;
+                        window._digBlockFailCounts.set(key, Date.now() + backoff);
+                    }
+                } catch (e) {}
                 this.actionCooldown = (typeof window !== 'undefined' && window.reservationFallbackCooldown !== undefined) ? window.reservationFallbackCooldown : 1.0;
                 return false;
             }
@@ -1124,6 +1163,8 @@ class Character {
                 removeBlock && removeBlock(x, y, z);
                 // Mark recent dig timestamp
                 window._recentlyDug.set(key, Date.now());
+                // clear any transient failed-dig mark for this block since it's now removed
+                try { if (typeof window !== 'undefined' && window._digBlockFailCounts) window._digBlockFailCounts.delete(key); } catch (e) {}
                 // Release reservation (only if we still own it)
                 Character.releaseReservation(key, this.id);
                 this.log('reserveAndRemoveBlock: removed block', {x, y, z});
@@ -1137,6 +1178,21 @@ class Character {
         } catch (e) {
             try { Character.releaseReservation(`${x},${y},${z}`, this.id); } catch (e2) {}
             return false;
+        }
+    }
+    // Schedule a short BFS retry window with per-character growth and jitter
+    _scheduleShortBfsRetry() {
+        try {
+            if (!this._bfsShortRetryCount) this._bfsShortRetryCount = 0;
+            this._bfsShortRetryCount = Math.min(8, (this._bfsShortRetryCount || 0) + 1);
+            const base = (typeof window !== 'undefined' && window.bfsRetryBaseMs !== undefined) ? Number(window.bfsRetryBaseMs) : 150;
+            const per = (typeof window !== 'undefined' && window.bfsShortRetryGrowthMs !== undefined) ? Number(window.bfsShortRetryGrowthMs) : 80;
+            const jitterMax = (typeof window !== 'undefined' && window.bfsShortRetryJitterMs !== undefined) ? Number(window.bfsShortRetryJitterMs) : 200;
+            const extra = Math.min(1000, this._bfsShortRetryCount * per);
+            const jitter = Math.floor(Math.random() * jitterMax);
+            this._bfsRetryUntil = Date.now() + base + extra + jitter;
+        } catch (e) {
+            try { this._bfsRetryUntil = Date.now() + 250; } catch (e2) {}
         }
     }
     // --- Group detection and per-group leader election ---
@@ -1419,7 +1475,15 @@ class Character {
     }
 
     // --- 当たり判定ヘルパーメソッド ---
-    isBlockPassable(blockId) {
+    // Normalize stored worldData values to an id number (handles cave-air objects)
+    _normalizeBlockVal(val) {
+        if (val === undefined || val === null) return val;
+        if (typeof val === 'object' && val.id !== undefined) return val.id;
+        return val;
+    }
+
+    isBlockPassable(blockVal) {
+        const blockId = this._normalizeBlockVal(blockVal);
         if (blockId === undefined || blockId === null) return true;
 
         const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
@@ -1603,7 +1667,8 @@ class Character {
                 for (let dz = -2; dz <= 2; dz++) {
                     const x = this.gridPos.x + dx, y = this.gridPos.y + dy, z = this.gridPos.z + dz;
                     const key = `${x},${y},${z}`;
-                    const blockId = worldData.get(key);
+                    const rawVal = worldData.get(key);
+                    const blockId = this._normalizeBlockVal(rawVal);
                     const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
                     if (blockType && blockType.diggable) {
                         // 上に空間
@@ -1975,7 +2040,8 @@ class Character {
 
     canDigDown() {
         const blockBelowPos = { x: this.gridPos.x, y: this.gridPos.y - 1, z: this.gridPos.z };
-        const blockId = worldData.get(`${blockBelowPos.x},${blockBelowPos.y},${blockBelowPos.z}`);
+        const rawVal = worldData.get(`${blockBelowPos.x},${blockBelowPos.y},${blockBelowPos.z}`);
+        const blockId = this._normalizeBlockVal(rawVal);
         const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
         return blockType && blockType.diggable;
     }
@@ -2696,9 +2762,10 @@ class Character {
         const stepsToCheck = Math.min(path.length, Math.max(1, lookahead));
         for (let i = 0; i < stepsToCheck; i++) {
             const step = path[i];
-            // occupancy check
+            // occupancy / passability check: consider block type passability rather than raw presence
             const key = `${step.x},${step.y},${step.z}`;
-            if (worldData.has(key)) {
+            const stepBlockId = worldData.get(key);
+            if (!this.isBlockPassable(stepBlockId)) {
                 try { if (typeof window !== 'undefined') {
                     window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 };
                     window.pathInvalidationStats.worldBlocked++;
@@ -2741,8 +2808,10 @@ class Character {
             // orthogonal neighbours
             const key1 = `${from.x + dx},${from.y},${from.z}`;
             const key2 = `${from.x},${from.y},${from.z + dz}`;
-            const blocked1 = (worldData.has(key1) && worldData.get(key1) !== BLOCK_TYPES.AIR.id) || this.isOccupiedByOther(from.x + dx, from.y, from.z);
-            const blocked2 = (worldData.has(key2) && worldData.get(key2) !== BLOCK_TYPES.AIR.id) || this.isOccupiedByOther(from.x, from.y, from.z + dz);
+            const b1Raw = worldData.get(key1);
+            const b2Raw = worldData.get(key2);
+            const blocked1 = (!this.isBlockPassable(b1Raw)) || this.isOccupiedByOther(from.x + dx, from.y, from.z);
+            const blocked2 = (!this.isBlockPassable(b2Raw)) || this.isOccupiedByOther(from.x, from.y, from.z + dz);
             // if both orthogonals blocked, diagonal should be blocked
             if (blocked1 && blocked2) return true;
         }
@@ -2801,7 +2870,17 @@ class Character {
             // Validate path immediately after computation to avoid outdated/blocked routes
             if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
                 // try fallback to bfsPath (older but sometimes more permissive)
-                this.path = this.bfsPath(this.gridPos, this.targetPos);
+                if (this._bfsRetryUntil && Date.now() < this._bfsRetryUntil) {
+                    this.log('Delaying BFS fallback due to recent failures', {until: this._bfsRetryUntil});
+                    this.path = null;
+                } else {
+                    if (this._bfsRetryUntil && Date.now() < this._bfsRetryUntil) {
+                        this.log('Delaying corner-break BFS due to recent failures', {until: this._bfsRetryUntil});
+                        this.path = null;
+                    } else {
+                        this.path = this.bfsPath(this.gridPos, this.targetPos);
+                    }
+                }
             }
 
             // If we obtained a valid path, reset invalidation counter
@@ -2852,6 +2931,15 @@ class Character {
                 }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
                 this.log('BFS failed, incrementing bfsFailCount', this.bfsFailCount);
+                // set a small retry cooldown proportional to bfsFailCount to avoid tight loops
+                try {
+                    const baseMs = (typeof window !== 'undefined' && window.bfsRetryBaseMs !== undefined) ? Number(window.bfsRetryBaseMs) : 300;
+                    const perFailMs = (typeof window !== 'undefined' && window.bfsRetryBackoffMs !== undefined) ? Number(window.bfsRetryBackoffMs) : 200;
+                    const extra = Math.min(2000, (this.bfsFailCount || 0) * perFailMs);
+                    // add some jitter so many characters don't retry in sync
+                    const jitter = Math.floor(Math.random() * Math.min(400, Math.max(100, perFailMs)));
+                    this._bfsRetryUntil = Date.now() + baseMs + extra + jitter;
+                } catch (e) {}
                 // --- 経路が見つからないとき: 近くの壊せるブロックを壊して道を作る ---
                 let brokeBlock = false;
                 const directions = [
@@ -2873,39 +2961,76 @@ class Character {
                                 if (!window._recentlyDug) window._recentlyDug = new Map();
                             }
                             const digKey = `${x},${y},${z}`;
+                            // If another char recently failed to dig this reserved block, skip it briefly
+                            const failMap = (typeof window !== 'undefined') ? window._digBlockFailCounts : null;
+                            const failT = failMap ? failMap.get(digKey) : null;
+                            const failSkipMs = (typeof window !== 'undefined' && window.digFailSkipMs !== undefined) ? Number(window.digFailSkipMs) : 4000;
+                            if (failT) {
+                                // failT may be a past timestamp (last fail) or a future-until timestamp (backoff until)
+                                const nowT = Date.now();
+                                if (failT > nowT) {
+                                    // stored as future-until timestamp -> skip until then
+                                    // add a small cooldown to avoid immediate retry loops
+                                    this.actionCooldown = Math.max(this.actionCooldown || 0, 0.6 + Math.random() * 0.6);
+                                    try { this._scheduleShortBfsRetry(); } catch(e){}
+                                    continue;
+                                }
+                                if ((nowT - failT) < failSkipMs) {
+                                    // recent failure within TTL
+                                    // add a small cooldown to avoid immediate retry loops
+                                    this.actionCooldown = Math.max(this.actionCooldown || 0, 0.6 + Math.random() * 0.6);
+                                    try { this._scheduleShortBfsRetry(); } catch(e){}
+                                    continue;
+                                }
+                            }
                             const now = Date.now();
                             const recentMs = (typeof window !== 'undefined' && window.recentDigCooldownMs !== undefined) ? window.recentDigCooldownMs : 10000;
                             const lastAttempt = (typeof window !== 'undefined' && window._recentlyDug) ? window._recentlyDug.get(digKey) : null;
                             // allow override of recent-dig throttle when we've repeatedly failed to find a path
+                            // but require a fraction of the cooldown to have passed so override isn't too aggressive
                             const allowOverrideAfterFails = (typeof window !== 'undefined' && window.recentDigAllowAfterBfsFailCount !== undefined) ? Number(window.recentDigAllowAfterBfsFailCount) : 1;
-                            const shouldOverride = (this.bfsFailCount && this.bfsFailCount > allowOverrideAfterFails);
+                            const overrideMinFraction = (typeof window !== 'undefined' && window.digOverrideMinFraction !== undefined) ? Number(window.digOverrideMinFraction) : 0.6;
+                            const shouldOverride = (this.bfsFailCount && this.bfsFailCount > allowOverrideAfterFails && (!lastAttempt || (now - lastAttempt) > (recentMs * overrideMinFraction)));
                             if (lastAttempt && (now - lastAttempt) < recentMs && !shouldOverride) {
                                 this.log('Skip digging: recently attempted', digKey);
+                                // small cooldown so this char doesn't immediately retry and cause visual jitter
+                                this.actionCooldown = Math.max(this.actionCooldown || 0, 0.6 + Math.random() * 0.6);
+                                try { this._bfsRetryUntil = Date.now() + 150 + Math.floor(Math.random() * 250); } catch(e){}
                                 continue;
                             }
-                            if (lastAttempt && (now - lastAttempt) < recentMs && shouldOverride) {
-                                this.log('Override recent-dig throttle due to repeated BFS failures', digKey, {bfsFailCount: this.bfsFailCount});
-                            }
+                                if (lastAttempt && (now - lastAttempt) < recentMs && shouldOverride) {
+                                // When overriding, add a small randomized backoff so multiple chars do not all retry simultaneously
+                                const extraBackoff = 200 + Math.floor(Math.random() * 800); // 200-1000ms
+                                const failMap2 = (typeof window !== 'undefined') ? window._digBlockFailCounts : null;
+                                try {
+                                    if (failMap2) failMap2.set(digKey, Date.now() + extraBackoff);
+                                } catch (e) {}
+                                this.log('Override recent-dig throttle due to repeated BFS failures (with backoff)', digKey, {bfsFailCount: this.bfsFailCount, backoffMs: extraBackoff});
+                                }
                         } catch (e) { /* ignore */ }
 
                         let fallY = y;
                         // 掘ったら落下する場合は下まで落ちる
-                        while (fallY > 0 && !worldData.has(`${x},${fallY-1},${this.gridPos.z}`)) fallY--;
+                        while (fallY > 0 && !worldData.has(`${x},${fallY-1},${z}`)) fallY--;
                         if (this.isSafeToFallOrDig(x, fallY, z)) {
-                            // use reservation-based removal
-                            this.reserveAndRemoveBlock(x, y, z);
-                            // record recent dig attempt to avoid repetition
-                            try {
-                                if (typeof window !== 'undefined' && window._recentlyDug) {
-                                    window._recentlyDug.set(`${x},${y},${z}`, Date.now());
-                                }
-                            } catch (e) {}
-                            this.log('Rescue: destroyed nearby diggable block to create path (safe)', {x, y, z, fallY});
-                            brokeBlock = true;
-                            // Give more time after rescue digging so other chars/world update
-                            const digCooldown = (typeof window !== 'undefined' && window.digActionCooldown !== undefined) ? window.digActionCooldown : 2200;
-                            this.actionCooldown = (digCooldown / 1000) + Math.random() * 0.5;
-                            break;
+                            // use reservation-based removal and only treat as success if it actually removed
+                            const removed = this.reserveAndRemoveBlock(x, y, z, { allowBottomRescue: true });
+                            if (removed) {
+                                // record recent dig attempt to avoid repetition
+                                try {
+                                    if (typeof window !== 'undefined' && window._recentlyDug) {
+                                        window._recentlyDug.set(`${x},${y},${z}`, Date.now());
+                                    }
+                                } catch (e) {}
+                                this.log('Rescue: destroyed nearby diggable block to create path (safe)', {x, y, z, fallY});
+                                brokeBlock = true;
+                                // Give more time after rescue digging so other chars/world update
+                                const digCooldown = (typeof window !== 'undefined' && window.digActionCooldown !== undefined) ? window.digActionCooldown : 2200;
+                                this.actionCooldown = (digCooldown / 1000) + Math.random() * 0.5;
+                                break;
+                            } else {
+                                this.log('Rescue attempt did not remove block (reserved/protected), continuing', {x, y, z, fallY});
+                            }
                         } else {
                             this.log('Skip digging: fall destination not safe', {x, y, z, fallY});
                         }
@@ -2920,7 +3045,8 @@ class Character {
                         const key = `${x},${y},${z}`;
                         const blockId = worldData.get(key);
                         // 強制掘削も安全な落下先のみ許可
-                        if (blockId !== undefined && blockId !== null && blockId !== BLOCK_TYPES.AIR.id) {
+                        const normBlockId = this._normalizeBlockVal(blockId);
+                        if (normBlockId !== undefined && normBlockId !== null && normBlockId !== BLOCK_TYPES.AIR.id) {
                             let fallY = y;
                             while (fallY > 0 && !worldData.has(`${x},${fallY-1},${z}`)) fallY--;
                             return this.isSafeToFallOrDig(x, fallY, z);
@@ -2932,13 +3058,17 @@ class Character {
                         const x = this.gridPos.x + randDir.dx;
                         const y = this.gridPos.y + randDir.dy;
                         const z = this.gridPos.z + randDir.dz;
-                        // use reservation-based removal
-                        this.reserveAndRemoveBlock(x, y, z);
-                        this.log('Rescue: forcibly dug random direction after multiple path fails', {x, y, z});
-                        this.bfsFailCount = 0; // リセット
-                        this.actionCooldown = 2.0; // Give time for the change to take effect
-                        this.state = 'idle';
-                        return;
+                        // use reservation-based removal and only treat as success if actually removed
+                        const removed = this.reserveAndRemoveBlock(x, y, z, { allowBottomRescue: true });
+                        if (removed) {
+                            this.log('Rescue: forcibly dug random direction after multiple path fails', {x, y, z});
+                            this.bfsFailCount = 0; // リセット
+                            this.actionCooldown = 2.0; // Give time for the change to take effect
+                            this.state = 'idle';
+                            return;
+                        } else {
+                            this.log('Forced-dig attempt did not remove block (reserved/protected), skipping', {x, y, z});
+                        }
                     }
                 }
                 if (this.bfsFailCount > 2) {
@@ -3122,7 +3252,8 @@ class Character {
             const y = this.gridPos.y;
             const key = `${x},${y},${z}`;
             const blockId = worldData.get(key);
-            if (blockId && blockId !== BLOCK_TYPES.AIR.id) {
+            const normBlockId2 = this._normalizeBlockVal(blockId);
+            if (normBlockId2 && normBlockId2 !== BLOCK_TYPES.AIR.id) {
                 wallCount++;
                 if (!wallPos) wallPos = {x, y, z};
             }
@@ -3139,11 +3270,15 @@ class Character {
             if (this._cornerStuckTimer > 1.5 && wallPos) {
                 // 強制的に壁を壊して脱出
                 // use reservation-based removal for wall break
-                this.reserveAndRemoveBlock(wallPos.x, wallPos.y, wallPos.z);
-                this.log('Break out: forcibly destroyed block to escape corner deadlock', wallPos);
-                this._cornerStuckTimer = 0;
-                // 経路再探索
-                this.path = this.bfsPath(this.gridPos, this.targetPos);
+                const removed = this.reserveAndRemoveBlock(wallPos.x, wallPos.y, wallPos.z);
+                if (removed) {
+                    this.log('Break out: forcibly destroyed block to escape corner deadlock', wallPos);
+                    this._cornerStuckTimer = 0;
+                    // 経路再探索
+                    this.path = this.bfsPath(this.gridPos, this.targetPos);
+                } else {
+                    this.log('Corner-break attempt failed (reserved/protected), will retry later', wallPos);
+                }
             }
         } else {
             this._cornerStuckTimer = 0;
