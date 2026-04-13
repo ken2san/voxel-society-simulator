@@ -80,13 +80,14 @@ function getStatusDisplay(char) {
     const rawAction = char.currentAction && char.currentAction !== '-' ? String(char.currentAction) : null;
     const actionNorm = rawAction ? rawAction.toUpperCase() : null;
     const redundantActionByState = {
-        moving: new Set(['WANDER', 'MOVE']),
+        // When already in moving state, the walk icon is sufficient.
+        moving: new Set(['*']),
         socializing: new Set(['SOCIALIZE']),
         resting: new Set(['REST']),
         meeting: new Set(['MEETING'])
     };
     const stateSet = redundantActionByState[char.state] || null;
-    const isRedundantAction = !!(actionNorm && stateSet && stateSet.has(actionNorm));
+    const isRedundantAction = !!(actionNorm && stateSet && (stateSet.has('*') || stateSet.has(actionNorm)));
     const action = isRedundantAction ? null : rawAction;
     const text = action ? `${icon} ${action}` : icon;
     const title = action ? `${stateLabel} / ${action}` : stateLabel;
