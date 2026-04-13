@@ -4088,7 +4088,9 @@ class Character {
                 this.actionCooldown = Math.max(this.actionCooldown, 0.6 + Math.random() * 0.6);
             }
         }
-    }    updateColorFromPersonality() {
+    }
+
+    updateColorFromPersonality() {
         const r = Math.max(0, Math.min(1, 0.2 + (this.personality.bravery - 0.5)));
         const g = Math.max(0, Math.min(1, 0.2 + (this.personality.diligence - 0.5)));
         const b = 0.3;
@@ -4483,12 +4485,6 @@ class Character {
         }
     }
 
-    // デバッグログメソッド
-    log(...args) {
-        if (typeof window !== 'undefined' && window.DEBUG_MODE) {
-            console.log(`[Char ${this.id}]`, ...args);
-        }
-    }
 }
 
 export { Character };

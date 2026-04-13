@@ -37,6 +37,25 @@ function recordCharacterHistory() {
 }
 if (window.__characterHistoryInterval) clearInterval(window.__characterHistoryInterval);
 window.__characterHistoryInterval = setInterval(recordCharacterHistory, 1000);
+
+function getMoodDisplay(mood) {
+    switch (mood) {
+        case 'happy': return { icon: '😄', className: 'mood-happy', text: 'happy' };
+        case 'tired': return { icon: '😪', className: 'mood-tired', text: 'tired' };
+        case 'lonely': return { icon: '😢', className: 'mood-lonely', text: 'lonely' };
+        case 'active': return { icon: '🚶', className: 'mood-active', text: 'active' };
+        case 'scared': return { icon: '😱', className: 'mood-scared', text: 'scared' };
+        case 'angry': return { icon: '😠', className: 'mood-angry', text: 'angry' };
+        case 'sad': return { icon: '😔', className: 'mood-sad', text: 'sad' };
+        case 'social': return { icon: '💬', className: 'mood-neutral', text: 'social' };
+        case 'hungry': return { icon: '🍎', className: 'mood-neutral', text: 'hungry' };
+        case 'dead': return { icon: '💀', className: 'mood-neutral', text: 'dead' };
+        case 'confused': return { icon: '❓', className: 'mood-neutral', text: 'confused' };
+        case 'excited': return { icon: '✨', className: 'mood-neutral', text: 'excited' };
+        default: return { icon: '🙂', className: 'mood-neutral', text: 'neutral' };
+    }
+}
+
 function renderCharacterNeeds() {
     // Traverse each tr in summary table tbody and update only needs and mood
     const table = document.querySelector('.character-summary-table');
@@ -53,20 +72,11 @@ function renderCharacterNeeds() {
         // mood
         const tdMood = tr.querySelector('.mood-td');
         if (tdMood) {
-            let moodIcon = '', moodClass = 'mood-neutral', moodText = '';
-            switch (char.mood) {
-                case 'happy': moodIcon = '😄'; moodClass = 'mood-happy'; moodText = 'happy'; break;
-                case 'tired': moodIcon = '😪'; moodClass = 'mood-tired'; moodText = 'tired'; break;
-                case 'lonely': moodIcon = '😢'; moodClass = 'mood-lonely'; moodText = 'lonely'; break;
-                case 'active': moodIcon = '🚶'; moodClass = 'mood-active'; moodText = 'active'; break;
-                case 'angry': moodIcon = '😠'; moodClass = 'mood-angry'; moodText = 'angry'; break;
-                case 'sad': moodIcon = '😔'; moodClass = 'mood-sad'; moodText = 'sad'; break;
-                default: moodIcon = '🙂'; moodClass = 'mood-neutral'; moodText = 'neutral';
-            }
+            const mood = getMoodDisplay(char.mood);
             const moodSpan = tdMood.querySelector('.mood-badge');
             if (moodSpan) {
-                moodSpan.className = 'mood-badge ' + moodClass;
-                moodSpan.textContent = `${moodIcon} ${moodText}`;
+                moodSpan.className = 'mood-badge ' + mood.className;
+                moodSpan.textContent = `${mood.icon} ${mood.text}`;
             }
         }
         // needs (hunger, energy, safety, social)
@@ -1592,17 +1602,8 @@ function renderCharacterList() {
             // 気分（moodアイコンのみ）
             const tdMood = document.createElement('td');
             tdMood.className = 'mood-td';
-            let moodIcon = '';
-            switch (char.mood) {
-                case 'happy': moodIcon = '😄'; break;
-                case 'tired': moodIcon = '😪'; break;
-                case 'lonely': moodIcon = '😢'; break;
-                case 'scared': moodIcon = '😱'; break;
-                case 'angry': moodIcon = '😠'; break;
-                case 'sad': moodIcon = '😔'; break;
-                default: moodIcon = '🙂';
-            }
-            tdMood.textContent = moodIcon;
+            const mood = getMoodDisplay(char.mood);
+            tdMood.textContent = mood.icon;
             tdMood.title = char.mood || 'neutral';
             tr.appendChild(tdMood);
             // needs
@@ -1683,18 +1684,9 @@ function createCharacterDetailCard(char) {
     header.appendChild(topRow);
     // 下段: 気分バッジを中央に
     const moodSpan = document.createElement('span');
-    let moodIcon = '', moodClass = 'mood-neutral', moodText = '';
-    switch (char.mood) {
-        case 'happy': moodIcon = '😄'; moodClass = 'mood-happy'; break;
-        case 'tired': moodIcon = '😪'; moodClass = 'mood-tired'; break;
-        case 'lonely': moodIcon = '😢'; moodClass = 'mood-lonely'; break;
-        case 'scared': moodIcon = '😱'; moodClass = 'mood-scared'; break;
-        case 'angry': moodIcon = '😠'; moodClass = 'mood-angry'; break;
-        case 'sad': moodIcon = '😔'; moodClass = 'mood-sad'; break;
-        default: moodIcon = '🙂'; moodClass = 'mood-neutral';
-    }
-    moodSpan.className = 'mood-badge ' + moodClass;
-    moodSpan.textContent = moodIcon;
+    const mood = getMoodDisplay(char.mood);
+    moodSpan.className = 'mood-badge ' + mood.className;
+    moodSpan.textContent = mood.icon;
     moodSpan.style.marginTop = '6px';
     header.appendChild(moodSpan);
     card.appendChild(header);
