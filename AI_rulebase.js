@@ -16,6 +16,7 @@ export function decideNextAction_rulebase(character, isNight) {
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeBuildingHungerThreshold = (typeof window !== 'undefined' && window.homeBuildingHungerThreshold !== undefined) ? window.homeBuildingHungerThreshold : 80;
+    const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 10;
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 15;
     // resilience: hardy characters tolerate lower energy before forcing REST
     const effectiveEnergyEmergency = energyEmergency / Math.max(0.3, character.personality.resilience ?? 1.0);
@@ -40,6 +41,28 @@ export function decideNextAction_rulebase(character, isNight) {
         // No shelter found — rest in place anyway; starvation is worse
         character.log(`Action: REST (energy emergency, unsafe but no shelter)`);
         character.setNextAction('REST');
+        return;
+    }
+
+    // === PRIORITY 0.5: EMERGENCY HUNGER — force immediate foraging ===
+    // Keep hunger emergency above exploration/social/home logic to avoid starvation spirals.
+    if (character.needs.hunger <= hungerEmergency) {
+        const foodPos = character.findClosestFood && character.findClosestFood();
+        if (foodPos) {
+            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(foodPos);
+            if (adjacentSpot) {
+                character.log(`Action: EAT (hunger emergency=${character.needs.hunger.toFixed(1)})`);
+                character.setNextAction('EAT', foodPos, adjacentSpot);
+                return;
+            }
+            character.log(`Action: COLLECT_FOOD (hunger emergency no adjacent spot)`);
+            character.setNextAction('COLLECT_FOOD', foodPos, foodPos);
+            return;
+        }
+
+        // No visible food: avoid expensive work and keep searching.
+        character.log('Action: WANDER (hunger emergency, no food found)');
+        character.setNextAction('WANDER');
         return;
     }
 

@@ -2628,8 +2628,8 @@ class Character {
             if (this.actionCooldown <= 0) {
                 const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
                 const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
-                const urgentNeeds = (this.needs.hunger <= (hungerEmergency + 6) || this.needs.energy <= (energyEmergency + 6));
-                const interruptibleMove = !this.action || ['WANDER', 'SOCIALIZE'].includes(this.action.type);
+                const urgentNeeds = (this.needs.hunger <= (hungerEmergency + 8) || this.needs.energy <= (energyEmergency + 8));
+                const interruptibleMove = !this.action || ['WANDER', 'SOCIALIZE', 'MOVE'].includes(this.action.type);
                 if (urgentNeeds && interruptibleMove) {
                     this.clearNavigationState();
                     this.state = 'idle';
