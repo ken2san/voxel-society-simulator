@@ -6,7 +6,7 @@
     "sidebarParams": {
       "charNum": 12,
       "socialTh": 75,
-      "groupAffinityTh": 30,
+      "groupAffinityTh": 60,
       "hungerEmergencyThreshold": 10,
       "energyEmergencyThreshold": 24,
       "characterLifespan": 180,
