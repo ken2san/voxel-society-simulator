@@ -641,10 +641,19 @@ window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
     return stats;
 };
 
+function normalizeDeathCause(cause) {
+    const normalized = String(cause || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!normalized) return 'unknown';
+    if (normalized === 'starvation' || normalized === 'starved' || normalized.includes('starv')) return 'starvation';
+    if (normalized === 'old_age' || normalized === 'oldage' || normalized === 'old') return 'old_age';
+    return 'unknown';
+}
+
 window.recordPopulationDeath = function recordPopulationDeath(payload = {}) {
     const stats = window.getPopulationStats();
     stats.deaths += 1;
-    const cause = payload && typeof payload.cause === 'string' ? payload.cause : 'unknown';
+    const rawCause = payload && typeof payload.cause === 'string' ? payload.cause : 'unknown';
+    const cause = normalizeDeathCause(rawCause);
     if (stats.deathsByCause[cause] === undefined) stats.deathsByCause[cause] = 0;
     stats.deathsByCause[cause] += 1;
     stats.latestDeath = {

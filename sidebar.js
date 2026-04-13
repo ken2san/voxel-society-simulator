@@ -1647,7 +1647,8 @@ function createPopulationDetailsHTML(metrics) {
                 { label: 'Avg age', value: `${metrics.avgAge}s` },
                 { label: 'Max age', value: `${metrics.maxAge}s` },
                 { label: 'Starved', value: metrics.starvationDeaths },
-                { label: 'Old age', value: metrics.oldAgeDeaths }
+                { label: 'Old age', value: metrics.oldAgeDeaths },
+                { label: 'Unknown', value: metrics.unknownDeaths }
             ]) +
             createPopulationDetailCard('Generation', '🌱', [
                 { label: 'Max gen', value: metrics.maxGen },
@@ -1898,8 +1899,10 @@ function renderCharacterList() {
         const avgGen   = alive.length ? (alive.reduce((s, c) => s + (c.generation || 0), 0) / alive.length).toFixed(1) : '—';
         const avgAge   = alive.length ? (alive.reduce((s, c) => s + (c.age || 0), 0) / alive.length).toFixed(1) : '—';
         const maxAge   = alive.length ? Math.max(...alive.map(c => Number(c.age || 0))).toFixed(1) : '—';
-        const starvationDeaths = popStats ? Number(popStats.deathsByCause?.starvation || 0) : 0;
-        const oldAgeDeaths = popStats ? Number(popStats.deathsByCause?.old_age || 0) : 0;
+        const deathsByCause = popStats?.deathsByCause || {};
+        const starvationDeaths = Number(deathsByCause.starvation || 0) + Number(deathsByCause.starved || 0);
+        const oldAgeDeaths = Number(deathsByCause.old_age || 0) + Number(deathsByCause.oldage || 0) + Number(deathsByCause.oldAge || 0) + Number(deathsByCause['old age'] || 0);
+        const unknownDeaths = Number(deathsByCause.unknown || 0);
         const avgBrav  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.bravery         || 0), 0) / alive.length).toFixed(2) : '—';
         const avgDili  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.diligence        || 0), 0) / alive.length).toFixed(2) : '—';
         const avgSoci  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.sociality        || 0), 0) / alive.length).toFixed(2) : '—';
@@ -1951,6 +1954,7 @@ function renderCharacterList() {
             maxAge,
             starvationDeaths,
             oldAgeDeaths,
+            unknownDeaths,
             maxGen,
             avgGen,
             avgBrav,
