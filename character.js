@@ -1801,8 +1801,6 @@ class Character {
                 this.needs[k] = 80 + Math.random()*10;
             }
         }
-        // --- Mood（感情状態）---
-        this.mood = 'neutral'; // 'happy', 'sad', 'angry', 'lonely', 'scared', etc.
         this.personality = genes ? genes : {
             bravery: 0.5 + Math.random() * 0.2,
             diligence: 0.5 + Math.random() * 0.2
@@ -2143,6 +2141,21 @@ class Character {
         return spots;
     }
 
+    // mood is derived from state + needs — no stored field needed
+    get mood() {
+        if (this.state === 'dead')         return 'dead';
+        if (this.state === 'resting')      return 'tired';
+        if (this.state === 'socializing')  return this.needs.social > 80 ? 'happy' : 'social';
+        if (this.needs.hunger < 20)        return 'hungry';
+        if (this.needs.safety < 20)        return 'scared';
+        if (this.needs.energy < 20)        return 'tired';
+        if (this.needs.social < 20)        return 'lonely';
+        if (this.state === 'meeting')      return 'excited';
+        if (this.state === 'confused')     return 'confused';
+        if (this.state === 'moving')       return 'active';
+        return 'neutral';
+    }
+
     update(deltaTime, isNight, camera) {
         // 死亡以外のstateになったら目・口の色を黒にリセット
         if (this.state !== 'dead') {
@@ -2354,32 +2367,6 @@ class Character {
             this.learn && this.learn({ type: 'SAFETY_DECREASE' });
         }
 
-        // --- Mood（感情状態）の更新 ---
-        // シンプルなルールでmoodを決定
-        if (this.state === 'dead') {
-            this.mood = 'dead';
-        } else if (this.state === 'resting') {
-            this.mood = 'tired';
-        } else if (this.state === 'socializing') {
-            if (this.needs.social > 80) this.mood = 'happy';
-            else this.mood = 'social';
-        } else if (this.needs.hunger < 20) {
-            this.mood = 'hungry';
-        } else if (this.needs.safety < 20) {
-            this.mood = 'scared';
-        } else if (this.needs.energy < 20) {
-            this.mood = 'tired';
-        } else if (this.needs.social < 20) {
-            this.mood = 'lonely';
-        } else if (this.state === 'meeting') {
-            this.mood = 'excited';
-        } else if (this.state === 'confused') {
-            this.mood = 'confused';
-        } else if (this.state === 'moving') {
-            this.mood = 'active';
-        } else {
-            this.mood = 'neutral';
-        }
         // Recovery
         if (this.state === 'resting') {
             this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 18);
