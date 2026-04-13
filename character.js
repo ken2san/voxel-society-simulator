@@ -199,20 +199,10 @@ class Character {
 
     runWorkAction(actionType = this.action?.type) {
         switch (actionType) {
-            case 'BUILD_HOME':
-                this.log('⚡ BUILD_HOME execution started');
-                this.buildHome();
-                return true;
-            case 'CRAFT_TOOL':
-                this.log('⚡ CRAFT_TOOL execution started');
-                this.craftTool();
-                return true;
-            case 'DESTROY_BLOCK':
-                this.log('⚡ DESTROY_BLOCK execution started');
-                this.destroyBlock();
-                return true;
-            default:
-                return false;
+            case 'BUILD_HOME':    this.buildHome();    return true;
+            case 'CRAFT_TOOL':   this.craftTool();    return true;
+            case 'DESTROY_BLOCK': this.destroyBlock(); return true;
+            default: return false;
         }
     }
 
@@ -654,7 +644,6 @@ class Character {
 
         if (blockId) {
             this._diggingProgress += 1;
-            this.log(`Dig progress: ${this._diggingProgress}/18`);
 
             // 段階的なアイコン表示とエフェクト
             const stages = ['⛏️', '💪⛏️', '💥⛏️', '🔥⛏️', '✨💎'];
@@ -662,6 +651,7 @@ class Character {
             if (currentStage !== this._diggingStage) {
                 this.showActionIcon(stages[currentStage], 0.6);
                 this._diggingStage = currentStage;
+                this.log(`Dig progress: ${this._diggingProgress}/18 [stage ${currentStage}]`);
             }
 
             // 完了判定
@@ -779,15 +769,14 @@ class Character {
 
         // 段階的な制作プロセス
         this._craftingProgress += 1;
-        this.log(`Crafting progress: ${this._craftingProgress}/20`);
 
         const stages = ['🔨', '🪚', '⚒️', '🛠️', '✨🔧'];
-            const messages = ['Preparing materials...', 'Cutting...', 'Assembling...', 'Adjusting...', 'Complete!'];
         const currentStage = Math.floor(this._craftingProgress / 4) % stages.length;
 
         if (currentStage !== this._craftingStage) {
             this.showActionIcon(stages[currentStage], 1.0);
             this._craftingStage = currentStage;
+            this.log(`Crafting progress: ${this._craftingProgress}/20 [stage ${currentStage}]`);
         }
 
         // 完了判定（35→20に短縮で道具作成を高速化）
@@ -833,16 +822,15 @@ class Character {
         if (woodCount > 0) {
             // より慎重な建築進行（+1）
             this._buildingProgress += 1;
-            this.log(`Build progress: ${this._buildingProgress}/15 (wood: ${woodCount})`);
 
             // 段階的な建築アイコン表示
             const stages = ['🔨', '🏗️', '🧱', '🏠', '✨🏡'];
-            const messages = ['Designing...', 'Laying foundation...', 'Building walls...', 'Installing roof...', 'Complete!'];
             const currentStage = Math.floor(this._buildingProgress / 3) % stages.length;
 
             if (currentStage !== this._buildingStage) {
                 this.showActionIcon(stages[currentStage], 1.0);
                 this._buildingStage = currentStage;
+                this.log(`Build progress: ${this._buildingProgress}/15 [stage ${currentStage}] wood: ${woodCount}`);
             }
 
             // 15進捗で木材を1つ消費（木材1個で家完成）
@@ -2950,7 +2938,6 @@ class Character {
         // this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos }); // コメントアウト
         if (!this.targetPos) { this.state = 'idle'; return; }
         if (!this._blockedRetryCount) this._blockedRetryCount = 0;
-        if (!this._blockedWaitTimer) this._blockedWaitTimer = 0;
         // --- small "alive" movement tweaks ---
         // variable speed (updated intermittently), micro-pauses (hesitation), and short arrival delay
         if (!this._speedTicker) {
@@ -3201,16 +3188,8 @@ class Character {
                     }
                 }
                 if (this.bfsFailCount > 2) {
-                    this.log('BFS pathfinding failed multiple times, giving up.');
-
-                    // If this was a wood collection action, increment AI failure counter
-                    if (this.action && this.action.type === 'CHOP_WOOD') {
-                        if (!this._woodFailureCount) this._woodFailureCount = 0;
-                        this._woodFailureCount++;
-                        const woodPos = this.action.target;
-                        this._lastWoodTarget = woodPos ? `${woodPos.x},${woodPos.y},${woodPos.z}` : null;
-                        this.log(`AI: Pathfinding failed for wood collection (${this._woodFailureCount} total failures)`);
-                    }
+                    const tpos = this.action?.target;
+                    this.log(`BFS: too many failures, giving up [action=${this.action?.type} target=${tpos ? `${tpos.x},${tpos.y},${tpos.z}` : 'none'}]`);
 
                         this.clearNavigationState();
                     this.state = 'idle';
@@ -3230,16 +3209,7 @@ class Character {
                     this.releaseReservedSidestep && this.releaseReservedSidestep();
                     return;
                 }
-                this.log('BFS pathfinding failed, will retry.');
-
-                // If this was a wood collection action, increment AI failure counter on first retry too
-                if (this.action && this.action.type === 'CHOP_WOOD' && this.bfsFailCount === 1) {
-                    if (!this._woodFailureCount) this._woodFailureCount = 0;
-                    this._woodFailureCount++;
-                    const woodPos = this.action.target;
-                    this._lastWoodTarget = woodPos ? `${woodPos.x},${woodPos.y},${woodPos.z}` : null;
-                    this.log(`AI: Early pathfinding failure for wood collection (${this._woodFailureCount} total failures)`);
-                }
+                this.log(`BFS: path failed, retrying [action=${this.action?.type} fail#${this.bfsFailCount}]`);
 
                 this.actionCooldown = brokeBlock ? 2.0 : 1.0; // Longer cooldown if we dug a block
                 this.state = 'idle';
@@ -3254,6 +3224,7 @@ class Character {
             this.releaseReservedSidestep && this.releaseReservedSidestep();
             this.state = 'idle';
             this.clearNavigationState();
+            this.log(`Arrived [action=${this.action?.type} pos=${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}]`);
             this.performAction && this.performAction();
             return;
         }
@@ -3267,8 +3238,7 @@ class Character {
             } else {
                 // Temporary congestion: wait briefly before giving up to avoid stop-jitter.
                 this._blockedRetryCount += 1;
-                this._blockedWaitTimer = 0.12 + Math.random() * 0.18;
-                this._microPauseTimer = Math.max(this._microPauseTimer || 0, this._blockedWaitTimer);
+                this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.12 + Math.random() * 0.18);
                 if (this._blockedRetryCount < 6) {
                     return;
                 }
