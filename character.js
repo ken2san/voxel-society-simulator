@@ -277,6 +277,10 @@ class Character {
                 // シェルター探索のため移動状態に遷移
                 this.state = 'moving';
                 break;
+            case 'SEEK_SHELTER_TO_REST':
+                // シェルターに移動し、そのまま休息へ入る
+                this.state = 'moving';
+                break;
             case 'REST':
                 // 休息状態に遷移
                 this.state = 'resting';
@@ -350,6 +354,10 @@ class Character {
                 break;
             case 'SEEK_SHELTER':
                 this.seekShelter();
+                break;
+            case 'SEEK_SHELTER_TO_REST':
+                this.seekShelter();
+                this.state = 'resting';
                 break;
             case 'REST':
                 this.state = 'resting';
@@ -2618,16 +2626,28 @@ class Character {
         else if (this.state === 'moving') {
             this.actionCooldown -= deltaTime;
             if (this.actionCooldown <= 0) {
+                const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+                const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+                const urgentNeeds = (this.needs.hunger <= (hungerEmergency + 6) || this.needs.energy <= (energyEmergency + 6));
+                const interruptibleMove = !this.action || ['WANDER', 'SOCIALIZE'].includes(this.action.type);
+                if (urgentNeeds && interruptibleMove) {
+                    this.clearNavigationState();
+                    this.state = 'idle';
+                    this.action = null;
+                    this.actionCooldown = 0.2;
+                    this.decideNextAction && this.decideNextAction(isNight);
+                }
+
                 // 重要なアクション実行中は新しいアクション決定を控える
                 const now = Date.now();
                 const isImportantActionProtected = this._lastImportantActionTime && (now - this._lastImportantActionTime < 3000); // 3秒間保護
                 const stallMs = (typeof window !== 'undefined' && window.movingReplanStallMs !== undefined) ? Number(window.movingReplanStallMs) : 2500;
                 const noRecentProgress = !this._lastMoveProgressTime || (now - this._lastMoveProgressTime) > stallMs;
-                if (!isImportantActionProtected && noRecentProgress) {
+                if (this.state === 'moving' && !isImportantActionProtected && noRecentProgress) {
                     // Move replan only when stalled, otherwise keep current target to avoid tremble.
                     this.actionCooldown = 1.2;
                     this.decideNextAction && this.decideNextAction(isNight);
-                } else {
+                } else if (this.state === 'moving') {
                     this.actionCooldown = 1.0;
                 }
             }
