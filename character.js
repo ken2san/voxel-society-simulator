@@ -1517,7 +1517,10 @@ class Character {
         const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
         if (!blockType) return true;
 
-        const passableBlocks = ['Air', 'Wood', 'Leaf', 'Fruit'];
+        // Wood trunks are solid — characters must path around them, not through them.
+        // Leaf blocks remain passable (visually thin, and blocking them causes BFS failures
+        // in dense canopy where no clear route exists).
+        const passableBlocks = ['Air', 'Leaf', 'Fruit'];
         return passableBlocks.includes(blockType.name) ||
                blockType.isBed ||
                blockId === BLOCK_TYPES.AIR?.id;
