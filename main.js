@@ -86,10 +86,15 @@ async function init() {
             setDEBUG_MODE(debugToggle.checked);
         }
 
-        setupTelemetryManagerPanel();
-
         // Setup resource generation sliders
         setupResourceSliders();
+
+        // Restore persisted tuning preset if available
+        if (typeof window.loadSimulatorSettingsLocal === 'function') {
+            window.loadSimulatorSettingsLocal({ persist: false, silent: true });
+        }
+
+        setupTelemetryManagerPanel();
 
         animate();
     } catch (error) { console.error("Initialization Error:", error); }
@@ -104,6 +109,11 @@ function setupTelemetryManagerPanel() {
     const downloadBtn = document.getElementById('telemetryDownloadBtn');
     const autoToggle = document.getElementById('telemetryAutoDownloadToggle');
     const status = document.getElementById('telemetryStatus');
+    const settingsSaveLocalBtn = document.getElementById('settingsSaveLocalBtn');
+    const settingsExportBtn = document.getElementById('settingsExportBtn');
+    const settingsImportBtn = document.getElementById('settingsImportBtn');
+    const settingsImportFileInput = document.getElementById('settingsImportFileInput');
+    const settingsStatus = document.getElementById('settingsStatus');
 
     if (!startBtn || !stopBtn || !downloadBtn || !status) return;
 
@@ -114,6 +124,10 @@ function setupTelemetryManagerPanel() {
         const mode = window.simTestMode ? 'running' : 'idle';
         const auto = !!window.simTelemetryConfig?.autoDownloadOnStop;
         status.textContent = `Telemetry ${mode} | samples=${sampleCount} events=${eventCount} | autoDownload=${auto ? 'on' : 'off'}`;
+    };
+
+    const setSettingsStatus = (message) => {
+        if (settingsStatus) settingsStatus.textContent = message;
     };
 
     const openModal = () => {
@@ -179,8 +193,41 @@ function setupTelemetryManagerPanel() {
         renderStatus();
     });
 
+    if (settingsSaveLocalBtn) {
+        settingsSaveLocalBtn.addEventListener('click', () => {
+            const ok = window.saveSimulatorSettingsLocal?.();
+            setSettingsStatus(ok ? `Saved local preset at ${new Date().toLocaleTimeString()}` : 'Local save failed');
+        });
+    }
+
+    if (settingsExportBtn) {
+        settingsExportBtn.addEventListener('click', () => {
+            const fileName = window.exportSimulatorSettingsJSON?.();
+            setSettingsStatus(fileName ? `Exported ${fileName}` : 'Export failed');
+        });
+    }
+
+    if (settingsImportBtn && settingsImportFileInput) {
+        settingsImportBtn.addEventListener('click', () => settingsImportFileInput.click());
+        settingsImportFileInput.addEventListener('change', async (e) => {
+            const file = e.target?.files?.[0];
+            if (!file) return;
+            try {
+                await window.importSimulatorSettingsFromFile?.(file, { persist: true });
+                setSettingsStatus(`Imported ${file.name}`);
+                renderStatus();
+            } catch (err) {
+                console.error('[Settings] import failed', err);
+                setSettingsStatus('Import failed (invalid JSON or schema)');
+            } finally {
+                settingsImportFileInput.value = '';
+            }
+        });
+    }
+
     window.setInterval(renderStatus, 1000);
     renderStatus();
+    setSettingsStatus('Settings preset ready');
 }
 
 function main() {
@@ -214,6 +261,15 @@ function setupResourceSliders() {
     const fruitValue = document.getElementById('fruitValue');
     const stoneValue = document.getElementById('stoneValue');
     const caveValue = document.getElementById('caveValue');
+
+    const clampFromSlider = (slider, rawValue) => {
+        if (!slider) return Number(rawValue);
+        const min = Number(slider.min);
+        const max = Number(slider.max);
+        let value = Number(rawValue);
+        if (!Number.isFinite(value)) value = Number(slider.value);
+        return Math.max(min, Math.min(max, value));
+    };
 
     // Update display values
     function updateSliderValues() {
@@ -273,6 +329,43 @@ function setupResourceSliders() {
 
     // Initialize display values
     updateSliderValues();
+
+    window.getResourceGenerationSettings = () => ({
+        treeSpawnRate: treeSlider ? Number(treeSlider.value) : null,
+        leafSpawnRate: leafSlider ? Number(leafSlider.value) : null,
+        fruitSpawnRate: fruitSlider ? Number(fruitSlider.value) : null,
+        stoneSpawnRate: stoneSlider ? Number(stoneSlider.value) : null,
+        caveSpawnRate: caveSlider ? Number(caveSlider.value) : null
+    });
+
+    window.applyResourceGenerationSettings = (settings = {}) => {
+        if (treeSlider && settings.treeSpawnRate !== undefined) {
+            const value = clampFromSlider(treeSlider, settings.treeSpawnRate);
+            treeSlider.value = String(value);
+            setTreeSpawnRate(value);
+        }
+        if (leafSlider && settings.leafSpawnRate !== undefined) {
+            const value = clampFromSlider(leafSlider, settings.leafSpawnRate);
+            leafSlider.value = String(value);
+            setLeafSpawnRate(value);
+        }
+        if (fruitSlider && settings.fruitSpawnRate !== undefined) {
+            const value = clampFromSlider(fruitSlider, settings.fruitSpawnRate);
+            fruitSlider.value = String(value);
+            setFruitSpawnRate(value);
+        }
+        if (stoneSlider && settings.stoneSpawnRate !== undefined) {
+            const value = clampFromSlider(stoneSlider, settings.stoneSpawnRate);
+            stoneSlider.value = String(value);
+            setStoneSpawnRate(value);
+        }
+        if (caveSlider && settings.caveSpawnRate !== undefined) {
+            const value = clampFromSlider(caveSlider, settings.caveSpawnRate);
+            caveSlider.value = String(value);
+            setCaveSpawnRate(value);
+        }
+        updateSliderValues();
+    };
 }
 
 // Function to regenerate the world with new settings
@@ -332,6 +425,130 @@ window.simTelemetryConfig = {
     autoDownloadOnStop: false,
     fileNamePrefix: 'telemetry'
 };
+window.__simSettingsStorageKey = 'voxel-society.settings.v1';
+
+window.exportSimulatorSettingsObject = function exportSimulatorSettingsObject() {
+    return {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        settings: {
+            sidebarParams: { ...(window.sidebarParams || {}) },
+            telemetryConfig: { ...(window.simTelemetryConfig || {}) },
+            resourceGeneration: (typeof window.getResourceGenerationSettings === 'function')
+                ? window.getResourceGenerationSettings()
+                : {},
+            debug: {
+                debugMode: !!window.DEBUG_MODE
+            }
+        }
+    };
+};
+
+window.downloadSimulatorSettingsJSON = function downloadSimulatorSettingsJSON(fileName = null) {
+    const safeName = fileName || `sim-settings-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const content = JSON.stringify(window.exportSimulatorSettingsObject(), null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return safeName;
+};
+
+window.exportSimulatorSettingsJSON = function exportSimulatorSettingsJSON(fileName = null) {
+    return window.downloadSimulatorSettingsJSON(fileName);
+};
+
+window.applySimulatorSettingsObject = function applySimulatorSettingsObject(payload, opts = {}) {
+    if (!payload || typeof payload !== 'object') {
+        throw new Error('Settings payload must be an object');
+    }
+    const settings = (payload.settings && typeof payload.settings === 'object') ? payload.settings : payload;
+
+    if (settings.sidebarParams && typeof settings.sidebarParams === 'object') {
+        window.sidebarParams = {
+            ...(window.sidebarParams || {}),
+            ...settings.sidebarParams
+        };
+        if (typeof window.renderCharacterDetail === 'function') {
+            window.renderCharacterDetail();
+        }
+    }
+
+    if (settings.telemetryConfig && typeof settings.telemetryConfig === 'object') {
+        const next = { ...(window.simTelemetryConfig || {}) };
+        if (settings.telemetryConfig.sampleIntervalMs !== undefined) {
+            next.sampleIntervalMs = Math.max(200, Number(settings.telemetryConfig.sampleIntervalMs) || next.sampleIntervalMs);
+        }
+        if (settings.telemetryConfig.maxSamples !== undefined) {
+            next.maxSamples = Math.max(1000, Number(settings.telemetryConfig.maxSamples) || next.maxSamples);
+        }
+        if (settings.telemetryConfig.maxEvents !== undefined) {
+            next.maxEvents = Math.max(1000, Number(settings.telemetryConfig.maxEvents) || next.maxEvents);
+        }
+        if (settings.telemetryConfig.autoDownloadOnStop !== undefined) {
+            next.autoDownloadOnStop = !!settings.telemetryConfig.autoDownloadOnStop;
+        }
+        if (settings.telemetryConfig.fileNamePrefix !== undefined && String(settings.telemetryConfig.fileNamePrefix).trim()) {
+            next.fileNamePrefix = String(settings.telemetryConfig.fileNamePrefix).trim();
+        }
+        window.simTelemetryConfig = next;
+    }
+
+    if (settings.resourceGeneration && typeof settings.resourceGeneration === 'object' && typeof window.applyResourceGenerationSettings === 'function') {
+        window.applyResourceGenerationSettings(settings.resourceGeneration);
+    }
+
+    if (settings.debug && typeof settings.debug === 'object' && settings.debug.debugMode !== undefined) {
+        const debugMode = !!settings.debug.debugMode;
+        const debugToggle = document.getElementById('debugToggle');
+        if (debugToggle) debugToggle.checked = debugMode;
+        window.DEBUG_MODE = debugMode;
+        setDEBUG_MODE(debugMode);
+    }
+
+    if (opts.persist !== false) {
+        window.saveSimulatorSettingsLocal();
+    }
+
+    return true;
+};
+
+window.saveSimulatorSettingsLocal = function saveSimulatorSettingsLocal() {
+    try {
+        localStorage.setItem(window.__simSettingsStorageKey, JSON.stringify(window.exportSimulatorSettingsObject()));
+        return true;
+    } catch (err) {
+        console.error('[Settings] local save failed', err);
+        return false;
+    }
+};
+
+window.loadSimulatorSettingsLocal = function loadSimulatorSettingsLocal(opts = {}) {
+    try {
+        const raw = localStorage.getItem(window.__simSettingsStorageKey);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        window.applySimulatorSettingsObject(parsed, { persist: opts.persist !== undefined ? opts.persist : false });
+        return true;
+    } catch (err) {
+        if (!opts.silent) console.error('[Settings] local load failed', err);
+        return false;
+    }
+};
+
+window.importSimulatorSettingsFromFile = async function importSimulatorSettingsFromFile(file, opts = {}) {
+    if (!file) throw new Error('No file selected');
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    window.applySimulatorSettingsObject(parsed, { persist: opts.persist !== false });
+    return true;
+};
+
 window.__simTelemetry = {
     startedAt: 0,
     endedAt: 0,

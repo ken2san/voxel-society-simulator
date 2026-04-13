@@ -127,6 +127,18 @@
             </div>
             <div id="telemetryStatus" class="text-xs text-gray-300 text-center">Telemetry idle</div>
             </div>
+
+            <div class="bg-slate-900/50 border border-slate-400/20 rounded-lg p-3 mt-3">
+                <div class="text-white font-semibold mb-2">Settings Preset (JSON)</div>
+                <p class="text-gray-300 text-sm mb-3">Save current tuning values and restore them after reload.</p>
+                <div class="flex flex-wrap items-center justify-center gap-2 mb-2">
+                    <button id="settingsSaveLocalBtn" class="btn btn-primary btn-md debug-action-btn">Save Local</button>
+                    <button id="settingsExportBtn" class="btn btn-accent btn-md debug-action-btn">Export JSON</button>
+                    <button id="settingsImportBtn" class="btn btn-secondary btn-md debug-action-btn">Import JSON</button>
+                </div>
+                <input type="file" id="settingsImportFileInput" accept="application/json,.json" class="hidden">
+                <div id="settingsStatus" class="text-xs text-gray-300 text-center">Settings preset idle</div>
+            </div>
         </div>
     </div>
 
