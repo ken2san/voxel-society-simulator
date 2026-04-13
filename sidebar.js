@@ -76,9 +76,17 @@ function getStatusDisplay(char) {
         icon = '❓'; stateLabel = 'confused';
     }
 
-    // Avoid redundant text when action already means the same as the state icon.
-    const rawAction = char.currentAction && char.currentAction !== '-' ? char.currentAction : null;
-    const isRedundantAction = rawAction === 'WANDER' && char.state === 'moving';
+    // Avoid redundant text when action already means the same thing as the state icon.
+    const rawAction = char.currentAction && char.currentAction !== '-' ? String(char.currentAction) : null;
+    const actionNorm = rawAction ? rawAction.toUpperCase() : null;
+    const redundantActionByState = {
+        moving: new Set(['WANDER', 'MOVE']),
+        socializing: new Set(['SOCIALIZE']),
+        resting: new Set(['REST']),
+        meeting: new Set(['MEETING'])
+    };
+    const stateSet = redundantActionByState[char.state] || null;
+    const isRedundantAction = !!(actionNorm && stateSet && stateSet.has(actionNorm));
     const action = isRedundantAction ? null : rawAction;
     const text = action ? `${icon} ${action}` : icon;
     const title = action ? `${stateLabel} / ${action}` : stateLabel;
