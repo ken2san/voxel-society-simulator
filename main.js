@@ -739,7 +739,6 @@ window.__simTelemetry = {
                 recentDigCooldownMs: window.recentDigCooldownMs,
                 digActionCooldown: window.digActionCooldown,
                 worldReservationTTL: window.worldReservationTTL,
-                reservationFallbackCooldown: window.reservationFallbackCooldown,
                 maxActionCooldown: window.maxActionCooldown,
                 recoverActionCooldown: window.recoverActionCooldown
             },

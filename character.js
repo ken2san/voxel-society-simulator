@@ -1184,7 +1184,7 @@ class Character {
                         window._digBlockFailCounts.set(key, Date.now() + backoff);
                     }
                 } catch (e) {}
-                this.actionCooldown = (typeof window !== 'undefined' && window.reservationFallbackCooldown !== undefined) ? window.reservationFallbackCooldown : 1.0;
+                this.actionCooldown = 1.0;
                 return false;
             }
 
@@ -3548,8 +3548,8 @@ class Character {
             // path invalidation backoff: avoid immediate recompute loops (tunable)
             if (!this._pathInvalidationCount) this._pathInvalidationCount = 0;
             this._pathInvalidationCount++;
-            const factor = (typeof window !== 'undefined' && window.pathInvalidationBackoffFactor !== undefined) ? Number(window.pathInvalidationBackoffFactor) : 0.2;
-            const maxExtra = (typeof window !== 'undefined' && window.pathInvalidationBackoffMax !== undefined) ? Number(window.pathInvalidationBackoffMax) : 2.0;
+            const factor = 0.2;
+            const maxExtra = 2.0;
             const extra = Math.min(maxExtra, factor * this._pathInvalidationCount);
             this.actionCooldown = 0.4 + extra + Math.random() * 0.2;
             // if we've had many invalidations recently, reset counters and add longer cooldown
@@ -4355,7 +4355,7 @@ class Character {
         if (!this.action || this.action === null) {
             // Avoid immediately falling back to WANDER repeatedly (causes trembling)
             const now = Date.now();
-            const fallbackBackoffMs = (typeof window !== 'undefined' && window.fallbackBackoffMs !== undefined) ? Number(window.fallbackBackoffMs) : 1500;
+            const fallbackBackoffMs = 1500;
             if (!this._lastFallbackTime || (now - this._lastFallbackTime) > fallbackBackoffMs) {
                 // Prefer collecting nearby food first, then chopping wood, before defaulting to WANDER
                 const food = this.findClosestFood ? this.findClosestFood() : null;

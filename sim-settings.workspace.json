@@ -26,8 +26,7 @@
       "pathOccupancyLookahead": 2,
       "recentDigCooldownMs": 10000,
       "digActionCooldown": 2200,
-      "worldReservationTTL": 5000,
-      "reservationFallbackCooldown": 1000
+      "worldReservationTTL": 5000
     },
     "telemetryConfig": {
       "sampleIntervalMs": 800,

@@ -211,7 +211,6 @@ function renderCharacterDetail() {
         recentDigCooldownMs:                10000,
         digActionCooldown:                  2200,
         worldReservationTTL:                5000,
-        reservationFallbackCooldown:        1000,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
