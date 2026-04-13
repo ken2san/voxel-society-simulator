@@ -121,61 +121,42 @@ function renderCharacterDetail() {
     const sidebarParams = window.sidebarParams;
     // Disable parameter fields during simulation (defined only once)
     const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
-    // Also reflect to global
+
+    // --- sidebarParams defaults and window.* mirroring ---
+    // To add a new parameter: add ONE entry here. Init and global mirror are both automatic.
+    const PARAM_DEFAULTS = {
+        hungerEmergencyThreshold:           5,
+        energyEmergencyThreshold:           8,
+        homeReturnHungerLevel:              90,
+        homeBuildingPriority:               80,
+        woodCollectionPriority:             70,
+        initialAffinityMin:                 20,
+        initialAffinityMax:                 40,
+        affinityIncreaseRate:               10,
+        affinityDecayRate:                  0.01,
+        pairReproductionCooldownSeconds:    60,
+        maxAffinity:                        100,
+        reproductionCooldownSeconds:        10,
+        autoRecoverStall:                   true,
+        recoverActionCooldown:              0.5,
+        maxActionCooldown:                  8,
+        movingReplanStallMs:                2500,
+        pathOccupancyLookahead:             2,
+        recentDigCooldownMs:                10000,
+        digActionCooldown:                  2200,
+        worldReservationTTL:                5000,
+        reservationFallbackCooldown:        1000,
+        fallbackBackoffMs:                  1500,
+        pathInvalidationBackoffFactor:      0.2,
+        pathInvalidationBackoffMax:         2.0,
+    };
+    for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
+        if (sidebarParams[key] === undefined) sidebarParams[key] = def;
+        window[key] = sidebarParams[key];
+    }
+    // Rename mappings: sidebarParams uses shorter keys, window.* uses full names
     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
-    window.socialThreshold = sidebarParams.socialTh; // Set during initialization as well
-    // Emergency threshold parameters
-    if (sidebarParams.hungerEmergencyThreshold === undefined) sidebarParams.hungerEmergencyThreshold = 5;
-    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 8;
-    if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
-    if (sidebarParams.homeBuildingPriority === undefined) sidebarParams.homeBuildingPriority = 80;
-    if (sidebarParams.woodCollectionPriority === undefined) sidebarParams.woodCollectionPriority = 70;
-    window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
-    window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
-    window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
-    window.homeBuildingPriority = sidebarParams.homeBuildingPriority;
-    window.woodCollectionPriority = sidebarParams.woodCollectionPriority;
-    // New parameters: initial affinity value and increase rate
-    if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
-    if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
-    if (sidebarParams.affinityIncreaseRate === undefined) sidebarParams.affinityIncreaseRate = 10;
-    if (sidebarParams.affinityDecayRate === undefined) sidebarParams.affinityDecayRate = 0.01; // affinity units per second
-    // New control defaults
-    if (sidebarParams.pairReproductionCooldownSeconds === undefined) sidebarParams.pairReproductionCooldownSeconds = 60;
-    if (sidebarParams.maxAffinity === undefined) sidebarParams.maxAffinity = 100;
-    if (sidebarParams.reproductionCooldownSeconds === undefined) sidebarParams.reproductionCooldownSeconds = 10;
-    if (sidebarParams.autoRecoverStall === undefined) sidebarParams.autoRecoverStall = true;
-    if (sidebarParams.recoverActionCooldown === undefined) sidebarParams.recoverActionCooldown = 0.5;
-    if (sidebarParams.maxActionCooldown === undefined) sidebarParams.maxActionCooldown = 8;
-    if (sidebarParams.movingReplanStallMs === undefined) sidebarParams.movingReplanStallMs = 2500;
-    if (sidebarParams.pathOccupancyLookahead === undefined) sidebarParams.pathOccupancyLookahead = 2;
-    if (sidebarParams.recentDigCooldownMs === undefined) sidebarParams.recentDigCooldownMs = 10000;
-    if (sidebarParams.digActionCooldown === undefined) sidebarParams.digActionCooldown = 2200;
-    if (sidebarParams.worldReservationTTL === undefined) sidebarParams.worldReservationTTL = 5000;
-    if (sidebarParams.reservationFallbackCooldown === undefined) sidebarParams.reservationFallbackCooldown = 1000;
-    if (sidebarParams.fallbackBackoffMs === undefined) sidebarParams.fallbackBackoffMs = 1500;
-    if (sidebarParams.pathInvalidationBackoffFactor === undefined) sidebarParams.pathInvalidationBackoffFactor = 0.2;
-    if (sidebarParams.pathInvalidationBackoffMax === undefined) sidebarParams.pathInvalidationBackoffMax = 2.0;
-    window.initialAffinityMin = sidebarParams.initialAffinityMin;
-    window.initialAffinityMax = sidebarParams.initialAffinityMax;
-    window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
-    window.affinityDecayRate = sidebarParams.affinityDecayRate;
-    // Expose new knobs to global window for runtime tuning
-    window.pairReproductionCooldownSeconds = sidebarParams.pairReproductionCooldownSeconds;
-    window.maxAffinity = sidebarParams.maxAffinity;
-    window.reproductionCooldownSeconds = sidebarParams.reproductionCooldownSeconds;
-    window.autoRecoverStall = sidebarParams.autoRecoverStall;
-    window.recoverActionCooldown = sidebarParams.recoverActionCooldown;
-    window.maxActionCooldown = sidebarParams.maxActionCooldown;
-    window.movingReplanStallMs = sidebarParams.movingReplanStallMs;
-    window.pathOccupancyLookahead = sidebarParams.pathOccupancyLookahead;
-    window.recentDigCooldownMs = sidebarParams.recentDigCooldownMs;
-    window.digActionCooldown = sidebarParams.digActionCooldown;
-    window.worldReservationTTL = sidebarParams.worldReservationTTL;
-    window.reservationFallbackCooldown = sidebarParams.reservationFallbackCooldown;
-    window.fallbackBackoffMs = sidebarParams.fallbackBackoffMs;
-    window.pathInvalidationBackoffFactor = sidebarParams.pathInvalidationBackoffFactor;
-    window.pathInvalidationBackoffMax = sidebarParams.pathInvalidationBackoffMax;
+    window.socialThreshold = sidebarParams.socialTh;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');

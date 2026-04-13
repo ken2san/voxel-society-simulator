@@ -1801,11 +1801,6 @@ class Character {
                 this.needs[k] = 80 + Math.random()*10;
             }
         }
-        // stateがdeadならidleにリセット
-        if (this.state === 'dead') {
-            this.state = 'idle';
-            this.action = null;
-        }
         // --- Mood（感情状態）---
         this.mood = 'neutral'; // 'happy', 'sad', 'angry', 'lonely', 'scared', etc.
         this.personality = genes ? genes : {
@@ -2872,31 +2867,6 @@ class Character {
 
         this.log('Moved from', oldPos, 'to', newGridPos);
         return true;
-    }
-
-    // --- 経路に沿った移動実行（安全判定付き） ---
-    moveAlongPath() {
-        if (!this.path || this.path.length === 0) return false;
-
-        const nextPos = this.path[0];
-        if (!nextPos) return false;
-
-        // 落下先が安全か判定してから移動
-        if (nextPos.y < this.gridPos.y) {
-            // 下に降りる場合、落下先が安全か判定
-            if (!this.isSafeToFallOrDig(nextPos.x, nextPos.y, nextPos.z)) {
-                this.log('Skip move: fall destination not safe', {from: this.gridPos, to: nextPos});
-                return false;
-            }
-        }
-
-        // 移動実行
-        const success = this.moveToGridPos(nextPos);
-        if (success) {
-            this.path.shift(); // パスから次の位置を削除
-        }
-
-        return success;
     }
 
     // Validate a computed path step-by-step for current passability and corner-cutting
