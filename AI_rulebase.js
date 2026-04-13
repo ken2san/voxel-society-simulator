@@ -16,8 +16,9 @@ export function decideNextAction_rulebase(character, isNight) {
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeBuildingHungerThreshold = (typeof window !== 'undefined' && window.homeBuildingHungerThreshold !== undefined) ? window.homeBuildingHungerThreshold : 80;
-    const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 10;
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 15;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
     // resilience: hardy characters tolerate lower energy before forcing REST
     const effectiveEnergyEmergency = energyEmergency / Math.max(0.3, character.personality.resilience ?? 1.0);
 
@@ -44,30 +45,13 @@ export function decideNextAction_rulebase(character, isNight) {
         return;
     }
 
-    // === PRIORITY 0.5: EMERGENCY HUNGER — force immediate foraging ===
-    // Keep hunger emergency above exploration/social/home logic to avoid starvation spirals.
-    if (character.needs.hunger <= hungerEmergency) {
-        const foodPos = character.findClosestFood && character.findClosestFood();
-        if (foodPos) {
-            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(foodPos);
-            if (adjacentSpot) {
-                character.log(`Action: EAT (hunger emergency=${character.needs.hunger.toFixed(1)})`);
-                character.setNextAction('EAT', foodPos, adjacentSpot);
-                return;
-            }
-            character.log(`Action: COLLECT_FOOD (hunger emergency no adjacent spot)`);
-            character.setNextAction('COLLECT_FOOD', foodPos, foodPos);
-            return;
-        }
-
-        // No visible food: avoid expensive work and keep searching.
-        character.log('Action: WANDER (hunger emergency, no food found)');
-        character.setNextAction('WANDER');
-        return;
-    }
-
     // === PRIORITY 1: RANDOM EXPLORATION (base 10%; curiosity scales it) ===
-    if (Math.random() < 0.10 * (character.personality.curiosity ?? 1.0)) {
+    const explorationWeight = clamp(
+        0.10 * (character.personality.curiosity ?? 1.0) * (1 + (adapt.explore * 0.45) - (adapt.forage * 0.55) - (adapt.rest * 0.50)),
+        0.02,
+        0.20
+    );
+    if (Math.random() < explorationWeight) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         let nearbyPartner = null;
         for (const char of chars) {
@@ -88,7 +72,7 @@ export function decideNextAction_rulebase(character, isNight) {
 
     // === PRIORITY 2: SOCIAL NEEDS ===
     // sociality scales the threshold: social characters seek interaction earlier
-    const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0);
+    const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0) * (1 + adapt.social * 0.35 - adapt.forage * 0.25 - adapt.rest * 0.20);
     if (character.needs.social <= effectiveSocialThreshold) {
         const partner = character.findClosestPartner && character.findClosestPartner();
         if (partner) {
@@ -632,7 +616,8 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 7: ENERGY MANAGEMENT ===
-    if (character.needs.energy < 70 * character.personality.bravery) {
+    const effectiveRestThreshold = (70 * character.personality.bravery) + (adapt.rest * 18);
+    if (character.needs.energy < effectiveRestThreshold) {
         if (character.isSafe(isNight)) {
             character.setNextAction('REST');
             return;
@@ -648,7 +633,8 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 8: FOOD COLLECTION (resourcefulness: proactive characters forage earlier) ===
-    if (character.needs.hunger < 95 * Math.min(1.0, character.personality.resourcefulness ?? 1.0)) {
+    const hungerCollectionThreshold = clamp((95 * Math.min(1.0, character.personality.resourcefulness ?? 1.0)) + (adapt.forage * 22), 35, 100);
+    if (character.needs.hunger < hungerCollectionThreshold) {
         const foodPos = character.findClosestFood();
         if (foodPos) {
             const adjacentSpot = character.findAdjacentSpot(foodPos);

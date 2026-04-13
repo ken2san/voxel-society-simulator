@@ -509,7 +509,9 @@ class Character {
                     this.showActionIcon('😋', 1.5);
                     this.inventory[0] = null;
                     this.carriedItemMesh.visible = false;
+                    const inDanger = this.needs.hunger <= 15 || this.needs.energy <= 15;
                     this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                    this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                     this.eatCount = (this.eatCount || 0) + 1;
                     this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
@@ -1942,6 +1944,14 @@ class Character {
         };
         // Merge: genes values override defaults; missing keys fall back to random defaults.
         this.personality = genes ? { ..._defaultTraits, ...genes } : _defaultTraits;
+        // Short/mid-term adaptive tendencies (learned during lifetime, not inherited directly).
+        this.adaptiveTendencies = {
+            forage: 0,
+            rest: 0,
+            social: 0,
+            explore: 0,
+        };
+        this._learningTick = 0;
         this.appearanceProfile = { ...this.personality };
         this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
@@ -2252,10 +2262,53 @@ class Character {
 
     // --- Learning logic (bak_game.js準拠) ---
     learn(outcome) {
-        if (outcome.type === 'SAFETY_DECREASE') { this.personality.bravery = Math.max(0.5, this.personality.bravery - 0.05); }
-        else if (outcome.type === 'ATE_FOOD' && outcome.inDanger) { this.personality.bravery = Math.min(1.5, this.personality.bravery + 0.1); }
-        else if (outcome.type === 'BUILT_HOME') { this.personality.diligence = Math.min(1.5, this.personality.diligence + 0.2); }
-        else if (outcome.type === 'FOUND_SHELTER') { this.personality.diligence = Math.min(1.5, this.personality.diligence + 0.05); }
+        const clampTrait = (v) => Math.max(0.3, Math.min(1.7, v));
+        const clampBias = (v) => Math.max(-1.0, Math.min(1.0, v));
+        const adapt = this.adaptiveTendencies || (this.adaptiveTendencies = { forage: 0, rest: 0, social: 0, explore: 0 });
+
+        if (outcome.type === 'SAFETY_DECREASE') {
+            this.personality.bravery = clampTrait(this.personality.bravery - 0.04);
+            adapt.explore = clampBias(adapt.explore - 0.04);
+        }
+        else if (outcome.type === 'ATE_FOOD') {
+            this.personality.resourcefulness = clampTrait(this.personality.resourcefulness + 0.015);
+            if (outcome.inDanger) this.personality.bravery = clampTrait(this.personality.bravery + 0.05);
+            adapt.forage = clampBias(adapt.forage - 0.08);
+            adapt.explore = clampBias(adapt.explore + 0.02);
+        }
+        else if (outcome.type === 'BUILT_HOME') {
+            this.personality.diligence = clampTrait(this.personality.diligence + 0.05);
+            adapt.rest = clampBias(adapt.rest + 0.02);
+        }
+        else if (outcome.type === 'FOUND_SHELTER') {
+            this.personality.diligence = clampTrait(this.personality.diligence + 0.02);
+            this.personality.resilience = clampTrait(this.personality.resilience + 0.015);
+            adapt.rest = clampBias(adapt.rest - 0.06);
+        }
+        else if (outcome.type === 'HUNGER_STRESS') {
+            this.personality.resourcefulness = clampTrait(this.personality.resourcefulness + 0.01);
+            this.personality.curiosity = clampTrait(this.personality.curiosity - 0.006);
+            adapt.forage = clampBias(adapt.forage + 0.08);
+            adapt.explore = clampBias(adapt.explore - 0.05);
+            adapt.social = clampBias(adapt.social - 0.02);
+        }
+        else if (outcome.type === 'ENERGY_STRESS') {
+            this.personality.resilience = clampTrait(this.personality.resilience + 0.01);
+            this.personality.curiosity = clampTrait(this.personality.curiosity - 0.004);
+            adapt.rest = clampBias(adapt.rest + 0.08);
+            adapt.explore = clampBias(adapt.explore - 0.04);
+        }
+        else if (outcome.type === 'SOCIAL_SUCCESS') {
+            this.personality.sociality = clampTrait(this.personality.sociality + 0.01);
+            adapt.social = clampBias(adapt.social + 0.06);
+        }
+
+        // Slow decay toward neutral so tendencies reflect recent context.
+        adapt.forage *= 0.995;
+        adapt.rest *= 0.995;
+        adapt.social *= 0.995;
+        adapt.explore *= 0.995;
+
         this.updateColorFromPersonality();
     }
 
@@ -2499,11 +2552,22 @@ class Character {
             this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 18);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
+                this.learn && this.learn({ type: 'FOUND_SHELTER' });
                 if (this.provisionalHome === null) {
                     this.provisionalHome = this.gridPos;
-                    this.learn && this.learn({ type: 'FOUND_SHELTER' });
                 }
             }
+        }
+
+        // Natural adaptation from prolonged stress (sampled at low frequency).
+        this._learningTick = (this._learningTick || 0) + deltaTime;
+        if (this._learningTick >= 2.0) {
+            this._learningTick = 0;
+            const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 10;
+            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 15;
+            if (this.needs.hunger <= hungerEmergency + 8) this.learn && this.learn({ type: 'HUNGER_STRESS' });
+            if (this.needs.energy <= energyEmergency + 8) this.learn && this.learn({ type: 'ENERGY_STRESS' });
+            if (this.state === 'socializing' && this.needs.social > 80) this.learn && this.learn({ type: 'SOCIAL_SUCCESS' });
         }
         // --- Affinity decay: slowly reduce affinity over time to stabilize long-term behavior ---
         try {
@@ -2628,8 +2692,8 @@ class Character {
             if (this.actionCooldown <= 0) {
                 const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
                 const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
-                const urgentNeeds = (this.needs.hunger <= (hungerEmergency + 8) || this.needs.energy <= (energyEmergency + 8));
-                const interruptibleMove = !this.action || ['WANDER', 'SOCIALIZE', 'MOVE'].includes(this.action.type);
+                const urgentNeeds = (this.needs.hunger <= (hungerEmergency + 6) || this.needs.energy <= (energyEmergency + 6));
+                const interruptibleMove = !this.action || ['WANDER', 'SOCIALIZE'].includes(this.action.type);
                 if (urgentNeeds && interruptibleMove) {
                     this.clearNavigationState();
                     this.state = 'idle';
