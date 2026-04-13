@@ -174,6 +174,19 @@ class Character {
         if (cooldown !== null) this.actionCooldown = cooldown;
     }
 
+    setNavigationTarget(targetPos) {
+        if (targetPos && targetPos.x !== undefined && targetPos.y !== undefined && targetPos.z !== undefined) {
+            this.targetPos = { x: targetPos.x, y: targetPos.y, z: targetPos.z };
+        } else {
+            this.targetPos = null;
+        }
+        this.lastTargetPos = null;
+    }
+
+    clearNavigationTarget() {
+        this.setNavigationTarget(null);
+    }
+
     // --- 現在のアクションを実行する ---
     performAction() {
         this.log('⚡ performAction called:', this.action?.type);
@@ -916,7 +929,7 @@ class Character {
             if (candidates.length > 0) {
                 const selectedMoveTo = candidates[Math.floor(Math.random() * candidates.length)];
                 this.action = { type, target, item };
-                this.targetPos = selectedMoveTo;
+                this.setNavigationTarget(selectedMoveTo);
                 this.state = 'moving';
                 return;
             }
@@ -960,7 +973,7 @@ class Character {
 
         this.action = { type, target, item };
         if (moveTo && type !== 'SOCIALIZE') {
-            this.targetPos = moveTo;
+            this.setNavigationTarget(moveTo);
             this.state = 'moving';
         } else if (type === 'SOCIALIZE' && moveTo) {
             // SOCIALIZE の場合は距離をチェック
@@ -970,13 +983,13 @@ class Character {
                 this.performAction();
             } else {
                 // 遠い場合は移動
-                this.targetPos = moveTo;
+                this.setNavigationTarget(moveTo);
                 this.state = 'moving';
             }
         } else {
             // moveTo が null または undefined の場合は移動不要
             // targetPos をクリアして即座にアクション実行
-            this.targetPos = null;
+            this.clearNavigationTarget();
             this.performAction();
         }
     }
@@ -3008,7 +3021,7 @@ class Character {
                     if (alternativeWood && alternativeWood !== this.action.target) {
                         this.log('Found alternative wood target, switching');
                         this.action.target = alternativeWood;
-                        this.targetPos = alternativeWood;
+                        this.setNavigationTarget(alternativeWood);
                         this.path = this.bfsPath(this.gridPos, this.targetPos);
                         if (this.path && this.path.length > 0) {
                             this.bfsFailCount = 0;
@@ -3025,7 +3038,7 @@ class Character {
                         if (dist <= 3) { // 3ブロック以内なら強制実行
                             this.log('CHOP_WOOD: Force execution within 3 blocks, distance:', dist);
                             this.state = 'working';
-                            this.targetPos = null;
+                            this.clearNavigationTarget();
                             this.path = null;
                             this.executeAction();
                             return;
