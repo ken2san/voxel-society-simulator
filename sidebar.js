@@ -57,55 +57,31 @@ function getMoodDisplay(mood) {
 }
 
 function getStatusDisplay(char) {
-    const icons = [];
-    const labels = [];
+    let icon = '⏸';
+    let stateLabel = char.state || 'idle';
 
     if (char.state === 'dead') {
-        icons.push('💀');
-        labels.push('dead');
+        icon = '💀'; stateLabel = 'dead';
     } else if (char.state === 'resting') {
-        icons.push('🛏️');
-        labels.push('resting');
+        icon = '🛏️'; stateLabel = 'resting';
     } else if (char.state === 'socializing') {
-        icons.push('💬');
-        labels.push('socializing');
+        icon = '💬'; stateLabel = 'socializing';
     } else if (char.state === 'moving') {
-        icons.push('🚶');
-        labels.push('moving');
+        icon = '🚶'; stateLabel = 'moving';
     } else if (char.state === 'working') {
-        icons.push('🛠️');
-        labels.push('working');
+        icon = '🛠️'; stateLabel = 'working';
     } else if (char.state === 'meeting') {
-        icons.push('🤝');
-        labels.push('meeting');
+        icon = '🤝'; stateLabel = 'meeting';
     } else if (char.state === 'confused') {
-        icons.push('❓');
-        labels.push('confused');
-    } else {
-        icons.push('⏸');
-        labels.push(char.state || 'idle');
+        icon = '❓'; stateLabel = 'confused';
     }
 
-    if (char.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) {
-        icons.push('🍎');
-        labels.push('collecting food');
-    } else if (char.needs && char.needs.hunger < 30 && !icons.includes('🍎')) {
-        icons.push('🍎');
-        labels.push('low hunger');
-    }
-    if (char.needs && char.needs.energy < 30) {
-        icons.push('💤');
-        labels.push('low energy');
-    }
-    if (char.needs && char.needs.social < 30) {
-        icons.push('👥');
-        labels.push('low social');
-    }
+    // Show task name alongside state icon — single source of truth for activity.
+    const action = char.currentAction && char.currentAction !== '-' ? char.currentAction : null;
+    const text = action ? `${icon} ${action}` : icon;
+    const title = action ? `${stateLabel} / ${action}` : stateLabel;
 
-    return {
-        text: icons.join(' '),
-        title: labels.join(', ')
-    };
+    return { text, title };
 }
 
 function renderCharacterNeeds() {
@@ -1666,7 +1642,6 @@ function renderCharacterList() {
             'Eng',
             'Saf',
             'Soc',
-            'Action',
             'Move'
         ];
         headerLabels.forEach(txt => {
@@ -1700,6 +1675,7 @@ function renderCharacterList() {
             }
             const detailTd = document.createElement('td');
             detailTd.colSpan = 10;
+                        detailTd.colSpan = 9;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
             detailTd.appendChild(createCharacterDetailCard(char));
@@ -1762,10 +1738,6 @@ function renderCharacterList() {
                 tr.appendChild(td);
             });
             // 行動
-            const tdAction = document.createElement('td');
-            tdAction.textContent = char.currentAction || '-';
-            tdAction.className = 'action-text';
-            tr.appendChild(tdAction);
             // 移動距離
             const tdMove = document.createElement('td');
             tdMove.textContent = (typeof char.moveDistance === 'number') ? char.moveDistance : '-';
