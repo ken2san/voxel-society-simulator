@@ -1653,9 +1653,13 @@ function createPopulationDetailsHTML(metrics) {
                 { label: 'Max gen', value: metrics.maxGen },
                 { label: 'Avg gen', value: metrics.avgGen }
             ]) +
-            createPopulationDetailCard('Traits', '🧭', [
-                { label: 'Bravery', value: metrics.avgBrav },
-                { label: 'Diligence', value: metrics.avgDili }
+            createPopulationDetailCard('Traits', '�', [
+                { label: 'Bravery',         value: metrics.avgBrav },
+                { label: 'Diligence',       value: metrics.avgDili },
+                { label: 'Sociality',       value: metrics.avgSoci },
+                { label: 'Curiosity',       value: metrics.avgCuri },
+                { label: 'Resourcefulness', value: metrics.avgReso },
+                { label: 'Resilience',      value: metrics.avgResi }
             ]) +
             createPopulationDetailCard('Needs', '⚡', [
                 createPopulationNeedRow('Hunger', metrics.avgHun, 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'),
@@ -1896,8 +1900,12 @@ function renderCharacterList() {
         const maxAge   = alive.length ? Math.max(...alive.map(c => Number(c.age || 0))).toFixed(1) : '—';
         const starvationDeaths = popStats ? Number(popStats.deathsByCause?.starvation || 0) : 0;
         const oldAgeDeaths = popStats ? Number(popStats.deathsByCause?.old_age || 0) : 0;
-        const avgBrav  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.bravery  || 0), 0) / alive.length).toFixed(2) : '—';
-        const avgDili  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.diligence || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgBrav  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.bravery         || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgDili  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.diligence        || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgSoci  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.sociality        || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgCuri  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.curiosity        || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgReso  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.resourcefulness  || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgResi  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.resilience       || 0), 0) / alive.length).toFixed(2) : '—';
         const avgHun   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.hunger  || 0), 0) / alive.length).toFixed(0) : '—';
         const avgEng   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.energy  || 0), 0) / alive.length).toFixed(0) : '—';
         const avgSaf   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.safety  || 0), 0) / alive.length).toFixed(0) : '—';
@@ -1947,6 +1955,10 @@ function renderCharacterList() {
             avgGen,
             avgBrav,
             avgDili,
+            avgSoci,
+            avgCuri,
+            avgReso,
+            avgResi,
             avgHun,
             avgEng,
             avgSaf,
@@ -2190,21 +2202,23 @@ function createCharacterDetailCard(char) {
     const profileBox = document.createElement('div');
     profileBox.className = 'profile-box';
     profileBox.style.marginBottom = '10px';
-    // bravery/diligence
-    let bravery = '-', diligence = '-';
-    if (char.personality && typeof char.personality === 'object') {
-        bravery = (char.personality.bravery !== undefined) ? char.personality.bravery.toFixed(2) : '-';
-        diligence = (char.personality.diligence !== undefined) ? char.personality.diligence.toFixed(2) : '-';
-    }
+    // personality traits (all 6)
+    const p = char.personality || {};
+    const fmt = v => (v !== undefined ? Number(v).toFixed(2) : '-');
     // group/role
     const groupStr = char.groupId ? `Group: <b>${char.groupId}</b>` : 'Group: <b>Unassigned</b>';
     const roleStr = char.role === 'leader' ? 'Leader' : char.role === 'worker' ? 'Worker' : 'Member';
     // id
     const idStr = `ID: <b>${char.id}</b>`;
-    // プロフィールHTML（年齢・性格・特技は表示しない）
+    // プロフィールHTML
     profileBox.innerHTML = `<b>Profile</b><br>` +
         `${idStr}<br>${groupStr} / Role: <b>${roleStr}</b><br>` +
-        `bravery: <b>${bravery}</b> ／ diligence: <b>${diligence}</b>`;
+        `<span title="Risk tolerance">⚔️ ${fmt(p.bravery)}</span> ` +
+        `<span title="Work rate">🔨 ${fmt(p.diligence)}</span> ` +
+        `<span title="Social drive">💬 ${fmt(p.sociality)}</span><br>` +
+        `<span title="Exploration drive">🔭 ${fmt(p.curiosity)}</span> ` +
+        `<span title="Proactive foraging">🌾 ${fmt(p.resourcefulness)}</span> ` +
+        `<span title="Energy stress tolerance">💪 ${fmt(p.resilience)}</span>`;
     card.appendChild(profileBox);
     // 状態推移グラフ（直近10秒）
     const histArr = window.characterHistory?.[char.id] || [];

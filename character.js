@@ -1832,10 +1832,17 @@ class Character {
                 this.needs[k] = 80 + Math.random()*10;
             }
         }
-        this.personality = genes ? genes : {
-            bravery: 0.5 + Math.random() * 0.2,
-            diligence: 0.5 + Math.random() * 0.2
+        const _defaultTraits = {
+            bravery:         0.5 + Math.random() * 0.5,
+            diligence:       0.5 + Math.random() * 0.5,
+            // --- pseudo-evolution traits (added for Anlife-like drift) ---
+            sociality:       0.5 + Math.random() * 0.5, // seeks social earlier; modulates socialThreshold
+            curiosity:       0.5 + Math.random() * 0.5, // drives exploration probability
+            resourcefulness: 0.5 + Math.random() * 0.5, // proactive foraging threshold
+            resilience:      0.5 + Math.random() * 0.5, // energy stress tolerance
         };
+        // Merge: genes values override defaults; missing keys fall back to random defaults.
+        this.personality = genes ? { ..._defaultTraits, ...genes } : _defaultTraits;
         this.state = 'idle';
         this.action = null;
         this.targetPos = null;
@@ -3962,10 +3969,20 @@ class Character {
             g: (c1.g + c2.g) / 2,
             b: (c1.b + c2.b) / 2
         };
-        // Mix personality
+        // Mix personality — inherit average of parents + small noise; 5% chance of larger mutation per trait
+        const _blendTrait = (a, b) => {
+            const base = (a + b) / 2 + (Math.random() - 0.5) * 0.12;
+            const mutated = Math.random() < 0.05 ? base + (Math.random() - 0.5) * 0.5 : base;
+            return Math.max(0.3, Math.min(1.7, mutated));
+        };
+        const p = this.personality, q = partner.personality;
         const childGenes = {
-            bravery: Math.max(0.5, Math.min(1.5, (this.personality.bravery + partner.personality.bravery) / 2 + (Math.random()-0.5)*0.1)),
-            diligence: Math.max(0.5, Math.min(1.5, (this.personality.diligence + partner.personality.diligence) / 2 + (Math.random()-0.5)*0.1))
+            bravery:         _blendTrait(p.bravery,         q.bravery),
+            diligence:       _blendTrait(p.diligence,       q.diligence),
+            sociality:       _blendTrait(p.sociality        ?? 1.0, q.sociality        ?? 1.0),
+            curiosity:       _blendTrait(p.curiosity        ?? 1.0, q.curiosity        ?? 1.0),
+            resourcefulness: _blendTrait(p.resourcefulness  ?? 1.0, q.resourcefulness  ?? 1.0),
+            resilience:      _blendTrait(p.resilience       ?? 1.0, q.resilience       ?? 1.0),
         };
         // Find spawn position near parents (prefer free adjacent spot)
         let spawnPos = null;
