@@ -2183,8 +2183,7 @@ class Character {
 
     get currentAction() {
         if (this.action && this.action.type) return this.action.type;
-        if (this.state === 'idle') return 'IDLE';
-        return this.state || '-';
+        return '-';
     }
 
     update(deltaTime, isNight, camera) {

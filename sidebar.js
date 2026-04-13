@@ -56,6 +56,58 @@ function getMoodDisplay(mood) {
     }
 }
 
+function getStatusDisplay(char) {
+    const icons = [];
+    const labels = [];
+
+    if (char.state === 'dead') {
+        icons.push('💀');
+        labels.push('dead');
+    } else if (char.state === 'resting') {
+        icons.push('🛏️');
+        labels.push('resting');
+    } else if (char.state === 'socializing') {
+        icons.push('💬');
+        labels.push('socializing');
+    } else if (char.state === 'moving') {
+        icons.push('🚶');
+        labels.push('moving');
+    } else if (char.state === 'working') {
+        icons.push('🛠️');
+        labels.push('working');
+    } else if (char.state === 'meeting') {
+        icons.push('🤝');
+        labels.push('meeting');
+    } else if (char.state === 'confused') {
+        icons.push('❓');
+        labels.push('confused');
+    } else {
+        icons.push('⏸');
+        labels.push(char.state || 'idle');
+    }
+
+    if (char.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) {
+        icons.push('🍎');
+        labels.push('collecting food');
+    } else if (char.needs && char.needs.hunger < 30 && !icons.includes('🍎')) {
+        icons.push('🍎');
+        labels.push('low hunger');
+    }
+    if (char.needs && char.needs.energy < 30) {
+        icons.push('💤');
+        labels.push('low energy');
+    }
+    if (char.needs && char.needs.social < 30) {
+        icons.push('👥');
+        labels.push('low social');
+    }
+
+    return {
+        text: icons.join(' '),
+        title: labels.join(', ')
+    };
+}
+
 function renderCharacterNeeds() {
     // Traverse each tr in summary table tbody and update only needs and mood
     const table = document.querySelector('.character-summary-table');
@@ -1504,7 +1556,7 @@ function renderCharacterList() {
         const headerLabels = [
             'ID',
             'Grp',
-            'State',
+            'Status',
             'Mood',
             'Hun',
             'Eng',
@@ -1582,29 +1634,18 @@ function renderCharacterList() {
                 tdGroup.textContent = '-';
             }
             tr.appendChild(tdGroup);
-            // 状態アイコン（state/needsのみ、気分は含めない）
+            // Status: activity / urgency signals, distinct from emotional mood.
             const tdIcons = document.createElement('td');
-            let stateIcons = [];
-            // 👑や🧑‍🌾は表示しない（グループ列のみ）
-            if (char.state === 'dead') stateIcons.push('💀');
-            else if (char.state === 'resting') stateIcons.push('🛏️');
-            else if (char.state === 'socializing') stateIcons.push('💬');
-            else if (char.state === 'moving') stateIcons.push('🚶');
-            // COLLECT_FOOD中は必ず🍎を表示
-            if (char.currentAction === 'COLLECT_FOOD' && !stateIcons.includes('🍎')) stateIcons.push('🍎');
-            else if (char.needs && char.needs.hunger < 30 && !stateIcons.includes('🍎')) stateIcons.push('🍎');
-            if (char.needs && char.needs.energy < 30) stateIcons.push('💤');
-            if (char.needs && char.needs.social < 30) stateIcons.push('👥');
-            if (stateIcons.length === 0) stateIcons.push('🙂');
-            tdIcons.textContent = stateIcons.join(' ');
-            tdIcons.title = stateIcons.join(' ');
+            const status = getStatusDisplay(char);
+            tdIcons.textContent = status.text;
+            tdIcons.title = `Status: ${status.title}`;
             tr.appendChild(tdIcons);
             // 気分（moodアイコンのみ）
             const tdMood = document.createElement('td');
             tdMood.className = 'mood-td';
             const mood = getMoodDisplay(char.mood);
             tdMood.textContent = mood.icon;
-            tdMood.title = char.mood || 'neutral';
+            tdMood.title = `Mood: ${mood.text}`;
             tr.appendChild(tdMood);
             // needs
             ['hunger','energy','safety','social'].forEach(k => {
