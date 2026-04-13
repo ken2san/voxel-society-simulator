@@ -1598,6 +1598,132 @@ function createSparklineSVG(values, color, width = 86, height = 24) {
     );
 }
 
+// --- Lifecycle Event Timeline ---
+if (!window.__lifecycleEventLog) window.__lifecycleEventLog = [];
+let _lastSeenBirthT = 0;
+let _lastSeenDeathT = 0;
+let _drawerExpanded = false;
+const LIFECYCLE_LOG_MAX = 30;
+
+function pushLifecycleEvent(type, data) {
+    const ev = Object.assign({ t: Date.now(), type }, data);
+    window.__lifecycleEventLog.unshift(ev);
+    if (window.__lifecycleEventLog.length > LIFECYCLE_LOG_MAX) {
+        window.__lifecycleEventLog.length = LIFECYCLE_LOG_MAX;
+    }
+}
+
+function syncLifecycleEventsFromStats() {
+    const stats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
+    if (!stats) return;
+    const lb = stats.latestBirth;
+    if (lb && lb.t && lb.t > _lastSeenBirthT) {
+        _lastSeenBirthT = lb.t;
+        pushLifecycleEvent('birth', {
+            childId: lb.childId,
+            generation: lb.generation,
+            parentIds: lb.parentIds
+        });
+    }
+    const ld = stats.latestDeath;
+    if (ld && ld.t && ld.t > _lastSeenDeathT) {
+        _lastSeenDeathT = ld.t;
+        pushLifecycleEvent('death', {
+            charId: ld.id,
+            cause: ld.cause,
+            age: ld.age,
+            generation: ld.generation,
+            wasChild: ld.wasChild
+        });
+    }
+}
+
+function _etlFormatTime(t) {
+    const d = new Date(t);
+    return d.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function _etlFormatEvent(ev) {
+    if (ev.type === 'birth') {
+        const charLabel = ev.childId !== undefined ? `#${ev.childId}` : '';
+        const gen = ev.generation !== undefined ? ` G${ev.generation}` : '';
+        return `🟢 Born ${charLabel}${gen}`;
+    } else {
+        const charLabel = ev.charId !== undefined ? `#${ev.charId}` : '';
+        const gen = ev.generation !== undefined ? ` G${ev.generation}` : '';
+        const age = ev.age !== undefined ? ` ${Math.round(ev.age)}s` : '';
+        const cause = ev.cause ? ` (${ev.cause})` : '';
+        return `🔴 Died ${charLabel}${gen}${age}${cause}`;
+    }
+}
+
+function initEventTimelineDrawer() {
+    if (document.getElementById('event-timeline-drawer')) return;
+    const drawer = document.createElement('div');
+    drawer.id = 'event-timeline-drawer';
+    drawer.style.cssText = [
+        'position:fixed',
+        'bottom:0',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'width:min(780px,80vw)',
+        'z-index:15',
+        'border-radius:12px 12px 0 0',
+        'overflow:hidden',
+        'box-shadow:0 -4px 20px rgba(0,0,0,0.32)',
+        'font-family:Inter,sans-serif',
+        'font-size:0.82em',
+        'pointer-events:auto'
+    ].join(';');
+    drawer.innerHTML =
+        `<div id="etl-handle" style="display:flex;align-items:center;gap:8px;padding:6px 14px;` +
+        `background:linear-gradient(90deg,#1e3a5f 0%,#1a2e4a 100%);color:#c8dcf0;cursor:pointer;` +
+        `height:36px;box-sizing:border-box;user-select:none;">` +
+            `<span style="font-size:0.94em;font-weight:700;letter-spacing:0.02em;white-space:nowrap;">📋 Timeline</span>` +
+            `<span id="etl-latest" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
+            `font-size:0.88em;color:#a8c4df;padding-left:10px;"></span>` +
+            `<span id="etl-toggle-icon" style="font-size:0.88em;transition:transform 200ms;">▲</span>` +
+        `</div>` +
+        `<div id="etl-body" style="display:none;background:rgba(14,24,42,0.96);` +
+        `backdrop-filter:blur(6px);max-height:200px;overflow-y:auto;padding:6px 8px;">` +
+            `<div id="etl-list" style="display:flex;flex-direction:column;gap:2px;"></div>` +
+        `</div>`;
+    document.body.appendChild(drawer);
+    document.getElementById('etl-handle').addEventListener('click', () => {
+        _drawerExpanded = !_drawerExpanded;
+        const body = document.getElementById('etl-body');
+        const icon = document.getElementById('etl-toggle-icon');
+        if (body) body.style.display = _drawerExpanded ? 'block' : 'none';
+        if (icon) icon.style.transform = _drawerExpanded ? 'rotate(180deg)' : '';
+        renderEventTimeline();
+    });
+}
+
+function renderEventTimeline() {
+    syncLifecycleEventsFromStats();
+    const log = window.__lifecycleEventLog;
+    const latestEl = document.getElementById('etl-latest');
+    const listEl = document.getElementById('etl-list');
+    if (!latestEl) return;
+    if (log.length === 0) {
+        latestEl.textContent = 'No events yet';
+        if (listEl) listEl.innerHTML =
+            `<div style="color:#6080a0;padding:8px 4px;font-size:0.88em;">No lifecycle events yet.</div>`;
+        return;
+    }
+    latestEl.textContent = `${_etlFormatTime(log[0].t)} — ${_etlFormatEvent(log[0])}`;
+    if (_drawerExpanded && listEl) {
+        listEl.innerHTML = log.map(ev => {
+            const color = ev.type === 'birth' ? '#34d399' : '#f87171';
+            const bg = ev.type === 'birth' ? 'rgba(52,211,153,0.07)' : 'rgba(248,113,113,0.07)';
+            return `<div style="display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;background:${bg};">` +
+                `<span style="color:${color};font-size:0.92em;white-space:nowrap;">${_etlFormatEvent(ev)}</span>` +
+                `<span style="color:#607090;font-size:0.8em;white-space:nowrap;margin-left:auto;">${_etlFormatTime(ev.t)}</span>` +
+                `</div>`;
+        }).join('');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     leftSidebar = document.getElementById('sidebar-left');
     rightSidebar = document.getElementById('sidebar-right');
@@ -1622,6 +1748,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初期状態: 必ず右サイドバーはキャラ詳細UI（Pause/ResumeトグルUI）
     renderCharacterDetail();
+    initEventTimelineDrawer();
 });
 console.log('[sidebar.js] loaded');
 // グローバルから呼び出せるように
@@ -1878,6 +2005,7 @@ function renderCharacterList() {
             leftSidebar.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
         };
     }
+    renderEventTimeline();
 // サマリー表の詳細カード生成
 function createCharacterDetailCard(char) {
     const card = document.createElement('div');
