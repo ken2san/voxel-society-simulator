@@ -76,9 +76,10 @@ function getStatusDisplay(char) {
         icon = '❓'; stateLabel = 'confused';
     }
 
-    // Avoid redundant text when action already means the same thing as the state icon.
+    // Avoid redundant text when action is a base behavior already represented by an icon.
     const rawAction = char.currentAction && char.currentAction !== '-' ? String(char.currentAction) : null;
     const actionNorm = rawAction ? rawAction.toUpperCase() : null;
+    const iconOnlyActions = new Set(['WANDER', 'WONDER', 'SOCIALIZE', 'REST', 'MOVE']);
     const redundantActionByState = {
         // When already in moving state, the walk icon is sufficient.
         moving: new Set(['*']),
@@ -87,7 +88,12 @@ function getStatusDisplay(char) {
         meeting: new Set(['MEETING'])
     };
     const stateSet = redundantActionByState[char.state] || null;
-    const isRedundantAction = !!(actionNorm && stateSet && (stateSet.has('*') || stateSet.has(actionNorm)));
+    const isRedundantAction = !!(
+        actionNorm && (
+            iconOnlyActions.has(actionNorm) ||
+            (stateSet && (stateSet.has('*') || stateSet.has(actionNorm)))
+        )
+    );
     const action = isRedundantAction ? null : rawAction;
     const text = action ? `${icon} ${action}` : icon;
     const title = action ? `${stateLabel} / ${action}` : stateLabel;
