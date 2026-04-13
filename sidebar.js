@@ -76,7 +76,7 @@ function getStatusDisplay(char) {
         icon = '❓'; stateLabel = 'confused';
     }
 
-    // Avoid redundant text when action is a base behavior already represented by an icon.
+    // Icon-first Status: state icon + optional action icon (no action text in cell).
     const rawAction = char.currentAction && char.currentAction !== '-' ? String(char.currentAction) : null;
     const actionNorm = rawAction ? rawAction.toUpperCase() : null;
     const iconOnlyActions = new Set(['WANDER', 'WONDER', 'SOCIALIZE', 'REST', 'MOVE']);
@@ -95,7 +95,17 @@ function getStatusDisplay(char) {
         )
     );
     const action = isRedundantAction ? null : rawAction;
-    const text = action ? `${icon} ${action}` : icon;
+    const actionIconByType = {
+        COLLECT_FOOD: '🍎',
+        BUILD_HOME: '🏠',
+        CRAFT_TOOL: '🔧',
+        DESTROY_BLOCK: '⛏️',
+        CHOP_WOOD: '🪓',
+        SEEK_SHELTER_TO_REST: '🏚️',
+        MEETING: '🤝'
+    };
+    const actionIcon = action ? (actionIconByType[actionNorm] || null) : null;
+    const text = actionIcon ? `${icon} ${actionIcon}` : icon;
     const title = action ? `${stateLabel} / ${action}` : stateLabel;
 
     return { text, title };
