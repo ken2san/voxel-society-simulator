@@ -68,6 +68,9 @@ async function init() {
 
         // Make characters array available globally for sidebar.js
         window.characters = characters;
+        if (typeof window.resetPopulationStats === 'function') {
+            window.resetPopulationStats(characters.length);
+        }
         // Redraw sidebar if function exists in window
         if (window.renderCharacterList) window.renderCharacterList();
         // Sidebar auto-update interval is managed on sidebar.js side
@@ -549,6 +552,55 @@ window.importSimulatorSettingsFromFile = async function importSimulatorSettingsF
     return true;
 };
 
+window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
+    const base = Math.max(0, Number(initialCount) || 0);
+    window.__simPopulationStats = {
+        startedAt: Date.now(),
+        initialPopulation: base,
+        births: 0,
+        deaths: 0,
+        deathsByCause: {
+            starvation: 0,
+            old_age: 0,
+            unknown: 0
+        },
+        latestBirth: null,
+        latestDeath: null
+    };
+    return window.__simPopulationStats;
+};
+
+window.getPopulationStats = function getPopulationStats() {
+    if (!window.__simPopulationStats) {
+        return window.resetPopulationStats(Array.isArray(window.characters) ? window.characters.length : 0);
+    }
+    return window.__simPopulationStats;
+};
+
+window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
+    const stats = window.getPopulationStats();
+    stats.births += 1;
+    stats.latestBirth = {
+        t: Date.now(),
+        ...payload
+    };
+    return stats;
+};
+
+window.recordPopulationDeath = function recordPopulationDeath(payload = {}) {
+    const stats = window.getPopulationStats();
+    stats.deaths += 1;
+    const cause = payload && typeof payload.cause === 'string' ? payload.cause : 'unknown';
+    if (stats.deathsByCause[cause] === undefined) stats.deathsByCause[cause] = 0;
+    stats.deathsByCause[cause] += 1;
+    stats.latestDeath = {
+        t: Date.now(),
+        ...payload,
+        cause
+    };
+    return stats;
+};
+
 window.__simTelemetry = {
     startedAt: 0,
     endedAt: 0,
@@ -592,7 +644,8 @@ window.__simTelemetry = {
                 pathOccupancyLookahead: window.pathOccupancyLookahead,
                 maxActionCooldown: window.maxActionCooldown,
                 recoverActionCooldown: window.recoverActionCooldown
-            }
+            },
+            population: window.getPopulationStats ? window.getPopulationStats() : null
         };
     },
     exportObject() {

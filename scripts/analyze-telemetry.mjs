@@ -127,6 +127,34 @@ if (meta.runtime) {
     console.log(`  - ${k}: ${v}`);
   }
 }
+if (meta.population) {
+  const p = meta.population;
+  const born = Number(p.initialPopulation || 0) + Number(p.births || 0);
+  console.log('Population counters:');
+  console.log(`  - initialPopulation: ${Number(p.initialPopulation || 0)}`);
+  console.log(`  - totalBorn: ${born}`);
+  console.log(`  - births: ${Number(p.births || 0)}`);
+  console.log(`  - deaths: ${Number(p.deaths || 0)}`);
+  console.log(`  - deaths.starvation: ${Number(p.deathsByCause?.starvation || 0)}`);
+  console.log(`  - deaths.old_age: ${Number(p.deathsByCause?.old_age || 0)}`);
+  console.log(`  - deaths.unknown: ${Number(p.deathsByCause?.unknown || 0)}`);
+}
+
+const birthEvents = events.filter(e => e && e.kind === 'birth').length;
+const deathEvents = events.filter(e => e && e.kind === 'death');
+const deathByCause = deathEvents.reduce((acc, e) => {
+  const c = e && typeof e.cause === 'string' ? e.cause : 'unknown';
+  acc[c] = (acc[c] || 0) + 1;
+  return acc;
+}, {});
+if (birthEvents > 0 || deathEvents.length > 0) {
+  console.log('Lifecycle events:');
+  console.log(`  - birthEvents: ${birthEvents}`);
+  console.log(`  - deathEvents: ${deathEvents.length}`);
+  for (const [cause, count] of Object.entries(deathByCause)) {
+    console.log(`  - deathEvents.${cause}: ${count}`);
+  }
+}
 
 console.log('\n=== Top Suspect Characters (stuck progression) ===');
 for (const s of summaries.slice(0, 10)) {

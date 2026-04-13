@@ -2503,7 +2503,7 @@ class Character {
         }
         // Death condition（猶予を-10まで）
         if (this.needs.hunger <= -10) {
-            this.die();
+            this.die('starvation');
             this.updateThoughtBubble(isNight, camera);
             return;
         }
@@ -2583,7 +2583,7 @@ class Character {
                 ? Number(window.characterLifespan) : 240;
             if (this.age >= lifespan) {
                 try { console.log(`[LIFESPAN] ${this.id} died of old age (${Math.round(this.age)}s, gen=${this.generation})`); } catch(e){}
-                this.die();
+                this.die('old_age');
                 return;
             }
         }
@@ -2751,11 +2751,18 @@ class Character {
                 const now = Date.now();
                 if (!this._telemetryNextAt) this._telemetryNextAt = now;
                 if (now >= this._telemetryNextAt) {
+                    const lifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
+                        ? Number(window.characterLifespan) : 240;
                     window.__simTelemetry.addSample({
                         t: now,
                         id: this.id,
                         state: this.state,
                         mood: this.mood,
+                        generation: Number(this.generation || 0),
+                        isChild: !!this.isChild,
+                        age: Number(this.age || 0),
+                        lifespan: lifespan,
+                        lifeRatio: lifespan > 0 ? Number((Number(this.age || 0) / lifespan).toFixed(4)) : 0,
                         action: this.action ? this.action.type : null,
                         pos: { x: this.gridPos.x, y: this.gridPos.y, z: this.gridPos.z },
                         target: this.targetPos ? { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z } : null,
@@ -2779,7 +2786,36 @@ class Character {
 
     }
 
-    die() {
+    die(cause = 'unknown') {
+        try {
+            if (typeof window !== 'undefined' && typeof window.recordPopulationDeath === 'function') {
+                window.recordPopulationDeath({
+                    id: this.id,
+                    cause,
+                    age: Number(this.age || 0),
+                    generation: Number(this.generation || 0),
+                    wasChild: !!this.isChild
+                });
+            }
+            if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addEvent === 'function') {
+                window.__simTelemetry.addEvent({
+                    t: Date.now(),
+                    id: this.id,
+                    kind: 'death',
+                    cause,
+                    state: this.state,
+                    action: this.action ? this.action.type : null,
+                    generation: Number(this.generation || 0),
+                    age: Number(this.age || 0),
+                    needs: {
+                        hunger: Number(this.needs?.hunger || 0),
+                        energy: Number(this.needs?.energy || 0),
+                        safety: Number(this.needs?.safety || 0),
+                        social: Number(this.needs?.social || 0)
+                    }
+                });
+            }
+        } catch (e) {}
         // 死亡時に持ち物をワールドにドロップ
         if (this.inventory && this.inventory[0]) {
             const dropPos = { x: this.gridPos.x, y: this.gridPos.y - 1, z: this.gridPos.z };
@@ -2818,7 +2854,7 @@ class Character {
             Character.handleLeaderDeath(this, characters);
         }
         this.state = 'dead';
-        this.log('Character died and removed', { id: this.id });
+        this.log('Character died and removed', { id: this.id, cause });
     }
 
     // リーダー死亡時の混乱: グループ全員をconfused状態にし一定時間後に再選出
@@ -3951,6 +3987,23 @@ class Character {
                 // record last reproduction time for both parents
                 this._lastReproductionTime = Date.now();
                 partner._lastReproductionTime = Date.now();
+                if (typeof window !== 'undefined' && typeof window.recordPopulationBirth === 'function') {
+                    window.recordPopulationBirth({
+                        childId: child.id,
+                        generation: Number(child.generation || 0),
+                        parentIds: [this.id, partner.id]
+                    });
+                }
+                if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addEvent === 'function') {
+                    window.__simTelemetry.addEvent({
+                        t: Date.now(),
+                        kind: 'birth',
+                        childId: child.id,
+                        generation: Number(child.generation || 0),
+                        parents: [this.id, partner.id],
+                        pos: { x: child.gridPos.x, y: child.gridPos.y, z: child.gridPos.z }
+                    });
+                }
                 try { console.log(`[REPRO] ${this.id} spawned child ${child.id} at ${JSON.stringify(spawnPos)} parents=${JSON.stringify(child.parentIds)}`); } catch(e){}
             } catch (e) { /* ignore visual tweak errors */ }
         }

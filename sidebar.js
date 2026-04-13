@@ -1500,7 +1500,11 @@ function renderCharacterDetail() {
                     window.perceptionRange = sidebarParams.perceptionRange;
                     window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
                     window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
+                    window.characterLifespan = sidebarParams.characterLifespan;
                     window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
+                    if (typeof window.resetPopulationStats === 'function') {
+                        window.resetPopulationStats(window.characters.length);
+                    }
                     // --- Initialize groups here ---
                     import('./character.js').then(charMod => {
                         if (typeof charMod.Character?.initializeAllRelationships === 'function') {
@@ -1594,12 +1598,20 @@ function renderCharacterList() {
 
     // --- 母集団統計パネル ---
     if (window.characters && window.characters.length > 0) {
+        const popStats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
         const alive = window.characters.filter(c => c.state !== 'dead');
-        const dead  = window.characters.length - alive.length;
+        const dead = popStats ? Number(popStats.deaths || 0) : (window.characters.length - alive.length);
+        const totalBorn = popStats
+            ? Number(popStats.initialPopulation || 0) + Number(popStats.births || 0)
+            : window.characters.length;
         const children = alive.filter(c => c.isChild).length;
         const adults   = alive.length - children;
         const maxGen   = window.characters.reduce((m, c) => Math.max(m, c.generation || 0), 0);
         const avgGen   = alive.length ? (alive.reduce((s, c) => s + (c.generation || 0), 0) / alive.length).toFixed(1) : '—';
+        const avgAge   = alive.length ? (alive.reduce((s, c) => s + (c.age || 0), 0) / alive.length).toFixed(1) : '—';
+        const maxAge   = alive.length ? Math.max(...alive.map(c => Number(c.age || 0))).toFixed(1) : '—';
+        const starvationDeaths = popStats ? Number(popStats.deathsByCause?.starvation || 0) : 0;
+        const oldAgeDeaths = popStats ? Number(popStats.deathsByCause?.old_age || 0) : 0;
         const avgBrav  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.bravery  || 0), 0) / alive.length).toFixed(2) : '—';
         const avgDili  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.diligence || 0), 0) / alive.length).toFixed(2) : '—';
         const avgHun   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.hunger  || 0), 0) / alive.length).toFixed(0) : '—';
@@ -1611,11 +1623,16 @@ function renderCharacterList() {
         statsDiv.style.cssText = 'background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:0.85em;color:#333;';
         statsDiv.innerHTML =
             `<b>Population</b> &nbsp;` +
-            `Total: <b>${window.characters.length}</b> &nbsp;` +
+            `Total Born: <b>${totalBorn}</b> &nbsp;` +
             `Alive: <b>${alive.length}</b> &nbsp;` +
             `Dead: <b>${dead}</b> &nbsp;` +
             `Adults: <b>${adults}</b> &nbsp;` +
             `Children: <b>${children}</b>` +
+            `<br>` +
+            `<b>Lifecycle</b> &nbsp;` +
+            `Avg Age: <b>${avgAge}s</b> &nbsp;` +
+            `Max Age: <b>${maxAge}s</b> &nbsp;` +
+            `Deaths(S/O): <b>${starvationDeaths}/${oldAgeDeaths}</b>` +
             `<br>` +
             `<b>Generation</b> &nbsp;` +
             `Max: <b>${maxGen}</b> &nbsp;` +
