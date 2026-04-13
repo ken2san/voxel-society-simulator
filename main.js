@@ -402,7 +402,7 @@ function setupResourceSliders() {
 }
 
 // Function to regenerate the world with new settings
-function regenerateWorld() {
+async function regenerateWorld() {
     // Clear existing world data and visual blocks
     worldData.clear();
 
