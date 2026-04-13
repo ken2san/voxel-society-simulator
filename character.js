@@ -2158,6 +2158,12 @@ class Character {
         return 'neutral';
     }
 
+    get currentAction() {
+        if (this.action && this.action.type) return this.action.type;
+        if (this.state === 'idle') return 'IDLE';
+        return this.state || '-';
+    }
+
     update(deltaTime, isNight, camera) {
         // 死亡以外のstateになったら目・口の色を黒にリセット
         if (this.state !== 'dead') {
@@ -2747,14 +2753,8 @@ class Character {
             }
         } catch (e) {}
 
-        // --- UI用: 現在のアクション名をwindow.characters配列に同期 ---
-        if (typeof window !== 'undefined' && window.characters) {
-            const idx = window.characters.findIndex(c => c.id === this.id);
-            if (idx !== -1) {
-                window.characters[idx].currentAction = this.action ? this.action.type : (this.state === 'idle' ? 'IDLE' : (this.state || '-'));
-            }
-        }
     }
+
     die() {
         // 死亡時に持ち物をワールドにドロップ
         if (this.inventory && this.inventory[0]) {
