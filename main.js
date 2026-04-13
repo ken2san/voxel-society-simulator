@@ -741,9 +741,6 @@ window.__simTelemetry = {
                 digActionCooldown: window.digActionCooldown,
                 worldReservationTTL: window.worldReservationTTL,
                 reservationFallbackCooldown: window.reservationFallbackCooldown,
-                fallbackBackoffMs: window.fallbackBackoffMs,
-                pathInvalidationBackoffFactor: window.pathInvalidationBackoffFactor,
-                pathInvalidationBackoffMax: window.pathInvalidationBackoffMax,
                 maxActionCooldown: window.maxActionCooldown,
                 recoverActionCooldown: window.recoverActionCooldown
             },

@@ -213,9 +213,6 @@ function renderCharacterDetail() {
         digActionCooldown:                  2200,
         worldReservationTTL:                5000,
         reservationFallbackCooldown:        1000,
-        fallbackBackoffMs:                  1500,
-        pathInvalidationBackoffFactor:      0.2,
-        pathInvalidationBackoffMax:         2.0,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
@@ -634,113 +631,8 @@ function renderCharacterDetail() {
     });
     reservationRow.appendChild(reservationNum);
 
-    const reservationFallbackLabel = document.createElement('span');
-    reservationFallbackLabel.textContent = 'Fallback Cooldown (ms):';
-    reservationFallbackLabel.style.width = '160px';
-    reservationRow.appendChild(reservationFallbackLabel);
-    const fallbackNum = document.createElement('input');
-    fallbackNum.type = 'number';
-    fallbackNum.min = 0;
-    fallbackNum.max = 10000;
-    fallbackNum.value = sidebarParams.reservationFallbackCooldown;
-    fallbackNum.style.width = '120px';
-    fallbackNum.disabled = paramDisabled;
-    fallbackNum.addEventListener('input', e => {
-        sidebarParams.reservationFallbackCooldown = Number(e.target.value);
-        window.reservationFallbackCooldown = Number(e.target.value);
-    });
-    reservationRow.appendChild(fallbackNum);
-    reservationRow.dataset.label = 'Reservation TTL Fallback Cooldown';
+    reservationRow.dataset.label = 'Reservation TTL';
     tabPanels[3].appendChild(reservationRow);
-
-    // --- Backoff: fallback/backoff tuning ---
-    const backoffRow = document.createElement('div');
-    backoffRow.style.display = 'flex';
-    backoffRow.style.flexDirection = 'column';
-    backoffRow.style.gap = '8px';
-
-    const fallbackRow = document.createElement('div');
-    fallbackRow.style.display = 'flex';
-    fallbackRow.style.alignItems = 'center';
-    fallbackRow.style.gap = '10px';
-    const fallbackLabel = document.createElement('span');
-    fallbackLabel.textContent = 'Fallback Backoff (ms):';
-    fallbackLabel.style.width = '140px';
-    fallbackRow.appendChild(fallbackLabel);
-    const fallbackInput = document.createElement('input');
-    fallbackInput.type = 'number';
-    fallbackInput.min = 0;
-    fallbackInput.max = 10000;
-    fallbackInput.value = sidebarParams.fallbackBackoffMs;
-    fallbackInput.style.width = '100px';
-    fallbackInput.disabled = paramDisabled;
-    fallbackInput.addEventListener('input', e => {
-        sidebarParams.fallbackBackoffMs = Number(e.target.value);
-        window.fallbackBackoffMs = Number(e.target.value);
-    });
-    fallbackRow.appendChild(fallbackInput);
-    backoffRow.appendChild(fallbackRow);
-
-    const pinvRow = document.createElement('div');
-    pinvRow.style.display = 'flex';
-    pinvRow.style.alignItems = 'center';
-    pinvRow.style.gap = '10px';
-    const pinvLabel = document.createElement('span');
-    pinvLabel.textContent = 'Path Invalidate Factor:';
-    pinvLabel.style.width = '140px';
-    pinvRow.appendChild(pinvLabel);
-    const pinvInput = document.createElement('input');
-    pinvInput.type = 'range';
-    pinvInput.min = 0;
-    pinvInput.max = 1;
-    pinvInput.step = 0.05;
-    pinvInput.value = sidebarParams.pathInvalidationBackoffFactor;
-    pinvInput.style.width = '120px';
-    pinvInput.disabled = paramDisabled;
-    // numeric input for precise editing and two-way sync
-    const pinvNumber = document.createElement('input');
-    pinvNumber.type = 'number';
-    pinvNumber.min = 0;
-    pinvNumber.max = 1;
-    pinvNumber.step = 0.01;
-    pinvNumber.value = sidebarParams.pathInvalidationBackoffFactor;
-    pinvNumber.style.width = '64px';
-    pinvNumber.disabled = paramDisabled;
-    pinvNumber.addEventListener('input', e => {
-        let v = Number(e.target.value);
-        if (isNaN(v)) v = 0;
-        v = Math.max(0, Math.min(1, v));
-        sidebarParams.pathInvalidationBackoffFactor = v;
-        window.pathInvalidationBackoffFactor = v;
-        pinvInput.value = v;
-    });
-
-    pinvInput.addEventListener('input', e => {
-        const v = Number(e.target.value);
-        sidebarParams.pathInvalidationBackoffFactor = v;
-        window.pathInvalidationBackoffFactor = v;
-        pinvNumber.value = v;
-    });
-
-    pinvRow.appendChild(pinvInput);
-    pinvRow.appendChild(pinvNumber);
-
-    const pinvMaxInput = document.createElement('input');
-    pinvMaxInput.type = 'number';
-    pinvMaxInput.min = 0;
-    pinvMaxInput.max = 10;
-    pinvMaxInput.step = 0.1;
-    pinvMaxInput.value = sidebarParams.pathInvalidationBackoffMax;
-    pinvMaxInput.style.width = '64px';
-    pinvMaxInput.disabled = paramDisabled;
-    pinvMaxInput.addEventListener('input', e => {
-        sidebarParams.pathInvalidationBackoffMax = Number(e.target.value);
-        window.pathInvalidationBackoffMax = Number(e.target.value);
-    });
-    pinvRow.appendChild(pinvMaxInput);
-    backoffRow.appendChild(pinvRow);
-    backoffRow.dataset.label = 'Fallback Backoff Path Invalidate';
-    tabPanels[3].appendChild(backoffRow);
 
     // --- Perception/Socialize Range Slider ---
     if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;

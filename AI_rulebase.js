@@ -15,7 +15,7 @@ export function decideNextAction_rulebase(character, isNight) {
 
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
-    const homeBuildingHungerThreshold = (typeof window !== 'undefined' && window.homeBuildingHungerThreshold !== undefined) ? window.homeBuildingHungerThreshold : 80;
+    const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
@@ -116,7 +116,7 @@ export function decideNextAction_rulebase(character, isNight) {
         return best;
     }
 
-    if (shouldBuildHome && ((character.needs.hunger >= homeBuildingHungerThreshold && !character.homePosition) || (character.provisionalHome && !character.homePosition))) {
+    if (shouldBuildHome && ((character.needs.hunger >= homeReturnHungerLevel && !character.homePosition) || (character.provisionalHome && !character.homePosition))) {
         character.log('🏠 HOME BUILDING PRIORITY: Well-fed but homeless or provisionalHome');
 
         // まだ家が完成していない場合はBUILD_HOMEを継続
