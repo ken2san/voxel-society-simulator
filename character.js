@@ -1786,6 +1786,97 @@ class Character {
         return null;
    }
 
+    createMorphologyProfile(sourceTraits = this.appearanceProfile || this.personality) {
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+        const traits = sourceTraits || {};
+        const bravery = traits.bravery ?? 1.0;
+        const diligence = traits.diligence ?? 1.0;
+        const sociality = traits.sociality ?? 1.0;
+        const curiosity = traits.curiosity ?? 1.0;
+        const resourcefulness = traits.resourcefulness ?? 1.0;
+        const resilience = traits.resilience ?? 1.0;
+
+        const bodyHeight = clamp(0.92 + (diligence - 1.0) * 0.26 + (resilience - 1.0) * 0.18, 0.74, 1.24);
+        const bodyTopRadius = clamp(0.19 + (sociality - 1.0) * 0.03 - (resourcefulness - 1.0) * 0.02, 0.15, 0.25);
+        const bodyBottomRadius = clamp(0.25 + (resilience - 1.0) * 0.05 + (bravery - 1.0) * 0.03, 0.20, 0.35);
+        const headRadiusTop = clamp(0.16 + (curiosity - 1.0) * 0.04 + (sociality - 1.0) * 0.02, 0.12, 0.25);
+        const headRadiusBottom = clamp(headRadiusTop + 0.02 + (resourcefulness - 1.0) * -0.01, 0.14, 0.28);
+        const headHeight = clamp(0.28 + (sociality - 1.0) * 0.05 + (curiosity - 1.0) * 0.05, 0.22, 0.40);
+        const neckGap = clamp(0.08 + (bravery - 1.0) * 0.02, 0.05, 0.12);
+        const eyeRadius = clamp(headRadiusBottom * 0.14, 0.018, 0.035);
+        const eyeSpacing = clamp(0.05 + (sociality - 1.0) * 0.02 + (curiosity - 1.0) * 0.01, 0.035, 0.09);
+        const eyeY = clamp(headHeight * 0.16 + (sociality - 1.0) * 0.01, 0.02, 0.10);
+        const faceZ = clamp(headRadiusBottom * 0.88, 0.11, 0.24);
+        const mouthRadius = clamp(0.035 + (sociality - 1.0) * 0.012, 0.025, 0.055);
+        const mouthY = clamp(-headHeight * 0.14, -0.08, -0.02);
+        const armLoopRadius = clamp(0.12 + (resourcefulness - 1.0) * 0.03 + (bravery - 1.0) * 0.01, 0.09, 0.17);
+        const armThickness = clamp(0.024 + (resilience - 1.0) * 0.006, 0.018, 0.034);
+        const armOffsetX = clamp(bodyBottomRadius * 0.92 + armThickness * 0.5, 0.18, 0.34);
+        const armY = clamp(bodyHeight * 0.64 + (diligence - 1.0) * 0.03, 0.45, 0.92);
+        const carriedItemSize = clamp(0.44 + (resourcefulness - 1.0) * 0.08, 0.34, 0.56);
+        const carriedItemY = clamp(bodyHeight * 0.78 + headHeight * 0.40, 0.72, 1.30);
+        const carriedItemZ = clamp(bodyBottomRadius + 0.05, 0.20, 0.42);
+        const shadowRadius = clamp(bodyBottomRadius + headRadiusBottom * 0.38, 0.26, 0.42);
+
+        return {
+            bodyHeight,
+            bodyTopRadius,
+            bodyBottomRadius,
+            headRadiusTop,
+            headRadiusBottom,
+            headHeight,
+            neckGap,
+            eyeRadius,
+            eyeSpacing,
+            eyeY,
+            faceZ,
+            mouthRadius,
+            mouthY,
+            armLoopRadius,
+            armThickness,
+            armOffsetX,
+            armY,
+            carriedItemSize,
+            carriedItemY,
+            carriedItemZ,
+            shadowRadius,
+        };
+    }
+
+    applyMorphologyToMeshes() {
+        if (!this.morphology || !this.body || !this.head) return;
+        const m = this.morphology;
+
+        this.body.position.y = m.bodyHeight / 2;
+        this.head.position.y = m.bodyHeight + m.neckGap + (m.headHeight / 2);
+
+        if (this.iconAnchor) {
+            this.iconAnchor.position.set(0, m.headHeight * 0.70, 0);
+        }
+        if (this.leftEye) {
+            this.leftEye.position.set(-m.eyeSpacing, m.eyeY, m.faceZ);
+        }
+        if (this.rightEye) {
+            this.rightEye.position.set(m.eyeSpacing, m.eyeY, m.faceZ);
+        }
+        if (this.mouth) {
+            this.mouth.position.set(0, m.mouthY, m.faceZ);
+        }
+        if (this.leftArm) {
+            this.leftArm.position.set(-m.armOffsetX, m.armY, 0);
+        }
+        if (this.rightArm) {
+            this.rightArm.position.set(m.armOffsetX, m.armY, 0);
+        }
+        if (this.carriedItemMesh) {
+            this.carriedItemMesh.position.set(0, m.carriedItemY, m.carriedItemZ);
+        }
+        if (this.shadowMesh) {
+            if (this.shadowMesh.geometry) this.shadowMesh.geometry.dispose();
+            this.shadowMesh.geometry = new THREE.CircleGeometry(m.shadowRadius, 32);
+        }
+    }
+
 // ...existing code...
     constructor(scene, startPos, id, genes = null) {
         this.log('Character constructed', { id, startPos, genes });
@@ -1843,6 +1934,8 @@ class Character {
         };
         // Merge: genes values override defaults; missing keys fall back to random defaults.
         this.personality = genes ? { ..._defaultTraits, ...genes } : _defaultTraits;
+        this.appearanceProfile = { ...this.personality };
+        this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
         this.action = null;
         this.targetPos = null;
@@ -1858,43 +1951,39 @@ class Character {
         this.bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 }); // haniwa clay color
         this.bodyMaterial.gradientMap = null;
         // Tall cylindrical body (haniwa)
-        this.body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 1.0, 32), this.bodyMaterial);
-        this.body.position.y = 0.5;
+        this.body = new THREE.Mesh(new THREE.CylinderGeometry(this.morphology.bodyTopRadius, this.morphology.bodyBottomRadius, this.morphology.bodyHeight, 32), this.bodyMaterial);
         this.body.castShadow = true;
         this.body.receiveShadow = true;
         this.mesh.add(this.body);
         // Simple head (slightly smaller cylinder)
-        this.head = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 0.32, 24), this.bodyMaterial);
-        this.head.position.y = 1.08;
+        this.head = new THREE.Mesh(new THREE.CylinderGeometry(this.morphology.headRadiusTop, this.morphology.headRadiusBottom, this.morphology.headHeight, 24), this.bodyMaterial);
         this.head.castShadow = true;
         this.head.receiveShadow = true;
         this.mesh.add(this.head);
         // Icon anchor (above head)
         this.iconAnchor = new THREE.Object3D();
-        this.iconAnchor.position.set(0, 0.22, 0); // above head
         this.head.add(this.iconAnchor);
         // Simple face: two holes (black circles) for eyes
         this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
-        const eyeGeometry = new THREE.CylinderGeometry(0.025, 0.025, 0.01, 12);
-        this.leftEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.leftEye.position.set(-0.06, 0.05, 0.17); this.leftEye.rotation.x = Math.PI/2; this.head.add(this.leftEye);
-        this.rightEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.rightEye.position.set(0.06, 0.05, 0.17); this.rightEye.rotation.x = Math.PI/2; this.head.add(this.rightEye);
+        const eyeGeometry = new THREE.CylinderGeometry(this.morphology.eyeRadius, this.morphology.eyeRadius, 0.01, 12);
+        this.leftEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.leftEye.rotation.x = Math.PI/2; this.head.add(this.leftEye);
+        this.rightEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.rightEye.rotation.x = Math.PI/2; this.head.add(this.rightEye);
         this.eyeMeshes = [this.leftEye, this.rightEye];
         // Simple mouth: small horizontal hole
-        const mouthGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.01, 12);
+        const mouthGeometry = new THREE.CylinderGeometry(this.morphology.mouthRadius, this.morphology.mouthRadius, 0.01, 12);
         this.mouth = new THREE.Mesh(mouthGeometry, this.eyeMaterial);
-        this.mouth.position.set(0, -0.04, 0.17);
         this.mouth.rotation.x = Math.PI/2;
         this.head.add(this.mouth);
         // Arm loops (torus)
         const armMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
-        const armGeometry = new THREE.TorusGeometry(0.13, 0.025, 10, 24, Math.PI*1.2);
-        this.leftArm = new THREE.Mesh(armGeometry, armMaterial); this.leftArm.position.set(-0.22, 0.65, 0); this.leftArm.rotation.z = Math.PI/2.2; this.body.add(this.leftArm);
-        this.rightArm = new THREE.Mesh(armGeometry, armMaterial); this.rightArm.position.set(0.22, 0.65, 0); this.rightArm.rotation.z = -Math.PI/2.2; this.body.add(this.rightArm);
+        const armGeometry = new THREE.TorusGeometry(this.morphology.armLoopRadius, this.morphology.armThickness, 10, 24, Math.PI*1.2);
+        this.leftArm = new THREE.Mesh(armGeometry, armMaterial); this.leftArm.rotation.z = Math.PI/2.2; this.body.add(this.leftArm);
+        this.rightArm = new THREE.Mesh(armGeometry, armMaterial); this.rightArm.rotation.z = -Math.PI/2.2; this.body.add(this.rightArm);
         // Carried item
         const carriedItemMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown color
-        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), carriedItemMaterial); this.carriedItemMesh.position.set(0, 1.0, 0.3); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
+        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(this.morphology.carriedItemSize, this.morphology.carriedItemSize, this.morphology.carriedItemSize), carriedItemMaterial); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
         // Shadow
-        const shadowGeometry = new THREE.CircleGeometry(0.32, 32);
+        const shadowGeometry = new THREE.CircleGeometry(this.morphology.shadowRadius, 32);
         const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
         this.shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
         this.shadowMesh.position.set(0, 0.01, 0);
@@ -1907,6 +1996,7 @@ class Character {
         this.thoughtBubble.setAttribute('data-aos-duration', '300');
         document.body.appendChild(this.thoughtBubble);
 
+        this.applyMorphologyToMeshes();
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
 

@@ -2204,6 +2204,7 @@ function createCharacterDetailCard(char) {
     profileBox.style.marginBottom = '10px';
     // personality traits (all 6)
     const p = char.personality || {};
+    const m = char.morphology || {};
     const fmt = v => (v !== undefined ? Number(v).toFixed(2) : '-');
     // group/role
     const groupStr = char.groupId ? `Group: <b>${char.groupId}</b>` : 'Group: <b>Unassigned</b>';
@@ -2218,7 +2219,10 @@ function createCharacterDetailCard(char) {
         `<span title="Social drive">💬 ${fmt(p.sociality)}</span><br>` +
         `<span title="Exploration drive">🔭 ${fmt(p.curiosity)}</span> ` +
         `<span title="Proactive foraging">🌾 ${fmt(p.resourcefulness)}</span> ` +
-        `<span title="Energy stress tolerance">💪 ${fmt(p.resilience)}</span>`;
+        `<span title="Energy stress tolerance">💪 ${fmt(p.resilience)}</span><br>` +
+        `<span title="Torso height">🧱 ${fmt(m.bodyHeight)}</span> ` +
+        `<span title="Head size">🗿 ${fmt(m.headHeight)}</span> ` +
+        `<span title="Arm loop size">🌀 ${fmt(m.armLoopRadius)}</span>`;
     card.appendChild(profileBox);
     // 状態推移グラフ（直近10秒）
     const histArr = window.characterHistory?.[char.id] || [];
