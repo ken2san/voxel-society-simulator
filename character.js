@@ -185,7 +185,9 @@ class Character {
                 const partner = this.action.target;
                 if (partner && partner !== this) {
                     // パートナーの緊急ニーズをチェック
-                    const partnerCritical = (partner.needs?.hunger <= 10 || partner.needs?.energy <= 10);
+                    const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+                    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+                    const partnerCritical = (partner.needs?.hunger <= (hungerEmergency + 2) || partner.needs?.energy <= (energyEmergency + 2));
                     if (partnerCritical) {
                         this.state = 'idle';
                         this.action = null;
@@ -897,6 +899,7 @@ class Character {
         // Record timestamp for important actions
         if (['BUILD_HOME', 'CHOP_WOOD', 'DESTROY_BLOCK'].includes(type)) {
             this._lastActionTime = Date.now();
+            this._lastImportantActionTime = this._lastActionTime;
             this.log(`⚡ Setting important action: ${type} (protected for 1 second)`);
         }
 
@@ -1553,7 +1556,7 @@ class Character {
         // that focuses exploration toward the goal and generally yields shorter, more natural paths
         // without full A* bookkeeping.
         const directDist = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y) + Math.abs(start.z - goal.z);
-        if (directDist <= directMoveThreshold) return [goal];
+        if (directDist <= 1) return [goal];
 
         const key = (p) => `${p.x},${p.y},${p.z}`;
         const open = [{ pos: start, parent: null }];
@@ -1821,6 +1824,7 @@ class Character {
     this._stepFreqBase = 6.0; // base step freq multiplier for movement
     this._stepAmp = 0.10; // vertical bob amplitude (grid units)
     this._swayAmp = 0.06; // lateral sway amplitude
+    this._lastMoveProgressTime = Date.now();
 
         // --- Action icon (for action effect) ---
         this.actionIconDiv = document.createElement('div');
@@ -2344,11 +2348,13 @@ class Character {
         } catch (e) { /* non-fatal */ }
         if (this.state === 'socializing') {
             const partner = this.action?.target;
+            const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
 
             if (partner && partner.state === 'socializing') {
                 // 双方の緊急ニーズをチェック（中断条件）
-                const myCritical = (this.needs.hunger <= 5 || this.needs.energy <= 5);
-                const partnerCritical = (partner.needs?.hunger <= 5 || partner.needs?.energy <= 5);
+                const myCritical = (this.needs.hunger <= hungerEmergency || this.needs.energy <= energyEmergency);
+                const partnerCritical = (partner.needs?.hunger <= hungerEmergency || partner.needs?.energy <= energyEmergency);
 
                 if (myCritical || partnerCritical) {
                     this.state = 'idle';
@@ -2438,13 +2444,14 @@ class Character {
                 // 重要なアクション実行中は新しいアクション決定を控える
                 const now = Date.now();
                 const isImportantActionProtected = this._lastImportantActionTime && (now - this._lastImportantActionTime < 3000); // 3秒間保護
-                if (!isImportantActionProtected) {
-                    // 移動中でも定期的に新しいアクションを決定（より頻繁に）
-                    this.actionCooldown = 2.0;  // 2秒後に再チェック
+                const stallMs = (typeof window !== 'undefined' && window.movingReplanStallMs !== undefined) ? Number(window.movingReplanStallMs) : 2500;
+                const noRecentProgress = !this._lastMoveProgressTime || (now - this._lastMoveProgressTime) > stallMs;
+                if (!isImportantActionProtected && noRecentProgress) {
+                    // Move replan only when stalled, otherwise keep current target to avoid tremble.
+                    this.actionCooldown = 1.2;
                     this.decideNextAction && this.decideNextAction(isNight);
                 } else {
-                    this.log('⚡ Moving state: Skipping AI decision due to important action protection');
-                    this.actionCooldown = 1.0;  // 1秒後に再チェック
+                    this.actionCooldown = 1.0;
                 }
             }
         }
@@ -2463,7 +2470,9 @@ class Character {
         // SOCIALIZE状態中は、極端に緊急でない限りAI上書きを防ぐ
         else if (this.state === 'socializing') {
             // 餓死寸前（hunger <= 5）または極度の疲労（energy <= 5）の場合のみ中断
-            if (this.needs.hunger <= 5 || this.needs.energy <= 5) {
+            const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+            if (this.needs.hunger <= hungerEmergency || this.needs.energy <= energyEmergency) {
                 this.state = 'idle';
                 this.action = null;
                 this.actionCooldown = 0.1;
@@ -2598,6 +2607,26 @@ class Character {
             if ((this.actionCooldown && this.actionCooldown > maxCooldown && isEligibleForStall) || (this._microPauseTimer && this._microPauseTimer > 1.2)) {
                 if (!this._stallState.logged) {
                     console.warn(`[STALL] Char ${this.id} appears stalled: state=${this.state} actionCooldown=${(this.actionCooldown||0).toFixed(2)} microPause=${(this._microPauseTimer||0).toFixed(2)} pathLen=${this.path?this.path.length:0}`);
+                    try {
+                        if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addEvent === 'function') {
+                            window.__simTelemetry.addEvent({
+                                t: Date.now(),
+                                id: this.id,
+                                kind: 'stall-detected',
+                                state: this.state,
+                                action: this.action ? this.action.type : null,
+                                actionCooldown: Number(this.actionCooldown || 0),
+                                microPause: Number(this._microPauseTimer || 0),
+                                pathLen: this.path ? this.path.length : 0,
+                                needs: {
+                                    hunger: Number(this.needs?.hunger || 0),
+                                    energy: Number(this.needs?.energy || 0),
+                                    safety: Number(this.needs?.safety || 0),
+                                    social: Number(this.needs?.social || 0)
+                                }
+                            });
+                        }
+                    } catch (e) {}
                     this._stallState.logged = true;
                 }
                 if (autoRecover && isEligibleForStall) {
@@ -2613,7 +2642,53 @@ class Character {
                 }
             } else if (this._stallState.logged) {
                 console.log(`[STALL] Char ${this.id} recovered: actionCooldown=${(this.actionCooldown||0).toFixed(2)}`);
+                try {
+                    if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addEvent === 'function') {
+                        window.__simTelemetry.addEvent({
+                            t: Date.now(),
+                            id: this.id,
+                            kind: 'stall-recovered',
+                            state: this.state,
+                            action: this.action ? this.action.type : null,
+                            actionCooldown: Number(this.actionCooldown || 0),
+                            microPause: Number(this._microPauseTimer || 0)
+                        });
+                    }
+                } catch (e) {}
                 this._stallState.logged = false;
+            }
+        } catch (e) {}
+
+        // Telemetry sampling for reproducible jitter/stall analysis
+        try {
+            if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addSample === 'function') {
+                const intervalMs = (window.simTelemetryConfig && window.simTelemetryConfig.sampleIntervalMs) ? Number(window.simTelemetryConfig.sampleIntervalMs) : 1000;
+                const now = Date.now();
+                if (!this._telemetryNextAt) this._telemetryNextAt = now;
+                if (now >= this._telemetryNextAt) {
+                    window.__simTelemetry.addSample({
+                        t: now,
+                        id: this.id,
+                        state: this.state,
+                        mood: this.mood,
+                        action: this.action ? this.action.type : null,
+                        pos: { x: this.gridPos.x, y: this.gridPos.y, z: this.gridPos.z },
+                        target: this.targetPos ? { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z } : null,
+                        pathLen: this.path ? this.path.length : 0,
+                        actionCooldown: Number(this.actionCooldown || 0),
+                        microPause: Number(this._microPauseTimer || 0),
+                        blockedRetry: Number(this._blockedRetryCount || 0),
+                        bfsFailCount: Number(this.bfsFailCount || 0),
+                        moveDistance: Number(this.moveDistance || 0),
+                        needs: {
+                            hunger: Number(this.needs?.hunger || 0),
+                            energy: Number(this.needs?.energy || 0),
+                            safety: Number(this.needs?.safety || 0),
+                            social: Number(this.needs?.social || 0)
+                        }
+                    });
+                    this._telemetryNextAt = now + Math.max(200, intervalMs);
+                }
             }
         } catch (e) {}
 
@@ -2758,6 +2833,7 @@ class Character {
         if (!path || path.length === 0) return false;
         // configurable lookahead: only validate the first N steps strictly
         const lookahead = (typeof window !== 'undefined' && window.pathValidateLookahead !== undefined) ? Number(window.pathValidateLookahead) : 8;
+        const occupancyLookahead = (typeof window !== 'undefined' && window.pathOccupancyLookahead !== undefined) ? Number(window.pathOccupancyLookahead) : 2;
         let from = { ...this.gridPos };
         const stepsToCheck = Math.min(path.length, Math.max(1, lookahead));
         for (let i = 0; i < stepsToCheck; i++) {
@@ -2774,7 +2850,9 @@ class Character {
             }
 
             // Avoid stepping into a cell occupied by another character/entity
-            if (this.isOccupiedByOther(step.x, step.y, step.z)) {
+            // Treat dynamic character occupancy as a near-term constraint only.
+            // Checking too far ahead causes repath jitter when others are moving.
+            if (i < occupancyLookahead && this.isOccupiedByOther(step.x, step.y, step.z)) {
                 try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.occupied++; } } catch(e){}
                 return false;
             }
@@ -2821,6 +2899,8 @@ class Character {
     updateMovement(deltaTime) {
         // this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos }); // コメントアウト
         if (!this.targetPos) { this.state = 'idle'; return; }
+        if (!this._blockedRetryCount) this._blockedRetryCount = 0;
+        if (!this._blockedWaitTimer) this._blockedWaitTimer = 0;
         // --- small "alive" movement tweaks ---
         // variable speed (updated intermittently), micro-pauses (hesitation), and short arrival delay
         if (!this._speedTicker) {
@@ -3133,12 +3213,21 @@ class Character {
             if (sidestep) {
                 // Prepend sidestep to path so we move there first
                 this.path.unshift(sidestep);
+                this._blockedRetryCount = 0;
             } else {
-                // Can't avoid locally: clear path to force recompute
+                // Temporary congestion: wait briefly before giving up to avoid stop-jitter.
+                this._blockedRetryCount += 1;
+                this._blockedWaitTimer = 0.12 + Math.random() * 0.18;
+                this._microPauseTimer = Math.max(this._microPauseTimer || 0, this._blockedWaitTimer);
+                if (this._blockedRetryCount < 6) {
+                    return;
+                }
+                // Prolonged block: then force a recompute.
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.path = [];
                 this.state = 'idle';
-                this.actionCooldown = 0.4;
+                this.actionCooldown = 0.6 + Math.random() * 0.3;
+                this._blockedRetryCount = 0;
                 return;
             }
         }
@@ -3193,9 +3282,17 @@ class Character {
         const direction = targetWorldPos.clone().sub(this.mesh.position);
         // 顔の向き（body/headのrotation.y）を移動方向に合わせる
         if (direction.lengthSq() > 0.0001) {
-            const angle = Math.atan2(direction.x, direction.z);
-            this.body.rotation.y = angle;
-            this.head.rotation.y = angle;
+            const desired = Math.atan2(direction.x, direction.z);
+            if (this._bodyYaw === undefined) this._bodyYaw = this.body.rotation.y || 0;
+            let delta = desired - this._bodyYaw;
+            while (delta > Math.PI) delta -= Math.PI * 2;
+            while (delta < -Math.PI) delta += Math.PI * 2;
+            const maxTurnRate = (typeof window !== 'undefined' && window.characterTurnRateRad !== undefined) ? Number(window.characterTurnRateRad) : 8.0;
+            const maxTurn = Math.max(0.05, maxTurnRate * deltaTime);
+            const turn = Math.max(-maxTurn, Math.min(maxTurn, delta));
+            this._bodyYaw += turn;
+            this.body.rotation.y = this._bodyYaw;
+            this.head.rotation.y += (this._bodyYaw - this.head.rotation.y) * 0.35;
         }
     // apply speed multiplier for slight variation
     const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0);
@@ -3205,14 +3302,22 @@ class Character {
             const moveCheck = this.canMoveToPosition(next.x, next.y, next.z);
             if (!moveCheck.canMove) {
                 this.log(`Movement blocked: ${moveCheck.reason} at target position:`, next);
-                this.path = []; // パスをクリアして再計算を促す
-                this.state = 'idle';
-                this.actionCooldown = 0.5;
+                // Transient block should not immediately collapse movement state.
+                this._blockedRetryCount += 1;
+                this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.1 + Math.random() * 0.2);
+                if (this._blockedRetryCount >= 4) {
+                    this.path = []; // パスをクリアして再計算を促す
+                    this.state = 'idle';
+                    this.actionCooldown = 0.5 + Math.random() * 0.3;
+                    this._blockedRetryCount = 0;
+                }
                 return;
             }
 
                 this.mesh.position.copy(targetWorldPos);
             this.gridPos = {x: next.x, y: next.y, z: next.z};
+            this._lastMoveProgressTime = Date.now();
+            this._blockedRetryCount = 0;
             // --- ここで移動距離を加算 ---
             const dist = Math.abs(prevGridPos.x - next.x) + Math.abs(prevGridPos.y - next.y) + Math.abs(prevGridPos.z - next.z);
             if (dist > 0) this.moveDistance += dist;
@@ -3796,6 +3901,8 @@ class Character {
     }
 
     decideNextAction(isNight) {
+        const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+        const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
         // Child-specific behavior: simpler decision-making and no adult tasks
         if (this.isChild) {
             // If parents exist, attempt to stay near them or follow briefly
@@ -3842,7 +3949,7 @@ class Character {
         // === EMERGENCY SURVIVAL ONLY (Life or Death) ===
 
         // Critical hunger: immediate food collection or die
-        if (this.needs.hunger <= 5) {
+        if (this.needs.hunger <= hungerEmergency) {
             this.log('🚨 EMERGENCY: Critical hunger, forcing immediate food collection');
             const food = this.findClosestFood();
             if (food) {
@@ -3854,7 +3961,7 @@ class Character {
         }
 
         // Critical energy: immediate rest or collapse
-        if (this.needs.energy <= 5) {
+        if (this.needs.energy <= energyEmergency) {
             this.log('🚨 EMERGENCY: Critical energy, forcing immediate rest');
             this.setNextAction('REST');
             return;

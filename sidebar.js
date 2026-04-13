@@ -126,7 +126,7 @@ function renderCharacterDetail() {
     window.socialThreshold = sidebarParams.socialTh; // Set during initialization as well
     // Emergency threshold parameters
     if (sidebarParams.hungerEmergencyThreshold === undefined) sidebarParams.hungerEmergencyThreshold = 5;
-    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 1;
+    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 8;
     if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
     if (sidebarParams.homeBuildingPriority === undefined) sidebarParams.homeBuildingPriority = 80;
     if (sidebarParams.woodCollectionPriority === undefined) sidebarParams.woodCollectionPriority = 70;
@@ -146,6 +146,9 @@ function renderCharacterDetail() {
     if (sidebarParams.reproductionCooldownSeconds === undefined) sidebarParams.reproductionCooldownSeconds = 10;
     if (sidebarParams.autoRecoverStall === undefined) sidebarParams.autoRecoverStall = true;
     if (sidebarParams.recoverActionCooldown === undefined) sidebarParams.recoverActionCooldown = 0.5;
+    if (sidebarParams.maxActionCooldown === undefined) sidebarParams.maxActionCooldown = 8;
+    if (sidebarParams.movingReplanStallMs === undefined) sidebarParams.movingReplanStallMs = 2500;
+    if (sidebarParams.pathOccupancyLookahead === undefined) sidebarParams.pathOccupancyLookahead = 2;
     if (sidebarParams.recentDigCooldownMs === undefined) sidebarParams.recentDigCooldownMs = 10000;
     if (sidebarParams.digActionCooldown === undefined) sidebarParams.digActionCooldown = 2200;
     if (sidebarParams.worldReservationTTL === undefined) sidebarParams.worldReservationTTL = 5000;
@@ -163,6 +166,9 @@ function renderCharacterDetail() {
     window.reproductionCooldownSeconds = sidebarParams.reproductionCooldownSeconds;
     window.autoRecoverStall = sidebarParams.autoRecoverStall;
     window.recoverActionCooldown = sidebarParams.recoverActionCooldown;
+    window.maxActionCooldown = sidebarParams.maxActionCooldown;
+    window.movingReplanStallMs = sidebarParams.movingReplanStallMs;
+    window.pathOccupancyLookahead = sidebarParams.pathOccupancyLookahead;
     window.recentDigCooldownMs = sidebarParams.recentDigCooldownMs;
     window.digActionCooldown = sidebarParams.digActionCooldown;
     window.worldReservationTTL = sidebarParams.worldReservationTTL;
@@ -822,6 +828,71 @@ function renderCharacterDetail() {
     autoRecoverRow.appendChild(recoverCooldownNumber);
     paramBox.appendChild(autoRecoverRow);
 
+    // --- Movement stability controls ---
+    const movementStabilityRow = document.createElement('div');
+    movementStabilityRow.style.display = 'flex';
+    movementStabilityRow.style.alignItems = 'center';
+    movementStabilityRow.style.gap = '10px';
+    const movementStabilityLabel = document.createElement('span');
+    movementStabilityLabel.textContent = 'Move Replan Stall (ms):';
+    movementStabilityLabel.style.width = '140px';
+    movementStabilityRow.appendChild(movementStabilityLabel);
+    const movementStabilityInput = document.createElement('input');
+    movementStabilityInput.type = 'number';
+    movementStabilityInput.min = 500;
+    movementStabilityInput.max = 10000;
+    movementStabilityInput.step = 100;
+    movementStabilityInput.value = sidebarParams.movingReplanStallMs;
+    movementStabilityInput.style.width = '90px';
+    movementStabilityInput.disabled = paramDisabled;
+    movementStabilityInput.addEventListener('input', e => {
+        sidebarParams.movingReplanStallMs = Number(e.target.value);
+        window.movingReplanStallMs = Number(e.target.value);
+    });
+    movementStabilityRow.appendChild(movementStabilityInput);
+
+    const occupancyLabel = document.createElement('span');
+    occupancyLabel.textContent = ' Occupancy Lookahead:';
+    occupancyLabel.style.width = '150px';
+    movementStabilityRow.appendChild(occupancyLabel);
+    const occupancyInput = document.createElement('input');
+    occupancyInput.type = 'number';
+    occupancyInput.min = 1;
+    occupancyInput.max = 8;
+    occupancyInput.step = 1;
+    occupancyInput.value = sidebarParams.pathOccupancyLookahead;
+    occupancyInput.style.width = '60px';
+    occupancyInput.disabled = paramDisabled;
+    occupancyInput.addEventListener('input', e => {
+        sidebarParams.pathOccupancyLookahead = Number(e.target.value);
+        window.pathOccupancyLookahead = Number(e.target.value);
+    });
+    movementStabilityRow.appendChild(occupancyInput);
+    paramBox.appendChild(movementStabilityRow);
+
+    const cooldownCeilRow = document.createElement('div');
+    cooldownCeilRow.style.display = 'flex';
+    cooldownCeilRow.style.alignItems = 'center';
+    cooldownCeilRow.style.gap = '10px';
+    const cooldownCeilLabel = document.createElement('span');
+    cooldownCeilLabel.textContent = 'Max Action Cooldown (s):';
+    cooldownCeilLabel.style.width = '140px';
+    cooldownCeilRow.appendChild(cooldownCeilLabel);
+    const cooldownCeilInput = document.createElement('input');
+    cooldownCeilInput.type = 'number';
+    cooldownCeilInput.min = 2;
+    cooldownCeilInput.max = 30;
+    cooldownCeilInput.step = 0.5;
+    cooldownCeilInput.value = sidebarParams.maxActionCooldown;
+    cooldownCeilInput.style.width = '90px';
+    cooldownCeilInput.disabled = paramDisabled;
+    cooldownCeilInput.addEventListener('input', e => {
+        sidebarParams.maxActionCooldown = Number(e.target.value);
+        window.maxActionCooldown = Number(e.target.value);
+    });
+    cooldownCeilRow.appendChild(cooldownCeilInput);
+    paramBox.appendChild(cooldownCeilRow);
+
     // キャラ数
     const charNumRow = document.createElement('div');
     charNumRow.style.display = 'flex';
@@ -952,7 +1023,7 @@ function renderCharacterDetail() {
     hungerEmergencyVal.disabled = paramDisabled;
 
     // --- Energy Emergency Threshold Slider ---
-    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 1;
+    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 8;
     const energyEmergencyRow = document.createElement('div');
     energyEmergencyRow.style.display = 'flex';
     energyEmergencyRow.style.alignItems = 'center';

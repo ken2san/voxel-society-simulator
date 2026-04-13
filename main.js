@@ -86,11 +86,101 @@ async function init() {
             setDEBUG_MODE(debugToggle.checked);
         }
 
+        setupTelemetryManagerPanel();
+
         // Setup resource generation sliders
         setupResourceSliders();
 
         animate();
     } catch (error) { console.error("Initialization Error:", error); }
+}
+
+function setupTelemetryManagerPanel() {
+    const modal = document.getElementById('debugControlModal');
+    const openBtn = document.getElementById('debugPanelOpenBtn');
+    const closeBtn = document.getElementById('debugPanelCloseBtn');
+    const startBtn = document.getElementById('telemetryStartBtn');
+    const stopBtn = document.getElementById('telemetryStopBtn');
+    const downloadBtn = document.getElementById('telemetryDownloadBtn');
+    const autoToggle = document.getElementById('telemetryAutoDownloadToggle');
+    const status = document.getElementById('telemetryStatus');
+
+    if (!startBtn || !stopBtn || !downloadBtn || !status) return;
+
+    const renderStatus = () => {
+        const telemetry = window.__simTelemetry;
+        const sampleCount = telemetry?.samples?.length || 0;
+        const eventCount = telemetry?.events?.length || 0;
+        const mode = window.simTestMode ? 'running' : 'idle';
+        const auto = !!window.simTelemetryConfig?.autoDownloadOnStop;
+        status.textContent = `Telemetry ${mode} | samples=${sampleCount} events=${eventCount} | autoDownload=${auto ? 'on' : 'off'}`;
+    };
+
+    const openModal = () => {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.inert = false;
+        modal.setAttribute('aria-hidden', 'false');
+        renderStatus();
+        if (closeBtn) {
+            window.requestAnimationFrame(() => closeBtn.focus());
+        }
+    };
+
+    const closeModal = () => {
+        if (!modal) return;
+        if (modal.contains(document.activeElement) && openBtn) {
+            openBtn.focus();
+        }
+        modal.inert = true;
+        modal.setAttribute('aria-hidden', 'true');
+        modal.classList.add('hidden');
+    };
+
+    if (openBtn) {
+        openBtn.addEventListener('click', openModal);
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeModal);
+    }
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    if (autoToggle) {
+        autoToggle.checked = !!window.simTelemetryConfig.autoDownloadOnStop;
+        autoToggle.addEventListener('change', (e) => {
+            window.simTelemetryConfig.autoDownloadOnStop = !!e.target.checked;
+            renderStatus();
+        });
+    }
+
+    startBtn.addEventListener('click', () => {
+        window.startTelemetryTest({
+            autoDownloadOnStop: !!window.simTelemetryConfig.autoDownloadOnStop
+        });
+        renderStatus();
+    });
+
+    stopBtn.addEventListener('click', () => {
+        window.stopTelemetryTest({
+            autoDownloadOnStop: !!window.simTelemetryConfig.autoDownloadOnStop
+        });
+        renderStatus();
+    });
+
+    downloadBtn.addEventListener('click', () => {
+        window.downloadTelemetryJSON();
+        renderStatus();
+    });
+
+    window.setInterval(renderStatus, 1000);
+    renderStatus();
 }
 
 function main() {
@@ -232,3 +322,131 @@ window.logGroupStatus = function() {
 // Global runtime tuning defaults (can be overridden in DevTools)
 window.pathValidateLookahead = window.pathValidateLookahead || 8;
 window.recentDigAllowAfterBfsFailCount = window.recentDigAllowAfterBfsFailCount || 1;
+
+// Telemetry test environment helpers
+window.simTestMode = window.simTestMode || false;
+window.simTelemetryConfig = {
+    sampleIntervalMs: 1000,
+    maxSamples: 120000,
+    maxEvents: 50000,
+    autoDownloadOnStop: false,
+    fileNamePrefix: 'telemetry'
+};
+window.__simTelemetry = {
+    startedAt: 0,
+    endedAt: 0,
+    samples: [],
+    events: [],
+    counters: {
+        droppedSamples: 0,
+        droppedEvents: 0
+    },
+    addSample(sample) {
+        if (!sample) return;
+        if (this.samples.length >= window.simTelemetryConfig.maxSamples) {
+            this.counters.droppedSamples++;
+            return;
+        }
+        this.samples.push(sample);
+    },
+    addEvent(evt) {
+        if (!evt) return;
+        if (this.events.length >= window.simTelemetryConfig.maxEvents) {
+            this.counters.droppedEvents++;
+            return;
+        }
+        this.events.push(evt);
+    },
+    snapshotMeta() {
+        return {
+            startedAt: this.startedAt,
+            endedAt: this.endedAt,
+            durationMs: (this.endedAt || Date.now()) - (this.startedAt || Date.now()),
+            sampleCount: this.samples.length,
+            eventCount: this.events.length,
+            counters: { ...this.counters },
+            config: { ...window.simTelemetryConfig },
+            runtime: {
+                aiMode: window.aiMode,
+                hungerEmergencyThreshold: window.hungerEmergencyThreshold,
+                energyEmergencyThreshold: window.energyEmergencyThreshold,
+                movingReplanStallMs: window.movingReplanStallMs,
+                pathOccupancyLookahead: window.pathOccupancyLookahead,
+                maxActionCooldown: window.maxActionCooldown,
+                recoverActionCooldown: window.recoverActionCooldown
+            }
+        };
+    },
+    exportObject() {
+        return {
+            meta: this.snapshotMeta(),
+            samples: this.samples,
+            events: this.events
+        };
+    },
+    reset() {
+        this.startedAt = Date.now();
+        this.endedAt = 0;
+        this.samples = [];
+        this.events = [];
+        this.counters = { droppedSamples: 0, droppedEvents: 0 };
+    }
+};
+
+window.startTelemetryTest = function startTelemetryTest(opts = {}) {
+    if (opts.sampleIntervalMs !== undefined) {
+        window.simTelemetryConfig.sampleIntervalMs = Math.max(200, Number(opts.sampleIntervalMs) || 1000);
+    }
+    if (opts.maxSamples !== undefined) {
+        window.simTelemetryConfig.maxSamples = Math.max(1000, Number(opts.maxSamples) || 120000);
+    }
+    if (opts.maxEvents !== undefined) {
+        window.simTelemetryConfig.maxEvents = Math.max(1000, Number(opts.maxEvents) || 50000);
+    }
+    if (opts.autoDownloadOnStop !== undefined) {
+        window.simTelemetryConfig.autoDownloadOnStop = !!opts.autoDownloadOnStop;
+    }
+    if (opts.fileNamePrefix !== undefined && typeof opts.fileNamePrefix === 'string' && opts.fileNamePrefix.trim()) {
+        window.simTelemetryConfig.fileNamePrefix = opts.fileNamePrefix.trim();
+    }
+    window.__simTelemetry.reset();
+    window.simTestMode = true;
+    console.log('[Telemetry] started', window.__simTelemetry.snapshotMeta());
+};
+
+window.stopTelemetryTest = function stopTelemetryTest(opts = {}) {
+    window.simTestMode = false;
+    window.__simTelemetry.endedAt = Date.now();
+    console.log('[Telemetry] stopped', window.__simTelemetry.snapshotMeta());
+    const shouldAutoDownload = (opts.autoDownloadOnStop !== undefined)
+        ? !!opts.autoDownloadOnStop
+        : !!window.simTelemetryConfig.autoDownloadOnStop;
+    if (shouldAutoDownload) {
+        const prefix = (opts.fileNamePrefix && typeof opts.fileNamePrefix === 'string')
+            ? opts.fileNamePrefix.trim()
+            : window.simTelemetryConfig.fileNamePrefix;
+        const fileName = `${prefix || 'telemetry'}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        const saved = window.downloadTelemetryJSON(fileName);
+        console.log('[Telemetry] auto-downloaded', saved);
+        return saved;
+    }
+    return null;
+};
+
+window.getTelemetryJSON = function getTelemetryJSON(pretty = true) {
+    return JSON.stringify(window.__simTelemetry.exportObject(), null, pretty ? 2 : 0);
+};
+
+window.downloadTelemetryJSON = function downloadTelemetryJSON(fileName = null) {
+    const safeName = fileName || `telemetry-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    const blob = new Blob([window.getTelemetryJSON(true)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return safeName;
+};

@@ -25,6 +25,51 @@
             box-shadow: 0 0 0 9999px rgba(30,41,59,0.18) inset, 0 0 80px 8px rgba(60,130,246,0.08) inset;
             z-index: 1;
         }
+
+        .telemetry-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 70;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(8, 12, 28, 0.62);
+            backdrop-filter: blur(4px);
+        }
+
+        .telemetry-modal-overlay.hidden {
+            display: none;
+        }
+
+        .telemetry-modal-card {
+            width: min(680px, calc(100vw - 32px));
+            border-radius: 16px;
+            border: 1px solid rgba(176, 200, 224, 0.38);
+            background: linear-gradient(160deg, rgba(25, 34, 62, 0.98) 0%, rgba(18, 25, 46, 0.98) 100%);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+            color: #ecf3ff;
+            padding: 16px;
+        }
+
+        .debug-action-btn {
+            min-width: 140px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            border-width: 1px;
+            border-color: rgba(196, 222, 255, 0.35);
+            box-shadow: 0 8px 20px rgba(10, 16, 36, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            transition: transform 120ms ease, box-shadow 120ms ease;
+        }
+
+        .debug-action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(10, 16, 36, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+        }
+
+        .debug-action-btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 4px 10px rgba(10, 16, 36, 0.35), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
     </style>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="sidebar.css">
@@ -45,13 +90,43 @@
     <div id="sidebar-right" class="sidebar-bg-right"></div>
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
 
-    <!-- Debug toggle -->
+    <!-- Debug launcher -->
     <div class="mb-3 text-center max-w-2xl mx-auto">
-        <div class="inline-block bg-gray-800 bg-opacity-60 p-2 rounded-xl shadow">
-            <label class="flex items-center space-x-2 text-white justify-center">
-                <input type="checkbox" id="debugToggle" class="checkbox">
-                <span class="font-semibold">Show Debug Info</span>
-            </label>
+        <div class="inline-flex items-center gap-2 bg-gray-800 bg-opacity-60 p-2 rounded-xl shadow">
+            <button id="debugPanelOpenBtn" class="btn btn-info btn-md debug-action-btn">Open Debug Panel</button>
+        </div>
+    </div>
+
+    <div id="debugControlModal" class="telemetry-modal-overlay hidden" aria-hidden="true" inert>
+        <div class="telemetry-modal-card">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-white font-semibold">Debug Manager</h3>
+                <button id="debugPanelCloseBtn" class="btn btn-ghost btn-sm">Close</button>
+            </div>
+            <div class="bg-slate-900/50 border border-slate-400/20 rounded-lg p-3 mb-3">
+                <div class="text-white font-semibold mb-2">Debug Info</div>
+                <label class="inline-flex items-center gap-2 text-gray-200 text-sm">
+                    <input type="checkbox" id="debugToggle" class="checkbox checkbox-sm">
+                    <span>Show Debug Info (console logs)</span>
+                </label>
+            </div>
+
+            <div class="bg-slate-900/50 border border-slate-400/20 rounded-lg p-3">
+            <div class="text-white font-semibold mb-2">Telemetry</div>
+            <p class="text-gray-300 text-sm mb-3">Capture reproducible runtime logs separately from Debug Info.</p>
+            <div class="flex flex-wrap items-center justify-center gap-2 mb-2">
+                <button id="telemetryStartBtn" class="btn btn-success btn-md debug-action-btn">Start Capture</button>
+                <button id="telemetryStopBtn" class="btn btn-warning btn-md debug-action-btn">Stop Capture</button>
+                <button id="telemetryDownloadBtn" class="btn btn-info btn-md debug-action-btn">Download JSON</button>
+            </div>
+            <div class="flex items-center justify-center gap-2 text-sm text-gray-300 mb-2">
+                <label class="inline-flex items-center gap-2">
+                    <input type="checkbox" id="telemetryAutoDownloadToggle" checked>
+                    <span>Auto-download on Stop</span>
+                </label>
+            </div>
+            <div id="telemetryStatus" class="text-xs text-gray-300 text-center">Telemetry idle</div>
+            </div>
         </div>
     </div>
 

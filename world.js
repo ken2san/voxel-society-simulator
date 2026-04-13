@@ -352,7 +352,9 @@ export function animate() {
 export async function spawnCharacter(pos, genes = null) {
     if (pos) {
         const { Character } = await import('./character.js');
-    try { console.log('[SPAWN] spawnCharacter called at', pos, 'genes=', genes); } catch(e){}
+    if (typeof window !== 'undefined' && window.DEBUG_MODE) {
+        try { console.log('[SPAWN] spawnCharacter called at', pos, 'genes=', genes); } catch (e) {}
+    }
     const char = new Character(scene, pos, nextCharacterId++, genes);
     characters.push(char);
     }
