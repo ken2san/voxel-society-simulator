@@ -52,6 +52,13 @@ async function init() {
         for (let i = 0; i < 10; i++) {
             await spawnCharacter(findValidSpawn());
         }
+        // Randomize initial ages to prevent synchronized cohort die-off.
+        // All characters spawned at the same time would otherwise all hit
+        // old_age death simultaneously. Spread ages over 0–50% of lifespan.
+        {
+            const lifespan = window.characterLifespan || 240;
+            characters.forEach(c => { c.age = Math.random() * lifespan * 0.5; });
+        }
         // Initialize relationships after all characters are created
 
         Character.initializeAllRelationships(characters);
@@ -422,7 +429,12 @@ function regenerateWorld() {
     // Spawn new characters
     for (let i = 0; i < 8; i++) {
         const pos = findValidSpawn();
-        if (pos) spawnCharacter(pos);
+        if (pos) await spawnCharacter(pos);
+    }
+    // Randomize initial ages to prevent synchronized die-off
+    {
+        const lifespan = window.characterLifespan || 240;
+        characters.forEach(c => { c.age = Math.random() * lifespan * 0.5; });
     }
 
     // Update sidebar if available
