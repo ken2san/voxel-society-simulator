@@ -4319,19 +4319,19 @@ class Character {
 
             // 5回以上WANDERしてもまだ家がない場合のみ緊急処理
             if (this._wanderCount >= 5) {
-                // UI優先度設定をチェック（さらに低い確率で実行）
-                const woodPriority = (typeof window !== 'undefined' && window.woodCollectionPriority) ? window.woodCollectionPriority : 50;
-                const shouldCollectWood = Math.random() * 100 < (woodPriority * 0.5); // 確率を半分に
+                // Home building priority controls emergency wood collection probability.
+                const buildPriority = (typeof window !== 'undefined' && window.homeBuildingPriority !== undefined) ? Number(window.homeBuildingPriority) : 80;
+                const shouldCollectWood = Math.random() * 100 < (buildPriority * 0.5); // Keep conservative half-chance behavior.
 
                 const wood = this.findClosestWood();
                 if (wood && !this._lastWoodAttempt && shouldCollectWood) {
-                    this.log(`🚨 EMERGENCY: No home, no wood, low hunger - attempting basic collection (priority: ${woodPriority * 0.5}%)`);
+                    this.log(`🚨 EMERGENCY: No home, no wood, low hunger - attempting basic collection (priority: ${buildPriority * 0.5}%)`);
                     this._lastWoodAttempt = Date.now();
                     this._wanderCount = 0; // リセット
                     this.setNextAction('CHOP_WOOD', wood, wood);
                     return;
                 } else if (wood && !shouldCollectWood) {
-                    this.log(`🚨 EMERGENCY: No home, no wood - but wood collection priority too low (${woodPriority * 0.5}%)`);
+                    this.log(`🚨 EMERGENCY: No home, no wood - but home building priority too low (${buildPriority * 0.5}%)`);
                 }
             }
 

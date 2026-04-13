@@ -12,7 +12,6 @@
       "characterLifespan": 360,
       "homeReturnHungerLevel": 85,
       "homeBuildingPriority": 65,
-      "woodCollectionPriority": 55,
       "initialAffinityMin": 10,
       "initialAffinityMax": 35,
       "affinityIncreaseRate": 6,
@@ -28,10 +27,7 @@
       "recentDigCooldownMs": 10000,
       "digActionCooldown": 2200,
       "worldReservationTTL": 5000,
-      "reservationFallbackCooldown": 1000,
-      "fallbackBackoffMs": 1500,
-      "pathInvalidationBackoffFactor": 0.2,
-      "pathInvalidationBackoffMax": 2
+      "reservationFallbackCooldown": 1000
     },
     "telemetryConfig": {
       "sampleIntervalMs": 800,

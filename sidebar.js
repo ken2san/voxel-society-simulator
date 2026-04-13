@@ -196,7 +196,6 @@ function renderCharacterDetail() {
         characterLifespan:                  240,
         homeReturnHungerLevel:              90,
         homeBuildingPriority:               80,
-        woodCollectionPriority:             70,
         initialAffinityMin:                 20,
         initialAffinityMax:                 40,
         affinityIncreaseRate:               10,
@@ -1257,52 +1256,6 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(homeBuildRow);
     homeBuildInput.disabled = paramDisabled;
     homeBuildVal.disabled = paramDisabled;
-
-    // --- Wood Collection Priority Slider ---
-    if (sidebarParams.woodCollectionPriority === undefined) sidebarParams.woodCollectionPriority = 70;
-    const woodCollectRow = document.createElement('div');
-    woodCollectRow.style.display = 'flex';
-    woodCollectRow.style.alignItems = 'center';
-    woodCollectRow.style.gap = '10px';
-    const woodCollectLabel = document.createElement('span');
-    woodCollectLabel.textContent = '🪵 Wood Collection Priority:';
-    woodCollectLabel.style.flex = '1';
-    const woodCollectInput = document.createElement('input');
-    woodCollectInput.type = 'range';
-    woodCollectInput.min = 0;
-    woodCollectInput.max = 100;
-    woodCollectInput.step = 1;
-    woodCollectInput.value = sidebarParams.woodCollectionPriority;
-    woodCollectInput.style.flex = '2';
-    woodCollectInput.id = 'woodCollectInput';
-    woodCollectInput.name = 'woodCollectInput';
-    const woodCollectVal = document.createElement('input');
-    woodCollectVal.type = 'number';
-    woodCollectVal.min = 0;
-    woodCollectVal.max = 100;
-    woodCollectVal.step = 1;
-    woodCollectVal.value = sidebarParams.woodCollectionPriority;
-    woodCollectVal.style.width = '60px';
-    woodCollectVal.id = 'woodCollectVal';
-    woodCollectVal.name = 'woodCollectVal';
-    woodCollectRow.appendChild(woodCollectLabel);
-    woodCollectRow.appendChild(woodCollectInput);
-    woodCollectRow.appendChild(woodCollectVal);
-    // 双方向同期＋sidebarParams更新
-    woodCollectInput.oninput = () => {
-        woodCollectVal.value = woodCollectInput.value;
-        sidebarParams.woodCollectionPriority = parseInt(woodCollectInput.value);
-        window.woodCollectionPriority = parseInt(woodCollectInput.value);
-    };
-    woodCollectVal.oninput = () => {
-        woodCollectInput.value = woodCollectVal.value;
-        sidebarParams.woodCollectionPriority = parseInt(woodCollectVal.value);
-        window.woodCollectionPriority = parseInt(woodCollectVal.value);
-    };
-    woodCollectRow.dataset.label = 'Wood Collection Priority';
-    tabPanels[2].appendChild(woodCollectRow);
-    woodCollectInput.disabled = paramDisabled;
-    woodCollectVal.disabled = paramDisabled;
 
     // ランダム生成トグル
     const randomRow = document.createElement('div');

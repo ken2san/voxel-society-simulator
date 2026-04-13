@@ -725,7 +725,6 @@ window.__simTelemetry = {
                 groupAffinityThreshold: window.groupAffinityThreshold,
                 homeBuildingPriority: window.homeBuildingPriority,
                 homeReturnHungerLevel: window.homeReturnHungerLevel,
-                woodCollectionPriority: window.woodCollectionPriority,
                 perceptionRange: window.perceptionRange,
                 reproductionCooldownSeconds: window.reproductionCooldownSeconds,
                 pairReproductionCooldownSeconds: window.pairReproductionCooldownSeconds,
