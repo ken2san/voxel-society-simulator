@@ -1538,6 +1538,77 @@ class Character {
         return { canMove: true };
     }
 
+    // Check only static solid collisions along a world-space segment.
+    // Dynamic occupancy is intentionally ignored here to avoid congestion jitter.
+    canTraverseWorldSegment(fromWorldPos, toWorldPos) {
+        if (!fromWorldPos || !toWorldPos) return { canMove: true };
+        const segment = toWorldPos.clone().sub(fromWorldPos);
+        const length = segment.length();
+        if (length <= 0.0001) return { canMove: true };
+
+        const dir = segment.clone().normalize();
+        // Sample every ~0.25 voxel to prevent tunneling through thin corners.
+        const samples = Math.max(1, Math.ceil(length / 0.25));
+        for (let i = 1; i <= samples; i++) {
+            const t = i / samples;
+            const sample = fromWorldPos.clone().add(dir.clone().multiplyScalar(length * t));
+            const gx = Math.floor(sample.x);
+            const gy = Math.floor(sample.y);
+            const gz = Math.floor(sample.z);
+
+            const bodyVal = worldData.get(`${gx},${gy},${gz}`);
+            if (!this.isBlockPassable(bodyVal)) {
+                return { canMove: false, reason: 'segment_blocked_by_solid', at: { x: gx, y: gy, z: gz } };
+            }
+
+            const headVal = worldData.get(`${gx},${gy + 1},${gz}`);
+            if (!this.isBlockPassable(headVal)) {
+                return { canMove: false, reason: 'segment_blocked_by_ceiling', at: { x: gx, y: gy + 1, z: gz } };
+            }
+        }
+
+        return { canMove: true };
+    }
+
+    // When forward movement is blocked by static geometry, try sliding along one axis.
+    // This keeps movement feeling less sticky around corners without allowing wall clipping.
+    tryWallSlideMove(direction, moveDistance) {
+        if (!direction || moveDistance <= 0) return null;
+
+        const from = this.mesh?.position?.clone?.();
+        if (!from) return null;
+
+        const absX = Math.abs(direction.x || 0);
+        const absZ = Math.abs(direction.z || 0);
+        if (absX < 0.0001 && absZ < 0.0001) return null;
+
+        const primaryAxis = absX >= absZ ? 'x' : 'z';
+        const secondaryAxis = primaryAxis === 'x' ? 'z' : 'x';
+        const axes = [primaryAxis, secondaryAxis];
+
+        for (const axis of axes) {
+            const axisDir = direction[axis] || 0;
+            if (Math.abs(axisDir) < 0.0001) continue;
+
+            const candidate = from.clone();
+            candidate[axis] += Math.sign(axisDir) * moveDistance;
+
+            const traverse = this.canTraverseWorldSegment(from, candidate);
+            if (!traverse.canMove) continue;
+
+            // Ensure the candidate cell itself is still a valid standing/moving cell.
+            const gx = Math.floor(candidate.x);
+            const gy = Math.floor(candidate.y);
+            const gz = Math.floor(candidate.z);
+            const check = this.canMoveToPosition(gx, gy, gz);
+            if (!check.canMove) continue;
+
+            return candidate;
+        }
+
+        return null;
+    }
+
     // --- 統一された経路探索システム ---
     findPathTo(destination, options = {}) {
         const {
@@ -3336,7 +3407,28 @@ class Character {
             }
         } else {
             direction.normalize();
-            this.mesh.position.add(direction.multiplyScalar(moveDistance));
+            const nextWorldPos = this.mesh.position.clone().add(direction.clone().multiplyScalar(moveDistance));
+            const traverse = this.canTraverseWorldSegment(this.mesh.position, nextWorldPos);
+            if (!traverse.canMove) {
+                const slideTarget = this.tryWallSlideMove(direction, moveDistance);
+                if (slideTarget) {
+                    this.mesh.position.copy(slideTarget);
+                    this._lastMoveProgressTime = Date.now();
+                    this._blockedRetryCount = Math.max(0, (this._blockedRetryCount || 0) - 1);
+                    return;
+                }
+                this._blockedRetryCount += 1;
+                this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.08 + Math.random() * 0.16);
+                if (this._blockedRetryCount >= 4) {
+                    this.log(`Movement segment blocked: ${traverse.reason}`, traverse.at || {});
+                    this.path = [];
+                    this.state = 'idle';
+                    this.actionCooldown = 0.45 + Math.random() * 0.25;
+                    this._blockedRetryCount = 0;
+                }
+                return;
+            }
+            this.mesh.position.copy(nextWorldPos);
         }
         // --- 汎用スタック判定＋救助（移動中も呼ぶ） ---
         const stuckInfo = this.isStuck();
