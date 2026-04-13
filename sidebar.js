@@ -43,11 +43,11 @@ function getMoodDisplay(mood) {
         case 'happy': return { icon: '😄', className: 'mood-happy', text: 'happy' };
         case 'tired': return { icon: '😪', className: 'mood-tired', text: 'tired' };
         case 'lonely': return { icon: '😢', className: 'mood-lonely', text: 'lonely' };
-        case 'active': return { icon: '🚶', className: 'mood-active', text: 'active' };
+        case 'active': return { icon: '😌', className: 'mood-neutral', text: 'active' };
         case 'scared': return { icon: '😱', className: 'mood-scared', text: 'scared' };
         case 'angry': return { icon: '😠', className: 'mood-angry', text: 'angry' };
         case 'sad': return { icon: '😔', className: 'mood-sad', text: 'sad' };
-        case 'social': return { icon: '💬', className: 'mood-neutral', text: 'social' };
+        case 'social': return { icon: '😊', className: 'mood-happy', text: 'social' };
         case 'hungry': return { icon: '🍎', className: 'mood-neutral', text: 'hungry' };
         case 'dead': return { icon: '💀', className: 'mood-neutral', text: 'dead' };
         case 'confused': return { icon: '❓', className: 'mood-neutral', text: 'confused' };

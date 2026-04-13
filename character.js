@@ -2170,14 +2170,13 @@ class Character {
     get mood() {
         if (this.state === 'dead')         return 'dead';
         if (this.state === 'resting')      return 'tired';
-        if (this.state === 'socializing')  return this.needs.social > 80 ? 'happy' : 'social';
+        if (this.state === 'socializing' && this.needs.social > 80) return 'happy';
         if (this.needs.hunger < 20)        return 'hungry';
         if (this.needs.safety < 20)        return 'scared';
         if (this.needs.energy < 20)        return 'tired';
         if (this.needs.social < 20)        return 'lonely';
         if (this.state === 'meeting')      return 'excited';
         if (this.state === 'confused')     return 'confused';
-        if (this.state === 'moving')       return 'active';
         return 'neutral';
     }
 
