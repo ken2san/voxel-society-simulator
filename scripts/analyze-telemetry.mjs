@@ -142,17 +142,32 @@ if (meta.population) {
 
 const birthEvents = events.filter(e => e && e.kind === 'birth').length;
 const deathEvents = events.filter(e => e && e.kind === 'death');
+const actionTransitions = events.filter(e => e && e.kind === 'action-transition');
 const deathByCause = deathEvents.reduce((acc, e) => {
   const c = e && typeof e.cause === 'string' ? e.cause : 'unknown';
   acc[c] = (acc[c] || 0) + 1;
   return acc;
 }, {});
-if (birthEvents > 0 || deathEvents.length > 0) {
+const actionPairs = actionTransitions.reduce((acc, e) => {
+  const from = e && e.from ? e.from : 'null';
+  const to = e && e.to ? e.to : 'null';
+  const key = `${from} -> ${to}`;
+  acc[key] = (acc[key] || 0) + 1;
+  return acc;
+}, {});
+if (birthEvents > 0 || deathEvents.length > 0 || actionTransitions.length > 0) {
   console.log('Lifecycle events:');
   console.log(`  - birthEvents: ${birthEvents}`);
   console.log(`  - deathEvents: ${deathEvents.length}`);
   for (const [cause, count] of Object.entries(deathByCause)) {
     console.log(`  - deathEvents.${cause}: ${count}`);
+  }
+  console.log(`  - actionTransitions: ${actionTransitions.length}`);
+  const topActionPairs = Object.entries(actionPairs)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+  for (const [pair, count] of topActionPairs) {
+    console.log(`  - actionTransitions.${pair}: ${count}`);
   }
 }
 

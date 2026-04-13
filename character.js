@@ -2749,21 +2749,52 @@ class Character {
             if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addSample === 'function') {
                 const intervalMs = (window.simTelemetryConfig && window.simTelemetryConfig.sampleIntervalMs) ? Number(window.simTelemetryConfig.sampleIntervalMs) : 1000;
                 const now = Date.now();
+                const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+                const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
+                const maxActionCooldown = (typeof window !== 'undefined' && window.maxActionCooldown !== undefined) ? Number(window.maxActionCooldown) : 8;
+                const actionType = this.action ? this.action.type : null;
+                const actionKey = `${this.state}|${actionType || '-'}|${this.targetPos ? `${this.targetPos.x},${this.targetPos.y},${this.targetPos.z}` : '-'}`;
+                if (this._telemetryLastActionKey !== actionKey) {
+                    window.__simTelemetry.addEvent({
+                        t: now,
+                        id: this.id,
+                        kind: 'action-transition',
+                        from: this._telemetryLastActionKey || null,
+                        to: actionKey,
+                        state: this.state,
+                        action: actionType,
+                        needs: {
+                            hunger: Number(this.needs?.hunger || 0),
+                            energy: Number(this.needs?.energy || 0),
+                            safety: Number(this.needs?.safety || 0),
+                            social: Number(this.needs?.social || 0)
+                        }
+                    });
+                    this._telemetryLastActionKey = actionKey;
+                }
                 if (!this._telemetryNextAt) this._telemetryNextAt = now;
                 if (now >= this._telemetryNextAt) {
                     const lifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
                         ? Number(window.characterLifespan) : 240;
+                    const inventoryCount = Array.isArray(this.inventory) ? this.inventory.filter(Boolean).length : 0;
+                    const homeDistance = this.homePosition
+                        ? (Math.abs((this.gridPos?.x || 0) - this.homePosition.x)
+                            + Math.abs((this.gridPos?.y || 0) - this.homePosition.y)
+                            + Math.abs((this.gridPos?.z || 0) - this.homePosition.z))
+                        : null;
                     window.__simTelemetry.addSample({
                         t: now,
                         id: this.id,
                         state: this.state,
                         mood: this.mood,
+                        role: this.role || 'worker',
+                        groupId: this.groupId || null,
                         generation: Number(this.generation || 0),
                         isChild: !!this.isChild,
                         age: Number(this.age || 0),
                         lifespan: lifespan,
                         lifeRatio: lifespan > 0 ? Number((Number(this.age || 0) / lifespan).toFixed(4)) : 0,
-                        action: this.action ? this.action.type : null,
+                        action: actionType,
                         pos: { x: this.gridPos.x, y: this.gridPos.y, z: this.gridPos.z },
                         target: this.targetPos ? { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z } : null,
                         pathLen: this.path ? this.path.length : 0,
@@ -2777,6 +2808,27 @@ class Character {
                             energy: Number(this.needs?.energy || 0),
                             safety: Number(this.needs?.safety || 0),
                             social: Number(this.needs?.social || 0)
+                        },
+                        personality: {
+                            bravery: Number(this.personality?.bravery || 0),
+                            diligence: Number(this.personality?.diligence || 0)
+                        },
+                        home: {
+                            hasHome: !!this.homePosition,
+                            provisional: !!this.provisionalHome,
+                            distance: homeDistance
+                        },
+                        inventory: {
+                            count: inventoryCount,
+                            hasTool: Array.isArray(this.inventory) ? this.inventory.includes('STONE_TOOL') : false,
+                            hasWood: Array.isArray(this.inventory) ? this.inventory.includes('WOOD_LOG') : false
+                        },
+                        decisionPressure: {
+                            hungerEmergency,
+                            energyEmergency,
+                            lowHunger: Number(this.needs?.hunger || 0) <= hungerEmergency,
+                            lowEnergy: Number(this.needs?.energy || 0) <= energyEmergency,
+                            stallLike: (Number(this.actionCooldown || 0) > maxActionCooldown) || (Number(this._microPauseTimer || 0) > 1.2)
                         }
                     });
                     this._telemetryNextAt = now + Math.max(200, intervalMs);

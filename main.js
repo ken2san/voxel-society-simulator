@@ -627,6 +627,24 @@ window.__simTelemetry = {
         this.events.push(evt);
     },
     snapshotMeta() {
+        const popBase = window.getPopulationStats ? window.getPopulationStats() : null;
+        const chars = Array.isArray(window.characters) ? window.characters : [];
+        const alive = chars.filter(c => c && c.state !== 'dead');
+        const children = alive.filter(c => c && c.isChild).length;
+        const currentPopulation = {
+            totalTracked: chars.length,
+            alive: alive.length,
+            children,
+            adults: alive.length - children,
+            maxGeneration: chars.reduce((m, c) => Math.max(m, Number(c?.generation || 0)), 0)
+        };
+        const population = popBase
+            ? {
+                ...popBase,
+                deathsByCause: { ...(popBase.deathsByCause || {}) },
+                current: currentPopulation
+            }
+            : null;
         return {
             startedAt: this.startedAt,
             endedAt: this.endedAt,
@@ -640,12 +658,33 @@ window.__simTelemetry = {
                 hungerEmergencyThreshold: window.hungerEmergencyThreshold,
                 energyEmergencyThreshold: window.energyEmergencyThreshold,
                 characterLifespan: window.characterLifespan,
+                socialThreshold: window.socialThreshold,
+                groupAffinityThreshold: window.groupAffinityThreshold,
+                homeBuildingPriority: window.homeBuildingPriority,
+                homeReturnHungerLevel: window.homeReturnHungerLevel,
+                woodCollectionPriority: window.woodCollectionPriority,
+                perceptionRange: window.perceptionRange,
+                reproductionCooldownSeconds: window.reproductionCooldownSeconds,
+                pairReproductionCooldownSeconds: window.pairReproductionCooldownSeconds,
+                initialAffinityMin: window.initialAffinityMin,
+                initialAffinityMax: window.initialAffinityMax,
+                affinityIncreaseRate: window.affinityIncreaseRate,
+                affinityDecayRate: window.affinityDecayRate,
+                maxAffinity: window.maxAffinity,
+                autoRecoverStall: window.autoRecoverStall,
                 movingReplanStallMs: window.movingReplanStallMs,
                 pathOccupancyLookahead: window.pathOccupancyLookahead,
+                recentDigCooldownMs: window.recentDigCooldownMs,
+                digActionCooldown: window.digActionCooldown,
+                worldReservationTTL: window.worldReservationTTL,
+                reservationFallbackCooldown: window.reservationFallbackCooldown,
+                fallbackBackoffMs: window.fallbackBackoffMs,
+                pathInvalidationBackoffFactor: window.pathInvalidationBackoffFactor,
+                pathInvalidationBackoffMax: window.pathInvalidationBackoffMax,
                 maxActionCooldown: window.maxActionCooldown,
                 recoverActionCooldown: window.recoverActionCooldown
             },
-            population: window.getPopulationStats ? window.getPopulationStats() : null
+            population
         };
     },
     exportObject() {
