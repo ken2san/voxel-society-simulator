@@ -4,6 +4,29 @@ _Last updated: 2026-04-13_
 
 ---
 
+## Project Concept
+
+**Voxel Society Simulator is a glass-tank observation tool, not a game to win.**
+
+The mental model is a terrarium or ant farm: the user watches creatures live,
+form relationships, reproduce, age, and die — from the outside, without
+intervening. The goal is to make that observation interesting and legible,
+not to balance a game loop or maximize birth rate.
+
+Implications for all development decisions:
+
+- **Realism over optimization.** Tuning parameters should make behavior feel
+  organic, not efficient. A population decline is an interesting observation,
+  not a failure state to fix.
+- **Observability over control.** UI investment should go toward making
+  internal state readable (sidebar, telemetry, thought bubbles), not toward
+  giving the user levers to steer outcomes.
+- **Natural emergence over scripted cycles.** Births, deaths, and group
+  formation should arise from individual character decisions, not from
+  demographic targets or cooldown tuning.
+
+---
+
 ## Phase 1 - Core Simulation Stability
 
 ### Goal
