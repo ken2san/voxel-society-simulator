@@ -732,6 +732,8 @@ window.__simTelemetry = {
                 initialAffinityMax: window.initialAffinityMax,
                 affinityIncreaseRate: window.affinityIncreaseRate,
                 affinityDecayRate: window.affinityDecayRate,
+                socialNeedRecovery: window.socialNeedRecovery,
+                bondPersistence: window.bondPersistence,
                 maxAffinity: window.maxAffinity,
                 autoRecoverStall: window.autoRecoverStall,
                 movingReplanStallMs: window.movingReplanStallMs,

@@ -200,6 +200,8 @@ function renderCharacterDetail() {
         initialAffinityMax:                 40,
         affinityIncreaseRate:               10,
         affinityDecayRate:                  0.01,
+        socialNeedRecovery:                 1.0,
+        bondPersistence:                    1.0,
         pairReproductionCooldownSeconds:    60,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
@@ -565,6 +567,90 @@ function renderCharacterDetail() {
     affinityDecayRow.appendChild(affinityDecayNumber);
     affinityDecayRow.dataset.label = 'Affinity Decay';
     tabPanels[1].appendChild(affinityDecayRow);
+
+    // --- social need recovery multiplier ---
+    const socialRecoveryRow = document.createElement('div');
+    socialRecoveryRow.style.display = 'flex';
+    socialRecoveryRow.style.alignItems = 'center';
+    socialRecoveryRow.style.gap = '10px';
+    const socialRecoveryLabel = document.createElement('span');
+    socialRecoveryLabel.textContent = 'Social Need Recovery:';
+    socialRecoveryLabel.style.width = '140px';
+    socialRecoveryRow.appendChild(socialRecoveryLabel);
+    const socialRecoveryInput = document.createElement('input');
+    socialRecoveryInput.type = 'range';
+    socialRecoveryInput.min = 0.5;
+    socialRecoveryInput.max = 2.0;
+    socialRecoveryInput.step = 0.05;
+    socialRecoveryInput.value = sidebarParams.socialNeedRecovery;
+    socialRecoveryInput.style.width = '120px';
+    socialRecoveryInput.disabled = paramDisabled;
+    socialRecoveryInput.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.socialNeedRecovery = v;
+        socialRecoveryNumber.value = v;
+        window.socialNeedRecovery = v;
+    });
+    socialRecoveryRow.appendChild(socialRecoveryInput);
+    const socialRecoveryNumber = document.createElement('input');
+    socialRecoveryNumber.type = 'number';
+    socialRecoveryNumber.min = 0.5;
+    socialRecoveryNumber.max = 2.0;
+    socialRecoveryNumber.step = 0.05;
+    socialRecoveryNumber.value = sidebarParams.socialNeedRecovery;
+    socialRecoveryNumber.disabled = paramDisabled;
+    socialRecoveryNumber.style.width = '64px';
+    socialRecoveryNumber.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.socialNeedRecovery = v;
+        socialRecoveryInput.value = v;
+        window.socialNeedRecovery = v;
+    });
+    socialRecoveryRow.appendChild(socialRecoveryNumber);
+    socialRecoveryRow.dataset.label = 'Social Need Recovery';
+    tabPanels[1].appendChild(socialRecoveryRow);
+
+    // --- bond persistence multiplier ---
+    const bondPersistenceRow = document.createElement('div');
+    bondPersistenceRow.style.display = 'flex';
+    bondPersistenceRow.style.alignItems = 'center';
+    bondPersistenceRow.style.gap = '10px';
+    const bondPersistenceLabel = document.createElement('span');
+    bondPersistenceLabel.textContent = 'Bond Persistence:';
+    bondPersistenceLabel.style.width = '140px';
+    bondPersistenceRow.appendChild(bondPersistenceLabel);
+    const bondPersistenceInput = document.createElement('input');
+    bondPersistenceInput.type = 'range';
+    bondPersistenceInput.min = 0.5;
+    bondPersistenceInput.max = 2.0;
+    bondPersistenceInput.step = 0.05;
+    bondPersistenceInput.value = sidebarParams.bondPersistence;
+    bondPersistenceInput.style.width = '120px';
+    bondPersistenceInput.disabled = paramDisabled;
+    bondPersistenceInput.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.bondPersistence = v;
+        bondPersistenceNumber.value = v;
+        window.bondPersistence = v;
+    });
+    bondPersistenceRow.appendChild(bondPersistenceInput);
+    const bondPersistenceNumber = document.createElement('input');
+    bondPersistenceNumber.type = 'number';
+    bondPersistenceNumber.min = 0.5;
+    bondPersistenceNumber.max = 2.0;
+    bondPersistenceNumber.step = 0.05;
+    bondPersistenceNumber.value = sidebarParams.bondPersistence;
+    bondPersistenceNumber.disabled = paramDisabled;
+    bondPersistenceNumber.style.width = '64px';
+    bondPersistenceNumber.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.bondPersistence = v;
+        bondPersistenceInput.value = v;
+        window.bondPersistence = v;
+    });
+    bondPersistenceRow.appendChild(bondPersistenceNumber);
+    bondPersistenceRow.dataset.label = 'Bond Persistence';
+    tabPanels[1].appendChild(bondPersistenceRow);
 
     // --- Dig cooldown controls ---
     const digRow = document.createElement('div');

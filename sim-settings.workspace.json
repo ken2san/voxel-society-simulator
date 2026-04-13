@@ -16,6 +16,8 @@
       "initialAffinityMax": 35,
       "affinityIncreaseRate": 6,
       "affinityDecayRate": 0.01,
+      "socialNeedRecovery": 1,
+      "bondPersistence": 1,
       "pairReproductionCooldownSeconds": 90,
       "reproductionCooldownSeconds": 10,
       "maxAffinity": 100,

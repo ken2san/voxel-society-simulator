@@ -2392,13 +2392,14 @@ class Character {
             const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
             let foundNearby = false;
             const perceptionRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? window.perceptionRange : 2;
+            const socialRecoveryMul = (typeof window !== 'undefined' && window.socialNeedRecovery !== undefined) ? Number(window.socialNeedRecovery) : 1.0;
             for (const char of chars) {
                 if (char.id === this.id) continue;
                 const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
                 if (dist > 0 && dist <= perceptionRange) { foundNearby = true; break; }
             }
             if (foundNearby) {
-                this.needs.social = Math.min(100, this.needs.social + deltaTime * 5);
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 5 * socialRecoveryMul);
             }
         }
         // --- 空中スタック救済: 下にブロックがなければ強制落下 ---
@@ -2572,10 +2573,12 @@ class Character {
         // --- Affinity decay: slowly reduce affinity over time to stabilize long-term behavior ---
         try {
             const decayRate = (typeof window !== 'undefined' && window.affinityDecayRate !== undefined) ? Number(window.affinityDecayRate) : 0;
+            const bondPersistence = (typeof window !== 'undefined' && window.bondPersistence !== undefined) ? Number(window.bondPersistence) : 1.0;
+            const effectiveDecayRate = decayRate / Math.max(0.25, bondPersistence);
             if (decayRate > 0 && this.relationships && this.relationships.size > 0) {
                 const keysToRemove = [];
                 for (const [otherId, aff] of this.relationships.entries()) {
-                    let newAff = aff - decayRate * deltaTime;
+                    let newAff = aff - effectiveDecayRate * deltaTime;
                     // clamp and removal
                     if (newAff <= 0) {
                         keysToRemove.push(otherId);
@@ -2611,7 +2614,8 @@ class Character {
                 }
 
                 // needs.social回復速度を調整
-                this.needs.social = Math.min(100, this.needs.social + deltaTime * 8);
+                const socialRecoveryMul = (typeof window !== 'undefined' && window.socialNeedRecovery !== undefined) ? Number(window.socialNeedRecovery) : 1.0;
+                this.needs.social = Math.min(100, this.needs.social + deltaTime * 8 * socialRecoveryMul);
                 // affinity上昇速度をパラメータ化（sidebar.jsで調整可能）
                 const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? window.affinityIncreaseRate : 10;
                 let affinity = this.relationships.get(partner.id) || 0;
