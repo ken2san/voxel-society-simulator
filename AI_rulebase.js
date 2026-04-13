@@ -16,6 +16,30 @@ export function decideNextAction_rulebase(character, isNight) {
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeBuildingHungerThreshold = (typeof window !== 'undefined' && window.homeBuildingHungerThreshold !== undefined) ? window.homeBuildingHungerThreshold : 80;
+    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 15;
+
+    // === PRIORITY 0: EMERGENCY ENERGY — force REST before any other decision ===
+    // Home-building and wandering both consume energy; a depleted character must rest
+    // regardless of other priorities or it enters a drain spiral it cannot recover from.
+    if (character.needs.energy <= energyEmergency) {
+        if (character.isSafe(isNight)) {
+            character.log(`Action: REST (energy emergency=${character.needs.energy.toFixed(1)})`);
+            character.setNextAction('REST');
+            return;
+        }
+        // Not safe: seek shelter then rest
+        const shelterPos = character.findShelter && character.findShelter(isNight);
+        if (shelterPos) {
+            character.log(`Action: SEEK_SHELTER_TO_REST (energy emergency)`);
+            const adj = character.findAdjacentSpot && character.findAdjacentSpot(shelterPos);
+            character.setNextAction('SEEK_SHELTER_TO_REST', shelterPos, adj || shelterPos);
+            return;
+        }
+        // No shelter found — rest in place anyway; starvation is worse
+        character.log(`Action: REST (energy emergency, unsafe but no shelter)`);
+        character.setNextAction('REST');
+        return;
+    }
 
     // === PRIORITY 1: RANDOM EXPLORATION (10% chance) ===
     if (Math.random() < 0.10) {

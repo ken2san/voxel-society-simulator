@@ -188,7 +188,8 @@ function renderCharacterDetail() {
     // To add a new parameter: add ONE entry here. Init and global mirror are both automatic.
     const PARAM_DEFAULTS = {
         hungerEmergencyThreshold:           5,
-        energyEmergencyThreshold:           8,
+        energyEmergencyThreshold:           20,
+        characterLifespan:                  240,
         homeReturnHungerLevel:              90,
         homeBuildingPriority:               80,
         woodCollectionPriority:             70,
@@ -1179,7 +1180,7 @@ function renderCharacterDetail() {
     hungerEmergencyVal.disabled = paramDisabled;
 
     // --- Energy Emergency Threshold Slider ---
-    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 8;
+    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 20;
     const energyEmergencyRow = document.createElement('div');
     energyEmergencyRow.style.display = 'flex';
     energyEmergencyRow.style.alignItems = 'center';
@@ -1190,7 +1191,7 @@ function renderCharacterDetail() {
     const energyEmergencyInput = document.createElement('input');
     energyEmergencyInput.type = 'range';
     energyEmergencyInput.min = 0;
-    energyEmergencyInput.max = 20;
+    energyEmergencyInput.max = 40;
     energyEmergencyInput.step = 1;
     energyEmergencyInput.value = sidebarParams.energyEmergencyThreshold;
     energyEmergencyInput.style.flex = '2';
@@ -1199,7 +1200,7 @@ function renderCharacterDetail() {
     const energyEmergencyVal = document.createElement('input');
     energyEmergencyVal.type = 'number';
     energyEmergencyVal.min = 0;
-    energyEmergencyVal.max = 20;
+    energyEmergencyVal.max = 40;
     energyEmergencyVal.step = 1;
     energyEmergencyVal.value = sidebarParams.energyEmergencyThreshold;
     energyEmergencyVal.style.width = '60px';
@@ -1223,6 +1224,51 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(energyEmergencyRow);
     energyEmergencyInput.disabled = paramDisabled;
     energyEmergencyVal.disabled = paramDisabled;
+
+    // --- Character Lifespan Slider ---
+    if (sidebarParams.characterLifespan === undefined) sidebarParams.characterLifespan = 240;
+    const lifespanRow = document.createElement('div');
+    lifespanRow.style.display = 'flex';
+    lifespanRow.style.alignItems = 'center';
+    lifespanRow.style.gap = '10px';
+    const lifespanLabel = document.createElement('span');
+    lifespanLabel.textContent = 'Character Lifespan (s):';
+    lifespanLabel.style.flex = '1';
+    const lifespanInput = document.createElement('input');
+    lifespanInput.type = 'range';
+    lifespanInput.min = 60;
+    lifespanInput.max = 600;
+    lifespanInput.step = 30;
+    lifespanInput.value = sidebarParams.characterLifespan;
+    lifespanInput.style.flex = '2';
+    lifespanInput.id = 'lifespanInput';
+    lifespanInput.name = 'lifespanInput';
+    const lifespanVal = document.createElement('input');
+    lifespanVal.type = 'number';
+    lifespanVal.min = 60;
+    lifespanVal.max = 600;
+    lifespanVal.step = 30;
+    lifespanVal.value = sidebarParams.characterLifespan;
+    lifespanVal.style.width = '60px';
+    lifespanVal.id = 'lifespanVal';
+    lifespanVal.name = 'lifespanVal';
+    lifespanRow.appendChild(lifespanLabel);
+    lifespanRow.appendChild(lifespanInput);
+    lifespanRow.appendChild(lifespanVal);
+    lifespanInput.oninput = () => {
+        lifespanVal.value = lifespanInput.value;
+        sidebarParams.characterLifespan = parseInt(lifespanInput.value);
+        window.characterLifespan = parseInt(lifespanInput.value);
+    };
+    lifespanVal.oninput = () => {
+        lifespanInput.value = lifespanVal.value;
+        sidebarParams.characterLifespan = parseInt(lifespanVal.value);
+        window.characterLifespan = parseInt(lifespanVal.value);
+    };
+    lifespanRow.dataset.label = 'Character Lifespan';
+    tabPanels[2].appendChild(lifespanRow);
+    lifespanInput.disabled = paramDisabled;
+    lifespanVal.disabled = paramDisabled;
 
     // --- Home Return Hunger Level Slider ---
     if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;

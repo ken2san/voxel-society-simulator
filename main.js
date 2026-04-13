@@ -587,6 +587,7 @@ window.__simTelemetry = {
                 aiMode: window.aiMode,
                 hungerEmergencyThreshold: window.hungerEmergencyThreshold,
                 energyEmergencyThreshold: window.energyEmergencyThreshold,
+                characterLifespan: window.characterLifespan,
                 movingReplanStallMs: window.movingReplanStallMs,
                 pathOccupancyLookahead: window.pathOccupancyLookahead,
                 maxActionCooldown: window.maxActionCooldown,

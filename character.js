@@ -1803,7 +1803,8 @@ class Character {
         this.children = [];
         // --- 移動距離カウント ---
         this.moveDistance = 0;
-        // --- 世代番号 (0 = 初代、子は max(親) + 1) ---
+        // --- 年齢・世代 ---
+        this.age = 0; // seconds lived (incremented for all characters, not just children)
         this.generation = 0;
         // --- Love timer for heart mark ---
         this.loveTimer = 0;
@@ -2561,10 +2562,10 @@ class Character {
         }
         if (this.state === 'moving') this.updateMovement(deltaTime);
         this.updateAnimations(deltaTime);
-        // Child aging: increase age and mature when reaching maturityAge
+        // Age all characters (used for both maturity and lifespan)
+        this.age += deltaTime;
+        // Child aging: mature when reaching maturityAge
         if (this.isChild) {
-            if (typeof this.age !== 'number') this.age = 0;
-            this.age += deltaTime;
             if (this.age >= (this.maturityAge || 60)) {
                 // mature: restore movement, scale, and clear child flag
                 this.isChild = false;
@@ -2574,6 +2575,16 @@ class Character {
                 if (this.head && this.head.scale) this.head.scale.set(1,1,1);
                 if (this.shadowMesh && this.shadowMesh.scale) this.shadowMesh.scale.multiplyScalar(1.3333);
                 try { console.log(`[GROW] ${this.id} matured after ${Math.round(this.age)}s`); } catch(e){}
+            }
+        }
+        // Natural lifespan: adults die of old age, making room for offspring
+        if (!this.isChild && this.state !== 'dead') {
+            const lifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
+                ? Number(window.characterLifespan) : 240;
+            if (this.age >= lifespan) {
+                try { console.log(`[LIFESPAN] ${this.id} died of old age (${Math.round(this.age)}s, gen=${this.generation})`); } catch(e){}
+                this.die();
+                return;
             }
         }
         // --- loveTimer減少 ---
