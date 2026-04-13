@@ -1541,13 +1541,69 @@ let rightSidebar = null;
 let groupColorMap = {};
 // サマリー表で開いている詳細キャラID
 let openedCharId = undefined;
+// Lightweight population pulse history for compact trend visualization.
+if (!window.__populationPulseHistory) window.__populationPulseHistory = [];
+
+function pushPopulationPulseSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    const arr = window.__populationPulseHistory;
+    const now = Number(snapshot.t || Date.now());
+    const last = arr[arr.length - 1];
+    // Prevent accidental duplicate sampling within the same frame/second.
+    if (last && now - last.t < 800) return;
+    arr.push({
+        t: now,
+        alive: Number(snapshot.alive || 0),
+        totalBorn: Number(snapshot.totalBorn || 0),
+        deaths: Number(snapshot.deaths || 0),
+        avgEnergy: Number(snapshot.avgEnergy || 0)
+    });
+    if (arr.length > 180) arr.shift(); // Keep about 3 minutes at 1 Hz.
+}
+
+function computePerMinuteDelta(history, key, windowMs = 60000) {
+    if (!Array.isArray(history) || history.length < 2) return 0;
+    const latest = history[history.length - 1];
+    const targetTime = latest.t - windowMs;
+    let base = history[0];
+    for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].t <= targetTime) {
+            base = history[i];
+            break;
+        }
+    }
+    const dtMs = Math.max(1, latest.t - base.t);
+    const dv = Number(latest[key] || 0) - Number(base[key] || 0);
+    return dv * (60000 / dtMs);
+}
+
+function createSparklineSVG(values, color, width = 86, height = 24) {
+    if (!Array.isArray(values) || values.length === 0) {
+        return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"></svg>`;
+    }
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1e-6, max - min);
+    const step = values.length > 1 ? (width - 4) / (values.length - 1) : 0;
+    const points = values.map((v, i) => {
+        const x = 2 + i * step;
+        const y = height - 2 - ((v - min) / span) * (height - 4);
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    return (
+        `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">` +
+        `<rect x="0" y="0" width="${width}" height="${height}" rx="6" fill="rgba(255,255,255,0.78)"></rect>` +
+        `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>` +
+        `</svg>`
+    );
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     leftSidebar = document.getElementById('sidebar-left');
     rightSidebar = document.getElementById('sidebar-right');
     // サイドバーのUIをゲーム画面に溶け込むよう調整（幅を拡張）
     if (leftSidebar) {
-        leftSidebar.style.width = '520px';
+        leftSidebar.style.width = 'min(440px, 34vw)';
         leftSidebar.style.background = 'rgba(255,255,255,0.90)';
         leftSidebar.style.backdropFilter = 'blur(6px)';
         leftSidebar.style.borderRight = '2px solid #ccc';
@@ -1621,35 +1677,69 @@ function renderCharacterList() {
         const avgEng   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.energy  || 0), 0) / alive.length).toFixed(0) : '—';
         const avgSaf   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.safety  || 0), 0) / alive.length).toFixed(0) : '—';
         const avgSoc   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.social  || 0), 0) / alive.length).toFixed(0) : '—';
+        const criticalEnergyCount = alive.filter(c => Number(c.needs?.energy || 0) < 20).length;
+        const criticalHungerCount = alive.filter(c => Number(c.needs?.hunger || 0) < 20).length;
+
+        pushPopulationPulseSnapshot({
+            t: Date.now(),
+            alive: alive.length,
+            totalBorn,
+            deaths: dead,
+            avgEnergy: Number(avgEng) || 0
+        });
+        const pulseHistory = window.__populationPulseHistory || [];
+        const birthRate = computePerMinuteDelta(pulseHistory, 'totalBorn', 60000);
+        const deathRate = computePerMinuteDelta(pulseHistory, 'deaths', 60000);
+        const netRate = birthRate - deathRate;
+        const aliveSeries = pulseHistory.slice(-40).map(p => p.alive);
+        const netSeries = pulseHistory.slice(-40).map((p, idx, arr) => {
+            if (idx === 0) return 0;
+            const prev = arr[Math.max(0, idx - 1)];
+            const dt = Math.max(1, p.t - prev.t);
+            return ((p.totalBorn - prev.totalBorn) - (p.deaths - prev.deaths)) * (60000 / dt);
+        });
+        const energySeries = pulseHistory.slice(-40).map(p => p.avgEnergy);
+
+        const sparkAlive = createSparklineSVG(aliveSeries, '#2563eb');
+        const sparkNet = createSparklineSVG(netSeries, netRate >= 0 ? '#16a34a' : '#dc2626');
+        const sparkEnergy = createSparklineSVG(energySeries, '#f59e0b');
 
         const statsDiv = document.createElement('div');
-        statsDiv.style.cssText = 'background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:0.85em;color:#333;';
+        statsDiv.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:0.82em;color:#2b3340;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
         statsDiv.innerHTML =
-            `<b>Population</b> &nbsp;` +
-            `Total Born: <b>${totalBorn}</b> &nbsp;` +
-            `Alive: <b>${alive.length}</b> &nbsp;` +
-            `Dead: <b>${dead}</b> &nbsp;` +
-            `Adults: <b>${adults}</b> &nbsp;` +
-            `Children: <b>${children}</b>` +
-            `<br>` +
-            `<b>Lifecycle</b> &nbsp;` +
-            `Avg Age: <b>${avgAge}s</b> &nbsp;` +
-            `Max Age: <b>${maxAge}s</b> &nbsp;` +
-            `Deaths(S/O): <b>${starvationDeaths}/${oldAgeDeaths}</b>` +
-            `<br>` +
-            `<b>Generation</b> &nbsp;` +
-            `Max: <b>${maxGen}</b> &nbsp;` +
-            `Avg: <b>${avgGen}</b>` +
-            `<br>` +
-            `<b>Traits (alive avg)</b> &nbsp;` +
-            `Bravery: <b>${avgBrav}</b> &nbsp;` +
-            `Diligence: <b>${avgDili}</b>` +
-            `<br>` +
-            `<b>Needs (alive avg)</b> &nbsp;` +
-            `Hun: <b>${avgHun}</b> &nbsp;` +
-            `Eng: <b>${avgEng}</b> &nbsp;` +
-            `Saf: <b>${avgSaf}</b> &nbsp;` +
-            `Soc: <b>${avgSoc}</b>`;
+            `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">` +
+                `<b style="font-size:1.0em;">Population Pulse</b>` +
+                `<span style="font-size:0.9em;color:#55657a;">1m window</span>` +
+            `</div>` +
+            `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:6px;">` +
+                `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
+                    `<div style="color:#5a6a80;font-size:0.85em;">Alive</div>` +
+                    `<div style="font-weight:700;font-size:1.1em;color:#1d4ed8;line-height:1.2;">${alive.length}</div>` +
+                `</div>` +
+                `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
+                    `<div style="color:#5a6a80;font-size:0.85em;">Net/min</div>` +
+                    `<div style="font-weight:700;font-size:1.1em;line-height:1.2;color:${netRate >= 0 ? '#15803d' : '#b91c1c'};">${netRate >= 0 ? '+' : ''}${netRate.toFixed(2)}</div>` +
+                `</div>` +
+                `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
+                    `<div style="color:#5a6a80;font-size:0.85em;">Risk (H/E)</div>` +
+                    `<div style="font-weight:700;font-size:1.1em;color:#b45309;line-height:1.2;">${criticalHungerCount}/${criticalEnergyCount}</div>` +
+                `</div>` +
+            `</div>` +
+            `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:7px;">` +
+                `<div title="Alive trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Alive</span>${sparkAlive}</div>` +
+                `<div title="Net growth trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Net</span>${sparkNet}</div>` +
+                `<div title="Average energy trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Energy</span>${sparkEnergy}</div>` +
+            `</div>` +
+            `<details style="margin-top:6px;">` +
+                `<summary style="cursor:pointer;color:#475569;">More metrics</summary>` +
+                `<div style="margin-top:5px;line-height:1.45;">` +
+                    `<b>Population</b> Total Born: <b>${totalBorn}</b> / Dead: <b>${dead}</b> / Adults: <b>${adults}</b> / Children: <b>${children}</b><br>` +
+                    `<b>Lifecycle</b> Avg Age: <b>${avgAge}s</b> / Max Age: <b>${maxAge}s</b> / Deaths(S/O): <b>${starvationDeaths}/${oldAgeDeaths}</b><br>` +
+                    `<b>Generation</b> Max: <b>${maxGen}</b> / Avg: <b>${avgGen}</b><br>` +
+                    `<b>Traits</b> Bravery: <b>${avgBrav}</b> / Diligence: <b>${avgDili}</b><br>` +
+                    `<b>Needs</b> Hun: <b>${avgHun}</b> / Eng: <b>${avgEng}</b> / Saf: <b>${avgSaf}</b> / Soc: <b>${avgSoc}</b>` +
+                `</div>` +
+            `</details>`;
         leftSidebar.appendChild(statsDiv);
     }
 
