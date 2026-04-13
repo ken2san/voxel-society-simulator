@@ -142,7 +142,7 @@ class Character {
             // 木の家完成時はインベントリクリア処理を削除（buildHome内で既に処理済み）
             this.showActionIcon('🏠', 3.0);
         }
-        this.log(`建築完了！ type=${type} buildCount=${this.buildCount || 0}`, this.homePosition);
+        this.log(`Construction complete! type=${type} buildCount=${this.buildCount || 0}`, this.homePosition);
         this._buildingProgress = 0;
         this._buildingStage = 0;
         this._diggingProgress = 0;
@@ -306,15 +306,15 @@ class Character {
                 this.chopWood();
                 break;
             case 'BUILD_HOME':
-                this.log('⚡ BUILD_HOME実行開始');
+                this.log('⚡ BUILD_HOME execution started');
                 this.buildHome();
                 break;
             case 'CRAFT_TOOL':
-                this.log('⚡ CRAFT_TOOL実行開始');
+                this.log('⚡ CRAFT_TOOL execution started');
                 this.craftTool();
                 break;
             case 'DESTROY_BLOCK':
-                this.log('⚡ DESTROY_BLOCK実行開始');
+                this.log('⚡ DESTROY_BLOCK execution started');
                 this.destroyBlock();
                 break;
             case 'SEEK_SHELTER':
@@ -474,7 +474,7 @@ class Character {
                     this.carriedItemMesh.visible = false;
                     this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
                     this.eatCount = (this.eatCount || 0) + 1;
-                    this.log(`食事完了！ eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
+                    this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
                     // 満腹感の表現
                     setTimeout(() => {
@@ -499,7 +499,7 @@ class Character {
 
     eatFood() {
         // EATアクションはCOLLECT_FOODと同様の処理
-        this.log('EAT_FOOD: 食事開始');
+        this.log('EAT_FOOD: meal started');
         this.collectFood();
     }
 
@@ -535,12 +535,12 @@ class Character {
         if (blockId) {
             const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
             // 木ブロックまたは葉ブロックから木材を取得可能
-            if (blockType && (blockType.name === '木' || blockType.name === '葉')) {
+            if (blockType && (blockType.name === 'Wood' || blockType.name === 'Leaf')) {
                 this._choppingProgress += 1;
 
                 // 段階的なアイコン表示（ブロックタイプに応じて変更）
                 let stages;
-                if (blockType.name === '葉') {
+                if (blockType.name === 'Leaf') {
                     stages = ['✂️', '🍃', '🍃💥', '🪵']; // 葉の場合
                 } else {
                     stages = ['🪓', '⛏️', '🌲💥', '🪵']; // 木の幹の場合
@@ -571,7 +571,7 @@ class Character {
                     }
 
                     // 完了アイコンをブロックタイプに応じて変更
-                    if (blockType.name === '葉') {
+                    if (blockType.name === 'Leaf') {
                         this.showActionIcon('✅🍃🪵', 3.0); // 葉から木材1個取得
                     } else {
                         this.showActionIcon('✅🪵', 3.0); // 木から木材1個取得
@@ -606,7 +606,7 @@ class Character {
         if (!this._diggingProgress) {
             this._diggingProgress = 0;
             this._diggingStage = 0;
-            this.log('DESTROY_BLOCK: 採掘開始');
+            this.log('DESTROY_BLOCK: digging started');
         }
 
         const { x, y, z } = this.action.target;
@@ -615,7 +615,7 @@ class Character {
 
         if (blockId) {
             this._diggingProgress += 1;
-            this.log(`採掘進行: ${this._diggingProgress}/18`);
+            this.log(`Dig progress: ${this._diggingProgress}/18`);
 
             // 段階的なアイコン表示とエフェクト
             const stages = ['⛏️', '💪⛏️', '💥⛏️', '🔥⛏️', '✨💎'];
@@ -632,20 +632,20 @@ class Character {
                 // Use reservation-based remove to avoid races
                 this.reserveAndRemoveBlock(x, y, z);
                 this.digCount = (this.digCount || 0) + 1;
-                this.log(`採掘完了！ digCount=${this.digCount}`);
+                this.log(`Dig complete! digCount=${this.digCount}`);
 
                 // 破壊したブロックからアイテムを取得
                 if (blockType) {
-                    if (blockType.name.includes('果実') || blockType.name === 'FRUIT') {
+                    if (blockType.name.includes('Fruit') || blockType.name === 'FRUIT') {
                         this.inventory[0] = 'FRUIT_ITEM';
                         this.updateCarriedItemAppearance('FRUIT_ITEM');
                         this.carriedItemMesh.visible = true;
-                        this.log(`✅ 果実アイテム取得！ inventory=[${this.inventory[0]}] hunger=${this.needs.hunger.toFixed(1)}`);
-                    } else if (blockType.name.includes('石')) {
+                        this.log(`✅ Fruit item acquired! inventory=[${this.inventory[0]}] hunger=${this.needs.hunger.toFixed(1)}`);
+                    } else if (blockType.name.includes('Stone')) {
                         // 石は直接使用するか、道具作成に使用
                         this.showActionIcon('🗿💥', 2.0);
                         this.log('Destroyed stone block');
-                    } else if (blockType.name.includes('土')) {
+                    } else if (blockType.name.includes('Dirt')) {
                         this.showActionIcon('🟫💨', 1.5);
                         this.log('Destroyed dirt block');
                     } else {
@@ -658,9 +658,9 @@ class Character {
 
                 // 破壊したブロックの種類に基づいて異なるエフェクト
                 if (blockType) {
-                    if (blockType.name.includes('石')) {
+                    if (blockType.name.includes('Stone')) {
                         this.showActionIcon('🗿💥', 2.0);
-                    } else if (blockType.name.includes('土')) {
+                    } else if (blockType.name.includes('Dirt')) {
                         this.showActionIcon('🟫💨', 1.5);
                     } else {
                         this.showActionIcon('✅⛏️', 1.5);
@@ -698,7 +698,7 @@ class Character {
             return;
         }
 
-        this.log('DESTROY_BLOCK: ターゲットブロックが見つからない');
+        this.log('DESTROY_BLOCK: target block not found');
         this.state = 'idle';
         this.action = null;
         this.actionCooldown = 1.0;
@@ -709,7 +709,7 @@ class Character {
         if (!this._craftingProgress) {
             this._craftingProgress = 0;
             this._craftingStage = 0;
-            this.log('CRAFT_TOOL: 道具作成開始');
+            this.log('CRAFT_TOOL: crafting started');
         }
 
         // 材料チェック: 木材と石が必要
@@ -740,10 +740,10 @@ class Character {
 
         // 段階的な制作プロセス
         this._craftingProgress += 1;
-        this.log(`作成進行: ${this._craftingProgress}/20`);
+        this.log(`Crafting progress: ${this._craftingProgress}/20`);
 
         const stages = ['🔨', '🪚', '⚒️', '🛠️', '✨🔧'];
-        const messages = ['材料準備中...', '切削中...', '組み立て中...', '調整中...', '完成！'];
+            const messages = ['Preparing materials...', 'Cutting...', 'Assembling...', 'Adjusting...', 'Complete!'];
         const currentStage = Math.floor(this._craftingProgress / 4) % stages.length;
 
         if (currentStage !== this._craftingStage) {
@@ -758,7 +758,7 @@ class Character {
             const woodIndex = this.inventory.findIndex(item => item === 'WOOD_LOG');
             if (woodIndex !== -1) {
                 this.inventory[woodIndex] = 'STONE_TOOL';
-                this.log('木材を消費して道具を作成');
+                this.log('Consumed wood to craft tool');
             } else {
                 // 空きスロットに道具を作成
                 const emptyIndex = this.inventory.findIndex(item => item === null);
@@ -770,7 +770,7 @@ class Character {
             this.updateCarriedItemAppearance('STONE_TOOL'); // グレーに変更
             this.carriedItemMesh.visible = true;
             this.showActionIcon('🎉⚒️', 2.5);
-            this.log('道具作成完了！', 'STONE_TOOL');
+            this.log('Tool crafting complete!', 'STONE_TOOL');
 
             this._craftingProgress = 0;
             this._craftingStage = 0;
@@ -785,7 +785,7 @@ class Character {
         if (!this._buildingProgress) {
             this._buildingProgress = 0;
             this._buildingStage = 0;
-            this.log('BUILD_HOME: 建築開始');
+            this.log('BUILD_HOME: construction started');
         }
 
         // 家建設の処理 - 木材の在庫数をチェック
@@ -794,11 +794,11 @@ class Character {
         if (woodCount > 0) {
             // より慎重な建築進行（+1）
             this._buildingProgress += 1;
-            this.log(`建築進行: ${this._buildingProgress}/15 (木材: ${woodCount}個)`);
+            this.log(`Build progress: ${this._buildingProgress}/15 (wood: ${woodCount})`);
 
             // 段階的な建築アイコン表示
             const stages = ['🔨', '🏗️', '🧱', '🏠', '✨🏡'];
-            const messages = ['設計中...', '基礎工事中...', '壁を作成中...', '屋根を設置中...', '完成！'];
+            const messages = ['Designing...', 'Laying foundation...', 'Building walls...', 'Installing roof...', 'Complete!'];
             const currentStage = Math.floor(this._buildingProgress / 3) % stages.length;
 
             if (currentStage !== this._buildingStage) {
@@ -812,7 +812,7 @@ class Character {
                 const woodIndex = this.inventory.findIndex(item => item === 'WOOD_LOG');
                 if (woodIndex !== -1) {
                     this.inventory[woodIndex] = null;
-                    this.log(`木材を1個使用 (残り: ${woodCount - 1}個)`);
+                    this.log(`Used 1 wood (remaining: ${woodCount - 1})`);
 
                     // インベントリの表示を更新（10スロット対応）
                     const nextItem = this.inventory.find(item => item !== null);
@@ -880,7 +880,7 @@ class Character {
             return;
         }
 
-        this.log('BUILD_HOME: 木材がない');
+        this.log('BUILD_HOME: no wood available');
         this.state = 'idle';
         this.action = null;
         this.actionCooldown = 3.0;
@@ -1489,7 +1489,7 @@ class Character {
         const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
         if (!blockType) return true;
 
-        const passableBlocks = ['空気', '木', '葉', '果実'];
+        const passableBlocks = ['Air', 'Wood', 'Leaf', 'Fruit'];
         return passableBlocks.includes(blockType.name) ||
                blockType.isBed ||
                blockId === BLOCK_TYPES.AIR?.id;
@@ -1954,7 +1954,7 @@ class Character {
         for (const [key, id] of worldData.entries()) {
             const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
             // 木ブロックまたは葉ブロックを検索対象に
-            if (type && type.diggable && (type.name === '木' || type.name === '葉')) {
+            if (type && type.diggable && (type.name === 'Wood' || type.name === 'Leaf')) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
                 if (dist < minDist && dist <= searchRange) {
@@ -1971,7 +1971,7 @@ class Character {
         let minDist = Infinity, closest = null;
         for (const [key, id] of worldData.entries()) {
             const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
-            if (type && type.diggable && (type.name === '石' || type.name.includes('石') || type.name === 'STONE')) {
+            if (type && type.diggable && (type.name === 'Stone' || type.name.includes('Stone') || type.name === 'STONE')) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
                 if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
@@ -1992,7 +1992,7 @@ class Character {
                     const blockId = worldData.get(key);
                     if (blockId) {
                         const type = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-                        if (type && type.diggable && (type.name === '石' || type.name.includes('石') || type.name === 'STONE')) {
+                        if (type && type.diggable && (type.name === 'Stone' || type.name.includes('Stone') || type.name === 'STONE')) {
                             return true;
                         }
                     }
@@ -2242,7 +2242,7 @@ class Character {
 
         // --- working状態での段階的処理継続 ---
         if (this.state === 'working' && this.action) {
-            this.log(`⚡ working状態で処理継続: ${this.action.type}`, this.action);
+            this.log(`⚡ continuing processing in working state: ${this.action.type}`, this.action);
             switch (this.action.type) {
                 case 'BUILD_HOME':
                     this.log('⚡ Calling buildHome() from working state');
@@ -2255,7 +2255,7 @@ class Character {
                     this.destroyBlock();
                     break;
                 default:
-                    this.log(`未対応のworking action: ${this.action.type}`);
+                    this.log(`Unhandled working action: ${this.action.type}`);
                     this.state = 'idle';
                     this.action = null;
                     break;
@@ -4060,7 +4060,7 @@ class Character {
                 } else if (!this.isOccupiedByOther(x, y, z)) {
                     const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
                     if (blockType && blockType.diggable && blockId !== BLOCK_TYPES.BED?.id) {
-                        if (!breakable) breakable = {x, y, z, priority: blockType.name === '土' ? 1 : 2};
+                        if (!breakable) breakable = {x, y, z, priority: blockType.name === 'Dirt' ? 1 : 2};
                     }
                 }
             }
@@ -4233,7 +4233,7 @@ class Character {
                             if (blockType && blockType.diggable) {
                                 breakableBlocks.push({
                                     x, y, z,
-                                    priority: blockType.name === '土' ? 1 : 2,
+                                    priority: blockType.name === 'Dirt' ? 1 : 2,
                                     distance: Math.abs(dx) + Math.abs(dz)
                                 });
                             }

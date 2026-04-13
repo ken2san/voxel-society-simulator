@@ -1,5 +1,5 @@
-// needs/moodだけ個別に更新する関数
-// --- キャラごとにmood/needs履歴を記録する ---
+// Function to individually update only needs/mood
+// --- Record mood/needs history for each character ---
 if (!window.characterHistory) window.characterHistory = {};
 function recordCharacterHistory() {
     if (!window.characters) return;
@@ -16,7 +16,7 @@ function recordCharacterHistory() {
             safety: char.needs?.safety ?? null,
             social: char.needs?.social ?? null
         };
-        // 直前と何か変化があった場合のみpush
+        // Only push if there's any change from the previous state
         let changed = false;
         if (!last) changed = true;
         else {
@@ -38,13 +38,13 @@ function recordCharacterHistory() {
 if (window.__characterHistoryInterval) clearInterval(window.__characterHistoryInterval);
 window.__characterHistoryInterval = setInterval(recordCharacterHistory, 1000);
 function renderCharacterNeeds() {
-    // サマリー表のtbody内の各trを走査し、needsとmoodだけ更新
+    // Traverse each tr in summary table tbody and update only needs and mood
     const table = document.querySelector('.character-summary-table');
     if (!table) return;
     const tbody = table.querySelector('tbody');
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
-    // キャラごとに2行（サマリー行＋詳細行）なので偶数行のみ処理
+    // Process only even rows since there are 2 rows per character (summary row + detail row)
     for (let i = 0; i < rows.length; i += 2) {
         const tr = rows[i];
         const charId = tr.children[0]?.textContent;
@@ -69,7 +69,7 @@ function renderCharacterNeeds() {
                 moodSpan.textContent = `${moodIcon} ${moodText}`;
             }
         }
-        // needs（hunger, energy, safety, social）
+        // needs (hunger, energy, safety, social)
         const needKeys = ['hunger','energy','safety','social'];
         for (let j = 0; j < needKeys.length; j++) {
             const td = tr.children[3 + j];
@@ -80,21 +80,21 @@ function renderCharacterNeeds() {
     }
 }
 
-// openedCharIdの有無だけで自動更新を制御
+// Control auto-update based on presence of openedCharId only
 if (window.__sidebarNeedsInterval) clearInterval(window.__sidebarNeedsInterval);
 window.__sidebarNeedsInterval = setInterval(() => {
-    // 詳細パネル開いている間は一切更新しない
+    // Do not update at all while detail panel is open
     if (openedCharId) return;
-    // サマリー表全体を再描画
+    // Redraw entire summary table
     window.renderCharacterList && window.renderCharacterList();
 }, 1000);
 
-// グローバル登録
+// Global registration
 window.renderCharacterNeeds = renderCharacterNeeds;
-// 初期状態で自動スタートしないように明示的に初期化
+// Explicitly initialize so it doesn't auto-start in initial state
 window.characters = undefined;
 window.simulationRunning = false;
-// 右サイドバー：選択キャラ詳細
+// Right sidebar: Selected character details
 function renderCharacterDetail() {
     if (!rightSidebar) return;
 
@@ -109,7 +109,7 @@ function renderCharacterDetail() {
     } catch (e) {
         // ignore environment errors
     }
-    // --- sidebarParamsで値を保持 ---
+    // --- Hold values in sidebarParams ---
     if (!window.sidebarParams) {
         window.sidebarParams = {
             charNum: 10,
@@ -119,11 +119,11 @@ function renderCharacterDetail() {
         };
     }
     const sidebarParams = window.sidebarParams;
-    // シミュレーション中はパラメータ欄をdisabledに（1回だけ定義）
+    // Disable parameter fields during simulation (defined only once)
     const paramDisabled = !!window.simulationRunning && window.characters && window.characters.length > 0;
-    // グローバルにも反映
+    // Also reflect to global
     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
-    window.socialThreshold = sidebarParams.socialTh; // ← 初期化時にも設定
+    window.socialThreshold = sidebarParams.socialTh; // Set during initialization as well
     // Emergency threshold parameters
     if (sidebarParams.hungerEmergencyThreshold === undefined) sidebarParams.hungerEmergencyThreshold = 5;
     if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 1;
@@ -135,12 +135,12 @@ function renderCharacterDetail() {
     window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
     window.homeBuildingPriority = sidebarParams.homeBuildingPriority;
     window.woodCollectionPriority = sidebarParams.woodCollectionPriority;
-    // 新パラメータ: 初期affinity値と上昇速度
+    // New parameters: initial affinity value and increase rate
     if (sidebarParams.initialAffinityMin === undefined) sidebarParams.initialAffinityMin = 20;
     if (sidebarParams.initialAffinityMax === undefined) sidebarParams.initialAffinityMax = 40;
     if (sidebarParams.affinityIncreaseRate === undefined) sidebarParams.affinityIncreaseRate = 10;
     if (sidebarParams.affinityDecayRate === undefined) sidebarParams.affinityDecayRate = 0.01; // affinity units per second
-    // 新しいコントロールのデフォルト
+    // New control defaults
     if (sidebarParams.pairReproductionCooldownSeconds === undefined) sidebarParams.pairReproductionCooldownSeconds = 60;
     if (sidebarParams.maxAffinity === undefined) sidebarParams.maxAffinity = 100;
     if (sidebarParams.reproductionCooldownSeconds === undefined) sidebarParams.reproductionCooldownSeconds = 10;
@@ -211,6 +211,29 @@ function renderCharacterDetail() {
     paramBox.style.display = 'flex';
     paramBox.style.flexDirection = 'column';
     paramBox.style.gap = '12px';
+
+    // Sticky simulation controls so Start/Pause is always reachable while scrolling.
+    const actionBar = document.createElement('div');
+    actionBar.style.position = 'sticky';
+    actionBar.style.top = '6px';
+    actionBar.style.zIndex = '15';
+    actionBar.style.display = 'flex';
+    actionBar.style.alignItems = 'center';
+    actionBar.style.justifyContent = 'space-between';
+    actionBar.style.gap = '10px';
+    actionBar.style.padding = '10px 12px';
+    actionBar.style.borderRadius = '12px';
+    actionBar.style.border = '1px solid #d9e6ff';
+    actionBar.style.background = 'linear-gradient(120deg, rgba(255,255,255,0.95) 0%, rgba(231,241,255,0.95) 100%)';
+    actionBar.style.backdropFilter = 'blur(6px)';
+    actionBar.style.boxShadow = '0 6px 18px rgba(0,0,0,0.10)';
+
+    const actionBarLabel = document.createElement('span');
+    actionBarLabel.textContent = 'Simulation';
+    actionBarLabel.style.fontWeight = '700';
+    actionBarLabel.style.fontSize = '0.95em';
+    actionBarLabel.style.color = '#2f3b52';
+    actionBar.appendChild(actionBarLabel);
 
 
     // タイトル
@@ -1129,43 +1152,43 @@ function renderCharacterDetail() {
     paramBox.appendChild(randomRow);
     randomCheck.disabled = paramDisabled;
 
-    // スタート／一時停止トグルボタン
+    // Start/Pause toggle button (pinned at top)
     if (window.simulationRunning === undefined) window.simulationRunning = false;
     const toggleBtn = document.createElement('button');
     function updateToggleBtn() {
         if (!window.characters || window.characters.length === 0) {
             toggleBtn.textContent = 'Start';
-            toggleBtn.style.background = 'linear-gradient(90deg,#e3f0ff 60%,#f8f4fa 100%)';
+            toggleBtn.style.background = 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
         } else if (window.simulationRunning) {
             toggleBtn.textContent = 'Pause';
-            toggleBtn.style.background = 'linear-gradient(90deg,#ffe082 60%,#f8f4fa 100%)';
+            toggleBtn.style.background = 'linear-gradient(90deg,#ffe8a3 10%,#ffd5b3 100%)';
         } else {
             toggleBtn.textContent = 'Start';
-            toggleBtn.style.background = 'linear-gradient(90deg,#b2ff59 60%,#f8f4fa 100%)';
+            toggleBtn.style.background = 'linear-gradient(90deg,#bfffb2 10%,#dcffe0 100%)';
         }
     }
-    toggleBtn.style.fontSize = '1.1em';
+    toggleBtn.style.fontSize = '1.0em';
     toggleBtn.style.fontWeight = 'bold';
-    toggleBtn.style.padding = '8px 24px';
-    toggleBtn.style.borderRadius = '8px';
-    toggleBtn.style.border = '1.5px solid #b0c8e0';
-    toggleBtn.style.color = '#333';
+    toggleBtn.style.padding = '8px 18px';
+    toggleBtn.style.borderRadius = '999px';
+    toggleBtn.style.border = '1.5px solid #b7cbe6';
+    toggleBtn.style.color = '#1f2f46';
     toggleBtn.style.cursor = 'pointer';
-    toggleBtn.style.marginTop = '8px';
+    toggleBtn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
     updateToggleBtn();
     toggleBtn.onclick = () => {
         if (!window.simulationRunning) {
-            // Start: sidebarParamsの値でキャラ配列を再生成（リセット）
+            // Start: regenerate character array from sidebar params (reset)
             const num = parseInt(sidebarParams.charNum);
             const socialTh = parseInt(sidebarParams.socialTh);
             const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
             const useRandom = !!sidebarParams.useRandom;
-            // 既存キャラ・IDリセット
+            // Reset existing characters and IDs
             window.characters = [];
             if (window.nextCharacterId !== undefined) window.nextCharacterId = 0;
-            // グループしきい値をグローバルに反映
+            // Reflect group threshold globally
             window.groupAffinityThreshold = groupAffinityTh;
-            // world.jsのremoveAllCharacterObjectsを呼び出し
+            // Call removeAllCharacterObjects from world.js
             import('./world.js').then(worldMod => {
                 if (typeof worldMod.removeAllCharacterObjects === 'function') {
                     worldMod.removeAllCharacterObjects();
@@ -1190,17 +1213,17 @@ function renderCharacterDetail() {
                     }
                     window.characters = worldMod.characters;
                     selectedCharId = window.characters[0]?.id;
-                    // --- グループ初期化前にパラメータをwindowに反映 ---
+                    // --- Reflect parameters to window before group initialization ---
                     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
                     window.initialAffinityMin = sidebarParams.initialAffinityMin;
                     window.initialAffinityMax = sidebarParams.initialAffinityMax;
                     window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
-                    window.socialThreshold = socialTh; // ← これが不足していました！
+                    window.socialThreshold = socialTh;
                     window.perceptionRange = sidebarParams.perceptionRange;
                     window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
                     window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
                     window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
-                    // --- ここでグループ初期化 ---
+                    // --- Initialize groups here ---
                     import('./character.js').then(charMod => {
                         if (typeof charMod.Character?.initializeAllRelationships === 'function') {
                             charMod.Character.initializeAllRelationships(window.characters);
@@ -1220,7 +1243,8 @@ function renderCharacterDetail() {
             renderCharacterDetail();
         }
     };
-    paramBox.appendChild(toggleBtn);
+    actionBar.appendChild(toggleBtn);
+    paramBox.insertBefore(actionBar, paramBox.firstChild);
 
     rightSidebar.appendChild(paramBox);
 }
@@ -1285,7 +1309,7 @@ function renderCharacterList() {
     leftSidebar.innerHTML = '';
     // タイトルを追加
     const title = document.createElement('h3');
-    title.textContent = 'キャラクター一覧';
+    title.textContent = 'Character List';
     title.style.color = '#222';
     title.style.marginBottom = '8px';
     leftSidebar.appendChild(title);
@@ -1299,15 +1323,15 @@ function renderCharacterList() {
         const trh = document.createElement('tr');
         const headerLabels = [
             'ID',
-            'グル',
-            '状態',
-            '気分',
-            '空腹',
-            'エネ',
-            '安全',
-            '社交',
-            '行動',
-            '移動'
+            'Grp',
+            'State',
+            'Mood',
+            'Hun',
+            'Eng',
+            'Saf',
+            'Soc',
+            'Action',
+            'Move'
         ];
         headerLabels.forEach(txt => {
             const th = document.createElement('th');
@@ -1371,7 +1395,7 @@ function renderCharacterList() {
                     leaderMark.textContent = ' 👑';
                     leaderMark.style.color = '#eab308';
                     leaderMark.style.fontWeight = 'bold';
-                    leaderMark.title = 'リーダー';
+                    leaderMark.title = 'Leader';
                     tdGroup.appendChild(leaderMark);
                 }
             } else {
@@ -1476,13 +1500,13 @@ function createCharacterDetailCard(char) {
     topRow.appendChild(idBox);
     // グループ
     const groupBox = document.createElement('div');
-    groupBox.textContent = `グループ${char.groupId ?? '未所属'}`;
+    groupBox.textContent = `Group ${char.groupId ?? 'Unassigned'}`;
     groupBox.style.color = '#888';
     groupBox.style.fontSize = '0.98em';
     topRow.appendChild(groupBox);
     // 役割
     const roleBox = document.createElement('div');
-    roleBox.textContent = char.role === 'leader' ? 'リーダー' : char.role === 'worker' ? '労働者' : '一般';
+    roleBox.textContent = char.role === 'leader' ? 'Leader' : char.role === 'worker' ? 'Worker' : 'Member';
     roleBox.style.color = '#666';
     roleBox.style.fontSize = '0.98em';
     topRow.appendChild(roleBox);
@@ -1516,13 +1540,13 @@ function createCharacterDetailCard(char) {
         diligence = (char.personality.diligence !== undefined) ? char.personality.diligence.toFixed(2) : '-';
     }
     // group/role
-    const groupStr = char.groupId ? `グループ: <b>${char.groupId}</b>` : 'グループ: <b>未所属</b>';
-    const roleStr = char.role === 'leader' ? 'リーダー' : char.role === 'worker' ? '労働者' : '一般';
+    const groupStr = char.groupId ? `Group: <b>${char.groupId}</b>` : 'Group: <b>Unassigned</b>';
+    const roleStr = char.role === 'leader' ? 'Leader' : char.role === 'worker' ? 'Worker' : 'Member';
     // id
     const idStr = `ID: <b>${char.id}</b>`;
     // プロフィールHTML（年齢・性格・特技は表示しない）
-    profileBox.innerHTML = `<b>プロフィール</b><br>` +
-        `${idStr}<br>${groupStr} ／ 役割: <b>${roleStr}</b><br>` +
+    profileBox.innerHTML = `<b>Profile</b><br>` +
+        `${idStr}<br>${groupStr} / Role: <b>${roleStr}</b><br>` +
         `bravery: <b>${bravery}</b> ／ diligence: <b>${diligence}</b>`;
     card.appendChild(profileBox);
     // 状態推移グラフ（直近10秒）
@@ -1535,7 +1559,7 @@ function createCharacterDetailCard(char) {
         histDiv.style.alignItems = 'center';
         // タイトル
         const title = document.createElement('div');
-        title.textContent = '状態推移グラフ（最新10件）';
+        title.textContent = 'State Transition Graph (Latest 10)';
         title.style.fontWeight = 'bold';
         title.style.fontSize = '1.18em';
         title.style.color = '#333';
@@ -1547,7 +1571,7 @@ function createCharacterDetailCard(char) {
         const N = Math.min(10, histArr.length);
         if (N < 2) {
             // データ点が1つ以下ならグラフを描画しない
-            histDiv.appendChild(document.createTextNode('グラフ表示には2件以上の履歴が必要です。'));
+            histDiv.appendChild(document.createTextNode('At least 2 history records are required to render the graph.'));
             card.appendChild(histDiv);
             return card;
         }
@@ -1676,7 +1700,7 @@ function createCharacterDetailCard(char) {
     // 所持アイテム
     if (char.items && Array.isArray(char.items) && char.items.length > 0) {
         const itemDiv = document.createElement('div');
-        itemDiv.innerHTML = `<b>所持アイテム:</b> ${char.items.join(', ')}`;
+        itemDiv.innerHTML = `<b>Items:</b> ${char.items.join(', ')}`;
         infoBox.appendChild(itemDiv);
     }
     // 所有土地数
@@ -1684,44 +1708,44 @@ function createCharacterDetailCard(char) {
     if (typeof char.landCount === 'number') landCount = char.landCount;
     else if (char.ownedLand && typeof char.ownedLand.size === 'number') landCount = char.ownedLand.size;
     const landDiv = document.createElement('div');
-    landDiv.innerHTML = `<b>所有土地:</b> ${landCount}区画`;
+    landDiv.innerHTML = `<b>Owned Land:</b> ${landCount} plots`;
     infoBox.appendChild(landDiv);
     // 子供数
     let childCount = '-';
     if (typeof char.childCount === 'number') childCount = char.childCount;
     else if (Array.isArray(char.children)) childCount = char.children.length;
     const childDiv = document.createElement('div');
-    childDiv.innerHTML = `<b>子供数:</b> ${childCount}`;
+    childDiv.innerHTML = `<b>Children:</b> ${childCount}`;
     infoBox.appendChild(childDiv);
     // 穴を掘った回数
     let digCount = '-';
     if (typeof char.digCount === 'number') digCount = char.digCount;
     const digDiv = document.createElement('div');
-    digDiv.innerHTML = `<b>穴を掘った回数:</b> ${digCount}`;
+    digDiv.innerHTML = `<b>Dig Count:</b> ${digCount}`;
     infoBox.appendChild(digDiv);
     // 建物を建てた回数
     let buildCount = '-';
     if (typeof char.buildCount === 'number') buildCount = char.buildCount;
     const buildDiv = document.createElement('div');
-    buildDiv.innerHTML = `<b>建物を建てた回数:</b> ${buildCount}`;
+    buildDiv.innerHTML = `<b>Build Count:</b> ${buildCount}`;
     infoBox.appendChild(buildDiv);
     // 食事の回数
     let eatCount = '-';
     if (typeof char.eatCount === 'number') eatCount = char.eatCount;
     const eatDiv = document.createElement('div');
-    eatDiv.innerHTML = `<b>食事の回数:</b> ${eatCount}`;
+    eatDiv.innerHTML = `<b>Meals:</b> ${eatCount}`;
     infoBox.appendChild(eatDiv);
     // 現在のstateのみは残し、移動距離・現在の行動は詳細カードから削除
     if (char.state) {
         const stateDiv = document.createElement('div');
-        stateDiv.innerHTML = `<b>現在の状態(state):</b> <span style="font-family:monospace;">${char.state}</span>`;
+        stateDiv.innerHTML = `<b>Current State:</b> <span style="font-family:monospace;">${char.state}</span>`;
         infoBox.appendChild(stateDiv);
     }
     card.appendChild(infoBox);
     // 関係性リスト
     if (char.relationships && Array.isArray(char.relationships) && window.characters) {
         const relBox = document.createElement('div');
-        relBox.innerHTML = '<b>関係性リスト</b>';
+        relBox.innerHTML = '<b>Relationship List</b>';
         relBox.style.marginBottom = '10px';
         char.relationships.forEach((val, idx) => {
             const relChar = window.characters[idx];

@@ -1,5 +1,5 @@
 // utils.js
-// ユーティリティ関数・Perlinノイズなど
+// Utility functions, Perlin noise, etc.
 
 export const PerlinNoise = new function() {
     this.p = new Uint8Array(512);

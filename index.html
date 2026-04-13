@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -45,12 +45,12 @@
     <div id="sidebar-right" class="sidebar-bg-right"></div>
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
 
-    <!-- Debug toggle: 説明文の下・中央寄せで配置 -->
+    <!-- Debug toggle -->
     <div class="mb-3 text-center max-w-2xl mx-auto">
         <div class="inline-block bg-gray-800 bg-opacity-60 p-2 rounded-xl shadow">
             <label class="flex items-center space-x-2 text-white justify-center">
                 <input type="checkbox" id="debugToggle" class="checkbox">
-                <span class="font-semibold">デバッグ情報を表示</span>
+                <span class="font-semibold">Show Debug Info</span>
             </label>
         </div>
     </div>
@@ -58,11 +58,11 @@
     <!-- Resource Generation Settings -->
     <div class="mb-4 text-center max-w-6xl mx-auto">
         <div class="bg-gray-800 bg-opacity-60 p-3 rounded-xl shadow">
-            <h3 class="text-white font-semibold mb-3">リソース生成設定</h3>
+            <h3 class="text-white font-semibold mb-3">Resource Generation Settings</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                 <!-- Tree Spawn Rate -->
                 <div class="bg-gray-700 bg-opacity-50 p-3 rounded-lg">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">🌲 木の生成率</label>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">🌲 Tree Spawn Rate</label>
                     <input type="range" id="treeSlider" min="0" max="1" step="0.05" value="0.35" class="range range-primary w-full">
                     <div class="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0%</span>
@@ -73,7 +73,7 @@
 
                 <!-- Leaf Spawn Rate -->
                 <div class="bg-gray-700 bg-opacity-50 p-3 rounded-lg">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">🍃 葉の密度</label>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">🍃 Leaf Density</label>
                     <input type="range" id="leafSlider" min="0" max="1" step="0.05" value="0.70" class="range range-leaf w-full">
                     <div class="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0%</span>
@@ -84,7 +84,7 @@
 
                 <!-- Fruit Spawn Rate -->
                 <div class="bg-gray-700 bg-opacity-50 p-3 rounded-lg">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">🍎 果実の生成率</label>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">🍎 Fruit Spawn Rate</label>
                     <input type="range" id="fruitSlider" min="0" max="1" step="0.05" value="0.30" class="range range-secondary w-full">
                     <div class="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0%</span>
@@ -95,7 +95,7 @@
 
                 <!-- Stone Spawn Rate -->
                 <div class="bg-gray-700 bg-opacity-50 p-3 rounded-lg">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">🗿 石の生成率</label>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">🗿 Stone Spawn Rate</label>
                     <input type="range" id="stoneSlider" min="0" max="1" step="0.05" value="0.15" class="range range-accent w-full">
                     <div class="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0%</span>
@@ -106,7 +106,7 @@
 
                 <!-- Cave Spawn Rate -->
                 <div class="bg-gray-700 bg-opacity-50 p-3 rounded-lg">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">🕳️ 洞窟の生成率</label>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">🕳️ Cave Spawn Rate</label>
                     <input type="range" id="caveSlider" min="0" max="0.5" step="0.05" value="0.10" class="range range-info w-full">
                     <div class="flex justify-between text-xs text-gray-400 mt-1">
                         <span>0%</span>
@@ -116,7 +116,7 @@
                 </div>
             </div>
             <button id="regenerateButton" class="btn btn-primary mt-3 px-6 py-2 font-bold">
-                🔄 ワールドを再生成
+                🔄 Regenerate World
             </button>
         </div>
     </div>
@@ -128,7 +128,7 @@
     </div>
     <div id="messageBox" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-8 rounded-2xl shadow-2xl z-50" data-aos="fade-in" data-aos-delay="300">
         <p id="messageText" class="text-xl font-bold mb-6"></p>
-        <button id="messageBoxCloseBtn" class="btn w-full px-6 py-3 font-bold transition-all duration-200">閉じる</button>
+        <button id="messageBoxCloseBtn" class="btn w-full px-6 py-3 font-bold transition-all duration-200">Close</button>
     </div>
     <script>
         // Only UI initialization and AOS setup should be here

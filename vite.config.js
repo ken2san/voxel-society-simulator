@@ -7,12 +7,12 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: [
       'voxel-society-simulator-150662223250.us-central1.run.app',
-      '.run.app', // Cloud Runの全てのホストを許可
+      '.run.app', // Allow all Cloud Run hosts
       'localhost',
       ...(process.env.ALLOWED_HOSTS ? process.env.ALLOWED_HOSTS.split(',') : [])
     ],
     hmr: {
-      // Cloud Run環境ではHMRを無効化
+      // Disable HMR in Cloud Run environment
       overlay: false,
       clientPort: process.env.PORT ? parseInt(process.env.PORT) : 8080
     }
@@ -30,7 +30,7 @@ export default defineConfig({
     format: 'esm',
     target: 'es2020'
   },
-  // Cloud Run環境では本番ビルド使用を推奨
+  // Recommend using production build in Cloud Run environment
   build: {
     rollupOptions: {
       external: ['three', 'three/examples/jsm/controls/OrbitControls.js']

@@ -3,14 +3,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 
-// キャラ3Dオブジェクトをsceneから全削除する関数
+// Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
     if (!scene || !scene.children) return;
-    // nameが'Character'で始まるGroupをすべてremove
+    // Remove all Groups whose name starts with 'Character'
     const toRemove = scene.children.filter(obj => obj.type === 'Group' && obj.name && obj.name.startsWith('Character'));
     toRemove.forEach(obj => {
         scene.remove(obj);
-        // メモリリーク防止: dispose
+        // Memory leak prevention: dispose
         if (obj.geometry) obj.geometry.dispose();
         if (obj.material) obj.material.dispose();
         if (obj.children && obj.children.length > 0) {
@@ -20,7 +20,7 @@ export function removeAllCharacterObjects() {
             });
         }
     });
-    // characters配列の各キャラにdisposeメソッドがあれば呼ぶ
+    // Call dispose method if exists for each character in characters array
     if (Array.isArray(characters)) {
         characters.forEach(char => {
             if (typeof char.dispose === 'function') {
@@ -83,21 +83,21 @@ export const visualBlocks = new Map();
 // Incremented whenever blocks are added/removed so characters can detect world changes
 export let worldChangeCounter = 0;
 export const BLOCK_TYPES = {
-    AIR:   { id: 0, name: '空気' },
-    GRASS: { id: 1, name: '草', color: 0x4CAF50, diggable: true },
-    DIRT:  { id: 2, name: '土', color: 0x966c4a, diggable: true },
-    STONE: { id: 3, name: '石', color: 0x888888, diggable: true },
-    FRUIT: { id: 4, name: '果実', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM' },
-    WOOD:  { id: 5, name: '木', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG' },
-    LEAF:  { id: 6, name: '葉', color: 0x228b22, diggable: true },
-    BED:   { id: 7, name: '寝床', color: 0xffec8b, isBed: true },
-    HOUSE_WALL: { id: 8, name: '家の壁', color: 0xd2b48c, isHouseWall: true },
-    HOUSE_ROOF: { id: 9, name: '家の屋根', color: 0x8b4513, isHouseRoof: true }
+    AIR:   { id: 0, name: 'Air' },
+    GRASS: { id: 1, name: 'Grass', color: 0x4CAF50, diggable: true },
+    DIRT:  { id: 2, name: 'Dirt', color: 0x966c4a, diggable: true },
+    STONE: { id: 3, name: 'Stone', color: 0x888888, diggable: true },
+    FRUIT: { id: 4, name: 'Fruit', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM' },
+    WOOD:  { id: 5, name: 'Wood', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG' },
+    LEAF:  { id: 6, name: 'Leaf', color: 0x228b22, diggable: true },
+    BED:   { id: 7, name: 'Bed', color: 0xffec8b, isBed: true },
+    HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd2b48c, isHouseWall: true },
+    HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x8b4513, isHouseRoof: true }
 };
 export const ITEM_TYPES = {
-    WOOD_LOG: { id: 100, name: '丸太', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.WOOD.color }) },
-    FRUIT_ITEM: { id: 101, name: '果実アイテム', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.FRUIT.color }), isStorable: true },
-    STONE_TOOL: { id: 102, name: '石の道具', material: new THREE.MeshLambertMaterial({ color: 0x888888 }), isTool: true }
+    WOOD_LOG: { id: 100, name: 'Log', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.WOOD.color }) },
+    FRUIT_ITEM: { id: 101, name: 'Fruit Item', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.FRUIT.color }), isStorable: true },
+    STONE_TOOL: { id: 102, name: 'Stone Tool', material: new THREE.MeshLambertMaterial({ color: 0x888888 }), isTool: true }
 };
 export const blockMaterials = new Map();
 Object.values(BLOCK_TYPES).forEach(type => { if (type.color) { blockMaterials.set(type.id, new THREE.MeshLambertMaterial({ color: type.color })); } });

@@ -4,7 +4,7 @@ import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-// --- グローバル変数・Three.js初期化・UIイベント・ループなど ---
+// --- Global variables, Three.js initialization, UI events, loops, etc. ---
 
 
 
@@ -56,21 +56,21 @@ async function init() {
 
         Character.initializeAllRelationships(characters);
 
-        // --- 調査用: relationships, affinity, groupId/role のログ出力 ---
+        // --- For investigation: relationships, affinity, groupId/role log output ---
         console.log('=== relationships size ===');
         characters.forEach(c => console.log(`id:${c.id} relSize:${c.relationships.size}`));
         console.log('=== affinity values ===');
         characters.forEach(c => console.log(`id:${c.id} affinities:`, Array.from(c.relationships.values())));
-        // グループ検出も一度呼んでgroupId/roleを確認
+        // Call group detection once to verify groupId/role
         Character.detectGroupsAndElectLeaders(characters);
         console.log('=== groupId/role ===');
         characters.forEach(c => console.log(`id:${c.id} groupId:${c.groupId} role:${c.role}`));
 
         // Make characters array available globally for sidebar.js
         window.characters = characters;
-        // サイドバーを再描画（関数がwindowにあれば）
+        // Redraw sidebar if function exists in window
         if (window.renderCharacterList) window.renderCharacterList();
-        // サイドバーの自動更新intervalはsidebar.js側で管理
+        // Sidebar auto-update interval is managed on sidebar.js side
 
         window.addEventListener('resize', onWindowResize);
         const msgBoxBtn = document.getElementById('messageBoxCloseBtn');
@@ -222,7 +222,7 @@ function regenerateWorld() {
     console.log('World regenerated with new resource settings');
 }
 
-// --- デバッグ用: いつでもグループ状態を確認できるグローバル関数 ---
+// --- For debugging: Global function to check group status anytime ---
 window.logGroupStatus = function() {
     Character.detectGroupsAndElectLeaders(characters);
     console.log('=== groupId/role (on demand) ===');

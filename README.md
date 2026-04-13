@@ -30,6 +30,25 @@ npm run build
 npm run preview
 ```
 
+## Agent Workspace Rules
+
+This workspace includes Copilot agent configuration files.
+
+- `AGENTS.md`: project-specific behavior and decision policy.
+- `.github/copilot-instructions.md`: workspace instructions loaded before coding tasks.
+- `.github/agents/`: role-specific agent guidance (`backend`, `frontend`, `infra`).
+- `agents/global.md`: project-level clarifications that supplement `AGENTS.md`.
+
+When updating these files, keep rules concise and avoid duplicating the same policy text across files.
+
+## Roadmap Workflow
+
+Use `ROADMAP.md` as the scope boundary for development work.
+
+- Active phase is listed in the roadmap.
+- Do not implement later-phase items unless explicitly requested.
+- Before major changes, check roadmap phase alignment first.
+
 ## Notes
 
 - Project currently uses CDN importmap for some ESM libs in `index.html`. Installing dependencies via npm (e.g. `three`) allows Vite to prebundle and manage them.
