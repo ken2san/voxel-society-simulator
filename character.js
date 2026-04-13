@@ -166,11 +166,19 @@ class Character {
         if (here && typeof here === 'object' && here.cave) return true;
         return false;
     }
+
+    // Consolidate repeated idle-transition logic used across action handlers.
+    setIdleState({ clearAction = false, cooldown = null } = {}) {
+        this.state = 'idle';
+        if (clearAction) this.action = null;
+        if (cooldown !== null) this.actionCooldown = cooldown;
+    }
+
     // --- 現在のアクションを実行する ---
     performAction() {
         this.log('⚡ performAction called:', this.action?.type);
         if (!this.action || !this.action.type) {
-            this.state = 'idle';
+            this.setIdleState();
             return;
         }
         switch (this.action.type) {
@@ -189,9 +197,7 @@ class Character {
                     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
                     const partnerCritical = (partner.needs?.hunger <= (hungerEmergency + 2) || partner.needs?.energy <= (energyEmergency + 2));
                     if (partnerCritical) {
-                        this.state = 'idle';
-                        this.action = null;
-                        this.actionCooldown = 1.0;
+                        this.setIdleState({ clearAction: true, cooldown: 1.0 });
                         break;
                     }
                     // パートナーがdead/confused以外かつ緊急ニーズがなければsocializingにする
@@ -265,7 +271,7 @@ class Character {
             // 必要に応じて他のアクションタイプも追加
             default:
                 this.log('Unknown action type:', this.action.type);
-                this.state = 'idle';
+                this.setIdleState();
                 break;
         }
     }
@@ -285,7 +291,7 @@ class Character {
             }
         }
         if (!this.action || !this.action.type) {
-            this.state = 'idle';
+            this.setIdleState();
             return;
         }
 
@@ -294,9 +300,7 @@ class Character {
         switch (this.action.type) {
             case 'WANDER':
                 // WANDER action is completed by reaching the destination
-                this.state = 'idle';
-                this.action = null;
-                this.actionCooldown = 0.5;
+                this.setIdleState({ clearAction: true, cooldown: 0.5 });
                 break;
             case 'COLLECT_FOOD':
                 this.collectFood();
@@ -327,9 +331,7 @@ class Character {
                 break;
             default:
                 this.log('No execution handler for action:', this.action.type);
-                this.state = 'idle';
-                this.action = null;
-                this.actionCooldown = 0.5;
+                this.setIdleState({ clearAction: true, cooldown: 0.5 });
                 break;
         }
     }
