@@ -2753,7 +2753,8 @@ class Character {
                 const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
                 const maxActionCooldown = (typeof window !== 'undefined' && window.maxActionCooldown !== undefined) ? Number(window.maxActionCooldown) : 8;
                 const actionType = this.action ? this.action.type : null;
-                const actionKey = `${this.state}|${actionType || '-'}|${this.targetPos ? `${this.targetPos.x},${this.targetPos.y},${this.targetPos.z}` : '-'}`;
+                // Keep transitions semantic (state/action changes) to avoid per-step coordinate event floods.
+                const actionKey = `${this.state}|${actionType || '-'}`;
                 if (this._telemetryLastActionKey !== actionKey) {
                     window.__simTelemetry.addEvent({
                         t: now,
@@ -2763,6 +2764,7 @@ class Character {
                         to: actionKey,
                         state: this.state,
                         action: actionType,
+                        target: this.targetPos ? { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z } : null,
                         needs: {
                             hunger: Number(this.needs?.hunger || 0),
                             energy: Number(this.needs?.energy || 0),
