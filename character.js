@@ -2458,14 +2458,19 @@ class Character {
 
                 // If timer expired while still in socializing and conditions met, reproduce first
                 if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60) {
-                    if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
+                    // per-pair cooldown check (only gate — no permanent one-child-per-pair lock)
+                    const _pairKey2 = `${Math.min(this.id, partner.id)}-${Math.max(this.id, partner.id)}`;
+                    if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
+                    const _pairLast2 = window._pairReproTimestamps.get(_pairKey2) || 0;
+                    const _pairNow2 = Date.now() / 1000;
+                    const _cooldown2 = window.pairReproductionCooldownSeconds || 60;
+                    if (_pairLast2 === 0 || (_pairNow2 - _pairLast2) >= _cooldown2) {
                         try { console.log(`[LOVE] ${this.id} loveTimer expired, reproducing with ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                         this.reproduceWith && this.reproduceWith(partner);
+                        window._pairReproTimestamps.set(_pairKey2, _pairNow2);
                         const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
                         this.relationships.set(partner.id, resetVal);
                         partner.relationships.set(this.id, resetVal);
-                        this._childCreatedWith = partner.id;
-                        partner._childCreatedWith = this.id;
                         this.lovePhase = 'completed';
                         partner.lovePhase = 'completed';
                     }
@@ -2609,44 +2614,26 @@ class Character {
                             const prox = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
                             const partnerShowingLove = (partner.lovePhase === 'showing' || (partner.loveTimer && partner.loveTimer > 0));
                             if (partner.state === 'socializing' || partnerShowingLove || prox <= 1) {
-                                if (!this._childCreatedWith || this._childCreatedWith !== partner.id) {
-                                    // per-pair cooldown check
-                                    if (typeof window !== 'undefined') {
-                                        if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
-                                        if (window.pairReproductionCooldownSeconds === undefined) window.pairReproductionCooldownSeconds = 60;
-                                        const a = Math.min(this.id, partner.id);
-                                        const b = Math.max(this.id, partner.id);
-                                        const key = `${a}-${b}`;
-                                        const last = window._pairReproTimestamps.get(key) || 0;
-                                        const now = Date.now() / 1000;
-                                        const left = Math.max(0, Math.ceil(window.pairReproductionCooldownSeconds - (now - last)));
-                                        if (last > 0 && (now - last) < window.pairReproductionCooldownSeconds) {
-                                            console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
-                                        } else {
-                                            console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
-                                            this.reproduceWith && this.reproduceWith(partner);
-                                            // record pair timestamp
-                                            window._pairReproTimestamps.set(key, now);
-                                            const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
-                                            this.relationships.set(partner.id, resetVal);
-                                            partner.relationships.set(this.id, resetVal);
-                                            this._childCreatedWith = partner.id;
-                                            partner._childCreatedWith = this.id;
-                                            this.lovePhase = 'completed';
-                                            partner.lovePhase = 'completed';
-                                        }
-                                    } else {
-                                        // fallback: no window available
-                                        console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (no window)`);
-                                        this.reproduceWith && this.reproduceWith(partner);
-                                        const resetVal = 30;
-                                        this.relationships.set(partner.id, resetVal);
-                                        partner.relationships.set(this.id, resetVal);
-                                        this._childCreatedWith = partner.id;
-                                        partner._childCreatedWith = this.id;
-                                        this.lovePhase = 'completed';
-                                        partner.lovePhase = 'completed';
-                                    }
+                                // per-pair cooldown — only gate, no permanent one-child lock
+                                if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
+                                if (window.pairReproductionCooldownSeconds === undefined) window.pairReproductionCooldownSeconds = 60;
+                                const a = Math.min(this.id, partner.id);
+                                const b = Math.max(this.id, partner.id);
+                                const key = `${a}-${b}`;
+                                const last = window._pairReproTimestamps.get(key) || 0;
+                                const now = Date.now() / 1000;
+                                const left = Math.max(0, Math.ceil(window.pairReproductionCooldownSeconds - (now - last)));
+                                if (last > 0 && (now - last) < window.pairReproductionCooldownSeconds) {
+                                    console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
+                                } else {
+                                    console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
+                                    this.reproduceWith && this.reproduceWith(partner);
+                                    window._pairReproTimestamps.set(key, now);
+                                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
+                                    this.relationships.set(partner.id, resetVal);
+                                    partner.relationships.set(this.id, resetVal);
+                                    this.lovePhase = 'completed';
+                                    partner.lovePhase = 'completed';
                                 }
                             } else {
                                 console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner exists but not socializing/nearby (state=${partner.state} prox=${prox} lovePhase=${partner.lovePhase})`);
