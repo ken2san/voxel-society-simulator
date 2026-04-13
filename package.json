@@ -13,6 +13,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
-    "analyze:telemetry": "node scripts/analyze-telemetry.mjs"
+    "analyze:telemetry": "node scripts/analyze-telemetry.mjs",
+    "compare:telemetry": "node scripts/compare-telemetry.mjs"
   }
 }
