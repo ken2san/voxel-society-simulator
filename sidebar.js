@@ -179,6 +179,24 @@ function renderCharacterDetail() {
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
+    // --- Tab panel containers (declared early so rows can be routed before the tab bar is built) ---
+    const PARAM_TAB_DEFS = [
+        { label: 'Setup',    icon: '⚙️' },
+        { label: 'Social',   icon: '👥' },
+        { label: 'Behavior', icon: '🎯' },
+        { label: 'Advanced', icon: '🔧' },
+    ];
+    if (sidebarParams.activeParamTab === undefined) sidebarParams.activeParamTab = 0;
+    if (sidebarParams.paramSearchQuery === undefined) sidebarParams.paramSearchQuery = '';
+    let activeParamTab = Math.max(0, Math.min(PARAM_TAB_DEFS.length - 1, Number(sidebarParams.activeParamTab) || 0));
+    const tabPanels = PARAM_TAB_DEFS.map(() => {
+        const p = document.createElement('div');
+        p.style.display = 'none';
+        p.style.flexDirection = 'column';
+        p.style.gap = '10px';
+        return p;
+    });
+    tabPanels[activeParamTab].style.display = 'flex';
     // --- AIモード切り替えトグル ---
     if (window.aiMode === undefined) window.aiMode = 'rule';
     const aiToggleRow = document.createElement('div');
@@ -208,7 +226,8 @@ function renderCharacterDetail() {
     aiToggleBtn.style.color = '#333';
     aiToggleBtn.style.cursor = 'pointer';
     aiToggleRow.appendChild(aiToggleBtn);
-    paramBox.appendChild(aiToggleRow);
+    aiToggleRow.dataset.label = 'AI Mode';
+    tabPanels[0].appendChild(aiToggleRow);
     paramBox.style.background = 'rgba(255,255,255,0.93)';
     paramBox.style.borderRadius = '18px';
     paramBox.style.boxShadow = '0 2px 12px #b0c8e033';
@@ -242,15 +261,91 @@ function renderCharacterDetail() {
     actionBar.appendChild(actionBarLabel);
 
 
-    // タイトル
-    const title = document.createElement('div');
-    title.textContent = 'AI Parameter Controls';
-    title.style.fontWeight = 'bold';
-    title.style.fontSize = '1.18em';
-    title.style.color = '#333';
-    title.style.marginBottom = '2px';
-    paramBox.appendChild(title);
+    // --- Tab bar ---
+    const tabBar = document.createElement('div');
+    tabBar.style.display = 'flex';
+    tabBar.style.gap = '4px';
+    const tabBtns = PARAM_TAB_DEFS.map((def, i) => {
+        const btn = document.createElement('button');
+        btn.style.flex = '1';
+        btn.style.padding = '5px 2px';
+        btn.style.fontSize = '0.70em';
+        btn.style.fontWeight = '600';
+        btn.style.borderRadius = '8px';
+        btn.style.border = 'none';
+        btn.style.cursor = 'pointer';
+        btn.style.lineHeight = '1.4';
+        btn.style.background = i === activeParamTab ? '#3b82f6' : '#e8eef6';
+        btn.style.color = i === activeParamTab ? '#fff' : '#4a5568';
+        btn.onclick = () => {
+            activeParamTab = i;
+            sidebarParams.activeParamTab = i;
+            tabPanels.forEach((p, j) => { p.style.display = j === i ? 'flex' : 'none'; });
+            tabBtns.forEach((b, j) => {
+                b.style.background = j === i ? '#3b82f6' : '#e8eef6';
+                b.style.color = j === i ? '#fff' : '#4a5568';
+            });
+            applyParamSearch(searchInput.value);
+        };
+        tabBar.appendChild(btn);
+        return btn;
+    });
+    function updateTabBtnLabels(counts) {
+        PARAM_TAB_DEFS.forEach((def, i) => {
+            const c = counts ? counts[i] : -1;
+            tabBtns[i].textContent = c >= 0
+                ? `${def.icon} ${def.label} (${c})`
+                : `${def.icon} ${def.label}`;
+        });
+    }
+    updateTabBtnLabels(null);
 
+    // --- Search bar ---
+    const searchWrap = document.createElement('div');
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = '🔍 Filter parameters…';
+    searchInput.style.width = '100%';
+    searchInput.style.boxSizing = 'border-box';
+    searchInput.style.padding = '5px 10px';
+    searchInput.style.borderRadius = '8px';
+    searchInput.style.border = '1.5px solid #d0dff0';
+    searchInput.style.fontSize = '0.84em';
+    searchInput.style.background = '#f5f8ff';
+    searchInput.style.outline = 'none';
+    searchInput.value = sidebarParams.paramSearchQuery || '';
+    searchWrap.appendChild(searchInput);
+
+    function applyParamSearch(q) {
+        q = (q || '').trim().toLowerCase();
+        const counts = PARAM_TAB_DEFS.map(() => 0);
+        tabPanels.forEach((panel, ti) => {
+            panel.querySelectorAll('[data-label]').forEach(row => {
+                const label = (row.dataset.label || '').toLowerCase();
+                const match = !q || label.includes(q);
+                row.style.display = match ? 'flex' : 'none';
+                if (match) counts[ti]++;
+            });
+        });
+        if (q) {
+            updateTabBtnLabels(counts);
+            if (counts[activeParamTab] === 0) {
+                const firstMatch = counts.findIndex(c => c > 0);
+                if (firstMatch >= 0) tabBtns[firstMatch].click();
+            }
+        } else {
+            updateTabBtnLabels(null);
+        }
+    }
+    searchInput.addEventListener('input', () => {
+        sidebarParams.paramSearchQuery = searchInput.value;
+        applyParamSearch(searchInput.value);
+    });
+
+    paramBox.appendChild(tabBar);
+    paramBox.appendChild(searchWrap);
+    tabPanels.forEach(p => paramBox.appendChild(p));
+    applyParamSearch(searchInput.value);
 
     // --- グループしきい値スライダー ---
     const groupThRow = document.createElement('div');
@@ -291,7 +386,8 @@ function renderCharacterDetail() {
         sidebarParams.groupAffinityTh = parseInt(groupThVal.value);
         window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
     };
-    paramBox.appendChild(groupThRow);
+    groupThRow.dataset.label = 'Group Affinity Threshold';
+    tabPanels[1].appendChild(groupThRow);
     groupThInput.disabled = paramDisabled;
     groupThVal.disabled = paramDisabled;
 
@@ -338,7 +434,8 @@ function renderCharacterDetail() {
         window.initialAffinityMax = Number(e.target.value);
     });
     affinityInitRow.appendChild(affinityInitMax);
-    paramBox.appendChild(affinityInitRow);
+    affinityInitRow.dataset.label = 'Initial Affinity';
+    tabPanels[1].appendChild(affinityInitRow);
 
     // --- affinity上昇速度スライダー ---
     const affinityRateRow = document.createElement('div');
@@ -379,7 +476,8 @@ function renderCharacterDetail() {
         window.affinityIncreaseRate = Number(e.target.value);
     });
     affinityRateRow.appendChild(affinityRateNumber);
-    paramBox.appendChild(affinityRateRow);
+    affinityRateRow.dataset.label = 'Affinity Increase Rate';
+    tabPanels[1].appendChild(affinityRateRow);
 
     // --- affinity decay rate slider ---
     const affinityDecayRow = document.createElement('div');
@@ -422,7 +520,8 @@ function renderCharacterDetail() {
         window.affinityDecayRate = Number(e.target.value);
     });
     affinityDecayRow.appendChild(affinityDecayNumber);
-    paramBox.appendChild(affinityDecayRow);
+    affinityDecayRow.dataset.label = 'Affinity Decay';
+    tabPanels[1].appendChild(affinityDecayRow);
 
     // --- Dig cooldown controls ---
     const digRow = document.createElement('div');
@@ -461,7 +560,8 @@ function renderCharacterDetail() {
         window.digActionCooldown = Number(e.target.value);
     });
     digRow.appendChild(digActionInput);
-    paramBox.appendChild(digRow);
+    digRow.dataset.label = 'Dig Cooldown';
+    tabPanels[3].appendChild(digRow);
 
     // --- Reservation controls (prevent multiple chars from digging same block) ---
     const reservationRow = document.createElement('div');
@@ -502,7 +602,8 @@ function renderCharacterDetail() {
         window.reservationFallbackCooldown = Number(e.target.value);
     });
     reservationRow.appendChild(fallbackNum);
-    paramBox.appendChild(reservationRow);
+    reservationRow.dataset.label = 'Reservation TTL Fallback Cooldown';
+    tabPanels[3].appendChild(reservationRow);
 
     // --- Backoff: fallback/backoff tuning ---
     const backoffRow = document.createElement('div');
@@ -590,7 +691,8 @@ function renderCharacterDetail() {
     });
     pinvRow.appendChild(pinvMaxInput);
     backoffRow.appendChild(pinvRow);
-    paramBox.appendChild(backoffRow);
+    backoffRow.dataset.label = 'Fallback Backoff Path Invalidate';
+    tabPanels[3].appendChild(backoffRow);
 
     // --- Perception/Socialize Range Slider ---
     if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;
@@ -632,7 +734,8 @@ function renderCharacterDetail() {
         window.perceptionRange = Number(e.target.value);
     });
     perceptionRow.appendChild(perceptionNumber);
-    paramBox.appendChild(perceptionRow);
+    perceptionRow.dataset.label = 'Perception Range';
+    tabPanels[1].appendChild(perceptionRow);
 
     // --- 繁殖後の友好度リセット値スライダー ---
     if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 30;
@@ -676,7 +779,8 @@ function renderCharacterDetail() {
         window.affinityResetAfterReproduce = Number(e.target.value);
     });
     affinityResetRow.appendChild(affinityResetNumber);
-    paramBox.appendChild(affinityResetRow);
+    affinityResetRow.dataset.label = 'Affinity After Reproduce';
+    tabPanels[1].appendChild(affinityResetRow);
 
     // --- Pair reproduction cooldown slider ---
     const pairCooldownRow = document.createElement('div');
@@ -715,7 +819,8 @@ function renderCharacterDetail() {
         window.pairReproductionCooldownSeconds = Number(e.target.value);
     });
     pairCooldownRow.appendChild(pairCooldownNumber);
-    paramBox.appendChild(pairCooldownRow);
+    pairCooldownRow.dataset.label = 'Pair Cooldown';
+    tabPanels[1].appendChild(pairCooldownRow);
 
     // --- Max affinity slider ---
     const maxAffinityRow = document.createElement('div');
@@ -754,7 +859,8 @@ function renderCharacterDetail() {
         window.maxAffinity = Number(e.target.value);
     });
     maxAffinityRow.appendChild(maxAffinityNumber);
-    paramBox.appendChild(maxAffinityRow);
+    maxAffinityRow.dataset.label = 'Max Affinity';
+    tabPanels[1].appendChild(maxAffinityRow);
 
     // --- Parent reproduction cooldown slider ---
     const parentCooldownRow = document.createElement('div');
@@ -793,7 +899,8 @@ function renderCharacterDetail() {
         window.reproductionCooldownSeconds = Number(e.target.value);
     });
     parentCooldownRow.appendChild(parentCooldownNumber);
-    paramBox.appendChild(parentCooldownRow);
+    parentCooldownRow.dataset.label = 'Parent Cooldown Reproduction';
+    tabPanels[1].appendChild(parentCooldownRow);
 
     // --- Auto recover stall toggle + recovery cooldown ---
     const autoRecoverRow = document.createElement('div');
@@ -826,7 +933,8 @@ function renderCharacterDetail() {
         window.recoverActionCooldown = Number(e.target.value);
     });
     autoRecoverRow.appendChild(recoverCooldownNumber);
-    paramBox.appendChild(autoRecoverRow);
+    autoRecoverRow.dataset.label = 'Auto Recover Stall';
+    tabPanels[2].appendChild(autoRecoverRow);
 
     // --- Movement stability controls ---
     const movementStabilityRow = document.createElement('div');
@@ -868,7 +976,8 @@ function renderCharacterDetail() {
         window.pathOccupancyLookahead = Number(e.target.value);
     });
     movementStabilityRow.appendChild(occupancyInput);
-    paramBox.appendChild(movementStabilityRow);
+    movementStabilityRow.dataset.label = 'Move Replan Stall Occupancy Lookahead';
+    tabPanels[3].appendChild(movementStabilityRow);
 
     const cooldownCeilRow = document.createElement('div');
     cooldownCeilRow.style.display = 'flex';
@@ -891,7 +1000,8 @@ function renderCharacterDetail() {
         window.maxActionCooldown = Number(e.target.value);
     });
     cooldownCeilRow.appendChild(cooldownCeilInput);
-    paramBox.appendChild(cooldownCeilRow);
+    cooldownCeilRow.dataset.label = 'Max Action Cooldown';
+    tabPanels[3].appendChild(cooldownCeilRow);
 
     // キャラ数
     const charNumRow = document.createElement('div');
@@ -930,7 +1040,8 @@ function renderCharacterDetail() {
         charNumInput.value = charNumVal.value;
         sidebarParams.charNum = parseInt(charNumVal.value);
     };
-    paramBox.appendChild(charNumRow);
+    charNumRow.dataset.label = 'Number of Characters';
+    tabPanels[0].appendChild(charNumRow);
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
 
@@ -973,7 +1084,8 @@ function renderCharacterDetail() {
         sidebarParams.socialTh = parseInt(socialVal.value);
         window.socialThreshold = parseInt(socialVal.value); // ← 即座にwindowに反映
     };
-    paramBox.appendChild(socialRow);
+    socialRow.dataset.label = 'Social Threshold';
+    tabPanels[0].appendChild(socialRow);
     socialInput.disabled = paramDisabled;
     socialVal.disabled = paramDisabled;
 
@@ -1018,7 +1130,8 @@ function renderCharacterDetail() {
         sidebarParams.hungerEmergencyThreshold = parseInt(hungerEmergencyVal.value);
         window.hungerEmergencyThreshold = parseInt(hungerEmergencyVal.value);
     };
-    paramBox.appendChild(hungerEmergencyRow);
+    hungerEmergencyRow.dataset.label = 'Hunger Emergency Threshold';
+    tabPanels[2].appendChild(hungerEmergencyRow);
     hungerEmergencyInput.disabled = paramDisabled;
     hungerEmergencyVal.disabled = paramDisabled;
 
@@ -1063,7 +1176,8 @@ function renderCharacterDetail() {
         sidebarParams.energyEmergencyThreshold = parseInt(energyEmergencyVal.value);
         window.energyEmergencyThreshold = parseInt(energyEmergencyVal.value);
     };
-    paramBox.appendChild(energyEmergencyRow);
+    energyEmergencyRow.dataset.label = 'Energy Emergency Threshold';
+    tabPanels[2].appendChild(energyEmergencyRow);
     energyEmergencyInput.disabled = paramDisabled;
     energyEmergencyVal.disabled = paramDisabled;
 
@@ -1108,7 +1222,8 @@ function renderCharacterDetail() {
         sidebarParams.homeReturnHungerLevel = parseInt(homeReturnVal.value);
         window.homeReturnHungerLevel = parseInt(homeReturnVal.value);
     };
-    paramBox.appendChild(homeReturnRow);
+    homeReturnRow.dataset.label = 'Home Return Hunger Level';
+    tabPanels[2].appendChild(homeReturnRow);
     homeReturnInput.disabled = paramDisabled;
     homeReturnVal.disabled = paramDisabled;
 
@@ -1153,7 +1268,8 @@ function renderCharacterDetail() {
         sidebarParams.homeBuildingPriority = parseInt(homeBuildVal.value);
         window.homeBuildingPriority = parseInt(homeBuildVal.value);
     };
-    paramBox.appendChild(homeBuildRow);
+    homeBuildRow.dataset.label = 'Home Building Priority';
+    tabPanels[2].appendChild(homeBuildRow);
     homeBuildInput.disabled = paramDisabled;
     homeBuildVal.disabled = paramDisabled;
 
@@ -1198,7 +1314,8 @@ function renderCharacterDetail() {
         sidebarParams.woodCollectionPriority = parseInt(woodCollectVal.value);
         window.woodCollectionPriority = parseInt(woodCollectVal.value);
     };
-    paramBox.appendChild(woodCollectRow);
+    woodCollectRow.dataset.label = 'Wood Collection Priority';
+    tabPanels[2].appendChild(woodCollectRow);
     woodCollectInput.disabled = paramDisabled;
     woodCollectVal.disabled = paramDisabled;
 
@@ -1220,7 +1337,8 @@ function renderCharacterDetail() {
         sidebarParams.useRandom = randomCheck.checked;
     };
     randomRow.appendChild(randomCheck);
-    paramBox.appendChild(randomRow);
+    randomRow.dataset.label = 'Randomize Thresholds';
+    tabPanels[0].appendChild(randomRow);
     randomCheck.disabled = paramDisabled;
 
     // Start/Pause toggle button (pinned at top)
