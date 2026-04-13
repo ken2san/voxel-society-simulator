@@ -197,6 +197,25 @@ class Character {
         if (resetBlockedRetry) this._blockedRetryCount = 0;
     }
 
+    runWorkAction(actionType = this.action?.type) {
+        switch (actionType) {
+            case 'BUILD_HOME':
+                this.log('⚡ BUILD_HOME execution started');
+                this.buildHome();
+                return true;
+            case 'CRAFT_TOOL':
+                this.log('⚡ CRAFT_TOOL execution started');
+                this.craftTool();
+                return true;
+            case 'DESTROY_BLOCK':
+                this.log('⚡ DESTROY_BLOCK execution started');
+                this.destroyBlock();
+                return true;
+            default:
+                return false;
+        }
+    }
+
     // --- 現在のアクションを実行する ---
     performAction() {
         this.log('⚡ performAction called:', this.action?.type);
@@ -335,16 +354,9 @@ class Character {
                 this.chopWood();
                 break;
             case 'BUILD_HOME':
-                this.log('⚡ BUILD_HOME execution started');
-                this.buildHome();
-                break;
             case 'CRAFT_TOOL':
-                this.log('⚡ CRAFT_TOOL execution started');
-                this.craftTool();
-                break;
             case 'DESTROY_BLOCK':
-                this.log('⚡ DESTROY_BLOCK execution started');
-                this.destroyBlock();
+                this.runWorkAction(this.action.type);
                 break;
             case 'SEEK_SHELTER':
                 this.seekShelter();
@@ -2355,22 +2367,9 @@ class Character {
         // --- working状態での段階的処理継続 ---
         if (this.state === 'working' && this.action) {
             this.log(`⚡ continuing processing in working state: ${this.action.type}`, this.action);
-            switch (this.action.type) {
-                case 'BUILD_HOME':
-                    this.log('⚡ Calling buildHome() from working state');
-                    this.buildHome();
-                    break;
-                case 'CRAFT_TOOL':
-                    this.craftTool();
-                    break;
-                case 'DESTROY_BLOCK':
-                    this.destroyBlock();
-                    break;
-                default:
-                    this.log(`Unhandled working action: ${this.action.type}`);
-                    this.state = 'idle';
-                    this.action = null;
-                    break;
+            if (!this.runWorkAction(this.action.type)) {
+                this.log(`Unhandled working action: ${this.action.type}`);
+                this.setIdleState({ clearAction: true });
             }
             this.updateThoughtBubble(isNight, camera);
             return;
