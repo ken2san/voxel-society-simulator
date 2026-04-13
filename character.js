@@ -226,7 +226,7 @@ class Character {
                 if (partner && partner !== this) {
                     // パートナーの緊急ニーズをチェック
                     const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
-                    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+                    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
                     const partnerCritical = (partner.needs?.hunger <= (hungerEmergency + 2) || partner.needs?.energy <= (energyEmergency + 2));
                     if (partnerCritical) {
                         this.setIdleState({ clearAction: true, cooldown: 1.0 });
@@ -2563,8 +2563,8 @@ class Character {
         this._learningTick = (this._learningTick || 0) + deltaTime;
         if (this._learningTick >= 2.0) {
             this._learningTick = 0;
-            const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 10;
-            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 15;
+            const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
+            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
             if (this.needs.hunger <= hungerEmergency + 8) this.learn && this.learn({ type: 'HUNGER_STRESS' });
             if (this.needs.energy <= energyEmergency + 8) this.learn && this.learn({ type: 'ENERGY_STRESS' });
             if (this.state === 'socializing' && this.needs.social > 80) this.learn && this.learn({ type: 'SOCIAL_SUCCESS' });
@@ -2593,7 +2593,7 @@ class Character {
         if (this.state === 'socializing') {
             const partner = this.action?.target;
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
-            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
 
             if (partner && partner.state === 'socializing') {
                 // 双方の緊急ニーズをチェック（中断条件）
@@ -2691,7 +2691,7 @@ class Character {
             this.actionCooldown -= deltaTime;
             if (this.actionCooldown <= 0) {
                 const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
-                const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+                const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
                 const urgentNeeds = (this.needs.hunger <= (hungerEmergency + 6) || this.needs.energy <= (energyEmergency + 6));
                 const interruptibleMove = !this.action || ['WANDER', 'SOCIALIZE'].includes(this.action.type);
                 if (urgentNeeds && interruptibleMove) {
@@ -2732,7 +2732,7 @@ class Character {
         else if (this.state === 'socializing') {
             // 餓死寸前（hunger <= 5）または極度の疲労（energy <= 5）の場合のみ中断
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
-            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+            const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
             if (this.needs.hunger <= hungerEmergency || this.needs.energy <= energyEmergency) {
                 this.state = 'idle';
                 this.action = null;
@@ -4126,7 +4126,7 @@ class Character {
         // Create child with mixed color and inherited personality
         this.log('Reproducing with', partner.id);
         // reproduction cooldown per parent to avoid rapid repeated births
-        const cooldownSec = (typeof window !== 'undefined' && window.reproductionCooldownSeconds !== undefined) ? window.reproductionCooldownSeconds : 20;
+        const cooldownSec = (typeof window !== 'undefined' && window.reproductionCooldownSeconds !== undefined) ? window.reproductionCooldownSeconds : 10;
         if (this._lastReproductionTime && (Date.now() - this._lastReproductionTime) < cooldownSec * 1000) {
             try { console.log(`[REPRO] ${this.id} reproduction aborted: cooldown active (${Math.round((cooldownSec*1000 - (Date.now()-this._lastReproductionTime))/1000)}s left)`); } catch(e){}
             return;

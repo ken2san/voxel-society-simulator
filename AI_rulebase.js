@@ -16,7 +16,7 @@ export function decideNextAction_rulebase(character, isNight) {
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeBuildingHungerThreshold = (typeof window !== 'undefined' && window.homeBuildingHungerThreshold !== undefined) ? window.homeBuildingHungerThreshold : 80;
-    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 15;
+    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
     // resilience: hardy characters tolerate lower energy before forcing REST
