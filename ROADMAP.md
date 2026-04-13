@@ -57,4 +57,34 @@ Potential themes:
 
 ## Current Status
 
-Active phase: Phase 1
+Active phase: **Phase 1 → Phase 2 (overlap)**
+
+---
+
+## Current Sprint — Character Movement Quality
+
+### Goal
+Bring character movement to a level comparable to standard game characters:
+natural collision handling, no wall clipping, smooth visual feel.
+
+### Tasks
+
+| Status | Item |
+|--------|------|
+| ✅ Done | BFS pathfinding with path validation and invalidation backoff |
+| ✅ Done | `canTraverseWorldSegment()` — substep solid collision (0.25 voxel interval) |
+| ✅ Done | `tryWallSlideMove()` — wall-slide fallback on blocked forward direction |
+| ✅ Done | Micro-pause → retry → path-reset escalation chain in `updateMovement` |
+| ✅ Done | Dead code removal (`moveAlongPath`) and constructor cleanup |
+| ✅ Done | `PARAM_DEFAULTS` registry in sidebar.js (parameter scaling prep) |
+| 🔲 Next | Validate wall-slide with 5–10 min telemetry; compare stuckLike% baseline |
+| 🔲 Next | Visual smoothing: interpolate mesh position between grid steps |
+| 🔲 Next | Anticipatory rotation: face next path node ahead of move |
+| 🔲 Backlog | Consolidate `state` / `action.type` dual intent representation |
+| 🔲 Backlog | Unify `targetPos` + `action.target` + `path` destination tracking |
+| 🔲 Backlog | Collapse `actionCooldown` + `_microPauseTimer` + `_arrivalDelay` |
+
+### Baseline Telemetry (2026-04-13, 153 s run)
+- avgWanderRatio: 69.3% | avgStuckLikeRatio: 8.1% | avgLowEnergyRatio: 10.9%
+- stallDetected: 0
+- Target after wall-slide: stuckLikeRatio < 5%
