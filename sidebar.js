@@ -1546,6 +1546,47 @@ function renderCharacterList() {
     title.style.marginBottom = '8px';
     leftSidebar.appendChild(title);
 
+    // --- 母集団統計パネル ---
+    if (window.characters && window.characters.length > 0) {
+        const alive = window.characters.filter(c => c.state !== 'dead');
+        const dead  = window.characters.length - alive.length;
+        const children = alive.filter(c => c.isChild).length;
+        const adults   = alive.length - children;
+        const maxGen   = window.characters.reduce((m, c) => Math.max(m, c.generation || 0), 0);
+        const avgGen   = alive.length ? (alive.reduce((s, c) => s + (c.generation || 0), 0) / alive.length).toFixed(1) : '—';
+        const avgBrav  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.bravery  || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgDili  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.diligence || 0), 0) / alive.length).toFixed(2) : '—';
+        const avgHun   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.hunger  || 0), 0) / alive.length).toFixed(0) : '—';
+        const avgEng   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.energy  || 0), 0) / alive.length).toFixed(0) : '—';
+        const avgSaf   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.safety  || 0), 0) / alive.length).toFixed(0) : '—';
+        const avgSoc   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.social  || 0), 0) / alive.length).toFixed(0) : '—';
+
+        const statsDiv = document.createElement('div');
+        statsDiv.style.cssText = 'background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:0.85em;color:#333;';
+        statsDiv.innerHTML =
+            `<b>Population</b> &nbsp;` +
+            `Total: <b>${window.characters.length}</b> &nbsp;` +
+            `Alive: <b>${alive.length}</b> &nbsp;` +
+            `Dead: <b>${dead}</b> &nbsp;` +
+            `Adults: <b>${adults}</b> &nbsp;` +
+            `Children: <b>${children}</b>` +
+            `<br>` +
+            `<b>Generation</b> &nbsp;` +
+            `Max: <b>${maxGen}</b> &nbsp;` +
+            `Avg: <b>${avgGen}</b>` +
+            `<br>` +
+            `<b>Traits (alive avg)</b> &nbsp;` +
+            `Bravery: <b>${avgBrav}</b> &nbsp;` +
+            `Diligence: <b>${avgDili}</b>` +
+            `<br>` +
+            `<b>Needs (alive avg)</b> &nbsp;` +
+            `Hun: <b>${avgHun}</b> &nbsp;` +
+            `Eng: <b>${avgEng}</b> &nbsp;` +
+            `Saf: <b>${avgSaf}</b> &nbsp;` +
+            `Soc: <b>${avgSoc}</b>`;
+        leftSidebar.appendChild(statsDiv);
+    }
+
     // --- 全体サマリー表（アコーディオン型詳細展開付き） ---
     if (window.characters && window.characters.length > 0) {
         const summaryTable = document.createElement('table');

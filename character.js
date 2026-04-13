@@ -1803,6 +1803,8 @@ class Character {
         this.children = [];
         // --- 移動距離カウント ---
         this.moveDistance = 0;
+        // --- 世代番号 (0 = 初代、子は max(親) + 1) ---
+        this.generation = 0;
         // --- Love timer for heart mark ---
         this.loveTimer = 0;
         this.lovePhase = null; // 'showing', 'completed', null
@@ -3916,6 +3918,8 @@ class Character {
                 child.isChild = true;
                 // record parent references for follow behavior
                 child.parentIds = [this.id, partner.id];
+                // generation counter: max of parents + 1
+                child.generation = Math.max(this.generation || 0, partner.generation || 0) + 1;
                 // prevent immediate group/role assignment - keep child as a neutral worker until maturity
                 child.groupId = null;
                 child.role = 'worker';
