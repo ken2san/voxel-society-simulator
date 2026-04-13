@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "name": "workspace-default",
+  "description": "Workspace preset loaded before simulation start.",
+  "settings": {
+    "sidebarParams": {
+      "charNum": 10,
+      "socialTh": 80,
+      "groupAffinityTh": 30,
+      "hungerEmergencyThreshold": 5,
+      "energyEmergencyThreshold": 20,
+      "characterLifespan": 240,
+      "homeReturnHungerLevel": 90,
+      "homeBuildingPriority": 80,
+      "woodCollectionPriority": 70,
+      "initialAffinityMin": 20,
+      "initialAffinityMax": 40,
+      "affinityIncreaseRate": 10,
+      "affinityDecayRate": 0.01,
+      "pairReproductionCooldownSeconds": 60,
+      "reproductionCooldownSeconds": 10,
+      "maxAffinity": 100,
+      "autoRecoverStall": true,
+      "recoverActionCooldown": 0.5,
+      "maxActionCooldown": 8,
+      "movingReplanStallMs": 2500,
+      "pathOccupancyLookahead": 2,
+      "recentDigCooldownMs": 10000,
+      "digActionCooldown": 2200,
+      "worldReservationTTL": 5000,
+      "reservationFallbackCooldown": 1000,
+      "fallbackBackoffMs": 1500,
+      "pathInvalidationBackoffFactor": 0.2,
+      "pathInvalidationBackoffMax": 2
+    },
+    "telemetryConfig": {
+      "sampleIntervalMs": 1000,
+      "maxSamples": 120000,
+      "maxEvents": 50000,
+      "autoDownloadOnStop": true,
+      "fileNamePrefix": "telemetry"
+    },
+    "resourceGeneration": {
+      "treeSpawnRate": 0.35,
+      "leafSpawnRate": 0.7,
+      "fruitSpawnRate": 0.3,
+      "stoneSpawnRate": 0.15,
+      "caveSpawnRate": 0.1
+    },
+    "debug": {
+      "debugMode": false
+    }
+  }
+}

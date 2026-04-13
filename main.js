@@ -96,6 +96,10 @@ async function init() {
         if (typeof window.loadSimulatorSettingsLocal === 'function') {
             window.loadSimulatorSettingsLocal({ persist: false, silent: true });
         }
+        // Workspace preset overrides local preset when available
+        if (typeof window.loadSimulatorSettingsWorkspace === 'function') {
+            await window.loadSimulatorSettingsWorkspace({ persist: false, silent: true });
+        }
 
         setupTelemetryManagerPanel();
 
@@ -115,6 +119,7 @@ function setupTelemetryManagerPanel() {
     const settingsSaveLocalBtn = document.getElementById('settingsSaveLocalBtn');
     const settingsExportBtn = document.getElementById('settingsExportBtn');
     const settingsImportBtn = document.getElementById('settingsImportBtn');
+    const settingsLoadWorkspaceBtn = document.getElementById('settingsLoadWorkspaceBtn');
     const settingsImportFileInput = document.getElementById('settingsImportFileInput');
     const settingsStatus = document.getElementById('settingsStatus');
 
@@ -207,6 +212,24 @@ function setupTelemetryManagerPanel() {
         settingsExportBtn.addEventListener('click', () => {
             const fileName = window.exportSimulatorSettingsJSON?.();
             setSettingsStatus(fileName ? `Exported ${fileName}` : 'Export failed');
+        });
+    }
+
+    if (settingsLoadWorkspaceBtn) {
+        settingsLoadWorkspaceBtn.addEventListener('click', async () => {
+            try {
+                const loaded = await window.loadSimulatorSettingsWorkspace?.({ persist: true, silent: false });
+                if (loaded) {
+                    const path = window.__simSettingsWorkspaceFile || 'sim-settings.workspace.json';
+                    setSettingsStatus(`Loaded workspace preset (${path})`);
+                    renderStatus();
+                } else {
+                    setSettingsStatus('Workspace preset not found');
+                }
+            } catch (err) {
+                console.error('[Settings] workspace load failed', err);
+                setSettingsStatus('Workspace preset load failed');
+            }
         });
     }
 
@@ -429,6 +452,7 @@ window.simTelemetryConfig = {
     fileNamePrefix: 'telemetry'
 };
 window.__simSettingsStorageKey = 'voxel-society.settings.v1';
+window.__simSettingsWorkspaceFile = 'sim-settings.workspace.json';
 
 window.exportSimulatorSettingsObject = function exportSimulatorSettingsObject() {
     return {
@@ -548,6 +572,24 @@ window.importSimulatorSettingsFromFile = async function importSimulatorSettingsF
     if (!file) throw new Error('No file selected');
     const text = await file.text();
     const parsed = JSON.parse(text);
+    window.applySimulatorSettingsObject(parsed, { persist: opts.persist !== false });
+    return true;
+};
+
+window.loadSimulatorSettingsWorkspace = async function loadSimulatorSettingsWorkspace(opts = {}) {
+    const filePath = (opts.filePath && String(opts.filePath).trim())
+        ? String(opts.filePath).trim()
+        : window.__simSettingsWorkspaceFile;
+    const bust = Date.now();
+    const normalized = filePath.startsWith('/') ? filePath : `/${filePath}`;
+    const res = await fetch(`${normalized}?v=${bust}`, { cache: 'no-store' });
+    if (!res.ok) {
+        if (!opts.silent) {
+            throw new Error(`Workspace settings not found: ${filePath} (HTTP ${res.status})`);
+        }
+        return false;
+    }
+    const parsed = await res.json();
     window.applySimulatorSettingsObject(parsed, { persist: opts.persist !== false });
     return true;
 };
