@@ -76,8 +76,10 @@ function getStatusDisplay(char) {
         icon = '❓'; stateLabel = 'confused';
     }
 
-    // Show task name alongside state icon — single source of truth for activity.
-    const action = char.currentAction && char.currentAction !== '-' ? char.currentAction : null;
+    // Avoid redundant text when action already means the same as the state icon.
+    const rawAction = char.currentAction && char.currentAction !== '-' ? char.currentAction : null;
+    const isRedundantAction = rawAction === 'WANDER' && char.state === 'moving';
+    const action = isRedundantAction ? null : rawAction;
     const text = action ? `${icon} ${action}` : icon;
     const title = action ? `${stateLabel} / ${action}` : stateLabel;
 
