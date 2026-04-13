@@ -187,6 +187,16 @@ class Character {
         this.setNavigationTarget(null);
     }
 
+    clearNavigationState({ clearTarget = true, resetBlockedRetry = false } = {}) {
+        if (clearTarget) {
+            this.clearNavigationTarget();
+        } else {
+            this.lastTargetPos = null;
+        }
+        this.path = [];
+        if (resetBlockedRetry) this._blockedRetryCount = 0;
+    }
+
     // --- 現在のアクションを実行する ---
     performAction() {
         this.log('⚡ performAction called:', this.action?.type);
@@ -3038,8 +3048,7 @@ class Character {
                         if (dist <= 3) { // 3ブロック以内なら強制実行
                             this.log('CHOP_WOOD: Force execution within 3 blocks, distance:', dist);
                             this.state = 'working';
-                            this.clearNavigationTarget();
-                            this.path = null;
+                            this.clearNavigationState();
                             this.executeAction();
                             return;
                         }
@@ -3206,6 +3215,7 @@ class Character {
                         this.log(`AI: Pathfinding failed for wood collection (${this._woodFailureCount} total failures)`);
                     }
 
+                        this.clearNavigationState();
                     this.state = 'idle';
                     this.bfsFailCount = 0;
                     this.actionCooldown = 2.0; // Longer cooldown when giving up
@@ -3246,7 +3256,7 @@ class Character {
             // clear any sidestep reservation when path emptied
             this.releaseReservedSidestep && this.releaseReservedSidestep();
             this.state = 'idle';
-            this.path = [];
+            this.clearNavigationState();
             this.performAction && this.performAction();
             return;
         }
@@ -3267,10 +3277,9 @@ class Character {
                 }
                 // Prolonged block: then force a recompute.
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
-                this.path = [];
+                this.clearNavigationState({ clearTarget: false, resetBlockedRetry: true });
                 this.state = 'idle';
                 this.actionCooldown = 0.6 + Math.random() * 0.3;
-                this._blockedRetryCount = 0;
                 return;
             }
         }
@@ -3281,7 +3290,7 @@ class Character {
             if (!this.validatePath(this.path)) {
                 this.log('Path invalidated mid-move, clearing and will recompute');
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
-                this.path = [];
+                this.clearNavigationState({ clearTarget: false });
             } else {
                 // path still valid under same world stamp
             }
@@ -3290,7 +3299,7 @@ class Character {
             if (!this.validatePath(this.path)) {
                 this.log('World changed since path computed; path invalid, clearing');
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
-                this.path = [];
+                this.clearNavigationState({ clearTarget: false });
             }
         }
         if (!this.path || this.path.length === 0) {
@@ -3315,7 +3324,7 @@ class Character {
             if (!this.isSafeToFallOrDig(next.x, next.y, next.z)) {
                 this.log('Skip move: fall destination not safe', {from: this.gridPos, to: next});
                 this.state = 'idle';
-                this.path = [];
+                this.clearNavigationState({ clearTarget: false });
                 this.actionCooldown = 0.5;
                 return;
             }
@@ -3349,10 +3358,9 @@ class Character {
                 this._blockedRetryCount += 1;
                 this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.1 + Math.random() * 0.2);
                 if (this._blockedRetryCount >= 4) {
-                    this.path = []; // パスをクリアして再計算を促す
+                    this.clearNavigationState({ clearTarget: false, resetBlockedRetry: true });
                     this.state = 'idle';
                     this.actionCooldown = 0.5 + Math.random() * 0.3;
-                    this._blockedRetryCount = 0;
                 }
                 return;
             }
@@ -3393,10 +3401,9 @@ class Character {
                 this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.08 + Math.random() * 0.16);
                 if (this._blockedRetryCount >= 4) {
                     this.log(`Movement segment blocked: ${traverse.reason}`, traverse.at || {});
-                    this.path = [];
+                    this.clearNavigationState({ clearTarget: false, resetBlockedRetry: true });
                     this.state = 'idle';
                     this.actionCooldown = 0.45 + Math.random() * 0.25;
-                    this._blockedRetryCount = 0;
                 }
                 return;
             }
