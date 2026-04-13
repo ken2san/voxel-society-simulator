@@ -180,7 +180,8 @@ function renderCharacterDetail() {
             charNum: 10,
             socialTh: 30,
             groupAffinityTh: 50,
-            useRandom: false
+            useRandom: false,
+            populationMetricsExpanded: false
         };
     }
     const sidebarParams = window.sidebarParams;
@@ -1598,6 +1599,105 @@ function createSparklineSVG(values, color, width = 86, height = 24) {
     );
 }
 
+function createPopulationDetailCard(title, icon, rows) {
+    return (
+        `<section class="population-detail-card">` +
+            `<div class="population-detail-card-header">` +
+                `<span class="population-detail-card-icon">${icon}</span>` +
+                `<span class="population-detail-card-title">${title}</span>` +
+            `</div>` +
+            `<div class="population-detail-card-body">` +
+                rows.map(row => row.html || (
+                    `<div class="population-detail-row">` +
+                        `<span class="population-detail-label">${row.label}</span>` +
+                        `<span class="population-detail-value">${row.value}</span>` +
+                    `</div>`
+                )).join('') +
+            `</div>` +
+        `</section>`
+    );
+}
+
+function createPopulationNeedRow(label, value, color) {
+    const numericValue = Math.max(0, Math.min(100, Number(value) || 0));
+    return {
+        html:
+            `<div class="population-need-row">` +
+                `<div class="population-need-top">` +
+                    `<span class="population-detail-label">${label}</span>` +
+                    `<span class="population-detail-value">${Math.round(numericValue)}</span>` +
+                `</div>` +
+                `<div class="population-need-bar-track">` +
+                    `<div class="population-need-bar-fill" style="width:${numericValue}%;background:${color};"></div>` +
+                `</div>` +
+            `</div>`
+    };
+}
+
+function createPopulationDetailsHTML(metrics) {
+    return (
+        `<div class="population-detail-grid">` +
+            createPopulationDetailCard('Population', '👥', [
+                { label: 'Total born', value: metrics.totalBorn },
+                { label: 'Dead', value: metrics.dead },
+                { label: 'Adults', value: metrics.adults },
+                { label: 'Children', value: metrics.children }
+            ]) +
+            createPopulationDetailCard('Lifecycle', '⏳', [
+                { label: 'Avg age', value: `${metrics.avgAge}s` },
+                { label: 'Max age', value: `${metrics.maxAge}s` },
+                { label: 'Starved', value: metrics.starvationDeaths },
+                { label: 'Old age', value: metrics.oldAgeDeaths }
+            ]) +
+            createPopulationDetailCard('Generation', '🌱', [
+                { label: 'Max gen', value: metrics.maxGen },
+                { label: 'Avg gen', value: metrics.avgGen }
+            ]) +
+            createPopulationDetailCard('Traits', '🧭', [
+                { label: 'Bravery', value: metrics.avgBrav },
+                { label: 'Diligence', value: metrics.avgDili }
+            ]) +
+            createPopulationDetailCard('Needs', '⚡', [
+                createPopulationNeedRow('Hunger', metrics.avgHun, 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'),
+                createPopulationNeedRow('Energy', metrics.avgEng, 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)'),
+                createPopulationNeedRow('Safety', metrics.avgSaf, 'linear-gradient(90deg, #22c55e 0%, #10b981 100%)'),
+                createPopulationNeedRow('Social', metrics.avgSoc, 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)')
+            ]) +
+        `</div>`
+    );
+}
+
+function createTimelineHandleHTML(ev) {
+    const badgeClass = ev.type === 'birth' ? 'timeline-badge-birth' : 'timeline-badge-death';
+    const badgeText = ev.type === 'birth' ? 'Birth' : 'Death';
+    return (
+        `<span class="timeline-inline-badge ${badgeClass}">${badgeText}</span>` +
+        `<span class="timeline-inline-summary">${_etlFormatEvent(ev)}</span>`
+    );
+}
+
+function createTimelineEventHTML(ev) {
+    const badgeClass = ev.type === 'birth' ? 'timeline-badge-birth' : 'timeline-badge-death';
+    const badgeText = ev.type === 'birth' ? 'Birth' : 'Death';
+    const meta = [
+        _etlFormatTime(ev.t),
+        ev.generation !== undefined ? `G${ev.generation}` : null,
+        ev.age !== undefined ? `${Math.round(ev.age)}s` : null,
+        ev.cause ? String(ev.cause).replace(/_/g, ' ') : null
+    ].filter(Boolean);
+    return (
+        `<div class="timeline-event-row ${ev.type === 'birth' ? 'is-birth' : 'is-death'}">` +
+            `<div class="timeline-event-main">` +
+                `<div class="timeline-event-top">` +
+                    `<span class="timeline-event-badge ${badgeClass}">${badgeText}</span>` +
+                    `<span class="timeline-event-title">${_etlFormatEvent(ev)}</span>` +
+                `</div>` +
+                `<div class="timeline-event-meta">${meta.join(' • ')}</div>` +
+            `</div>` +
+        `</div>`
+    );
+}
+
 // --- Lifecycle Event Timeline ---
 if (!window.__lifecycleEventLog) window.__lifecycleEventLog = [];
 let _lastSeenBirthT = 0;
@@ -1708,19 +1808,12 @@ function renderEventTimeline() {
     if (log.length === 0) {
         latestEl.textContent = 'No events yet';
         if (listEl) listEl.innerHTML =
-            `<div style="color:#6080a0;padding:8px 4px;font-size:0.88em;">No lifecycle events yet.</div>`;
+            `<div class="timeline-empty-state">No lifecycle events yet.</div>`;
         return;
     }
-    latestEl.textContent = `${_etlFormatTime(log[0].t)} — ${_etlFormatEvent(log[0])}`;
+    latestEl.innerHTML = createTimelineHandleHTML(log[0]);
     if (_drawerExpanded && listEl) {
-        listEl.innerHTML = log.map(ev => {
-            const color = ev.type === 'birth' ? '#34d399' : '#f87171';
-            const bg = ev.type === 'birth' ? 'rgba(52,211,153,0.07)' : 'rgba(248,113,113,0.07)';
-            return `<div style="display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;background:${bg};">` +
-                `<span style="color:${color};font-size:0.92em;white-space:nowrap;">${_etlFormatEvent(ev)}</span>` +
-                `<span style="color:#607090;font-size:0.8em;white-space:nowrap;margin-left:auto;">${_etlFormatTime(ev.t)}</span>` +
-                `</div>`;
-        }).join('');
+        listEl.innerHTML = log.map(createTimelineEventHTML).join('');
     }
 }
 
@@ -1776,11 +1869,16 @@ function renderCharacterList() {
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
     leftSidebar.innerHTML = '';
     // タイトルを追加
-    const title = document.createElement('h3');
-    title.textContent = 'Character List';
-    title.style.color = '#222';
-    title.style.marginBottom = '8px';
-    leftSidebar.appendChild(title);
+    const aliveCount = window.characters.filter(c => c.state !== 'dead').length;
+    const listHeader = document.createElement('div');
+    listHeader.className = 'character-list-header';
+    listHeader.innerHTML =
+        `<div>` +
+            `<div class="character-list-kicker">Observation</div>` +
+            `<h3 class="character-list-title">Character List</h3>` +
+        `</div>` +
+        `<div class="character-list-count">${aliveCount} alive</div>`;
+    leftSidebar.appendChild(listHeader);
 
     // --- 母集団統計パネル ---
     if (window.characters && window.characters.length > 0) {
@@ -1827,9 +1925,33 @@ function renderCharacterList() {
         });
         const energySeries = pulseHistory.slice(-40).map(p => p.avgEnergy);
 
+        if (window.sidebarParams?.populationMetricsExpanded === undefined) {
+            window.sidebarParams.populationMetricsExpanded = false;
+        }
+
         const sparkAlive = createSparklineSVG(aliveSeries, '#2563eb');
         const sparkNet = createSparklineSVG(netSeries, netRate >= 0 ? '#16a34a' : '#dc2626');
         const sparkEnergy = createSparklineSVG(energySeries, '#f59e0b');
+        const detailsExpanded = !!window.sidebarParams.populationMetricsExpanded;
+        const detailsChevron = detailsExpanded ? '▾' : '▸';
+        const detailsHTML = createPopulationDetailsHTML({
+            totalBorn,
+            dead,
+            adults,
+            children,
+            avgAge,
+            maxAge,
+            starvationDeaths,
+            oldAgeDeaths,
+            maxGen,
+            avgGen,
+            avgBrav,
+            avgDili,
+            avgHun,
+            avgEng,
+            avgSaf,
+            avgSoc
+        });
 
         const statsDiv = document.createElement('div');
         statsDiv.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:0.82em;color:#2b3340;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
@@ -1857,21 +1979,27 @@ function renderCharacterList() {
                 `<div title="Net growth trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Net</span>${sparkNet}</div>` +
                 `<div title="Average energy trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Energy</span>${sparkEnergy}</div>` +
             `</div>` +
-            `<details style="margin-top:6px;">` +
-                `<summary style="cursor:pointer;color:#475569;">More metrics</summary>` +
-                `<div style="margin-top:5px;line-height:1.45;">` +
-                    `<b>Population</b> Total Born: <b>${totalBorn}</b> / Dead: <b>${dead}</b> / Adults: <b>${adults}</b> / Children: <b>${children}</b><br>` +
-                    `<b>Lifecycle</b> Avg Age: <b>${avgAge}s</b> / Max Age: <b>${maxAge}s</b> / Deaths(S/O): <b>${starvationDeaths}/${oldAgeDeaths}</b><br>` +
-                    `<b>Generation</b> Max: <b>${maxGen}</b> / Avg: <b>${avgGen}</b><br>` +
-                    `<b>Traits</b> Bravery: <b>${avgBrav}</b> / Diligence: <b>${avgDili}</b><br>` +
-                    `<b>Needs</b> Hun: <b>${avgHun}</b> / Eng: <b>${avgEng}</b> / Saf: <b>${avgSaf}</b> / Soc: <b>${avgSoc}</b>` +
-                `</div>` +
+            `<details ${detailsExpanded ? 'open' : ''} data-population-metrics-details style="margin-top:8px;">` +
+                `<summary style="cursor:pointer;color:#334155;list-style:none;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#ffffffcc;border:1px solid #d7e4f5;font-weight:600;">` +
+                    `<span style="font-size:0.92em;color:#64748b;">${detailsChevron}</span>` +
+                    `<span>Detailed metrics</span>` +
+                `</summary>` +
+                `<div class="population-detail-wrap">${detailsHTML}</div>` +
             `</details>`;
+        const metricsDetails = statsDiv.querySelector('[data-population-metrics-details]');
+        if (metricsDetails) {
+            metricsDetails.addEventListener('toggle', () => {
+                if (!window.sidebarParams) window.sidebarParams = {};
+                window.sidebarParams.populationMetricsExpanded = metricsDetails.open;
+            });
+        }
         leftSidebar.appendChild(statsDiv);
     }
 
     // --- 全体サマリー表（アコーディオン型詳細展開付き） ---
     if (window.characters && window.characters.length > 0) {
+        const tableShell = document.createElement('div');
+        tableShell.className = 'character-table-shell';
         const summaryTable = document.createElement('table');
         summaryTable.className = 'character-summary-table';
         // ヘッダー（日本語で分かりやすく＆見やすいスタイル）
@@ -1907,6 +2035,8 @@ function renderCharacterList() {
         const tbody = document.createElement('tbody');
         window.characters.forEach(char => {
             const tr = document.createElement('tr');
+            tr.className = 'character-summary-row';
+            if (String(openedCharId) === String(char.id)) tr.classList.add('is-open');
             tr.style.cursor = 'pointer';
             // 詳細展開用のtr
             const detailTr = document.createElement('tr');
@@ -1918,8 +2048,7 @@ function renderCharacterList() {
                 detailTr.style.display = 'none';
             }
             const detailTd = document.createElement('td');
-            detailTd.colSpan = 10;
-                        detailTd.colSpan = 9;
+            detailTd.colSpan = 9;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
             detailTd.appendChild(createCharacterDetailCard(char));
@@ -1932,9 +2061,11 @@ function renderCharacterList() {
                     return;
                 }
                 // すでに開いている詳細を全て閉じる
+                tbody.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
                 tbody.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
                 // クリックしたキャラの詳細だけ開く
                 openedCharId = String(char.id);
+                tr.classList.add('is-open');
                 detailTr.style.display = '';
                 e.stopPropagation();
             };
@@ -1990,7 +2121,8 @@ function renderCharacterList() {
             tbody.appendChild(detailTr);
         });
         summaryTable.appendChild(tbody);
-        leftSidebar.appendChild(summaryTable);
+        tableShell.appendChild(summaryTable);
+        leftSidebar.appendChild(tableShell);
 
         // サイドバー余白クリックで詳細全閉じ
         leftSidebar.onclick = function(ev) {
@@ -2002,6 +2134,7 @@ function renderCharacterList() {
             }
             // 全ての詳細パネルを閉じる
             openedCharId = null;
+            leftSidebar.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
             leftSidebar.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
         };
     }
