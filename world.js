@@ -53,6 +53,7 @@ export const characters = [];
 export let worldTime = 0;
 export const DAY_DURATION = 120;
 export let nextCharacterId = 0;
+export function resetNextCharacterId() { nextCharacterId = 0; }
 
 let DEBUG_MODE = false;
 export function setDEBUG_MODE(val) { DEBUG_MODE = val; }

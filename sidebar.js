@@ -1749,7 +1749,6 @@ function renderCharacterDetail() {
             const useRandom = !!sidebarParams.useRandom;
             // Reset existing characters and IDs
             window.characters = [];
-            if (window.nextCharacterId !== undefined) window.nextCharacterId = 0;
             // Reflect group threshold globally
             window.groupAffinityThreshold = groupAffinityTh;
             // Call removeAllCharacterObjects from world.js
@@ -1757,6 +1756,8 @@ function renderCharacterDetail() {
                 if (typeof worldMod.removeAllCharacterObjects === 'function') {
                     worldMod.removeAllCharacterObjects();
                 }
+                // Reset module-level ID counter via exported function
+                if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();
                 if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
                 const spawnAll = async () => {
                     for (let i = 0; i < num; i++) {
@@ -2207,8 +2208,8 @@ function renderCharacterList() {
             return; // keep user's typing uninterrupted
         }
     } catch (e) {}
-    // キャラが未生成なら何も表示しない
-    if (!window.characters || !Array.isArray(window.characters) || window.characters.length === 0) {
+    // キャラが未生成（シム未起動）なら何も表示しない
+    if (!window.characters || !Array.isArray(window.characters) || (!window.simulationRunning && window.characters.length === 0)) {
         leftSidebar.innerHTML = '';
         return;
     }
