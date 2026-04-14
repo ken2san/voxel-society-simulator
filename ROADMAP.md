@@ -360,34 +360,26 @@ characters surviving famine more often over multiple generations → trait selec
 
 ---
 
-### 4 — Relationship Tiers ★★★ `Layer 2`
+### 4 — ~~Relationship Tiers~~ ✅ Done `Layer 2` (commit `027fe72`)
 
-Replace single affinity float with a **relationship class** used in AI decisions:
+**Implemented** in `character.js` + `AI_rulebase.js`:
 
-| Affinity range | Class | Behavioral gates |
-|----------------|-------|-----------------|
-| < affinityFloor+3 | `rival` | Avoidance; triggers `_nearEnemy` conflict bubble |
-| floor+3 – 30 | `stranger` | No bonus; ignores |
-| 30 – 60 | `acquaintance` | Minor safety bonus when adjacent |
-| 60 – 80 | `ally` | Donates food when own hunger > 70 and partner < 40 |
-| 80+ | `bonded` | Moves toward partner in danger; safety bonus stacks |
+| Class | Affinity | Behavior added |
+|-------|----------|----------------|
+| `acquaintance` | 30+ | (foundation only; no active gate yet) |
+| `ally` | 60+ | Safety +1.5/s at night within 2 tiles; food donation when donor >70, recipient <40 |
+| `bonded` | 80+ | Safety +3/s at night; P6.5 partner-aid moves toward them when their safety <30 |
 
-```javascript
-// helper — no new state, derived on access
-getRelationshipClass(otherId) {
-  const aff = this.relationships.get(otherId) ?? 0;
-  if (aff >= 80) return 'bonded';
-  if (aff >= 60) return 'ally';
-  if (aff >= 30) return 'acquaintance';
-  if (aff > window.affinityFloor + 3) return 'stranger';
-  return 'rival';
-}
-```
+`getRelationshipClass(otherId)` — derived helper, no stored state. Added to `character.js`.
 
-**Observable effect**: for the first time, affinity has action consequences.
-Watching two characters' relationship class change from acquaintance → ally → bonded is a story.
-**Risk**: bonded pairs clustering. Food competition within a cluster naturally limits this.
-**Note**: Resource Sharing (food donation) is gated on this — implement together or shortly after.
+Food donation (learningTick, every 2s): transfers `min(20, hunger - 50)` — donor never drops below 50.
+Shows 🤝 icon. Observable during famine: fed ally keeps hungry partner alive.
+
+P6.5 bonded-approach (AI_rulebase.js): triggers at night when bonded partner safety<30, self energy>50.
+WANDER toward adjacent spot. Observable: bonded pairs cluster at night automatically.
+
+**Observable check**: during seasonal famine, watch ally pairs — one character should show 🤝 icon
+while the other's hunger stabilizes. At night, bonded characters should move toward each other.
 
 ---
 
