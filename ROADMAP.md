@@ -53,6 +53,18 @@ Goal: add believable generational drift while keeping behavior legible.
 
 ---
 
+## Parameter Addition Rule
+
+Any new tunable parameter **must** complete all three steps:
+
+1. **`sim-settings.workspace.json`** — add under `settings.sidebarParams` with the intended default value.
+2. **`sidebar.js` `PARAM_DEFAULTS`** — add the same key/value as a code-level fallback.
+3. **`sidebar.js` slider row** — add a UI control in the right sidebar so the value can be adjusted at runtime without restarting.
+
+Omitting any of the three steps is considered incomplete. Parameters that skip the slider step are not adjustable and violate the observability principle.
+
+---
+
 ## Phase 1 - Core Simulation Stability
 
 ### Goal

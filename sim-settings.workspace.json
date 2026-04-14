@@ -20,6 +20,7 @@
       "bondPersistence": 1,
       "pairReproductionCooldownSeconds": 90,
       "reproductionCooldownSeconds": 10,
+      "fruitRegenIntervalSeconds": 60,
       "maxAffinity": 100,
       "autoRecoverStall": true,
       "recoverActionCooldown": 0.5,
