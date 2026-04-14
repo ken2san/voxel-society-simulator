@@ -183,7 +183,7 @@ Confirmed the core problem is **not food shortage** — it is **population struc
 
 | Priority | Task | Rationale |
 | -------- | ---- | --------- |
-| ★★★ | **Stagger initial spawn ages** — set `age = random(0, lifespan * 0.5)` at first spawn | Eliminates synchronized mass-death. Minimum code, maximum impact. 3-step param rule applies: add `initialAgeMaxRatio` (default 0.5) to workspace JSON + PARAM_DEFAULTS + slider. |
+| ★★★ | ~~**Stagger initial spawn ages**~~ ✅ Done | `initialAgeMaxRatio` param (default 0.5) added via 3-step rule. `main.js` uses `window.initialAgeMaxRatio` instead of hardcoded `0.65`. Slider in Setup tab. |
 | ★★☆ | **Ease reproduction rate** — consider lowering `pairReproductionCooldownSeconds` (90 → 45) or raising `affinityIncreaseRate` | After age stagger, measure birth rate in telemetry before touching this. |
 | ★☆☆ | **Hunger × fertility link** — suppress reproduction score when `hunger < threshold` | Ecological pressure signal; low urgency while food is abundant. |
 

@@ -206,6 +206,7 @@ function renderCharacterDetail() {
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
         fruitRegenIntervalSeconds:          60,
+        initialAgeMaxRatio:                 0.5,
         autoRecoverStall:                   true,
         recoverActionCooldown:              0.5,
         maxActionCooldown:                  8,
@@ -1069,6 +1070,52 @@ function renderCharacterDetail() {
     tabPanels[0].appendChild(charNumRow);
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
+
+    // --- Initial Age Spread Slider ---
+    if (sidebarParams.initialAgeMaxRatio === undefined) sidebarParams.initialAgeMaxRatio = 0.5;
+    const ageSpreadRow = document.createElement('div');
+    ageSpreadRow.style.display = 'flex';
+    ageSpreadRow.style.alignItems = 'center';
+    ageSpreadRow.style.gap = '10px';
+    const ageSpreadLabel = document.createElement('span');
+    ageSpreadLabel.textContent = '🎲 Initial Age Spread:';
+    ageSpreadLabel.style.width = '140px';
+    ageSpreadRow.appendChild(ageSpreadLabel);
+    const ageSpreadInput = document.createElement('input');
+    ageSpreadInput.type = 'range';
+    ageSpreadInput.min = 0;
+    ageSpreadInput.max = 1;
+    ageSpreadInput.step = 0.05;
+    ageSpreadInput.value = sidebarParams.initialAgeMaxRatio;
+    ageSpreadInput.style.flex = '1';
+    ageSpreadInput.style.margin = '0 8px';
+    ageSpreadInput.id = 'ageSpreadInput';
+    ageSpreadInput.name = 'ageSpreadInput';
+    ageSpreadRow.appendChild(ageSpreadInput);
+    const ageSpreadVal = document.createElement('input');
+    ageSpreadVal.type = 'number';
+    ageSpreadVal.min = 0;
+    ageSpreadVal.max = 1;
+    ageSpreadVal.step = 0.05;
+    ageSpreadVal.value = sidebarParams.initialAgeMaxRatio;
+    ageSpreadVal.style.width = '56px';
+    ageSpreadVal.id = 'ageSpreadVal';
+    ageSpreadVal.name = 'ageSpreadVal';
+    ageSpreadRow.appendChild(ageSpreadVal);
+    ageSpreadInput.oninput = () => {
+        ageSpreadVal.value = ageSpreadInput.value;
+        sidebarParams.initialAgeMaxRatio = parseFloat(ageSpreadInput.value);
+        window.initialAgeMaxRatio = parseFloat(ageSpreadInput.value);
+    };
+    ageSpreadVal.oninput = () => {
+        ageSpreadInput.value = ageSpreadVal.value;
+        sidebarParams.initialAgeMaxRatio = parseFloat(ageSpreadVal.value);
+        window.initialAgeMaxRatio = parseFloat(ageSpreadVal.value);
+    };
+    ageSpreadRow.dataset.label = 'Initial Age Spread';
+    tabPanels[0].appendChild(ageSpreadRow);
+    ageSpreadInput.disabled = paramDisabled;
+    ageSpreadVal.disabled = paramDisabled;
 
     // 社交閾値
     const socialRow = document.createElement('div');

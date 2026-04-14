@@ -21,6 +21,7 @@
       "pairReproductionCooldownSeconds": 90,
       "reproductionCooldownSeconds": 10,
       "fruitRegenIntervalSeconds": 60,
+      "initialAgeMaxRatio": 0.5,
       "maxAffinity": 100,
       "autoRecoverStall": true,
       "recoverActionCooldown": 0.5,

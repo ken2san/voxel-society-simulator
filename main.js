@@ -52,12 +52,12 @@ async function init() {
         for (let i = 0; i < 10; i++) {
             await spawnCharacter(findValidSpawn());
         }
-        // Randomize initial ages to prevent synchronized cohort die-off.
-        // All characters spawned at the same time would otherwise all hit
-        // old_age death simultaneously. Spread ages over 0–50% of lifespan.
+        // Randomize initial ages to reduce synchronized cohort die-off.
+        // Spread is controlled by initialAgeMaxRatio (0 = all age 0, 1 = up to full lifespan).
         {
             const lifespan = window.characterLifespan || 240;
-            characters.forEach(c => { c.age = Math.random() * lifespan * 0.5; });
+            const ratio = (window.initialAgeMaxRatio !== undefined) ? window.initialAgeMaxRatio : 0.5;
+            characters.forEach(c => { c.age = Math.random() * lifespan * ratio; });
         }
         // Initialize relationships after all characters are created
 
@@ -431,10 +431,10 @@ async function regenerateWorld() {
         const pos = findValidSpawn();
         if (pos) await spawnCharacter(pos);
     }
-    // Randomize initial ages to prevent synchronized die-off
+    // Randomize initial ages to reduce synchronized die-off.
     {
         const lifespan = window.characterLifespan || 240;
-        characters.forEach(c => { c.age = Math.random() * lifespan * 0.5; });
+        characters.forEach(c => { c.age = Math.random() * lifespan * 0.65; });
     }
 
     // Update sidebar if available
