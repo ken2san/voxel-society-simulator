@@ -372,8 +372,8 @@ export function animate() {
             const _alv = window.characters.filter(c => c && c.state !== 'dead');
             const _pop = _alv.length;
 
-            // Reset animate state when chronicle was cleared (sim restart)
-            if (Array.isArray(window.__societyChronicle) && window.__societyChronicle.length === 0 && animate._chronicleStarted) {
+            // Reset animate state when event log was cleared (sim restart)
+            if (Array.isArray(window.__eventLog) && window.__eventLog.length === 0 && animate._chronicleStarted) {
                 animate._chronicleStarted = false;
                 animate._popPeak = 0;
                 animate._lastChronPop = undefined;

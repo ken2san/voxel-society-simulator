@@ -1983,111 +1983,61 @@ const _etlKindColor = {
 };
 
 function createTimelineHandleHTML(ev) {
-    // Chronicle event (has .icon and .text)
-    if (ev.icon && ev.text && !ev.type) {
-        return `<span>${ev.icon}</span>&thinsp;<span style="font-size:0.9em;">${ev.text}</span>`;
-    }
-    const isB = ev.type === 'birth';
-    const dot = `<span style="color:${isB ? '#4ade80' : '#f87171'};font-size:1.1em;line-height:1;">●</span>`;
-    return dot + `&nbsp;<span style="font-size:0.9em;">${_etlFormatEvent(ev)}</span>`;
+    const dot = ev.kind === 'birth'
+        ? `<span style="color:#4ade80;font-size:1.1em;line-height:1;">●</span>&nbsp;`
+        : ev.kind === 'death'
+        ? `<span style="color:#f87171;font-size:1.1em;line-height:1;">●</span>&nbsp;`
+        : `<span>${ev.icon}</span>&thinsp;`;
+    return dot + `<span style="font-size:0.9em;">${ev.text}</span>`;
 }
 
 function createTimelineEventHTML(ev) {
-    const isChronicle = ev.icon && ev.text && !ev.type;
-    const kind = isChronicle ? (ev.kind || 'event') : ev.type;
-    const borderColor = _etlKindColor[kind] || '#64748b';
+    const borderColor = _etlKindColor[ev.kind] || '#64748b';
     const timeStr = _etlFormatTime(ev.t);
-
-    if (isChronicle) {
-        return `<div style="display:flex;align-items:flex-start;gap:7px;padding:4px 6px 4px 8px;` +
-            `border-left:3px solid ${borderColor};background:rgba(255,255,255,0.04);border-radius:0 4px 4px 0;margin-bottom:2px;">` +
-            `<span style="font-size:1.0em;line-height:1.6;flex-shrink:0;">${ev.icon}</span>` +
-            `<div style="flex:1;min-width:0;">` +
-                `<div style="color:#e2e8f0;font-size:0.88em;">${ev.text}</div>` +
-                `<div style="color:#64748b;font-size:0.76em;">${timeStr}</div>` +
-            `</div>` +
-        `</div>`;
-    }
-
-    // Lifecycle birth / death
-    const isB = ev.type === 'birth';
-    const icon = isB ? '👶' : '💀';
-    const mainText = _etlFormatEvent(ev);
-    const meta = [
-        timeStr,
-        ev.generation !== undefined ? `G${ev.generation}` : null,
-        ev.age !== undefined ? `${Math.round(ev.age)}s` : null
-    ].filter(Boolean);
     return `<div style="display:flex;align-items:flex-start;gap:7px;padding:4px 6px 4px 8px;` +
         `border-left:3px solid ${borderColor};background:rgba(255,255,255,0.04);border-radius:0 4px 4px 0;margin-bottom:2px;">` +
-        `<span style="font-size:1.0em;line-height:1.6;flex-shrink:0;">${icon}</span>` +
+        `<span style="font-size:1.0em;line-height:1.6;flex-shrink:0;">${ev.icon}</span>` +
         `<div style="flex:1;min-width:0;">` +
-            `<div style="color:#e2e8f0;font-size:0.88em;">${mainText}</div>` +
-            `<div style="color:#64748b;font-size:0.76em;">${meta.join(' · ')}</div>` +
+            `<div style="color:#e2e8f0;font-size:0.88em;">${ev.text}</div>` +
+            `<div style="color:#64748b;font-size:0.76em;">${timeStr}</div>` +
         `</div>` +
     `</div>`;
 }
 
-// --- Lifecycle Event Timeline ---
-if (!window.__lifecycleEventLog) window.__lifecycleEventLog = [];
+// --- Unified Event Timeline ---
+if (!window.__eventLog) window.__eventLog = [];
 let _lastSeenBirthT = 0;
 let _lastSeenDeathT = 0;
 let _drawerExpanded = false;
-const LIFECYCLE_LOG_MAX = 30;
-
-function pushLifecycleEvent(type, data) {
-    const ev = Object.assign({ t: Date.now(), type }, data);
-    window.__lifecycleEventLog.unshift(ev);
-    if (window.__lifecycleEventLog.length > LIFECYCLE_LOG_MAX) {
-        window.__lifecycleEventLog.length = LIFECYCLE_LOG_MAX;
-    }
-}
 
 function syncLifecycleEventsFromStats() {
     const stats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
-    if (!stats) return;
+    if (!stats || !Array.isArray(window.__eventLog)) return;
     const lb = stats.latestBirth;
     if (lb && lb.t && lb.t > _lastSeenBirthT) {
         _lastSeenBirthT = lb.t;
-        pushLifecycleEvent('birth', {
-            childId: lb.childId,
-            generation: lb.generation,
-            parentIds: lb.parentIds
-        });
+        const id = lb.childId !== undefined ? `#${lb.childId}` : '';
+        const gen = lb.generation !== undefined ? ` (G${lb.generation})` : '';
+        const pText = (lb.parentIds && lb.parentIds.length >= 2)
+            ? ` — #${lb.parentIds[0]} × #${lb.parentIds[1]}` : '';
+        window.__eventLog.unshift({ t: lb.t, icon: '👶', text: `Born ${id}${gen}${pText}`, kind: 'birth' });
+        if (window.__eventLog.length > 60) window.__eventLog.pop();
     }
     const ld = stats.latestDeath;
     if (ld && ld.t && ld.t > _lastSeenDeathT) {
         _lastSeenDeathT = ld.t;
-        pushLifecycleEvent('death', {
-            charId: ld.id,
-            cause: ld.cause,
-            age: ld.age,
-            generation: ld.generation,
-            wasChild: ld.wasChild
-        });
+        const id = ld.id !== undefined ? `#${ld.id}` : '';
+        const gen = ld.generation !== undefined ? ` G${ld.generation}` : '';
+        const age = ld.age !== undefined ? `, ${Math.round(ld.age)}s` : '';
+        const cause = ld.cause ? ` — ${ld.cause.replace(/_/g, ' ')}` : '';
+        window.__eventLog.unshift({ t: ld.t, icon: '💀', text: `Died ${id}${gen}${age}${cause}`, kind: 'death' });
+        if (window.__eventLog.length > 60) window.__eventLog.pop();
     }
 }
 
 function _etlFormatTime(t) {
     const d = new Date(t);
     return d.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function _etlFormatEvent(ev) {
-    if (ev.type === 'birth') {
-        const id = ev.childId !== undefined ? `#${ev.childId}` : '';
-        const gen = ev.generation !== undefined ? ` (G${ev.generation})` : '';
-        if (ev.parentIds && ev.parentIds.length >= 2) {
-            return `Born ${id}${gen} — #${ev.parentIds[0]} × #${ev.parentIds[1]}`;
-        }
-        return `Born ${id}${gen}`;
-    } else {
-        const id = ev.charId !== undefined ? `#${ev.charId}` : '';
-        const gen = ev.generation !== undefined ? ` G${ev.generation}` : '';
-        const age = ev.age !== undefined ? `, ${Math.round(ev.age)}s` : '';
-        const cause = ev.cause ? ` — ${ev.cause.replace(/_/g, ' ')}` : '';
-        return `Died ${id}${gen}${age}${cause}`;
-    }
 }
 
 function initEventTimelineDrawer() {
@@ -2135,32 +2085,29 @@ function initEventTimelineDrawer() {
 
 function renderEventTimeline() {
     syncLifecycleEventsFromStats();
-    // Merge lifecycle events + chronicle events, sort newest first
-    const lifecycle = Array.isArray(window.__lifecycleEventLog) ? window.__lifecycleEventLog : [];
-    const chronicle = Array.isArray(window.__societyChronicle) ? window.__societyChronicle : [];
-    const merged = [...lifecycle, ...chronicle].sort((a, b) => b.t - a.t).slice(0, 50);
+    const events = Array.isArray(window.__eventLog) ? window.__eventLog.slice(0, 50) : [];
 
     const latestEl = document.getElementById('etl-latest');
     const listEl = document.getElementById('etl-list');
     const countsEl = document.getElementById('etl-counts');
     if (!latestEl) return;
 
-    // Update birth/death count badge
+    // Update birth/death count badge from population stats
     if (countsEl) {
         const stats = typeof window.getPopulationStats === 'function' ? window.getPopulationStats() : null;
-        const births = stats ? stats.births : lifecycle.filter(e => e.type === 'birth').length;
-        const deaths = stats ? stats.deaths : lifecycle.filter(e => e.type === 'death').length;
+        const births = stats ? stats.births : 0;
+        const deaths = stats ? stats.deaths : 0;
         countsEl.innerHTML = `<span style="color:#4ade80;">↑${births}</span>&thinsp;<span style="color:#f87171;">↓${deaths}</span>`;
     }
 
-    if (merged.length === 0) {
+    if (events.length === 0) {
         latestEl.textContent = 'Waiting for first event…';
         if (listEl) listEl.innerHTML = `<div style="padding:16px;color:#64748b;text-align:center;font-style:italic;">The colony hasn't started yet.</div>`;
         return;
     }
-    latestEl.innerHTML = createTimelineHandleHTML(merged[0]);
+    latestEl.innerHTML = createTimelineHandleHTML(events[0]);
     if (_drawerExpanded && listEl) {
-        listEl.innerHTML = merged.map(createTimelineEventHTML).join('');
+        listEl.innerHTML = events.map(createTimelineEventHTML).join('');
     }
 }
 
@@ -2216,15 +2163,13 @@ function renderCharacterList() {
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
     leftSidebar.innerHTML = '';
     // タイトルを追加
-    const aliveCount = window.characters.filter(c => c.state !== 'dead').length;
     const listHeader = document.createElement('div');
     listHeader.className = 'character-list-header';
     listHeader.innerHTML =
         `<div>` +
             `<div class="character-list-kicker">Observation</div>` +
             `<h3 class="character-list-title">Society Overview</h3>` +
-        `</div>` +
-        `<div class="character-list-count">${aliveCount} alive</div>`;
+        `</div>`;
     leftSidebar.appendChild(listHeader);
 
     // --- 母集団統計パネル ---

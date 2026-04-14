@@ -621,8 +621,8 @@ window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
         latestBirth: null,
         latestDeath: null
     };
-    // Reset chronicle and generation tracker on new simulation
-    window.__societyChronicle = [];
+    // Reset unified event log and generation tracker on new simulation
+    window.__eventLog = [];
     window.__maxGenSeen = 0;
     return window.__simPopulationStats;
 };
@@ -634,13 +634,14 @@ window.getPopulationStats = function getPopulationStats() {
     return window.__simPopulationStats;
 };
 
-// --- Society Chronicle ---
-// Lightweight narrative event log. Max 60 entries; oldest evicted on overflow.
-if (!window.__societyChronicle) window.__societyChronicle = [];
+// --- Unified Event Log ---
+// Single store for all timeline events (society narrative + birth/death).
+// Max 60 entries; newest-first (unshift). Replacing __societyChronicle + __lifecycleEventLog.
+if (!window.__eventLog) window.__eventLog = [];
 window.logChronicleEvent = function logChronicleEvent(icon, text, kind) {
     const entry = { t: Date.now(), icon, text, kind: kind || 'event' };
-    window.__societyChronicle.push(entry);
-    if (window.__societyChronicle.length > 60) window.__societyChronicle.shift();
+    window.__eventLog.unshift(entry);
+    if (window.__eventLog.length > 60) window.__eventLog.pop();
     return entry;
 };
 
