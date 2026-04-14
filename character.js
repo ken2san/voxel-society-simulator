@@ -2620,6 +2620,23 @@ class Character {
             if (this.needs.hunger <= hungerEmergency + 8) this.learn && this.learn({ type: 'HUNGER_STRESS' });
             if (this.needs.energy <= energyEmergency + 8) this.learn && this.learn({ type: 'ENERGY_STRESS' });
             if (this.state === 'socializing' && this.needs.social > 80) this.learn && this.learn({ type: 'SOCIAL_SUCCESS' });
+
+            // 近接敵フラグを2秒ごとに更新 (O(n) max = relationships.size)
+            this._nearEnemy = false;
+            if (this.relationships && this.relationships.size > 0) {
+                const _floor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
+                const _chars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+                for (const [otherId, aff] of this.relationships.entries()) {
+                    if (aff <= _floor + 3) {
+                        const other = _chars.find(c => c.id === otherId && c.state !== 'dead');
+                        if (other) {
+                            const dx = Math.abs(this.gridPos.x - other.gridPos.x);
+                            const dz = Math.abs(this.gridPos.z - other.gridPos.z);
+                            if (dx + dz <= 5) { this._nearEnemy = true; break; }
+                        }
+                    }
+                }
+            }
         }
         // --- Affinity decay: slowly reduce affinity over time to stabilize long-term behavior ---
         try {
@@ -3996,6 +4013,16 @@ class Character {
             // Lonely eyes
             this.leftEye.scale.set(0.9, 0.9, 0.9);
             this.rightEye.scale.set(0.9, 0.9, 0.9);
+        } else if (this._nearEnemy) {
+            // 近接敵: オレンジ目 + 眉をしかめた形 (Y方向に引き伸ばして睨み顔)
+            this.eyeMaterial.color.set(0xff6600);
+            this.leftEye.scale.set(1.0, 1.4, 1.0);
+            this.rightEye.scale.set(1.0, 1.4, 1.0);
+        } else if (!this.groupId && this.needs && this.needs.safety < 60) {
+            // 孤立: 薄紫の目 + 少し小さく (不安感)
+            this.eyeMaterial.color.set(0x9988bb);
+            this.leftEye.scale.set(0.82, 0.82, 0.82);
+            this.rightEye.scale.set(0.82, 0.82, 0.82);
         } else {
             this.eyeMaterial.color.set(0x000000);
             // Normal eyes
@@ -4149,6 +4176,8 @@ class Character {
             this.thoughtBubble.textContent = '❤️';
             this.thoughtBubble.setAttribute('data-show', 'true');
             this.thoughtBubble.style.display = '';
+            this.thoughtBubble.style.background = 'rgba(255,220,235,0.96)';
+            this.thoughtBubble.style.borderColor = '#f9a8d4';
             // 位置更新
             if (camera && this.iconAnchor) {
                 const canvas = document.getElementById('gameCanvas');
@@ -4183,6 +4212,9 @@ class Character {
         else if (this.needs && this.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
         if (this.needs && this.needs.energy < 30) icons.push('💤');
         if (this.needs && this.needs.social < 30) icons.push('👥');
+        // --- 孤立・争いの視覚インジケーター ---
+        if (this._nearEnemy) icons.push('💢');               // 近くに敵がいる
+        else if (!this.groupId && this.needs && this.needs.safety < 60) icons.push('😶'); // 孤立+safety低下
         if (icons.length === 0) icons.push('🙂');
         html += icons.map(ic => ` <span style="font-size:0.98em;vertical-align:middle;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">${ic}</span>`).join('');
         if (html) {
@@ -4194,12 +4226,23 @@ class Character {
             this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
             this.thoughtBubble.style.position = 'fixed';
             this.thoughtBubble.style.display = 'block';
-            this.thoughtBubble.style.background = 'rgba(255,255,255,0.92)';
-            this.thoughtBubble.style.border = '1.2px solid #eee';
+            // バブル背景: 争い=赤, 孤立=グレー, 平常=白
+            if (this._nearEnemy) {
+                this.thoughtBubble.style.background = 'rgba(255,90,80,0.93)';
+                this.thoughtBubble.style.border = '1.5px solid #f87171';
+                this.thoughtBubble.style.color = '#fff';
+            } else if (!this.groupId && this.needs && this.needs.safety < 60) {
+                this.thoughtBubble.style.background = 'rgba(180,170,200,0.93)';
+                this.thoughtBubble.style.border = '1.2px solid #a78bfa';
+                this.thoughtBubble.style.color = '#fff';
+            } else {
+                this.thoughtBubble.style.background = 'rgba(255,255,255,0.92)';
+                this.thoughtBubble.style.border = '1.2px solid #eee';
+                this.thoughtBubble.style.color = '#333';
+            }
             this.thoughtBubble.style.borderRadius = '16px';
             this.thoughtBubble.style.boxShadow = '0 2px 8px #0001';
             this.thoughtBubble.style.padding = '2px 8px';
-            this.thoughtBubble.style.color = '#333';
             this.thoughtBubble.style.fontSize = '1.08em';
         } else {
             this.thoughtBubble.setAttribute('data-show', 'false');
