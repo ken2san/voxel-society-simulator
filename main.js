@@ -624,6 +624,7 @@ window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
     // Reset unified event log and generation tracker on new simulation
     window.__eventLog = [];
     window.__maxGenSeen = 0;
+    window.__deathRecords = []; // reset death record tombstones
     return window.__simPopulationStats;
 };
 

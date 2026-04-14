@@ -3232,6 +3232,33 @@ class Character {
                 });
             }
         } catch (e) {}
+
+        // --- Death Record tombstone: persist lightweight snapshot before instance is discarded ---
+        try {
+            if (typeof window !== 'undefined') {
+                if (!window.__deathRecords) window.__deathRecords = [];
+                window.__deathRecords.push({
+                    id: this.id,
+                    generation: Number(this.generation || 0),
+                    ageAtDeath: Number(this.age || 0),
+                    lifespan: Number(this.getEffectiveLifespan ? this.getEffectiveLifespan() : 240),
+                    cause,
+                    traits: this.personality ? { ...this.personality } : {},
+                    childCount: Number(this.childCount || 0),
+                    parentIds: this.parentIds ?? null,
+                    groupIdAtDeath: this.groupId ?? null,
+                    finalNeeds: {
+                        hunger: Number(this.needs?.hunger ?? 0),
+                        energy: Number(this.needs?.energy ?? 0),
+                        safety: Number(this.needs?.safety ?? 0),
+                        social: Number(this.needs?.social ?? 0)
+                    }
+                });
+                // Cap at 200 records (oldest dropped first)
+                if (window.__deathRecords.length > 200) window.__deathRecords.shift();
+            }
+        } catch (e) {}
+
         // 死亡時に持ち物をワールドにドロップ
         if (this.inventory && this.inventory[0]) {
             const dropPos = { x: this.gridPos.x, y: this.gridPos.y - 1, z: this.gridPos.z };
