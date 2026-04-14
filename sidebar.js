@@ -207,6 +207,7 @@ function renderCharacterDetail() {
         reproductionCooldownSeconds:        10,
         fruitRegenIntervalSeconds:          60,
         initialAgeMaxRatio:                 0.5,
+        traitAffinityCapReduction:          0.6,
         autoRecoverStall:                   true,
         recoverActionCooldown:              0.5,
         maxActionCooldown:                  8,
@@ -927,6 +928,49 @@ function renderCharacterDetail() {
     parentCooldownRow.appendChild(parentCooldownNumber);
     parentCooldownRow.dataset.label = 'Parent Cooldown Reproduction';
     tabPanels[1].appendChild(parentCooldownRow);
+
+    // --- Trait Affinity Cap Reduction Slider ---
+    // Controls how much personality distance lowers affinity ceiling.
+    // 0 = traits have no effect; 1 = opposite-trait pairs can never exceed 0 affinity.
+    if (sidebarParams.traitAffinityCapReduction === undefined) sidebarParams.traitAffinityCapReduction = 0.6;
+    const traitCapRow = document.createElement('div');
+    traitCapRow.style.display = 'flex';
+    traitCapRow.style.alignItems = 'center';
+    traitCapRow.style.gap = '10px';
+    const traitCapLabel = document.createElement('span');
+    traitCapLabel.textContent = '🧠 Ideology Gap Effect:';
+    traitCapLabel.style.width = '140px';
+    traitCapRow.appendChild(traitCapLabel);
+    const traitCapInput = document.createElement('input');
+    traitCapInput.type = 'range';
+    traitCapInput.min = 0;
+    traitCapInput.max = 1;
+    traitCapInput.step = 0.05;
+    traitCapInput.value = sidebarParams.traitAffinityCapReduction;
+    traitCapInput.style.width = '120px';
+    traitCapInput.disabled = paramDisabled;
+    traitCapInput.addEventListener('input', e => {
+        sidebarParams.traitAffinityCapReduction = parseFloat(e.target.value);
+        traitCapNumber.value = e.target.value;
+        window.traitAffinityCapReduction = parseFloat(e.target.value);
+    });
+    traitCapRow.appendChild(traitCapInput);
+    const traitCapNumber = document.createElement('input');
+    traitCapNumber.type = 'number';
+    traitCapNumber.min = 0;
+    traitCapNumber.max = 1;
+    traitCapNumber.step = 0.05;
+    traitCapNumber.value = sidebarParams.traitAffinityCapReduction;
+    traitCapNumber.style.width = '56px';
+    traitCapNumber.disabled = paramDisabled;
+    traitCapNumber.addEventListener('input', e => {
+        sidebarParams.traitAffinityCapReduction = parseFloat(e.target.value);
+        traitCapInput.value = e.target.value;
+        window.traitAffinityCapReduction = parseFloat(e.target.value);
+    });
+    traitCapRow.appendChild(traitCapNumber);
+    traitCapRow.dataset.label = 'Ideology Gap Effect';
+    tabPanels[1].appendChild(traitCapRow);
 
     // --- Auto recover stall toggle + recovery cooldown ---
     const autoRecoverRow = document.createElement('div');

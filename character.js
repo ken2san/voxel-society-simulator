@@ -1233,6 +1233,22 @@ class Character {
             try { this._bfsRetryUntil = Date.now() + 250; } catch (e2) {}
         }
     }
+    // --- Personality trait distance (0 = identical, 1 = opposite extremes) ---
+    // Uses the 6-trait vector; missing traits default to 1.0.
+    static computeTraitDistance(p1, p2) {
+        const TRAITS = ['bravery', 'diligence', 'sociality', 'curiosity', 'resourcefulness', 'resilience'];
+        const TRAIT_RANGE = 1.4; // max possible difference per trait (0.3 to 1.7)
+        let sumSq = 0;
+        for (const t of TRAITS) {
+            const a = p1[t] ?? 1.0;
+            const b = p2[t] ?? 1.0;
+            const d = (a - b) / TRAIT_RANGE;
+            sumSq += d * d;
+        }
+        // Normalize to [0, 1]: max sumSq is TRAITS.length when all traits are at opposite extremes
+        return Math.min(1, Math.sqrt(sumSq / TRAITS.length));
+    }
+
     // --- Group detection and per-group leader election ---
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
@@ -1907,6 +1923,8 @@ class Character {
         // --- 年齢・世代 ---
         this.age = 0; // seconds lived (incremented for all characters, not just children)
         this.generation = 0;
+        // Slight lifespan variance prevents cohort-wide synchronized old-age collapse.
+        this._lifespanMultiplier = 0.9 + Math.random() * 0.2; // ~90% to ~110%
         // --- Love timer for heart mark ---
         this.loveTimer = 0;
         this.lovePhase = null; // 'showing', 'completed', null
@@ -2258,6 +2276,30 @@ class Character {
         const blockId = this._normalizeBlockVal(rawVal);
         const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
         return blockType && blockType.diggable;
+    }
+
+    getEffectiveLifespan() {
+        const baseLifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
+            ? Number(window.characterLifespan) : 240;
+        return Math.max(60, baseLifespan * (this._lifespanMultiplier || 1.0));
+    }
+
+    getLifeRatio() {
+        const effectiveLifespan = this.getEffectiveLifespan();
+        return Math.max(0, Math.min(1.5, Number(this.age || 0) / Math.max(1, effectiveLifespan)));
+    }
+
+    getAgingProfile() {
+        const lifeRatio = this.getLifeRatio();
+        const late = Math.max(0, Math.min(1, (lifeRatio - 0.65) / 0.35));
+        const smoothLate = late * late * (3 - 2 * late);
+        return {
+            lifeRatio,
+            mobilityMul: 1.0 - (0.22 * smoothLate),
+            exploreMul: 1.0 - (0.40 * smoothLate),
+            // Fertility declines earlier and faster than mobility in most species.
+            fertilityMul: lifeRatio <= 0.55 ? 1.0 : Math.max(0, 1.0 - ((lifeRatio - 0.55) / 0.35))
+        };
     }
 
     // --- Learning logic (bak_game.js準拠) ---
@@ -2620,9 +2662,13 @@ class Character {
                 const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? window.affinityIncreaseRate : 10;
                 let affinity = this.relationships.get(partner.id) || 0;
                 affinity += deltaTime * affinityRate;
-                // clamp affinity to avoid runaway values
+                // clamp affinity: personality trait distance lowers the ceiling
                 const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
-                if (affinity > maxAffinity) affinity = maxAffinity;
+                const capReduction = (typeof window !== 'undefined' && window.traitAffinityCapReduction !== undefined) ? window.traitAffinityCapReduction : 0.6;
+                const traitDist = Character.computeTraitDistance(this.personality, partner.personality);
+                // affinityCap: at traitDist=0 (identical) → maxAffinity; at traitDist=1 (opposite) → maxAffinity*(1-capReduction)
+                const affinityCap = maxAffinity * (1.0 - capReduction * traitDist);
+                if (affinity > affinityCap) affinity = affinityCap;
                 this.relationships.set(partner.id, affinity);
                 // --- ハート表示 & reproduction logic ---
                 // 両者が距離1以内＆友好度60以上でハート表示。もし既にlovePhaseが'showing'かつ
@@ -2769,8 +2815,7 @@ class Character {
         }
         // Natural lifespan: adults die of old age, making room for offspring
         if (!this.isChild && this.state !== 'dead') {
-            const lifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
-                ? Number(window.characterLifespan) : 240;
+            const lifespan = this.getEffectiveLifespan();
             if (this.age >= lifespan) {
                 try { console.log(`[LIFESPAN] ${this.id} died of old age (${Math.round(this.age)}s, gen=${this.generation})`); } catch(e){}
                 this.die('old_age');
@@ -2948,8 +2993,7 @@ class Character {
                 }
                 if (!this._telemetryNextAt) this._telemetryNextAt = now;
                 if (now >= this._telemetryNextAt) {
-                    const lifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
-                        ? Number(window.characterLifespan) : 240;
+                    const lifespan = this.getEffectiveLifespan();
                     const inventoryCount = Array.isArray(this.inventory) ? this.inventory.filter(Boolean).length : 0;
                     const homeDistance = this.homePosition
                         ? (Math.abs((this.gridPos?.x || 0) - this.homePosition.x)
@@ -2967,7 +3011,7 @@ class Character {
                         isChild: !!this.isChild,
                         age: Number(this.age || 0),
                         lifespan: lifespan,
-                        lifeRatio: lifespan > 0 ? Number((Number(this.age || 0) / lifespan).toFixed(4)) : 0,
+                        lifeRatio: Number(this.getLifeRatio().toFixed(4)),
                         action: actionType,
                         pos: { x: this.gridPos.x, y: this.gridPos.y, z: this.gridPos.z },
                         target: this.targetPos ? { x: this.targetPos.x, y: this.targetPos.y, z: this.targetPos.z } : null,
@@ -3592,7 +3636,8 @@ class Character {
             this.head.rotation.y += (this._bodyYaw - this.head.rotation.y) * 0.35;
         }
     // apply speed multiplier for slight variation
-    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0);
+    const aging = this.getAgingProfile ? this.getAgingProfile() : { mobilityMul: 1.0 };
+    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0) * (aging.mobilityMul || 1.0);
     const moveDistance = effectiveSpeed * deltaTime;
         if (direction.length() < moveDistance) {
             // 移動実行前の最終当たり判定チェック
@@ -4124,6 +4169,14 @@ class Character {
         if (this.isChild || (partner && partner.isChild)) {
             this.log('Attempted reproduction blocked because one partner is a child', {self: this.id, partner: partner && partner.id});
             try { console.log(`[REPRO] reproduction blocked: ${this.id} or ${partner && partner.id} is a child`); } catch(e){}
+            return;
+        }
+
+        const myFertility = this.getAgingProfile ? this.getAgingProfile().fertilityMul : 1.0;
+        const partnerFertility = (partner && partner.getAgingProfile) ? partner.getAgingProfile().fertilityMul : 1.0;
+        const fertilityChance = Math.max(0, Math.min(1, myFertility * partnerFertility));
+        if (Math.random() > fertilityChance) {
+            try { console.log(`[REPRO] reproduction skipped due to age-related fertility decline (chance=${fertilityChance.toFixed(2)})`); } catch(e){}
             return;
         }
 

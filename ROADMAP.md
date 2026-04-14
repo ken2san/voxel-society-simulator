@@ -184,6 +184,8 @@ Confirmed the core problem is **not food shortage** — it is **population struc
 | Priority | Task | Rationale |
 | -------- | ---- | --------- |
 | ★★★ | ~~**Stagger initial spawn ages**~~ ✅ Done | `initialAgeMaxRatio` param (default 0.5) added via 3-step rule. `main.js` uses `window.initialAgeMaxRatio` instead of hardcoded `0.65`. Slider in Setup tab. |
+| ★★★ | ~~**Ideology gap → affinity ceiling**~~ ✅ Done | `Character.computeTraitDistance()` uses 6-trait vector (bravery/diligence/sociality/curiosity/resourcefulness/resilience). During socializing, `affinityCap = maxAffinity × (1 − capReduction × traitDist)`. Param: `traitAffinityCapReduction` (default 0.6) in Social tab → groups naturally form around compatible worldviews; Dunbar-scale fragmentation emerges without explicit rule. |
+| ★★☆ | **Affinity lower floor (hate-but-persist)** | Currently affinity ≤ 0 causes `relationships.delete()`. Change floor to 5 — negative relationships remain visible as structural tension. Change: `character.js` line ~2618 `relationships.delete(k)` → clamp to 5. |
 | ★★☆ | **Ease reproduction rate** — consider lowering `pairReproductionCooldownSeconds` (90 → 45) or raising `affinityIncreaseRate` | After age stagger, measure birth rate in telemetry before touching this. |
 | ★☆☆ | **Hunger × fertility link** — suppress reproduction score when `hunger < threshold` | Ecological pressure signal; low urgency while food is abundant. |
 
