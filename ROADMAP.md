@@ -317,21 +317,14 @@ Social structure must be real before generational drift can be read.
 
 ## System Design Backlog — Active (Layer 1–2)
 
-### 1 — Crisis Mode ★★★ `Layer 1`
+### 1 — ~~Crisis Mode~~ ✅ Done `Layer 1` (commit `10b622b`)
 
-When any need drops below a critical threshold, the character switches to **single-purpose mode**:
-all other rules suspended, only the critical need is addressed.
+**Implemented**: PRIORITY 0.5 inserted in `AI_rulebase.js` between energy-emergency and exploration.
+When `hunger ≤ 15`: all social/home/exploration/role rules bypassed; character seeks food or wanders.
+Reproduction blocked in `character.js` at both loveTimer trigger sites when either partner hunger ≤ 15.
 
-```javascript
-if (hunger < 15) → suppress all actions except FIND_FOOD
-if (energy < 10) → suppress all actions except REST
-// reproduction blocked entirely during crisis
-```
-
-**Observable effect**: famine visually breaks social patterns — characters scatter to find food
-instead of clustering. Content vs. crisis states become immediately distinguishable.
-**Implementation**: add crisis check before priority tiers in `decideNextAction_rulebase()`.
-**Risk**: none. Lower bound on hunger/energy threshold prevents infinite loop.
+**Observable check**: with `seasonAmplitude ≥ 0.8`, watch for characters scattering during winter famine
+instead of clustering socially. Activity bars should show Eating collapse + Moving spike simultaneously.
 
 ---
 
