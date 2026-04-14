@@ -2593,7 +2593,8 @@ class Character {
         // --- 飢餓死判定: hunger=0 が続いた秒数が閾値を超えたら starvation 死 ---
         if (this.needs.hunger <= 0) {
             this._starvationTimer = (this._starvationTimer || 0) + deltaTime;
-            if (this._starvationTimer >= 10) {
+            const starvDelay = (typeof window !== 'undefined' && window.starvationDeathDelaySeconds !== undefined) ? window.starvationDeathDelaySeconds : 10;
+            if (this._starvationTimer >= starvDelay) {
                 this.die('starvation');
                 this.updateThoughtBubble(isNight, camera);
                 return;
@@ -4298,7 +4299,8 @@ class Character {
         // Mix personality — inherit average of parents + small noise; 5% chance of larger mutation per trait
         const _blendTrait = (a, b) => {
             const base = (a + b) / 2 + (Math.random() - 0.5) * 0.12;
-            const mutated = Math.random() < 0.05 ? base + (Math.random() - 0.5) * 0.5 : base;
+            const mutRate = (typeof window !== 'undefined' && window.mutationRate !== undefined) ? window.mutationRate : 0.05;
+            const mutated = Math.random() < mutRate ? base + (Math.random() - 0.5) * 0.5 : base;
             return Math.max(0.3, Math.min(1.7, mutated));
         };
         const p = this.personality, q = partner.personality;

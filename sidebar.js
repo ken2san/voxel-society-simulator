@@ -221,6 +221,9 @@ function renderCharacterDetail() {
         recentDigCooldownMs:                10000,
         digActionCooldown:                  2200,
         worldReservationTTL:                5000,
+        reproduceAffinityThreshold:         60,
+        mutationRate:                       0.05,
+        starvationDeathDelaySeconds:        10,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
@@ -1021,6 +1024,46 @@ function renderCharacterDetail() {
     minAgeRow.dataset.label = 'Min Reproduction Age Ratio';
     tabPanels[1].appendChild(minAgeRow);
 
+    // --- Reproduce Affinity Threshold ---
+    const reproAffinRow = document.createElement('div');
+    reproAffinRow.style.display = 'flex'; reproAffinRow.style.alignItems = 'center'; reproAffinRow.style.gap = '10px';
+    const reproAffinLabel = document.createElement('span');
+    reproAffinLabel.textContent = '💑 Repro Affinity Min:';
+    reproAffinLabel.style.width = '140px';
+    reproAffinRow.appendChild(reproAffinLabel);
+    const reproAffinInput = document.createElement('input');
+    reproAffinInput.type = 'range'; reproAffinInput.min = 20; reproAffinInput.max = 100; reproAffinInput.step = 1;
+    reproAffinInput.value = sidebarParams.reproduceAffinityThreshold; reproAffinInput.style.width = '120px'; reproAffinInput.disabled = paramDisabled;
+    reproAffinInput.addEventListener('input', e => { sidebarParams.reproduceAffinityThreshold = parseInt(e.target.value); reproAffinNumber.value = e.target.value; window.reproduceAffinityThreshold = parseInt(e.target.value); });
+    reproAffinRow.appendChild(reproAffinInput);
+    const reproAffinNumber = document.createElement('input');
+    reproAffinNumber.type = 'number'; reproAffinNumber.min = 20; reproAffinNumber.max = 100; reproAffinNumber.step = 1;
+    reproAffinNumber.value = sidebarParams.reproduceAffinityThreshold; reproAffinNumber.style.width = '56px'; reproAffinNumber.disabled = paramDisabled;
+    reproAffinNumber.addEventListener('input', e => { sidebarParams.reproduceAffinityThreshold = parseInt(e.target.value); reproAffinInput.value = e.target.value; window.reproduceAffinityThreshold = parseInt(e.target.value); });
+    reproAffinRow.appendChild(reproAffinNumber);
+    reproAffinRow.dataset.label = 'Repro Affinity Min Threshold';
+    tabPanels[1].appendChild(reproAffinRow);
+
+    // --- Mutation Rate ---
+    const mutRateRow = document.createElement('div');
+    mutRateRow.style.display = 'flex'; mutRateRow.style.alignItems = 'center'; mutRateRow.style.gap = '10px';
+    const mutRateLabel = document.createElement('span');
+    mutRateLabel.textContent = '🧬 Mutation Rate:';
+    mutRateLabel.style.width = '140px';
+    mutRateRow.appendChild(mutRateLabel);
+    const mutRateInput = document.createElement('input');
+    mutRateInput.type = 'range'; mutRateInput.min = 0; mutRateInput.max = 0.5; mutRateInput.step = 0.01;
+    mutRateInput.value = sidebarParams.mutationRate; mutRateInput.style.width = '120px'; mutRateInput.disabled = paramDisabled;
+    mutRateInput.addEventListener('input', e => { sidebarParams.mutationRate = parseFloat(e.target.value); mutRateNumber.value = e.target.value; window.mutationRate = parseFloat(e.target.value); });
+    mutRateRow.appendChild(mutRateInput);
+    const mutRateNumber = document.createElement('input');
+    mutRateNumber.type = 'number'; mutRateNumber.min = 0; mutRateNumber.max = 0.5; mutRateNumber.step = 0.01;
+    mutRateNumber.value = sidebarParams.mutationRate; mutRateNumber.style.width = '56px'; mutRateNumber.disabled = paramDisabled;
+    mutRateNumber.addEventListener('input', e => { sidebarParams.mutationRate = parseFloat(e.target.value); mutRateInput.value = e.target.value; window.mutationRate = parseFloat(e.target.value); });
+    mutRateRow.appendChild(mutRateNumber);
+    mutRateRow.dataset.label = 'Mutation Rate trait inheritance';
+    tabPanels[1].appendChild(mutRateRow);
+
     // --- Auto recover stall toggle + recovery cooldown ---
     const autoRecoverRow = document.createElement('div');
     autoRecoverRow.style.display = 'flex';
@@ -1631,6 +1674,26 @@ function renderCharacterDetail() {
     homeBuildInput.disabled = paramDisabled;
     homeBuildVal.disabled = paramDisabled;
 
+    // --- Starvation Death Delay ---
+    const starvRow = document.createElement('div');
+    starvRow.style.display = 'flex'; starvRow.style.alignItems = 'center'; starvRow.style.gap = '10px';
+    const starvLabel = document.createElement('span');
+    starvLabel.textContent = '⏱ Starvation Timer (s):';
+    starvLabel.style.width = '140px';
+    starvRow.appendChild(starvLabel);
+    const starvInput = document.createElement('input');
+    starvInput.type = 'range'; starvInput.min = 3; starvInput.max = 30; starvInput.step = 1;
+    starvInput.value = sidebarParams.starvationDeathDelaySeconds; starvInput.style.width = '120px'; starvInput.disabled = paramDisabled;
+    starvInput.addEventListener('input', e => { sidebarParams.starvationDeathDelaySeconds = parseInt(e.target.value); starvNumber.value = e.target.value; window.starvationDeathDelaySeconds = parseInt(e.target.value); });
+    starvRow.appendChild(starvInput);
+    const starvNumber = document.createElement('input');
+    starvNumber.type = 'number'; starvNumber.min = 3; starvNumber.max = 30; starvNumber.step = 1;
+    starvNumber.value = sidebarParams.starvationDeathDelaySeconds; starvNumber.style.width = '56px'; starvNumber.disabled = paramDisabled;
+    starvNumber.addEventListener('input', e => { sidebarParams.starvationDeathDelaySeconds = parseInt(e.target.value); starvInput.value = e.target.value; window.starvationDeathDelaySeconds = parseInt(e.target.value); });
+    starvRow.appendChild(starvNumber);
+    starvRow.dataset.label = 'Starvation Death Delay seconds';
+    tabPanels[2].appendChild(starvRow);
+
     // ランダム生成トグル
     const randomRow = document.createElement('div');
     randomRow.style.display = 'flex';
@@ -1713,7 +1776,6 @@ function renderCharacterDetail() {
                         }
                     }
                     window.characters = worldMod.characters;
-                    selectedCharId = window.characters[0]?.id;
                     // --- Reflect parameters to window before group initialization ---
                     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
                     window.initialAffinityMin = sidebarParams.initialAffinityMin;
@@ -1754,11 +1816,8 @@ function renderCharacterDetail() {
     rightSidebar.appendChild(paramBox);
 }
 
-let selectedCharId = undefined;
 let leftSidebar = null;
 let rightSidebar = null;
-// グループ色マップをグローバル化
-let groupColorMap = {};
 // サマリー表で開いている詳細キャラID
 let openedCharId = undefined;
 // Lightweight population pulse history for compact trend visualization.
@@ -2237,8 +2296,9 @@ function renderCharacterList() {
         const actEat    = alive.filter(c => c.action?.type === 'EAT').length;
         const actSocial = alive.filter(c => c.action?.type === 'SOCIALIZE').length;
         const actRest   = alive.filter(c => c.state === 'resting').length;
+        const actBuild  = alive.filter(c => c.state === 'working').length;
         const actMove   = alive.filter(c => c.state === 'moving' && c.action?.type !== 'EAT' && c.action?.type !== 'SOCIALIZE').length;
-        const actIdle   = Math.max(0, alive.length - actEat - actSocial - actRest - actMove);
+        const actIdle   = Math.max(0, alive.length - actEat - actSocial - actRest - actBuild - actMove);
         const actTotal  = Math.max(1, alive.length);
         function actBar(label, icon, count, color) {
             const pct = Math.round((count / actTotal) * 100);
@@ -2254,6 +2314,7 @@ function renderCharacterList() {
             `<div style="margin-top:7px;display:flex;flex-direction:column;gap:3px;background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 7px;">` +
                 actBar('Eat',      '🍎', actEat,    '#16a34a') +
                 actBar('Social',   '💬', actSocial, '#7c3aed') +
+                actBar('Build',    '🔨', actBuild,  '#0891b2') +
                 actBar('Rest',     '💤', actRest,   '#3b82f6') +
                 actBar('Moving',   '🚶', actMove,   '#f59e0b') +
                 actBar('Idle',     '⏸', actIdle,   '#94a3b8') +
@@ -2837,11 +2898,6 @@ function createCharacterDetailCard(char) {
     }
     return card;
 }
-
-    // 初期選択キャラが未設定なら自動で最初のキャラを選択
-    if (selectedCharId === undefined && window.characters.length > 0) {
-        selectedCharId = String(window.characters[0].id);
-    }
 
     // サイドバー初回描画時に右も必ず表示
     if (typeof renderCharacterDetail === 'function') {

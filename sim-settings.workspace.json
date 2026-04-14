@@ -36,7 +36,10 @@
       "pathOccupancyLookahead": 2,
       "recentDigCooldownMs": 10000,
       "digActionCooldown": 2200,
-      "worldReservationTTL": 5000
+      "worldReservationTTL": 5000,
+      "reproduceAffinityThreshold": 60,
+      "mutationRate": 0.05,
+      "starvationDeathDelaySeconds": 10
     },
     "telemetryConfig": {
       "sampleIntervalMs": 800,
