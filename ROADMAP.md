@@ -1,6 +1,6 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-04-13_
+_Last updated: 2026-04-14_
 
 ---
 
@@ -151,3 +151,57 @@ natural collision handling, no wall clipping, smooth visual feel.
 - avgWanderRatio: 69.3% | avgStuckLikeRatio: 8.1% | avgLowEnergyRatio: 10.9%
 - stallDetected: 0
 - Target after wall-slide: stuckLikeRatio < 5%
+
+---
+
+## Handoff — Session 2026-04-14
+
+_This section is updated at the end of each working session so the next AI thread can pick up without re-explanation._
+
+### What was discussed
+
+Design review of the lifecycle loop: birth → eating + socializing → death.
+Confirmed the core problem is **not food shortage** — it is **population structure**.
+
+### What was built
+
+| Commit | Change |
+| ------ | ------ |
+| `ec757a7` | `animate()`: time-based fruit regeneration every `fruitRegenIntervalSeconds` (default 60 s). Scans all GRASS surfaces and places FRUIT at `fruitSpawnRate` probability. |
+| `091dab3` | `ROADMAP.md`: Parameter Addition Rule (3-step: workspace JSON → PARAM_DEFAULTS → sidebar slider). `sim-settings.workspace.json`: added missing `fruitRegenIntervalSeconds: 60`. |
+
+### Confirmed findings (from telemetry `telemetry-2026-04-13T15-54-47-101Z.json`)
+
+- **Death cause**: 100% old age (starvation: 0). Food is not the bottleneck.
+- **Population crash**: 13 → 4 people in 2 seconds at sim_total = 360 s.
+- **Root cause**: All 10 initial characters spawn at `age = 0` simultaneously → they all hit `lifespan = 360 s` at the same moment → mass extinction event.
+- **Birth rate**: Only 3 births in 360 s (need ~10 to sustain initial pop of 10).
+- **Reproduction bottleneck**: `affinityIncreaseRate = 6`, `pairReproductionCooldownSeconds = 90` → at most 2–3 children per pair per lifespan. Not enough to offset deaths.
+- **Surviving 4** (gen=1): lifeRatio 0.81–0.97 — they are the next cohort collapse, forming the same synchronized death wave.
+
+### Next tasks (prioritized)
+
+| Priority | Task | Rationale |
+| -------- | ---- | --------- |
+| ★★★ | **Stagger initial spawn ages** — set `age = random(0, lifespan * 0.5)` at first spawn | Eliminates synchronized mass-death. Minimum code, maximum impact. 3-step param rule applies: add `initialAgeMaxRatio` (default 0.5) to workspace JSON + PARAM_DEFAULTS + slider. |
+| ★★☆ | **Ease reproduction rate** — consider lowering `pairReproductionCooldownSeconds` (90 → 45) or raising `affinityIncreaseRate` | After age stagger, measure birth rate in telemetry before touching this. |
+| ★☆☆ | **Hunger × fertility link** — suppress reproduction score when `hunger < threshold` | Ecological pressure signal; low urgency while food is abundant. |
+
+### Parameter addition rule (summary)
+
+Every new parameter requires all 3 steps:
+1. `sim-settings.workspace.json` → `settings.sidebarParams`
+2. `sidebar.js` `PARAM_DEFAULTS`
+3. `sidebar.js` slider in right panel
+
+### Key file map (quick reference)
+
+| Concern | File | Key function/variable |
+| ------- | ---- | --------------------- |
+| World loop | `world.js` | `animate()` |
+| Fruit regen | `world.js` | `animate.lastFruitRegenTime`, `fruitSpawnRate` |
+| Character lifecycle | `character.js` | `constructor` (`this.age`), `die()`, `reproduceWith()` |
+| AI decisions | `AI_rulebase.js`, `AI_utility.js` | rule-based / utility-based modes |
+| Sidebar params | `sidebar.js` | `PARAM_DEFAULTS`, slider rows per tab |
+| Initial param values | `sim-settings.workspace.json` | `settings.sidebarParams` |
+| Telemetry | `main.js` | `window.simTelemetryConfig`, `exportSimulatorSettingsObject()` |
