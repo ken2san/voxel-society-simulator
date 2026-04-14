@@ -3096,6 +3096,7 @@ class Character {
                             provisional: !!this.provisionalHome,
                             distance: homeDistance
                         },
+                        nearEnemy: !!this._nearEnemy,
                         inventory: {
                             count: inventoryCount,
                             hasTool: Array.isArray(this.inventory) ? this.inventory.includes('STONE_TOOL') : false,

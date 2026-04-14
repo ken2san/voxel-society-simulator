@@ -365,6 +365,46 @@ export function animate() {
         else if (_phase < 0.75)  { _name = 'Autumn'; _icon = '🍂'; }
         else                     { _name = 'Winter'; _icon = '❄️'; }
         window.currentSeasonInfo = { name: _name, icon: _icon, multiplier: Math.max(0, _mul), amplitude: _amp, phase: _phase };
+
+        // --- World-level telemetry snapshot (1s tick) ---
+        if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addWorldSample === 'function') {
+            // Count fruit blocks (BLOCK_TYPES.FRUIT.id === 4)
+            let _fruitCount = 0;
+            worldData.forEach(v => { if (v === 4) _fruitCount++; });
+
+            const _chars = Array.isArray(window.characters) ? window.characters : [];
+            const _alive = _chars.filter(c => c && c.state !== 'dead');
+            const _groups = new Set(_alive.map(c => c.groupId).filter(Boolean));
+            const _isolated = _alive.filter(c => !c.groupId).length;
+            const _conflictPairs = (() => {
+                let cnt = 0;
+                for (const c of _alive) { if (c._nearEnemy) cnt++; }
+                return Math.round(cnt / 2); // each pair counted twice
+            })();
+            const _needsAvg = (() => {
+                if (_alive.length === 0) return { hunger: 0, energy: 0, safety: 0, social: 0 };
+                const sum = { hunger: 0, energy: 0, safety: 0, social: 0 };
+                for (const c of _alive) {
+                    sum.hunger += c.needs?.hunger || 0;
+                    sum.energy += c.needs?.energy || 0;
+                    sum.safety += c.needs?.safety || 0;
+                    sum.social += c.needs?.social || 0;
+                }
+                const n = _alive.length;
+                return { hunger: +(sum.hunger/n).toFixed(1), energy: +(sum.energy/n).toFixed(1), safety: +(sum.safety/n).toFixed(1), social: +(sum.social/n).toFixed(1) };
+            })();
+
+            window.__simTelemetry.addWorldSample({
+                t: Date.now(),
+                fruitCount: _fruitCount,
+                season: { name: _name, multiplier: +Math.max(0, _mul).toFixed(3), phase: +_phase.toFixed(3) },
+                pop: _alive.length,
+                groups: _groups.size,
+                isolated: _isolated,
+                conflictPairs: _conflictPairs,
+                avgNeeds: _needsAvg
+            });
+        }
     }
 
     // --- 果物再生：fruitRegenIntervalSeconds ごとに表面GRASSにFRUITをランダム再生 ---

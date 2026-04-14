@@ -668,6 +668,7 @@ window.__simTelemetry = {
     startedAt: 0,
     endedAt: 0,
     samples: [],
+    worldSamples: [],
     events: [],
     counters: {
         droppedSamples: 0,
@@ -680,6 +681,13 @@ window.__simTelemetry = {
             return;
         }
         this.samples.push(sample);
+    },
+    addWorldSample(sample) {
+        if (!sample) return;
+        // world samples cap at 1/10 of maxSamples to keep file size reasonable
+        const cap = Math.ceil(window.simTelemetryConfig.maxSamples / 10);
+        if (this.worldSamples.length >= cap) return;
+        this.worldSamples.push(sample);
     },
     addEvent(evt) {
         if (!evt) return;
@@ -742,7 +750,16 @@ window.__simTelemetry = {
                 digActionCooldown: window.digActionCooldown,
                 worldReservationTTL: window.worldReservationTTL,
                 maxActionCooldown: window.maxActionCooldown,
-                recoverActionCooldown: window.recoverActionCooldown
+                recoverActionCooldown: window.recoverActionCooldown,
+                // ecology & social params added in recent sessions
+                seasonCycleSeconds: window.seasonCycleSeconds,
+                seasonAmplitude: window.seasonAmplitude,
+                fruitRegenIntervalSeconds: window.fruitRegenIntervalSeconds,
+                initialAgeMaxRatio: window.initialAgeMaxRatio,
+                minReproductionAgeRatio: window.minReproductionAgeRatio,
+                affinityFloor: window.affinityFloor,
+                isolationPenalty: window.isolationPenalty,
+                traitAffinityCapReduction: window.traitAffinityCapReduction
             },
             population
         };
@@ -751,6 +768,7 @@ window.__simTelemetry = {
         return {
             meta: this.snapshotMeta(),
             samples: this.samples,
+            worldSamples: this.worldSamples,
             events: this.events
         };
     },
@@ -758,6 +776,7 @@ window.__simTelemetry = {
         this.startedAt = Date.now();
         this.endedAt = 0;
         this.samples = [];
+        this.worldSamples = [];
         this.events = [];
         this.counters = { droppedSamples: 0, droppedEvents: 0 };
     }
