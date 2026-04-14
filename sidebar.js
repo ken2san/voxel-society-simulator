@@ -1818,6 +1818,22 @@ function createSparklineSVG(values, color, width = 86, height = 24) {
     );
 }
 
+// --- Society Phase derivation ---
+function getSocietyPhase(pop, netRate, starving, conflictPairs, initialPop, elapsedSec) {
+    if (pop === 0) return { phase: 'Extinct',    icon: '💀', color: '#7f1d1d', bg: '#fef2f2' };
+    if (pop <= 2)  return { phase: 'Last Stand', icon: '🕯️', color: '#9a1234', bg: '#fff1f2' };
+    const starvRatio = starving / pop;
+    const conflRatio = conflictPairs / Math.max(1, pop);
+    if (pop <= 4 && netRate < -0.5)  return { phase: 'Collapse',     icon: '📉', color: '#b91c1c', bg: '#fef2f2' };
+    if (starvRatio > 0.4)            return { phase: 'Famine',       icon: '☠️', color: '#92400e', bg: '#fffbeb' };
+    if (conflRatio > 0.3)            return { phase: 'Conflict',     icon: '⚔️', color: '#c2410c', bg: '#fff7ed' };
+    if (netRate < -0.3 && pop < initialPop * 0.8) return { phase: 'Decline',  icon: '🌑', color: '#475569', bg: '#f8fafc' };
+    if (netRate > 0.5 && pop > initialPop * 1.3)  return { phase: 'Flourishing', icon: '🌟', color: '#15803d', bg: '#f0fdf4' };
+    if (netRate > 0.15) return { phase: 'Growth',   icon: '📈', color: '#1d4ed8', bg: '#eff6ff' };
+    if (elapsedSec < 120) return { phase: 'Founding', icon: '🌱', color: '#7c3aed', bg: '#faf5ff' };
+    return { phase: 'Stable', icon: '🏘️', color: '#1e40af', bg: '#f0f9ff' };
+}
+
 function createPopulationDetailCard(title, icon, rows) {
     return (
         `<section class="population-detail-card">` +
@@ -2161,6 +2177,64 @@ function renderCharacterList() {
         const sparkAlive = createSparklineSVG(aliveSeries, '#2563eb');
         const sparkNet = createSparklineSVG(netSeries, netRate >= 0 ? '#16a34a' : '#dc2626');
         const sparkEnergy = createSparklineSVG(energySeries, '#f59e0b');
+
+        // --- Society Phase ---
+        const _starving = alive.filter(c => (c._starvationTimer || 0) > 0).length;
+        const _conflictPairs = Math.round(alive.filter(c => c._nearEnemy).length / 2);
+        const _initialPop = window.__simPopulationStats?.initialPopulation || alive.length;
+        const _elapsedSec = window.__simPopulationStats ? (Date.now() - window.__simPopulationStats.startedAt) / 1000 : 0;
+        const phase = getSocietyPhase(alive.length, netRate, _starving, _conflictPairs, _initialPop, _elapsedSec);
+
+        // --- Activity snapshot (what chars are doing right now) ---
+        const actEat    = alive.filter(c => c.action?.type === 'EAT').length;
+        const actSocial = alive.filter(c => c.action?.type === 'SOCIALIZE').length;
+        const actRest   = alive.filter(c => c.state === 'resting').length;
+        const actMove   = alive.filter(c => c.state === 'moving' && c.action?.type !== 'EAT' && c.action?.type !== 'SOCIALIZE').length;
+        const actIdle   = Math.max(0, alive.length - actEat - actSocial - actRest - actMove);
+        const actTotal  = Math.max(1, alive.length);
+        function actBar(label, icon, count, color) {
+            const pct = Math.round((count / actTotal) * 100);
+            return `<div style="display:flex;align-items:center;gap:5px;min-width:0;">` +
+                `<span style="font-size:0.82em;min-width:14px;text-align:center;">${icon}</span>` +
+                `<div style="flex:1;background:#e2e8f0;border-radius:3px;height:6px;overflow:hidden;">` +
+                    `<div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width 0.4s;"></div>` +
+                `</div>` +
+                `<span style="color:#64748b;font-size:0.8em;min-width:22px;text-align:right;">${count}</span>` +
+            `</div>`;
+        }
+        const activityHTML = alive.length > 0 ? (
+            `<div style="margin-top:7px;display:flex;flex-direction:column;gap:3px;background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 7px;">` +
+                actBar('Eat',      '🍎', actEat,    '#16a34a') +
+                actBar('Social',   '💬', actSocial, '#7c3aed') +
+                actBar('Rest',     '💤', actRest,   '#3b82f6') +
+                actBar('Moving',   '🚶', actMove,   '#f59e0b') +
+                actBar('Idle',     '⏸', actIdle,   '#94a3b8') +
+            `</div>`
+        ) : '';
+
+        // --- Society Chronicle ---
+        const _chronicle = Array.isArray(window.__societyChronicle) ? window.__societyChronicle : [];
+        const _simStart = window.__simPopulationStats?.startedAt || Date.now();
+        const chronicleHTML = _chronicle.length > 0 ? (() => {
+            const entries = _chronicle.slice(-10).reverse();
+            const rows = entries.map(e => {
+                const ageSec = Math.round((e.t - _simStart) / 1000);
+                const timeLabel = ageSec >= 60 ? `${Math.floor(ageSec/60)}m${ageSec%60}s` : `${ageSec}s`;
+                return `<div style="display:flex;align-items:baseline;gap:5px;padding:2px 0;border-bottom:1px solid #f0f4fa;">` +
+                    `<span style="font-size:0.9em;min-width:14px;">${e.icon}</span>` +
+                    `<span style="flex:1;color:#334155;font-size:0.82em;">${e.text}</span>` +
+                    `<span style="color:#94a3b8;font-size:0.78em;white-space:nowrap;">t=${timeLabel}</span>` +
+                `</div>`;
+            }).join('');
+            const _chronicleOpen = !!window.sidebarParams?.chronicleExpanded;
+            return `<details style="margin-top:7px;" ${_chronicleOpen ? 'open' : ''} data-chronicle-details>` +
+                `<summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:#ffffffcc;border:1px solid #d7e4f5;font-weight:600;font-size:0.88em;color:#334155;">` +
+                    `<span>${_chronicleOpen ? '▾' : '▸'}</span><span>Chronicle</span><span style="font-size:0.82em;color:#94a3b8;font-weight:400;">${_chronicle.length} events</span>` +
+                `</summary>` +
+                `<div style="margin-top:5px;max-height:160px;overflow-y:auto;">${rows}</div>` +
+            `</details>`;
+        })() : '';
+
         const detailsExpanded = !!window.sidebarParams.populationMetricsExpanded;
         const detailsChevron = detailsExpanded ? '▾' : '▸';
         const detailsHTML = createPopulationDetailsHTML({
@@ -2216,6 +2290,12 @@ function renderCharacterList() {
 
         statsDiv.innerHTML =
             seasonHTML +
+            `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px 8px;border-radius:8px;background:${phase.bg};border:1px solid ${phase.color}33;">` +
+                `<span style="font-size:1.05em;">${phase.icon}</span>` +
+                `<span style="font-weight:700;color:${phase.color};font-size:0.88em;letter-spacing:0.03em;">${phase.phase}</span>` +
+                `<span style="flex:1;"></span>` +
+                `<span style="font-size:0.78em;color:#94a3b8;">${Math.round(_elapsedSec)}s elapsed</span>` +
+            `</div>` +
             `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">` +
                 `<b style="font-size:1.0em;">Population Pulse</b>` +
                 `<span style="font-size:0.9em;color:#55657a;">1m window</span>` +
@@ -2234,11 +2314,13 @@ function renderCharacterList() {
                     `<div style="font-weight:700;font-size:1.1em;color:#b45309;line-height:1.2;">${criticalHungerCount}/${criticalEnergyCount}</div>` +
                 `</div>` +
             `</div>` +
+            activityHTML +
             `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:7px;">` +
                 `<div title="Alive trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Alive</span>${sparkAlive}</div>` +
                 `<div title="Net growth trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Net</span>${sparkNet}</div>` +
                 `<div title="Average energy trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Energy</span>${sparkEnergy}</div>` +
             `</div>` +
+            chronicleHTML +
             `<details ${detailsExpanded ? 'open' : ''} data-population-metrics-details style="margin-top:8px;">` +
                 `<summary style="cursor:pointer;color:#334155;list-style:none;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#ffffffcc;border:1px solid #d7e4f5;font-weight:600;">` +
                     `<span style="font-size:0.92em;color:#64748b;">${detailsChevron}</span>` +
@@ -2251,6 +2333,13 @@ function renderCharacterList() {
             metricsDetails.addEventListener('toggle', () => {
                 if (!window.sidebarParams) window.sidebarParams = {};
                 window.sidebarParams.populationMetricsExpanded = metricsDetails.open;
+            });
+        }
+        const chronicleDetails = statsDiv.querySelector('[data-chronicle-details]');
+        if (chronicleDetails) {
+            chronicleDetails.addEventListener('toggle', () => {
+                if (!window.sidebarParams) window.sidebarParams = {};
+                window.sidebarParams.chronicleExpanded = chronicleDetails.open;
             });
         }
         leftSidebar.appendChild(statsDiv);

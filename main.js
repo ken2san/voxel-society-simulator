@@ -621,6 +621,9 @@ window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
         latestBirth: null,
         latestDeath: null
     };
+    // Reset chronicle and generation tracker on new simulation
+    window.__societyChronicle = [];
+    window.__maxGenSeen = 0;
     return window.__simPopulationStats;
 };
 
@@ -631,6 +634,16 @@ window.getPopulationStats = function getPopulationStats() {
     return window.__simPopulationStats;
 };
 
+// --- Society Chronicle ---
+// Lightweight narrative event log. Max 60 entries; oldest evicted on overflow.
+if (!window.__societyChronicle) window.__societyChronicle = [];
+window.logChronicleEvent = function logChronicleEvent(icon, text, kind) {
+    const entry = { t: Date.now(), icon, text, kind: kind || 'event' };
+    window.__societyChronicle.push(entry);
+    if (window.__societyChronicle.length > 60) window.__societyChronicle.shift();
+    return entry;
+};
+
 window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
     const stats = window.getPopulationStats();
     stats.births += 1;
@@ -638,6 +651,14 @@ window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
         t: Date.now(),
         ...payload
     };
+    // Generation milestone: log first birth of each new generation.
+    const gen = Number(payload.generation || 0);
+    if (gen > 0 && typeof window.logChronicleEvent === 'function') {
+        if (!window.__maxGenSeen || gen > window.__maxGenSeen) {
+            window.__maxGenSeen = gen;
+            window.logChronicleEvent('👶', `Generation ${gen} first birth`, 'new_gen');
+        }
+    }
     return stats;
 };
 

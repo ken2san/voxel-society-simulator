@@ -366,6 +366,71 @@ export function animate() {
         else                     { _name = 'Winter'; _icon = '❄️'; }
         window.currentSeasonInfo = { name: _name, icon: _icon, multiplier: Math.max(0, _mul), amplitude: _amp, phase: _phase };
 
+        // --- Society Chronicle event hooks (always active) ---
+        if (typeof window.logChronicleEvent === 'function' && Array.isArray(window.characters)) {
+            const _alv = window.characters.filter(c => c && c.state !== 'dead');
+            const _pop = _alv.length;
+
+            // Reset animate state when chronicle was cleared (sim restart)
+            if (Array.isArray(window.__societyChronicle) && window.__societyChronicle.length === 0 && animate._chronicleStarted) {
+                animate._chronicleStarted = false;
+                animate._popPeak = 0;
+                animate._lastChronPop = undefined;
+                animate._lastChronConfl = 0;
+                animate._lastChronStarving = 0;
+                animate._lastChronSeason = undefined;
+            }
+
+            // Colony established (once)
+            if (!animate._chronicleStarted && _pop > 0) {
+                animate._chronicleStarted = true;
+                window.logChronicleEvent('🌿', `Colony of ${_pop} established`, 'start');
+            }
+
+            // Season change (only when amplitude > 0 so flat-rate sims stay quiet)
+            if (_amp > 0 && animate._lastChronSeason && animate._lastChronSeason !== _name) {
+                const mul = Math.max(0, _mul);
+                window.logChronicleEvent(_icon, `${_name} — food ×${mul.toFixed(2)}`, 'season');
+            }
+            animate._lastChronSeason = _name;
+
+            // Population record high (not initial snapshot)
+            if (_pop > 0 && _pop > (animate._popPeak || 0)) {
+                if (animate._popPeak > 0) {
+                    window.logChronicleEvent('📈', `Population record: ${_pop}`, 'peak');
+                }
+                animate._popPeak = _pop;
+            }
+
+            // Population critical (once per drop below 5)
+            const _prevPop = animate._lastChronPop !== undefined ? animate._lastChronPop : _pop;
+            if (_pop > 0 && _pop <= 4 && _prevPop > 4) {
+                window.logChronicleEvent('⚠️', `Only ${_pop} survivors`, 'warning');
+            }
+            animate._lastChronPop = _pop;
+
+            // Conflict wave (≥3 pairs newly active)
+            const _conflPairs = Math.round(_alv.filter(c => c._nearEnemy).length / 2);
+            const _prevConfl = animate._lastChronConfl || 0;
+            if (_conflPairs >= 3 && _prevConfl < 3) {
+                window.logChronicleEvent('⚔️', `Conflict wave — ${_conflPairs} pairs`, 'conflict');
+            } else if (_conflPairs === 0 && _prevConfl >= 3) {
+                window.logChronicleEvent('🕊️', `Tensions eased`, 'peace');
+            }
+            animate._lastChronConfl = _conflPairs;
+
+            // Famine / recovery (starvationTimer > 0 indicates active starvation)
+            const _starving = _alv.filter(c => (c._starvationTimer || 0) > 0).length;
+            const _starvRate = _pop > 0 ? _starving / _pop : 0;
+            const _prevStarv = animate._lastChronStarving !== undefined ? animate._lastChronStarving : 0;
+            if (_starvRate > 0.4 && _prevStarv <= 0.4) {
+                window.logChronicleEvent('☠️', `Famine — ${_starving}/${_pop} starving`, 'famine');
+            } else if (_starvRate < 0.1 && _prevStarv > 0.4) {
+                window.logChronicleEvent('🍎', `Famine ended`, 'recovery');
+            }
+            animate._lastChronStarving = _starvRate;
+        }
+
         // --- World-level telemetry snapshot (1s tick) ---
         if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addWorldSample === 'function') {
             // Count fruit blocks (BLOCK_TYPES.FRUIT.id === 4)
