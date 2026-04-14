@@ -512,6 +512,7 @@ class Character {
                     const inDanger = this.needs.hunger <= 15 || this.needs.energy <= 15;
                     this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
                     this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
+                    if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now()); // remember this food spawn location
                     this.eatCount = (this.eatCount || 0) + 1;
                     this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
@@ -1970,6 +1971,7 @@ class Character {
             explore: 0,
         };
         this._learningTick = 0;
+        this._knownFoodSpots = new Map(); // "x,y,z" → timestamp; experienced chars remember food locations (TTL 60s)
         this.appearanceProfile = { ...this.personality };
         this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
@@ -2162,17 +2164,34 @@ class Character {
     }
 
     findClosestFood() {
-        let minDist = Infinity, closest = null;
+        // Expire stale spatial-memory entries (TTL 60s = approximate fruit respawn window)
+        if (this._knownFoodSpots && this._knownFoodSpots.size > 0) {
+            const now = Date.now();
+            for (const [k, ts] of this._knownFoodSpots) {
+                if (now - ts > 60000) this._knownFoodSpots.delete(k);
+            }
+        }
+
+        let minScore = Infinity, closest = null;
         for (const [key, id] of worldData.entries()) {
             if (Character.failedFoodTargets.has(key)) continue; // 失敗ターゲットは除外
             const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
             if (type && type.isEdible) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                if (dist < minDist) {
-                    minDist = dist;
+                // Known food spawn locations get a 50% scoring bonus — experienced characters head there first
+                const score = this._knownFoodSpots?.has(key) ? dist * 0.5 : dist;
+                if (score < minScore) {
+                    minScore = score;
                     closest = { x, y, z };
                 }
+            }
+        }
+
+        // On-miss invalidation: purge remembered spots that no longer have food
+        if (this._knownFoodSpots) {
+            for (const k of this._knownFoodSpots.keys()) {
+                if (!worldData.has(k)) this._knownFoodSpots.delete(k);
             }
         }
 

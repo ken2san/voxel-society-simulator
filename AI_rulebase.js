@@ -616,7 +616,11 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 6: SAFETY (Night time) ===
-    if (character.needs.safety < 20 * character.personality.bravery && isNight) {
+    // nightSafetyOverride: brave characters (bravery > 1.2) with adequate energy stay outside at night.
+    // bravery direction fix: low bravery → high threshold (flees at moderate danger);
+    //                        high bravery → low threshold (only flees in extreme danger).
+    const nightSafetyOverride = (character.personality.bravery ?? 1.0) > 1.2 && character.needs.energy > 60;
+    if (!nightSafetyOverride && character.needs.safety < 20 * (2.0 - (character.personality.bravery ?? 1.0)) && isNight) {
         const shelterPos = character.findShelter(isNight);
         if (shelterPos) {
             character.setNextAction('SEEK_SHELTER', shelterPos, shelterPos);
@@ -639,7 +643,9 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 7: ENERGY MANAGEMENT ===
-    const effectiveRestThreshold = (70 * character.personality.bravery) + (adapt.rest * 18);
+    // bravery direction fix: low bravery → high rest threshold (cautious, conserves energy);
+    //                        high bravery → low rest threshold (pushes through fatigue).
+    const effectiveRestThreshold = clamp(45 + (2.0 - (character.personality.bravery ?? 1.0)) * 18 + (adapt.rest * 15), 25, 75);
     if (character.needs.energy < effectiveRestThreshold) {
         if (character.isSafe(isNight)) {
             character.setNextAction('REST');
@@ -656,7 +662,12 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 8: FOOD COLLECTION (resourcefulness: proactive characters forage earlier) ===
-    const hungerCollectionThreshold = clamp((95 * Math.min(1.0, character.personality.resourcefulness ?? 1.0)) + (adapt.forage * 22), 35, 100);
+    // resourcefulness direction: high (1.7) → threshold 84 (eats proactively, before getting hungry);
+    //                            low  (0.3) → threshold 56 (waits until quite hungry).
+    // Formula: 70 + (resourcefulness - 1.0) * 20. Removed Math.min(1.0, ...) cap so trait has full range.
+    const hungerCollectionThreshold = clamp(
+        70 + ((character.personality.resourcefulness ?? 1.0) - 1.0) * 20 + (adapt.forage * 15),
+        30, 90);
     if (character.needs.hunger < hungerCollectionThreshold) {
         const foodPos = character.findClosestFood();
         if (foodPos) {
