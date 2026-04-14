@@ -347,13 +347,27 @@ export function animate() {
         animate.lastGroupDetectTime = 0;
     }
 
+    // --- 季節時計：シム経過時間を加算 ---
+    if (!animate.simTime) animate.simTime = 0;
+    animate.simTime += deltaTime;
+
     // --- 果物再生：fruitRegenIntervalSeconds ごとに表面GRASSにFRUITをランダム再生 ---
+    // 季節サイクル（sinカーブ）で実効レートを変動させる。
+    //   seasonAmplitude=0 → 季節なし（定数レート）
+    //   seasonAmplitude=0.8, cycleSec=120 → 夏は1.8×、冬は0.2× のリズム
     if (!animate.lastFruitRegenTime) animate.lastFruitRegenTime = 0;
     animate.lastFruitRegenTime += deltaTime;
     const fruitRegenInterval = (typeof window !== 'undefined' && window.fruitRegenIntervalSeconds > 0)
         ? window.fruitRegenIntervalSeconds : 60;
     if (animate.lastFruitRegenTime >= fruitRegenInterval) {
-        const rate = fruitSpawnRate;
+        const baseRate = fruitSpawnRate;
+        const cycleSec = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0)
+            ? window.seasonCycleSeconds : 120;
+        const amplitude = (typeof window !== 'undefined' && window.seasonAmplitude !== undefined)
+            ? Math.min(1, Math.max(0, window.seasonAmplitude)) : 0.6;
+        // sin: +1=真夏(rate最大), -1=真冬(rate最小)。最小レートは0（完全凶作）で上限なし。
+        const seasonalMultiplier = 1 + amplitude * Math.sin(2 * Math.PI * animate.simTime / cycleSec);
+        const rate = baseRate * Math.max(0, seasonalMultiplier);
         for (let x = 0; x < gridSize; x++) {
             for (let z = 0; z < gridSize; z++) {
                 if (Math.random() >= rate) continue;

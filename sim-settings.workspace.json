@@ -21,6 +21,8 @@
       "pairReproductionCooldownSeconds": 90,
       "reproductionCooldownSeconds": 10,
       "fruitRegenIntervalSeconds": 60,
+      "seasonCycleSeconds": 120,
+      "seasonAmplitude": 0.6,
       "initialAgeMaxRatio": 0.5,
       "traitAffinityCapReduction": 0.6,
       "maxAffinity": 100,

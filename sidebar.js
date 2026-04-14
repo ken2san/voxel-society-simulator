@@ -206,6 +206,8 @@ function renderCharacterDetail() {
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
         fruitRegenIntervalSeconds:          60,
+        seasonCycleSeconds:                 120,
+        seasonAmplitude:                    0.6,
         initialAgeMaxRatio:                 0.5,
         traitAffinityCapReduction:          0.6,
         autoRecoverStall:                   true,
@@ -1386,6 +1388,88 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(fruitRegenRow);
     fruitRegenInput.disabled = paramDisabled;
     fruitRegenVal.disabled = paramDisabled;
+
+    // --- Season Cycle Length Slider ---
+    if (sidebarParams.seasonCycleSeconds === undefined) sidebarParams.seasonCycleSeconds = 120;
+    const seasonCycleRow = document.createElement('div');
+    seasonCycleRow.style.display = 'flex';
+    seasonCycleRow.style.alignItems = 'center';
+    seasonCycleRow.style.gap = '10px';
+    const seasonCycleLabel = document.createElement('span');
+    seasonCycleLabel.textContent = '🌱 Season Cycle (s):';
+    seasonCycleLabel.style.flex = '1';
+    const seasonCycleInput = document.createElement('input');
+    seasonCycleInput.type = 'range';
+    seasonCycleInput.min = 30;
+    seasonCycleInput.max = 600;
+    seasonCycleInput.step = 10;
+    seasonCycleInput.value = sidebarParams.seasonCycleSeconds;
+    seasonCycleInput.style.flex = '2';
+    const seasonCycleVal = document.createElement('input');
+    seasonCycleVal.type = 'number';
+    seasonCycleVal.min = 30;
+    seasonCycleVal.max = 600;
+    seasonCycleVal.step = 10;
+    seasonCycleVal.value = sidebarParams.seasonCycleSeconds;
+    seasonCycleVal.style.width = '60px';
+    seasonCycleRow.appendChild(seasonCycleLabel);
+    seasonCycleRow.appendChild(seasonCycleInput);
+    seasonCycleRow.appendChild(seasonCycleVal);
+    seasonCycleInput.addEventListener('input', e => {
+        sidebarParams.seasonCycleSeconds = parseInt(e.target.value);
+        seasonCycleVal.value = e.target.value;
+        window.seasonCycleSeconds = parseInt(e.target.value);
+    });
+    seasonCycleVal.addEventListener('input', e => {
+        sidebarParams.seasonCycleSeconds = parseInt(e.target.value);
+        seasonCycleInput.value = e.target.value;
+        window.seasonCycleSeconds = parseInt(e.target.value);
+    });
+    seasonCycleRow.dataset.label = 'Season Cycle Length';
+    tabPanels[2].appendChild(seasonCycleRow);
+    seasonCycleInput.disabled = paramDisabled;
+    seasonCycleVal.disabled = paramDisabled;
+
+    // --- Season Amplitude Slider ---
+    if (sidebarParams.seasonAmplitude === undefined) sidebarParams.seasonAmplitude = 0.6;
+    const seasonAmpRow = document.createElement('div');
+    seasonAmpRow.style.display = 'flex';
+    seasonAmpRow.style.alignItems = 'center';
+    seasonAmpRow.style.gap = '10px';
+    const seasonAmpLabel = document.createElement('span');
+    seasonAmpLabel.textContent = '❄️ Season Amplitude:';
+    seasonAmpLabel.style.flex = '1';
+    const seasonAmpInput = document.createElement('input');
+    seasonAmpInput.type = 'range';
+    seasonAmpInput.min = 0;
+    seasonAmpInput.max = 1;
+    seasonAmpInput.step = 0.05;
+    seasonAmpInput.value = sidebarParams.seasonAmplitude;
+    seasonAmpInput.style.flex = '2';
+    const seasonAmpVal = document.createElement('input');
+    seasonAmpVal.type = 'number';
+    seasonAmpVal.min = 0;
+    seasonAmpVal.max = 1;
+    seasonAmpVal.step = 0.05;
+    seasonAmpVal.value = sidebarParams.seasonAmplitude;
+    seasonAmpVal.style.width = '60px';
+    seasonAmpRow.appendChild(seasonAmpLabel);
+    seasonAmpRow.appendChild(seasonAmpInput);
+    seasonAmpRow.appendChild(seasonAmpVal);
+    seasonAmpInput.addEventListener('input', e => {
+        sidebarParams.seasonAmplitude = parseFloat(e.target.value);
+        seasonAmpVal.value = e.target.value;
+        window.seasonAmplitude = parseFloat(e.target.value);
+    });
+    seasonAmpVal.addEventListener('input', e => {
+        sidebarParams.seasonAmplitude = parseFloat(e.target.value);
+        seasonAmpInput.value = e.target.value;
+        window.seasonAmplitude = parseFloat(e.target.value);
+    });
+    seasonAmpRow.dataset.label = 'Season Amplitude';
+    tabPanels[2].appendChild(seasonAmpRow);
+    seasonAmpInput.disabled = paramDisabled;
+    seasonAmpVal.disabled = paramDisabled;
 
     // --- Home Return Hunger Level Slider ---
     if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
