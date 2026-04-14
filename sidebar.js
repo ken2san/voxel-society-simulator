@@ -205,6 +205,7 @@ function renderCharacterDetail() {
         pairReproductionCooldownSeconds:    60,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
+        fruitRegenIntervalSeconds:          60,
         autoRecoverStall:                   true,
         recoverActionCooldown:              0.5,
         maxActionCooldown:                  8,
@@ -1249,6 +1250,51 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(lifespanRow);
     lifespanInput.disabled = paramDisabled;
     lifespanVal.disabled = paramDisabled;
+
+    // --- Fruit Regen Interval Slider ---
+    if (sidebarParams.fruitRegenIntervalSeconds === undefined) sidebarParams.fruitRegenIntervalSeconds = 60;
+    const fruitRegenRow = document.createElement('div');
+    fruitRegenRow.style.display = 'flex';
+    fruitRegenRow.style.alignItems = 'center';
+    fruitRegenRow.style.gap = '10px';
+    const fruitRegenLabel = document.createElement('span');
+    fruitRegenLabel.textContent = '🍎 Fruit Regen Interval (s):';
+    fruitRegenLabel.style.flex = '1';
+    const fruitRegenInput = document.createElement('input');
+    fruitRegenInput.type = 'range';
+    fruitRegenInput.min = 10;
+    fruitRegenInput.max = 300;
+    fruitRegenInput.step = 10;
+    fruitRegenInput.value = sidebarParams.fruitRegenIntervalSeconds;
+    fruitRegenInput.style.flex = '2';
+    fruitRegenInput.id = 'fruitRegenInput';
+    fruitRegenInput.name = 'fruitRegenInput';
+    const fruitRegenVal = document.createElement('input');
+    fruitRegenVal.type = 'number';
+    fruitRegenVal.min = 10;
+    fruitRegenVal.max = 300;
+    fruitRegenVal.step = 10;
+    fruitRegenVal.value = sidebarParams.fruitRegenIntervalSeconds;
+    fruitRegenVal.style.width = '60px';
+    fruitRegenVal.id = 'fruitRegenVal';
+    fruitRegenVal.name = 'fruitRegenVal';
+    fruitRegenRow.appendChild(fruitRegenLabel);
+    fruitRegenRow.appendChild(fruitRegenInput);
+    fruitRegenRow.appendChild(fruitRegenVal);
+    fruitRegenInput.oninput = () => {
+        fruitRegenVal.value = fruitRegenInput.value;
+        sidebarParams.fruitRegenIntervalSeconds = parseInt(fruitRegenInput.value);
+        window.fruitRegenIntervalSeconds = parseInt(fruitRegenInput.value);
+    };
+    fruitRegenVal.oninput = () => {
+        fruitRegenInput.value = fruitRegenVal.value;
+        sidebarParams.fruitRegenIntervalSeconds = parseInt(fruitRegenVal.value);
+        window.fruitRegenIntervalSeconds = parseInt(fruitRegenVal.value);
+    };
+    fruitRegenRow.dataset.label = 'Fruit Regen Interval';
+    tabPanels[2].appendChild(fruitRegenRow);
+    fruitRegenInput.disabled = paramDisabled;
+    fruitRegenVal.disabled = paramDisabled;
 
     // --- Home Return Hunger Level Slider ---
     if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;

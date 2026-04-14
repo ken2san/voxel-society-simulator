@@ -347,6 +347,26 @@ export function animate() {
         animate.lastGroupDetectTime = 0;
     }
 
+    // --- 果物再生：fruitRegenIntervalSeconds ごとに表面GRASSにFRUITをランダム再生 ---
+    if (!animate.lastFruitRegenTime) animate.lastFruitRegenTime = 0;
+    animate.lastFruitRegenTime += deltaTime;
+    const fruitRegenInterval = (typeof window !== 'undefined' && window.fruitRegenIntervalSeconds > 0)
+        ? window.fruitRegenIntervalSeconds : 60;
+    if (animate.lastFruitRegenTime >= fruitRegenInterval) {
+        const rate = fruitSpawnRate;
+        for (let x = 0; x < gridSize; x++) {
+            for (let z = 0; z < gridSize; z++) {
+                if (Math.random() >= rate) continue;
+                const y = findGroundY(x, z);
+                if (y < 0) continue;
+                if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
+                if (worldData.has(`${x},${y + 1},${z}`)) continue;
+                addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
+            }
+        }
+        animate.lastFruitRegenTime = 0;
+    }
+
     renderer.render(scene, camera);
 }
 export async function spawnCharacter(pos, genes = null) {
