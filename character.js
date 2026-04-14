@@ -2590,6 +2590,15 @@ class Character {
             this.learn && this.learn({ type: 'SAFETY_DECREASE' });
         }
 
+        // --- 孤立コスト: グループに属さないキャラはsafetyが追加で減衰する ---
+        // isolationPenalty=0 → 無効。isolationPenalty=1 → 夜の屋外と同程度の追加圧力。
+        {
+            const penalty = (typeof window !== 'undefined' && window.isolationPenalty !== undefined) ? Number(window.isolationPenalty) : 0.4;
+            if (penalty > 0 && !this.groupId) {
+                this.needs.safety = Math.max(0, this.needs.safety - deltaTime * 5 * penalty);
+            }
+        }
+
         // Recovery
         if (this.state === 'resting') {
             this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 18);
@@ -2623,13 +2632,16 @@ class Character {
                     let newAff = aff - effectiveDecayRate * deltaTime;
                     // clamp and removal
                     if (newAff <= 0) {
-                        keysToRemove.push(otherId);
+                        // floor: keep relationship as low-affinity tension rather than erasing it
+                        const affinityFloor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
+                        this.relationships.set(otherId, affinityFloor);
                     } else {
                         const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
                         if (newAff > maxAffinity) newAff = maxAffinity;
                         this.relationships.set(otherId, newAff);
                     }
                 }
+                // keysToRemove is now unused (floor replaces delete), but keep for safety
                 for (const k of keysToRemove) {
                     this.relationships.delete(k);
                 }
@@ -2684,6 +2696,13 @@ class Character {
                     const _pairNow2 = Date.now() / 1000;
                     const _cooldown2 = window.pairReproductionCooldownSeconds || 60;
                     if (_pairLast2 === 0 || (_pairNow2 - _pairLast2) >= _cooldown2) {
+                        // 繁殖年齢ウィンドウ: 寿命の minReproductionAgeRatio 未満なら繁殖不可
+                        const _minAgeRatio = (typeof window !== 'undefined' && window.minReproductionAgeRatio !== undefined) ? window.minReproductionAgeRatio : 0.2;
+                        const _lifespan = this.lifespan || (typeof window !== 'undefined' && window.characterLifespan) || 240;
+                        const _partnerLifespan = partner.lifespan || _lifespan;
+                        if ((this.age / _lifespan) < _minAgeRatio || (partner.age / _partnerLifespan) < _minAgeRatio) {
+                            // too young — skip silently
+                        } else {
                         try { console.log(`[LOVE] ${this.id} loveTimer expired, reproducing with ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                         this.reproduceWith && this.reproduceWith(partner);
                         window._pairReproTimestamps.set(_pairKey2, _pairNow2);
@@ -2692,6 +2711,7 @@ class Character {
                         partner.relationships.set(this.id, resetVal);
                         this.lovePhase = 'completed';
                         partner.lovePhase = 'completed';
+                        } // end age gate
                     }
                 }
 
@@ -2856,6 +2876,13 @@ class Character {
                                 if (last > 0 && (now - last) < window.pairReproductionCooldownSeconds) {
                                     console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
                                 } else {
+                                    // 繁殖年齢ウィンドウ
+                                    const _minAgeRatio2 = (typeof window !== 'undefined' && window.minReproductionAgeRatio !== undefined) ? window.minReproductionAgeRatio : 0.2;
+                                    const _ls2 = this.lifespan || (typeof window !== 'undefined' && window.characterLifespan) || 240;
+                                    const _pls2 = partner.lifespan || _ls2;
+                                    if ((this.age / _ls2) < _minAgeRatio2 || (partner.age / _pls2) < _minAgeRatio2) {
+                                        console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: too young (ageRatio=${(this.age/_ls2).toFixed(2)} partnerRatio=${(partner.age/_pls2).toFixed(2)} min=${_minAgeRatio2})`);
+                                    } else {
                                     console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
                                     this.reproduceWith && this.reproduceWith(partner);
                                     window._pairReproTimestamps.set(key, now);
@@ -2864,6 +2891,7 @@ class Character {
                                     partner.relationships.set(this.id, resetVal);
                                     this.lovePhase = 'completed';
                                     partner.lovePhase = 'completed';
+                                    } // end age gate
                                 }
                             } else {
                                 console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner exists but not socializing/nearby (state=${partner.state} prox=${prox} lovePhase=${partner.lovePhase})`);

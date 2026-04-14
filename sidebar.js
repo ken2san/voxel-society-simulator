@@ -210,6 +210,9 @@ function renderCharacterDetail() {
         seasonAmplitude:                    0.6,
         initialAgeMaxRatio:                 0.5,
         traitAffinityCapReduction:          0.6,
+        affinityFloor:                       5,
+        minReproductionAgeRatio:             0.2,
+        isolationPenalty:                    0.4,
         autoRecoverStall:                   true,
         recoverActionCooldown:              0.5,
         maxActionCooldown:                  8,
@@ -974,6 +977,50 @@ function renderCharacterDetail() {
     traitCapRow.dataset.label = 'Ideology Gap Effect';
     tabPanels[1].appendChild(traitCapRow);
 
+    // --- Affinity Floor Slider ---
+    if (sidebarParams.affinityFloor === undefined) sidebarParams.affinityFloor = 5;
+    const affinityFloorRow = document.createElement('div');
+    affinityFloorRow.style.display = 'flex';
+    affinityFloorRow.style.alignItems = 'center';
+    affinityFloorRow.style.gap = '10px';
+    const affinityFloorLabel = document.createElement('span');
+    affinityFloorLabel.textContent = '💢 Affinity Floor:';
+    affinityFloorLabel.style.width = '140px';
+    affinityFloorRow.appendChild(affinityFloorLabel);
+    const affinityFloorInput = document.createElement('input');
+    affinityFloorInput.type = 'range'; affinityFloorInput.min = 0; affinityFloorInput.max = 30; affinityFloorInput.step = 1;
+    affinityFloorInput.value = sidebarParams.affinityFloor; affinityFloorInput.style.width = '120px'; affinityFloorInput.disabled = paramDisabled;
+    affinityFloorInput.addEventListener('input', e => { sidebarParams.affinityFloor = parseInt(e.target.value); affinityFloorNumber.value = e.target.value; window.affinityFloor = parseInt(e.target.value); });
+    affinityFloorRow.appendChild(affinityFloorInput);
+    const affinityFloorNumber = document.createElement('input');
+    affinityFloorNumber.type = 'number'; affinityFloorNumber.min = 0; affinityFloorNumber.max = 30; affinityFloorNumber.step = 1;
+    affinityFloorNumber.value = sidebarParams.affinityFloor; affinityFloorNumber.style.width = '56px'; affinityFloorNumber.disabled = paramDisabled;
+    affinityFloorNumber.addEventListener('input', e => { sidebarParams.affinityFloor = parseInt(e.target.value); affinityFloorInput.value = e.target.value; window.affinityFloor = parseInt(e.target.value); });
+    affinityFloorRow.appendChild(affinityFloorNumber);
+    affinityFloorRow.dataset.label = 'Affinity Floor';
+    tabPanels[1].appendChild(affinityFloorRow);
+
+    // --- Min Reproduction Age Ratio Slider ---
+    if (sidebarParams.minReproductionAgeRatio === undefined) sidebarParams.minReproductionAgeRatio = 0.2;
+    const minAgeRow = document.createElement('div');
+    minAgeRow.style.display = 'flex'; minAgeRow.style.alignItems = 'center'; minAgeRow.style.gap = '10px';
+    const minAgeLabel = document.createElement('span');
+    minAgeLabel.textContent = '👶 Min Repro Age:';
+    minAgeLabel.style.width = '140px';
+    minAgeRow.appendChild(minAgeLabel);
+    const minAgeInput = document.createElement('input');
+    minAgeInput.type = 'range'; minAgeInput.min = 0; minAgeInput.max = 0.5; minAgeInput.step = 0.05;
+    minAgeInput.value = sidebarParams.minReproductionAgeRatio; minAgeInput.style.width = '120px'; minAgeInput.disabled = paramDisabled;
+    minAgeInput.addEventListener('input', e => { sidebarParams.minReproductionAgeRatio = parseFloat(e.target.value); minAgeNumber.value = e.target.value; window.minReproductionAgeRatio = parseFloat(e.target.value); });
+    minAgeRow.appendChild(minAgeInput);
+    const minAgeNumber = document.createElement('input');
+    minAgeNumber.type = 'number'; minAgeNumber.min = 0; minAgeNumber.max = 0.5; minAgeNumber.step = 0.05;
+    minAgeNumber.value = sidebarParams.minReproductionAgeRatio; minAgeNumber.style.width = '56px'; minAgeNumber.disabled = paramDisabled;
+    minAgeNumber.addEventListener('input', e => { sidebarParams.minReproductionAgeRatio = parseFloat(e.target.value); minAgeInput.value = e.target.value; window.minReproductionAgeRatio = parseFloat(e.target.value); });
+    minAgeRow.appendChild(minAgeNumber);
+    minAgeRow.dataset.label = 'Min Reproduction Age Ratio';
+    tabPanels[1].appendChild(minAgeRow);
+
     // --- Auto recover stall toggle + recovery cooldown ---
     const autoRecoverRow = document.createElement('div');
     autoRecoverRow.style.display = 'flex';
@@ -1470,6 +1517,27 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(seasonAmpRow);
     seasonAmpInput.disabled = paramDisabled;
     seasonAmpVal.disabled = paramDisabled;
+
+    // --- Isolation Penalty Slider ---
+    if (sidebarParams.isolationPenalty === undefined) sidebarParams.isolationPenalty = 0.4;
+    const isolationRow = document.createElement('div');
+    isolationRow.style.display = 'flex'; isolationRow.style.alignItems = 'center'; isolationRow.style.gap = '10px';
+    const isolationLabel = document.createElement('span');
+    isolationLabel.textContent = '👤 Isolation Penalty:';
+    isolationLabel.style.flex = '1';
+    isolationRow.appendChild(isolationLabel);
+    const isolationInput = document.createElement('input');
+    isolationInput.type = 'range'; isolationInput.min = 0; isolationInput.max = 2; isolationInput.step = 0.1;
+    isolationInput.value = sidebarParams.isolationPenalty; isolationInput.style.flex = '2'; isolationInput.disabled = paramDisabled;
+    isolationInput.addEventListener('input', e => { sidebarParams.isolationPenalty = parseFloat(e.target.value); isolationVal.value = e.target.value; window.isolationPenalty = parseFloat(e.target.value); });
+    isolationRow.appendChild(isolationInput);
+    const isolationVal = document.createElement('input');
+    isolationVal.type = 'number'; isolationVal.min = 0; isolationVal.max = 2; isolationVal.step = 0.1;
+    isolationVal.value = sidebarParams.isolationPenalty; isolationVal.style.width = '56px'; isolationVal.disabled = paramDisabled;
+    isolationVal.addEventListener('input', e => { sidebarParams.isolationPenalty = parseFloat(e.target.value); isolationInput.value = e.target.value; window.isolationPenalty = parseFloat(e.target.value); });
+    isolationRow.appendChild(isolationVal);
+    isolationRow.dataset.label = 'Isolation Penalty';
+    tabPanels[2].appendChild(isolationRow);
 
     // --- Home Return Hunger Level Slider ---
     if (sidebarParams.homeReturnHungerLevel === undefined) sidebarParams.homeReturnHungerLevel = 90;
