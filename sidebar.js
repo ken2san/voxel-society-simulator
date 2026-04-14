@@ -2031,7 +2031,7 @@ function renderCharacterList() {
     listHeader.innerHTML =
         `<div>` +
             `<div class="character-list-kicker">Observation</div>` +
-            `<h3 class="character-list-title">Character List</h3>` +
+            `<h3 class="character-list-title">Society Overview</h3>` +
         `</div>` +
         `<div class="character-list-count">${aliveCount} alive</div>`;
     leftSidebar.appendChild(listHeader);
