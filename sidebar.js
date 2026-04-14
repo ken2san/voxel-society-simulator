@@ -2239,6 +2239,32 @@ function renderCharacterList() {
         const _elapsedSec = window.__simPopulationStats ? (Date.now() - window.__simPopulationStats.startedAt) / 1000 : 0;
         const phase = getSocietyPhase(alive.length, netRate, _starving, _conflictPairs, _initialPop, _elapsedSec);
 
+        // --- Phase history trail (tracks transitions across renders) ---
+        if (!Array.isArray(window.__phaseHistory)) window.__phaseHistory = [];
+        const _lastPhaseEntry = window.__phaseHistory[window.__phaseHistory.length - 1];
+        if (!_lastPhaseEntry || _lastPhaseEntry.phase !== phase.phase) {
+            window.__phaseHistory.push({ phase: phase.phase, icon: phase.icon, color: phase.color, t: Date.now() });
+            if (window.__phaseHistory.length > 6) window.__phaseHistory.shift(); // keep last 6
+        }
+        // Also reset on sim restart
+        if (window.__simPopulationStats && window.__phaseHistory[0]?.t < window.__simPopulationStats.startedAt) {
+            window.__phaseHistory = [{ phase: phase.phase, icon: phase.icon, color: phase.color, t: Date.now() }];
+        }
+        // Build trail HTML: show up to 4 distinct preceding phases (oldest → newest → current)
+        const _trailEntries = window.__phaseHistory.slice(-4);
+        const phaseTrailHTML = _trailEntries.length > 1
+            ? `<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;margin-top:3px;opacity:0.7;font-size:0.78em;">` +
+              _trailEntries.map((e, i) => {
+                  const isCurrent = i === _trailEntries.length - 1;
+                  const phaseSec = i < _trailEntries.length - 1
+                      ? Math.round((_trailEntries[i + 1].t - e.t) / 1000) : null;
+                  return (i > 0 ? `<span style="color:#cbd5e1;">›</span>` : '') +
+                      `<span style="color:${e.color};font-weight:${isCurrent?'700':'400'};" title="${e.phase}${phaseSec?` (${phaseSec}s)`:''}">${e.icon}</span>` +
+                      (!isCurrent && phaseSec !== null && phaseSec > 0 ? `<span style="color:#94a3b8;font-size:0.85em;">${phaseSec}s</span>` : '');
+              }).join('') +
+              `</div>`
+            : '';
+
         // --- Activity snapshot (what chars are doing right now) ---
         const actEat    = alive.filter(c => c.action?.type === 'EAT').length;
         const actSocial = alive.filter(c => c.action?.type === 'SOCIALIZE').length;
@@ -2344,13 +2370,17 @@ function renderCharacterList() {
             `</div>`;
         })() : '';
 
+        const _currentPhaseSec = _lastPhaseEntry ? Math.round((Date.now() - _lastPhaseEntry.t) / 1000) : 0;
         statsDiv.innerHTML =
             seasonHTML +
-            `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px 8px;border-radius:8px;background:${phase.bg};border:1px solid ${phase.color}33;">` +
-                `<span style="font-size:1.05em;">${phase.icon}</span>` +
-                `<span style="font-weight:700;color:${phase.color};font-size:0.88em;letter-spacing:0.03em;">${phase.phase}</span>` +
-                `<span style="flex:1;"></span>` +
-                `<span style="font-size:0.78em;color:#94a3b8;">${Math.round(_elapsedSec)}s elapsed</span>` +
+            `<div style="margin-bottom:6px;padding:4px 8px;border-radius:8px;background:${phase.bg};border:1px solid ${phase.color}33;">` +
+                `<div style="display:flex;align-items:center;gap:6px;">` +
+                    `<span style="font-size:1.05em;">${phase.icon}</span>` +
+                    `<span style="font-weight:700;color:${phase.color};font-size:0.88em;letter-spacing:0.03em;">${phase.phase}</span>` +
+                    `<span style="flex:1;"></span>` +
+                    `<span style="font-size:0.78em;color:#94a3b8;">${_currentPhaseSec}s | ${Math.round(_elapsedSec)}s</span>` +
+                `</div>` +
+                phaseTrailHTML +
             `</div>` +
             `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">` +
                 `<b style="font-size:1.0em;">Population Pulse</b>` +

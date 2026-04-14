@@ -1016,8 +1016,8 @@ class Character {
     }
 
 // Duplicate class declaration removed
-    // --- 失敗ターゲット記憶用: 食料採集失敗時に同じ座標を避ける ---
-    static failedFoodTargets = new Set();
+    // --- 失敗ターゲット記憶用: 食料採集失敗時に同じ座標を避ける (TTL 90s) ---
+    static failedFoodTargets = new Map(); // key → timestamp; auto-expires after 90s
     // --- 汎用失敗ターゲットカウント: 失敗回数をカウントして一時的にブラックリスト化 ---
     static failedTargetCounts = new Map();
 
@@ -2174,8 +2174,14 @@ class Character {
 
         let minScore = Infinity, closest = null;
         for (const [key, id] of worldData.entries()) {
-            if (Character.failedFoodTargets.has(key)) continue; // 失敗ターゲットは除外
-            const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
+            // Skip positions that recently failed BFS — but auto-expire after 90s (fruit respawn window)
+            const _failTs = Character.failedFoodTargets.get(key);
+            if (_failTs !== undefined) {
+                if (Date.now() - _failTs < 90000) continue;
+                Character.failedFoodTargets.delete(key); // expired, worth retrying
+            }
+            const rawBlockVal = typeof id === 'object' && id !== null && id.id !== undefined ? id.id : id;
+            const type = Object.values(BLOCK_TYPES).find(t => t.id === rawBlockVal);
             if (type && type.isEdible) {
                 const [x, y, z] = key.split(',').map(Number);
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
@@ -3537,8 +3543,8 @@ class Character {
                 // --- 追加: COLLECT_FOOD時はターゲットを失敗リストに追加 ---
                 if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target) {
                     const {x, y, z} = this.action.target;
-                    Character.failedFoodTargets.add(`${x},${y},${z}`);
-                    this.log('Added unreachable food target to failedFoodTargets', {x, y, z});
+                    Character.failedFoodTargets.set(`${x},${y},${z}`, Date.now());
+                    this.log('Added unreachable food target to failedFoodTargets (TTL 90s)', {x, y, z});
                 }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
                 this.log('BFS failed, incrementing bfsFailCount', this.bfsFailCount);

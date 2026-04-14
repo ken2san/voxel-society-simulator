@@ -625,6 +625,7 @@ window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
     window.__eventLog = [];
     window.__maxGenSeen = 0;
     window.__deathRecords = []; // reset death record tombstones
+    window.__phaseHistory = []; // reset Society Phase trail
     return window.__simPopulationStats;
 };
 
