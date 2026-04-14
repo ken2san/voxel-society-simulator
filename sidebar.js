@@ -1865,9 +1865,8 @@ function createPopulationDetailsHTML(metrics) {
             createPopulationDetailCard('Lifecycle', '⏳', [
                 { label: 'Avg age', value: `${metrics.avgAge}s` },
                 { label: 'Max age', value: `${metrics.maxAge}s` },
-                { label: 'Starved', value: metrics.starvationDeaths },
                 { label: 'Old age', value: metrics.oldAgeDeaths },
-                { label: 'Unknown', value: metrics.unknownDeaths }
+                { label: 'Starved', value: metrics.starvationDeaths }
             ]) +
             createPopulationDetailCard('Generation', '🌱', [
                 { label: 'Max gen', value: metrics.maxGen },

@@ -2590,6 +2590,18 @@ class Character {
             this.learn && this.learn({ type: 'SAFETY_DECREASE' });
         }
 
+        // --- 飢餓死判定: hunger=0 が続いた秒数が閾値を超えたら starvation 死 ---
+        if (this.needs.hunger <= 0) {
+            this._starvationTimer = (this._starvationTimer || 0) + deltaTime;
+            if (this._starvationTimer >= 10) {
+                this.die('starvation');
+                this.updateThoughtBubble(isNight, camera);
+                return;
+            }
+        } else {
+            this._starvationTimer = 0;
+        }
+
         // --- 孤立コスト: グループに属さないキャラはsafetyが追加で減衰する ---
         // isolationPenalty=0 → 無効。isolationPenalty=1 → 夜の屋外と同程度の追加圧力。
         {
@@ -2762,12 +2774,8 @@ class Character {
                 this.state = 'idle';
             }
         }
-        // Death condition（猶予を-10まで）
-        if (this.needs.hunger <= -10) {
-            this.die('starvation');
-            this.updateThoughtBubble(isNight, camera);
-            return;
-        }
+        // Death condition (旧: hunger <= -10 はclipにより到達不能だったため上部のstarvationTimerに移行)
+        // starvation death is now handled above via _starvationTimer
         // --- 行動決定 ---
         if (this.state === 'idle') {
             this.actionCooldown -= deltaTime;
