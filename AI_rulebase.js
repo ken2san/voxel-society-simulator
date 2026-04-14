@@ -19,8 +19,10 @@ export function decideNextAction_rulebase(character, isNight) {
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
+    const aging = character.getAgingProfile ? character.getAgingProfile() : { mobilityMul: 1.0, exploreMul: 1.0 };
     // resilience: hardy characters tolerate lower energy before forcing REST
-    const effectiveEnergyEmergency = energyEmergency / Math.max(0.3, character.personality.resilience ?? 1.0);
+    const effectiveEnergyEmergency = (energyEmergency / Math.max(0.3, character.personality.resilience ?? 1.0))
+        * (1 + (1 - (aging.mobilityMul || 1.0)) * 0.8);
 
     // === PRIORITY 0: EMERGENCY ENERGY — force REST before any other decision ===
     // Home-building and wandering both consume energy; a depleted character must rest
@@ -45,9 +47,30 @@ export function decideNextAction_rulebase(character, isNight) {
         return;
     }
 
+    // === PRIORITY 0.5: HUNGER CRISIS — single-purpose food seeking ===
+    // When hunger is critically low, all social/home/exploration rules are suspended.
+    // Character has one goal: find and eat food. Reproduction is also blocked at source
+    // (character.js) when either partner is in hunger crisis.
+    if (character.needs.hunger <= 15) {
+        const foodPos = character.findClosestFood && character.findClosestFood();
+        if (foodPos) {
+            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(foodPos);
+            if (adjacentSpot) {
+                character.log(`Action: EAT (hunger crisis=${character.needs.hunger.toFixed(1)})`);
+                character.setNextAction('EAT', foodPos, adjacentSpot);
+                return;
+            }
+        }
+        // No food in range — wander to search
+        character.log(`Action: WANDER (hunger crisis, no food in range hunger=${character.needs.hunger.toFixed(1)})`);
+        character.setNextAction('WANDER');
+        return;
+    }
+
     // === PRIORITY 1: RANDOM EXPLORATION (base 10%; curiosity scales it) ===
     const explorationWeight = clamp(
-        0.10 * (character.personality.curiosity ?? 1.0) * (1 + (adapt.explore * 0.45) - (adapt.forage * 0.55) - (adapt.rest * 0.50)),
+        0.10 * (character.personality.curiosity ?? 1.0) * (aging.exploreMul || 1.0)
+            * (1 + (adapt.explore * 0.45) - (adapt.forage * 0.55) - (adapt.rest * 0.50)),
         0.02,
         0.20
     );

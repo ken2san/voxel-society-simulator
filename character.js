@@ -2718,7 +2718,8 @@ class Character {
                 const dist = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
 
                 // If timer expired while still in socializing and conditions met, reproduce first
-                if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60) {
+                if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60 &&
+                    this.needs.hunger > 15 && partner.needs.hunger > 15) {
                     // per-pair cooldown check (only gate — no permanent one-child-per-pair lock)
                     const _pairKey2 = `${Math.min(this.id, partner.id)}-${Math.max(this.id, partner.id)}`;
                     if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
@@ -2908,6 +2909,8 @@ class Character {
                                     const _pls2 = partner.lifespan || _ls2;
                                     if ((this.age / _ls2) < _minAgeRatio2 || (partner.age / _pls2) < _minAgeRatio2) {
                                         console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: too young (ageRatio=${(this.age/_ls2).toFixed(2)} partnerRatio=${(partner.age/_pls2).toFixed(2)} min=${_minAgeRatio2})`);
+                                    } else if (this.needs.hunger <= 15 || partner.needs.hunger <= 15) {
+                                        console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: hunger crisis (self=${this.needs.hunger.toFixed(1)} partner=${partner.needs.hunger.toFixed(1)})`);
                                     } else {
                                     console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
                                     this.reproduceWith && this.reproduceWith(partner);
