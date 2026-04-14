@@ -383,43 +383,34 @@ while the other's hunger stabilizes. At night, bonded characters should move tow
 
 ---
 
-### 5 — Death Record ★★☆ `Layer 3`
+### 5 — ~~Death Record~~ ✅ Done `Layer 3` (commit `ff1c433`)
 
-When `die()` is called, persist a lightweight tombstone (character instance discarded):
+**Implemented** in `character.js` `die()` + `main.js` `resetPopulationStats()`:
 
+Tombstone written before character is removed from array:
 ```javascript
-window.__deathRecords = window.__deathRecords || [];
 window.__deathRecords.push({
-  id, generation,
-  ageAtDeath: this.age,        // actual seconds lived
-  lifespan,                    // expected max
-  cause,                       // 'starvation' | 'old_age'
+  id, generation, ageAtDeath, lifespan, cause,
   traits: { ...this.personality },
-  childCount: this.childCount,
-  parentIds: this.parentIds,
-  groupIdAtDeath: this.groupId,
+  childCount, parentIds, groupIdAtDeath,
   finalNeeds: { hunger, energy, safety, social }
 });
 ```
+- Capped at 200 records (oldest shifted out). Same pattern as event log.
+- Cleared on sim restart via `resetPopulationStats()`.
+- Readable via DevTools: `window.__deathRecords`.
 
-**Observable effect**: world-level statistics become possible:
-- Average lifespan per generation
-- Dominant cause of death per season
-- Trait distribution shift across generations (did diligence rise after a famine winter?)
-
-**Unlocks**: Generation Summary banner (show per-generation averages when generation advances).
-**Risk**: unbounded growth if simulation runs for many generations. Cap at last 200 records.
+**Unlocks now stable**: Generation Summary Banner (can fire when `__maxGenSeen` increments).
 
 ---
 
 ## System Design Backlog — Deferred
 
-### B — Resource Sharing
-Depends on Relationship Tiers (item 4). Ally-class characters donate food.
-Add after Tier system is tested and stable.
+### B — Resource Sharing ✅ Done (implemented as part of Relationship Tiers, item 4)
+Food donation is live: ally/bonded characters donate food every 2s tick when nearby.
 
 ### Generation Summary Banner
-Depends on Death Record (item 5).
+Depends on Death Record (item 5) — now stable.
 When `__maxGenSeen` increments, compute avg lifespan + trait delta for the completed generation.
 Display as a Chronicle event with generational stats inline.
 

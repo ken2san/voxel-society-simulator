@@ -657,8 +657,28 @@ window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
     const gen = Number(payload.generation || 0);
     if (gen > 0 && typeof window.logChronicleEvent === 'function') {
         if (!window.__maxGenSeen || gen > window.__maxGenSeen) {
+            const prevGen = window.__maxGenSeen || 0;
             window.__maxGenSeen = gen;
             window.logChronicleEvent('👶', `Generation ${gen} first birth`, 'new_gen');
+
+            // Generation Summary: compute stats for the generation that just ended (prevGen)
+            if (prevGen > 0 && Array.isArray(window.__deathRecords) && window.__deathRecords.length > 0) {
+                const cohort = window.__deathRecords.filter(r => r.generation === prevGen);
+                if (cohort.length > 0) {
+                    const avgAge = (cohort.reduce((s, r) => s + r.ageAtDeath, 0) / cohort.length).toFixed(0);
+                    const starvCount = cohort.filter(r => r.cause === 'starvation').length;
+                    const starvPct = Math.round(100 * starvCount / cohort.length);
+                    const traitAvg = {};
+                    const traitKeys = ['bravery', 'diligence', 'sociality', 'curiosity', 'resourcefulness', 'resilience'];
+                    for (const k of traitKeys) {
+                        const vals = cohort.map(r => r.traits?.[k]).filter(v => v != null);
+                        if (vals.length > 0) traitAvg[k] = (vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2);
+                    }
+                    const topTrait = traitKeys.reduce((best, k) => traitAvg[k] > (traitAvg[best] ?? 0) ? k : best, traitKeys[0]);
+                    const summaryText = `Gen${prevGen} closed — ${cohort.length} died · avg ${avgAge}s · ${starvPct}% starved · top trait: ${topTrait}=${traitAvg[topTrait]}`;
+                    window.logChronicleEvent('📊', summaryText, 'gen_summary');
+                }
+            }
         }
     }
     return stats;
