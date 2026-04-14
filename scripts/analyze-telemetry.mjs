@@ -210,3 +210,86 @@ console.log(`avgLowSafetyRatio: ${pct(global.lowSafety / m)}`);
 console.log(`stallDetected: ${global.stall}, stallRecovered: ${global.recovered}`);
 
 console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high together, raise energy emergency threshold and reduce wander fallback pressure.');
+
+// --- Age distribution over time (cohort wave detector) ---
+// Groups samples into 30-second simulation-time buckets.
+// Reports lifeRatio distribution (p25/median/p75) and population count.
+// A narrow band that shifts uniformly is a synchronized cohort wave.
+{
+  if (samples.length > 0 && samples[0].lifeRatio !== undefined) {
+    const recStart = meta.startedAt ?? samples[0].t;
+    const BUCKET_SEC = 30;
+    const buckets = new Map(); // bucket index -> { lifeRatios, ids }
+
+    for (const s of samples) {
+      const bucketIdx = Math.floor((s.t - recStart) / 1000 / BUCKET_SEC);
+      if (!buckets.has(bucketIdx)) buckets.set(bucketIdx, { lifeRatios: [], ids: new Set() });
+      const b = buckets.get(bucketIdx);
+      b.lifeRatios.push(s.lifeRatio);
+      b.ids.add(s.id);
+    }
+
+    function percentile(sorted, p) {
+      const i = Math.floor(sorted.length * p);
+      return sorted[Math.min(i, sorted.length - 1)];
+    }
+
+    console.log('\n=== Age Distribution Over Time (cohort wave detector) ===');
+    console.log('bucket_start_s  pop  lifeRatio[p25/p50/p75]');
+    const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+    for (const [idx, b] of sortedBuckets) {
+      const tSec = idx * BUCKET_SEC;
+      const sorted = b.lifeRatios.slice().sort((a, c) => a - c);
+      const p25 = percentile(sorted, 0.25).toFixed(2);
+      const p50 = percentile(sorted, 0.50).toFixed(2);
+      const p75 = percentile(sorted, 0.75).toFixed(2);
+      const pop = b.ids.size;
+      const bar = '█'.repeat(pop);
+      console.log(`  t=${String(tSec).padStart(5)}s  pop=${String(pop).padStart(2)}  [${p25} / ${p50} / ${p75}]  ${bar}`);
+    }
+    console.log('Hint: If p25-p75 band is narrow and p50 approaches 1.0 uniformly across buckets, a cohort mass-death event is imminent.');
+  }
+}
+
+// --- Social network summary (ideology gap verification) ---
+{
+  const socialSamples = samples.filter(s => s.social);
+  if (socialSamples.length > 0) {
+    const byIdSocial = new Map();
+    for (const s of socialSamples) {
+      if (!byIdSocial.has(s.id)) byIdSocial.set(s.id, []);
+      byIdSocial.get(s.id).push(s);
+    }
+    // Per-character: last-known avgAffinity and groupSize
+    const charStats = [];
+    for (const [id, arr] of byIdSocial.entries()) {
+      const last = arr[arr.length - 1];
+      charStats.push({
+        id,
+        relationshipCount: last.social.relationshipCount,
+        avgAffinity: last.social.avgAffinity,
+        groupSize: last.social.groupSize,
+        gen: last.generation
+      });
+    }
+    charStats.sort((a, b) => a.id - b.id);
+
+    // group size distribution
+    const gsMap = new Map();
+    for (const c of charStats) {
+      gsMap.set(c.groupSize, (gsMap.get(c.groupSize) || 0) + 1);
+    }
+
+    const totalAvgAffinity = charStats.reduce((s, c) => s + c.avgAffinity, 0) / Math.max(1, charStats.length);
+    const totalAvgRel = charStats.reduce((s, c) => s + c.relationshipCount, 0) / Math.max(1, charStats.length);
+
+    console.log('\n=== Social Network Summary ===');
+    console.log(`avgRelationshipCount: ${totalAvgRel.toFixed(1)}`);
+    console.log(`avgAffinity (all chars, last snapshot): ${totalAvgAffinity.toFixed(1)}`);
+    console.log('Group size distribution (char count per group size):');
+    for (const [size, count] of Array.from(gsMap.entries()).sort((a, b) => a[0] - b[0])) {
+      console.log(`  groupSize=${size}: ${count} chars`);
+    }
+    console.log('Hint: Many chars in groupSize=1 = ideological fragmentation working. Larger clusters = homogeneous community forming.');
+  }
+}

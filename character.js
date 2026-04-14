@@ -3028,9 +3028,24 @@ class Character {
                             social: Number(this.needs?.social || 0)
                         },
                         personality: {
-                            bravery: Number(this.personality?.bravery || 0),
-                            diligence: Number(this.personality?.diligence || 0)
+                            bravery:          Number(this.personality?.bravery          || 0),
+                            diligence:        Number(this.personality?.diligence        || 0),
+                            sociality:        Number(this.personality?.sociality        || 0),
+                            curiosity:        Number(this.personality?.curiosity        || 0),
+                            resourcefulness:  Number(this.personality?.resourcefulness  || 0),
+                            resilience:       Number(this.personality?.resilience       || 0)
                         },
+                        social: (() => {
+                            const rels = this.relationships;
+                            if (!rels || rels.size === 0) return { relationshipCount: 0, avgAffinity: 0, groupSize: 1 };
+                            const values = Array.from(rels.values());
+                            const avg = values.reduce((s, v) => s + v, 0) / values.length;
+                            const gId = this.groupId || null;
+                            const gSize = gId && Array.isArray(window.characters)
+                                ? window.characters.filter(c => c.groupId === gId && !c.isDead).length
+                                : 1;
+                            return { relationshipCount: values.length, avgAffinity: Number(avg.toFixed(2)), groupSize: gSize };
+                        })(),
                         home: {
                             hasHome: !!this.homePosition,
                             provisional: !!this.provisionalHome,
