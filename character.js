@@ -2297,6 +2297,17 @@ class Character {
         return blockType && blockType.diggable;
     }
 
+    // Derived from affinity float — no stored state, safe to call any time.
+    getRelationshipClass(otherId) {
+        const aff = this.relationships.get(otherId) ?? 0;
+        const floor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
+        if (aff >= 80) return 'bonded';
+        if (aff >= 60) return 'ally';
+        if (aff >= 30) return 'acquaintance';
+        if (aff > floor + 3) return 'stranger';
+        return 'rival';
+    }
+
     getEffectiveLifespan() {
         const baseLifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
             ? Number(window.characterLifespan) : 240;
@@ -2605,6 +2616,26 @@ class Character {
         this.needs.social = Math.max(this.needs.social, 0);
         this.needs.energy = Math.max(this.needs.energy, 0);
         this.needs.safety = Math.max(this.needs.safety, 0);
+
+        // --- Safety bonus: nearby ally/bonded characters provide comfort at night ---
+        if (isNight && this.relationships && this.relationships.size > 0) {
+            const _safetyChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+            for (const [otherId, aff] of this.relationships.entries()) {
+                if (aff >= 60) {
+                    const other = _safetyChars.find(c => c.id === otherId && c.state !== 'dead');
+                    if (other) {
+                        const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
+                        if (d <= 2) {
+                            // bonded: +3/s; ally: +1.5/s — enough to offset night decay (5/s) when 2 bondeds nearby
+                            const bonus = aff >= 80 ? 3 : 1.5;
+                            this.needs.safety = Math.min(100, this.needs.safety + deltaTime * bonus);
+                            break; // one nearby ally is enough
+                        }
+                    }
+                }
+            }
+        }
+
         if (isNight && oldSafety > this.needs.safety) {
             this.learn && this.learn({ type: 'SAFETY_DECREASE' });
         }
@@ -2665,6 +2696,29 @@ class Character {
                             const dx = Math.abs(this.gridPos.x - other.gridPos.x);
                             const dz = Math.abs(this.gridPos.z - other.gridPos.z);
                             if (dx + dz <= 5) { this._nearEnemy = true; break; }
+                        }
+                    }
+                }
+
+                // Food donation: well-fed ally/bonded shares food with nearby hungry partner (every 2s tick)
+                if (this.needs.hunger > 70) {
+                    const _donateChars = _chars;
+                    for (const [otherId, aff] of this.relationships.entries()) {
+                        if (aff >= 60) { // ally or bonded
+                            const other = _donateChars.find(c => c.id === otherId && c.state !== 'dead');
+                            if (other && other.needs.hunger < 40) {
+                                const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
+                                if (d <= 3) {
+                                    const donation = Math.min(20, this.needs.hunger - 50); // never drop below 50
+                                    if (donation > 0) {
+                                        this.needs.hunger -= donation;
+                                        other.needs.hunger = Math.min(100, other.needs.hunger + donation);
+                                        this.log(`Donated ${donation.toFixed(1)} food to ${this.getRelationshipClass(otherId)} #${otherId} (aff=${aff.toFixed(0)})`);
+                                        this.showActionIcon('🤝', 1.5);
+                                    }
+                                    break;
+                                }
+                            }
                         }
                     }
                 }

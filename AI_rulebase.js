@@ -642,6 +642,30 @@ export function decideNextAction_rulebase(character, isNight) {
         // }
     }
 
+    // === PRIORITY 6.5: BONDED PARTNER AID — move toward bonded partner in danger ===
+    // A bonded character (affinity ≥ 80) who is unsafe at night triggers movement aid.
+    // Being adjacent provides the +3/s safety bonus in character.js need updates.
+    // Only triggers when self has enough energy; avoids creating rescue-death spirals.
+    if (isNight && character.needs.energy > 50 && character.relationships && character.relationships.size > 0) {
+        const _aidChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+        for (const [otherId, aff] of character.relationships.entries()) {
+            if (aff >= 80) { // bonded only
+                const other = _aidChars.find(c => c.id === otherId && c.state !== 'dead');
+                if (other && other.needs.safety < 30) {
+                    const d = Math.abs(character.gridPos.x - other.gridPos.x) + Math.abs(character.gridPos.z - other.gridPos.z);
+                    if (d <= 10 && d > 1) { // detect within 10 tiles, skip if already adjacent
+                        const adj = character.findAdjacentSpot && character.findAdjacentSpot(other.gridPos);
+                        if (adj) {
+                            character.log(`Action: WANDER toward bonded #${otherId} in danger (safety=${other.needs.safety.toFixed(0)})`);
+                            character.setNextAction('WANDER', null, adj);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // === PRIORITY 7: ENERGY MANAGEMENT ===
     // bravery direction fix: low bravery → high rest threshold (cautious, conserves energy);
     //                        high bravery → low rest threshold (pushes through fatigue).
