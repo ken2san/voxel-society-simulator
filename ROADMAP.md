@@ -328,44 +328,35 @@ instead of clustering socially. Activity bars should show Eating collapse + Movi
 
 ---
 
-### 2 — Spatial Memory (implement `learn()`) ★★★ `Layer 1`
+### 2 — ~~Spatial Memory~~ ✅ Done `Layer 1` (commit `8735c77`)
 
-The `learn()` function and `adaptiveTendencies` are already designed; `learn()` is a stub.
-Implement lightweight spatial memory as two Maps:
+**Note**: `learn()` was already fully implemented (not a stub). Missing piece was `_knownFoodSpots` Map.
 
-```javascript
-this._knownFoodSpots = new Map()  // "x,y,z" → lastSeenTimestamp
-this._dangerZones    = new Map()  // "x,y,z" → dangerScore
-```
+**Implemented** in `character.js`:
+- Constructor: `this._knownFoodSpots = new Map()` — `"x,y,z" → timestamp`
+- `collectFood()` (EAT completion): `_knownFoodSpots.set(key, Date.now())` after eating
+- `findClosestFood()`: TTL expiry (60s), 0.5× scoring bonus for known spots, on-miss purge
 
-- On eating: record tile to `_knownFoodSpots`
-- On low safety (isNight, no shelter): record nearby tiles to `_dangerZones`
-- Food search: score known spots higher than unknown; entries expire after 60s (food respawns)
-- Night pathing: penalize `_dangerZones` tiles in BFS
-
-**Observable effect**: new characters wander; experienced ones walk directly to known food spots.
-Novice vs. veteran distinction becomes visible behavior for the first time.
-**Risk**: stale food-spot cache sends characters to empty tiles. TTL of 60s + `_knownFoodSpots.delete(key)` on miss resolves this.
+**Observable check**: new characters wander erratically; characters that have eaten before
+walk directly toward previous food locations. Veteran vs novice movement is visually distinct.
 
 ---
 
-### 3 — Full Trait Activation ★★☆ `Layer 1`
+### 3 — ~~Full Trait Activation~~ ✅ Done `Layer 1` (commit `8735c77`)
 
-Two traits currently affect only morphology (visual). Activate them in AI:
+**Bug fixes + activation** in `AI_rulebase.js`:
+- P6 bravery direction was **inverted** — high bravery caused MORE fleeing (fixed)
+- P7 `70 * bravery` caused bravery=1.5 → rest threshold=105 = always resting (fixed)
+- P8 `Math.min(1.0, resourcefulness)` cap killed the trait for high-value characters (removed)
 
-| Trait | Current | Target |
-|-------|---------|--------|
-| `bravery` | visual only | high → stays outside at night; approaches conflict; low → flees at first sign of danger |
-| `resourcefulness` | visual only | high → begins food search at hunger < 70 (proactive); low → waits until hunger < 40 (reactive) |
+| Priority | Old formula | New formula |
+|----------|-------------|-------------|
+| P6 Safety | `safety < 20 * bravery` | `safety < 20 * (2.0 - bravery)` + `nightSafetyOverride` |
+| P7 Rest | `70 * bravery` | `clamp(45 + (2.0 - bravery) * 18 + adapt.rest * 15, 25, 75)` |
+| P8 Food | `95 * min(1.0, res)` | `70 + (resourcefulness - 1.0) * 20` |
 
-**Implementation**: modify `decideNextAction_rulebase()` thresholds:
-- `effectiveFoodThreshold = baseThreshold + (1.0 - resourcefulness) * 20`
-- `nightSafetyOverride = energy > 60 && bravery > 1.2` (brave characters don't flee)
-
-**Observable effect**: after seasonal famine, high-resourcefulness characters survive more often.
-After several generations, population resourcefulness average should drift upward.
-**Risk**: if food is always abundant, no selection pressure → trait still drifts neutrally.
-Requires `seasonAmplitude ≥ 0.6` to see differential survival. Test with telemetry.
+**Observable check**: with `seasonAmplitude ≥ 0.6`, telemetry should show high-resourcefulness
+characters surviving famine more often over multiple generations → trait selection pressure active.
 
 ---
 
