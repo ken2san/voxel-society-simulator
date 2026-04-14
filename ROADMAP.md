@@ -154,7 +154,71 @@ natural collision handling, no wall clipping, smooth visual feel.
 
 ---
 
-## Handoff — Session 2026-04-14
+## Handoff — Session 2026-04-14 PM (System Design)
+
+_This section is updated at the end of each working session so the next AI thread can pick up without re-explanation._
+
+### What this session did
+
+Pure design session — no simulation code changed. Three activities:
+
+1. **System design brainstorming** — deep dive into character.js/AI_rulebase.js to find structural weaknesses
+2. **Priority filtering** — selected top 5 items from 9+ ideas based on ROI + independence + whether they unblock other things
+3. **ROADMAP restructure** — replaced unordered idea list with 3-layer architecture model
+
+### Key structural findings (from code read)
+
+- `learn()` is a **stub** — `adaptiveTendencies` Map exists and is used in AI scoring, but `learn()` is never called → characters have zero experiential learning currently
+- `bravery` and `resourcefulness` affect **morphology only** — two of six traits are decorative in AI
+- `groupId` and `relationships` are **fully disconnected** — groups form by proximity, not by trust → being in a group means nothing socially
+- **No selection pressure**: all traits survive equally regardless of season/famine → generational drift is neutral/random
+- `adaptiveTendencies.forage/rest/social/explore` are used to weight AI probabilities, but since `learn()` is never called, all characters keep initial values forever
+
+### Architecture decision
+
+Settled on a **3-layer implementation order**:
+
+```
+Layer 1 Individual (implement first — makes behavior meaningful):
+  1. Crisis Mode       → single-purpose behavior when needs go critical
+  2. Spatial Memory    → implement learn() as _knownFoodSpots/_dangerZones Maps
+  3. Full trait use    → activate bravery (night safety override) + resourcefulness (proactive foraging threshold)
+
+Layer 2 Social (implement after Layer 1 is stable):
+  4. Relationship Tiers → getRelationshipClass() helper; affinity float → rival/stranger/acquaintance/ally/bonded
+
+Layer 3 Population (implement after Layer 2 is stable):
+  5. Death Record      → tombstone on die(), stored in window.__deathRecords; unlocks generation analytics
+```
+
+Deferred (with explicit preconditions noted in ROADMAP):
+- Resource Sharing (needs Tiers first)
+- Generation Summary banner (needs Death Record first)
+- Social Contagion (coefficient-sensitive; needs Crisis Mode baseline first)
+- groupId → affinity graph rebuild (high regression risk; defer until Tiers proven)
+
+### What to implement next
+
+**Start with Crisis Mode** — lowest cost, highest immediate observability impact.
+Change: in `decideNextAction_rulebase()`, add a pre-check before priority tiers:
+```javascript
+if (this.hunger < 15) → force FIND_FOOD, skip all other rules
+if (this.energy < 10) → force REST, skip all other rules
+// also: block reproduction during crisis
+```
+File: `AI_rulebase.js` (or wherever `decideNextAction_rulebase` lives — confirm before editing).
+
+After Crisis Mode: **Spatial Memory** (add `_knownFoodSpots` Map to constructor, populate on eat, use in food-target scoring).
+
+### What was NOT changed this session
+
+- `character.js`, `world.js`, `main.js`, `sidebar.js` — all unchanged
+- `sim-settings.workspace.json` — unchanged
+- All previously committed features remain intact
+
+---
+
+## Handoff — Session 2026-04-14 AM
 
 _This section is updated at the end of each working session so the next AI thread can pick up without re-explanation._
 
@@ -219,8 +283,8 @@ _Last reviewed: 2026-04-14_
 
 The simulation has three missing layers that together cause "everyone walks around randomly and dies at the same time":
 
-> **Individual**: no memory, two traits unused, no crisis response  
-> **Social**: affinity is a number with no behavioral consequence, groups are proximity clusters not trust networks  
+> **Individual**: no memory, two traits unused, no crisis response
+> **Social**: affinity is a number with no behavioral consequence, groups are proximity clusters not trust networks
 > **Population**: deaths leave no record, generational drift is invisible
 
 ### Three-layer model
