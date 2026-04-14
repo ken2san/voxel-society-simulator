@@ -211,69 +211,185 @@ Every new parameter requires all 3 steps:
 
 ---
 
-## System Design Backlog
+## System Design Architecture
 
-Ideas from design review session (2026-04-14). Not yet prioritized for implementation.
-All ideas must stay within Phase 1–3 scope (no persistence, no backend).
+_Last reviewed: 2026-04-14_
 
-### A — Relationship Tier System ★★★
+### Core structural problem
 
-Replace the single affinity float with a **relationship class** derived from the score:
+The simulation has three missing layers that together cause "everyone walks around randomly and dies at the same time":
 
-| Range | Class | Behavioral effect |
-|-------|-------|-------------------|
-| < floor+3 | `rival` | Avoidance, conflict bubble |
-| floor–30 | `stranger` | Ignores, no interaction bonus |
-| 30–60 | `acquaintance` | Greeting interactions, minor safety bonus |
-| 60–80 | `ally` | Will donate food when self-hunger > 70 and partner < 40 |
-| 80+ | `bonded` | Moves toward partner during danger, defends |
+> **Individual**: no memory, two traits unused, no crisis response  
+> **Social**: affinity is a number with no behavioral consequence, groups are proximity clusters not trust networks  
+> **Population**: deaths leave no record, generational drift is invisible
 
-**Risk**: bonded pairs may cluster indefinitely and monopolize food patches.
-The food-competition pressure among bonded characters likely rebalances this.
+### Three-layer model
+
+```
+Layer 1: Individual
+  ├── Crisis Mode        → behavior shifts when needs hit critical threshold
+  ├── Spatial Memory     → experienced characters remember food/danger locations
+  └── Full trait activation  → bravery + resourcefulness actually drive decisions
+
+Layer 2: Social
+  └── Relationship Tiers → affinity float becomes a behavioral class (rival/stranger/ally/bonded)
+
+Layer 3: Population
+  └── Death Record       → deaths store trait snapshot; foundation for generation analytics
+
+--- deferred until above layers are stable ---
+
+  ├── Resource Sharing   → ally-class characters donate food (depends on Tier)
+  ├── Generation Summary → per-generation trait averages, cause-of-death (depends on Death Record)
+  ├── Social Contagion   → hunger/contentment propagates within radius 3 (tuning-sensitive)
+  └── groupId rebuild    → groups form from affinity graph, not proximity (high risk)
+```
+
+**Implementation order**: Layer 1 → Layer 2 → Layer 3.
+Individual behavior must be meaningful before social dynamics are observable.
+Social structure must be real before generational drift can be read.
 
 ---
 
-### B — Group Resource Sharing ★★★
+## System Design Backlog — Active (Layer 1–2)
 
-When group members detect hunger disparity, surplus characters donate:
+### 1 — Crisis Mode ★★★ `Layer 1`
 
+When any need drops below a critical threshold, the character switches to **single-purpose mode**:
+all other rules suspended, only the critical need is addressed.
+
+```javascript
+if (hunger < 15) → suppress all actions except FIND_FOOD
+if (energy < 10) → suppress all actions except REST
+// reproduction blocked entirely during crisis
 ```
-if (myHunger > 80 && partner.hunger < 40 && affinity >= 60) → GIVE_FOOD action
-```
 
-**Effect**: Groups become "survive together" units, not just safety-buff clusters.
-`diligence` becomes a real selection pressure (better foragers feed the group).
-**Risk**: groups become extinction-resistant refuges. Acceptable under observation-first philosophy.
-**Depends on**: Relationship Tier (A) — ally/bonded threshold should gate generosity.
+**Observable effect**: famine visually breaks social patterns — characters scatter to find food
+instead of clustering. Content vs. crisis states become immediately distinguishable.
+**Implementation**: add crisis check before priority tiers in `decideNextAction_rulebase()`.
+**Risk**: none. Lower bound on hunger/energy threshold prevents infinite loop.
 
 ---
 
-### C — Social Contagion (Mood Propagation) ★★
+### 2 — Spatial Memory (implement `learn()`) ★★★ `Layer 1`
 
-Nearby characters' need states exert a tiny influence on each other per tick:
+The `learn()` function and `adaptiveTendencies` are already designed; `learn()` is a stub.
+Implement lightweight spatial memory as two Maps:
 
+```javascript
+this._knownFoodSpots = new Map()  // "x,y,z" → lastSeenTimestamp
+this._dangerZones    = new Map()  // "x,y,z" → dangerScore
 ```
-// Within radius 3: neighbor.hunger < 20 → self.safety -= 0.5 * deltaTime
-// Within radius 3: neighbor fully content → self.social += 0.3 * deltaTime
-```
 
-**Effect**: Famine "waves" become visible — one starving character unsettles neighbors.
-One content character in a group pulls others toward calm.
-**Risk**: Cascade collapse if coefficient too high. Keep delta ≤ 0.5/s; test with famine amplitude 0.8+.
+- On eating: record tile to `_knownFoodSpots`
+- On low safety (isNight, no shelter): record nearby tiles to `_dangerZones`
+- Food search: score known spots higher than unknown; entries expire after 60s (food respawns)
+- Night pathing: penalize `_dangerZones` tiles in BFS
+
+**Observable effect**: new characters wander; experienced ones walk directly to known food spots.
+Novice vs. veteran distinction becomes visible behavior for the first time.
+**Risk**: stale food-spot cache sends characters to empty tiles. TTL of 60s + `_knownFoodSpots.delete(key)` on miss resolves this.
 
 ---
 
-### D — Foraging Skill Accumulation ★
+### 3 — Full Trait Activation ★★☆ `Layer 1`
 
-Each fruit eaten increments `_foragingSkill` (cap 2.0, start 1.0):
+Two traits currently affect only morphology (visual). Activate them in AI:
 
+| Trait | Current | Target |
+|-------|---------|--------|
+| `bravery` | visual only | high → stays outside at night; approaches conflict; low → flees at first sign of danger |
+| `resourcefulness` | visual only | high → begins food search at hunger < 70 (proactive); low → waits until hunger < 40 (reactive) |
+
+**Implementation**: modify `decideNextAction_rulebase()` thresholds:
+- `effectiveFoodThreshold = baseThreshold + (1.0 - resourcefulness) * 20`
+- `nightSafetyOverride = energy > 60 && bravery > 1.2` (brave characters don't flee)
+
+**Observable effect**: after seasonal famine, high-resourcefulness characters survive more often.
+After several generations, population resourcefulness average should drift upward.
+**Risk**: if food is always abundant, no selection pressure → trait still drifts neutrally.
+Requires `seasonAmplitude ≥ 0.6` to see differential survival. Test with telemetry.
+
+---
+
+### 4 — Relationship Tiers ★★★ `Layer 2`
+
+Replace single affinity float with a **relationship class** used in AI decisions:
+
+| Affinity range | Class | Behavioral gates |
+|----------------|-------|-----------------|
+| < affinityFloor+3 | `rival` | Avoidance; triggers `_nearEnemy` conflict bubble |
+| floor+3 – 30 | `stranger` | No bonus; ignores |
+| 30 – 60 | `acquaintance` | Minor safety bonus when adjacent |
+| 60 – 80 | `ally` | Donates food when own hunger > 70 and partner < 40 |
+| 80+ | `bonded` | Moves toward partner in danger; safety bonus stacks |
+
+```javascript
+// helper — no new state, derived on access
+getRelationshipClass(otherId) {
+  const aff = this.relationships.get(otherId) ?? 0;
+  if (aff >= 80) return 'bonded';
+  if (aff >= 60) return 'ally';
+  if (aff >= 30) return 'acquaintance';
+  if (aff > window.affinityFloor + 3) return 'stranger';
+  return 'rival';
+}
 ```
-this._foragingSkill = Math.min(2.0, 1.0 + this._foragingCount * 0.008);
+
+**Observable effect**: for the first time, affinity has action consequences.
+Watching two characters' relationship class change from acquaintance → ally → bonded is a story.
+**Risk**: bonded pairs clustering. Food competition within a cluster naturally limits this.
+**Note**: Resource Sharing (food donation) is gated on this — implement together or shortly after.
+
+---
+
+### 5 — Death Record ★★☆ `Layer 3`
+
+When `die()` is called, persist a lightweight tombstone (character instance discarded):
+
+```javascript
+window.__deathRecords = window.__deathRecords || [];
+window.__deathRecords.push({
+  id, generation,
+  ageAtDeath: this.age,        // actual seconds lived
+  lifespan,                    // expected max
+  cause,                       // 'starvation' | 'old_age'
+  traits: { ...this.personality },
+  childCount: this.childCount,
+  parentIds: this.parentIds,
+  groupIdAtDeath: this.groupId,
+  finalNeeds: { hunger, energy, safety, social }
+});
 ```
 
-Applied as a score multiplier when choosing food targets (experienced foragers reach fruit faster).
-**Risk**: without trait coupling, skill converges uniformly — `diligence` or `resourcefulness` must
-gate the accumulation rate or this is just a time-alive buff, not individual character.
+**Observable effect**: world-level statistics become possible:
+- Average lifespan per generation
+- Dominant cause of death per season
+- Trait distribution shift across generations (did diligence rise after a famine winter?)
+
+**Unlocks**: Generation Summary banner (show per-generation averages when generation advances).
+**Risk**: unbounded growth if simulation runs for many generations. Cap at last 200 records.
+
+---
+
+## System Design Backlog — Deferred
+
+### B — Resource Sharing
+Depends on Relationship Tiers (item 4). Ally-class characters donate food.
+Add after Tier system is tested and stable.
+
+### Generation Summary Banner
+Depends on Death Record (item 5).
+When `__maxGenSeen` increments, compute avg lifespan + trait delta for the completed generation.
+Display as a Chronicle event with generational stats inline.
+
+### Social Contagion
+Coefficient-sensitive. Needs `seasonAmplitude` ≥ 0.8 to observe clearly.
+Add after Crisis Mode is stable (item 1 changes baseline behavior that contagion modulates).
+
+### groupId → Affinity Graph Rebuild
+High impact, high regression risk. Replaces proximity clustering with connected-component
+analysis of affinity ≥ 50 edges. Defer until Tier system (item 4) is proven stable.
 
 ---
 
