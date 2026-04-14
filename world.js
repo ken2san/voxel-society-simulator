@@ -350,6 +350,22 @@ export function animate() {
     // --- 季節時計：シム経過時間を加算 ---
     if (!animate.simTime) animate.simTime = 0;
     animate.simTime += deltaTime;
+    // 毎秒程度の頻度でサイドバー向け季節情報を更新（再生tick待ちでは遅すぎるため）
+    if (!animate.lastSeasonUIUpdate) animate.lastSeasonUIUpdate = 0;
+    animate.lastSeasonUIUpdate += deltaTime;
+    if (animate.lastSeasonUIUpdate >= 1.0) {
+        animate.lastSeasonUIUpdate = 0;
+        const _cycleSec = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0) ? window.seasonCycleSeconds : 120;
+        const _amp = (typeof window !== 'undefined' && window.seasonAmplitude !== undefined) ? Math.min(1, Math.max(0, window.seasonAmplitude)) : 0.6;
+        const _mul = 1 + _amp * Math.sin(2 * Math.PI * animate.simTime / _cycleSec);
+        const _phase = (animate.simTime % _cycleSec) / _cycleSec;
+        let _name, _icon;
+        if (_phase < 0.25)       { _name = 'Spring'; _icon = '🌸'; }
+        else if (_phase < 0.50)  { _name = 'Summer'; _icon = '☀️'; }
+        else if (_phase < 0.75)  { _name = 'Autumn'; _icon = '🍂'; }
+        else                     { _name = 'Winter'; _icon = '❄️'; }
+        window.currentSeasonInfo = { name: _name, icon: _icon, multiplier: Math.max(0, _mul), amplitude: _amp, phase: _phase };
+    }
 
     // --- 果物再生：fruitRegenIntervalSeconds ごとに表面GRASSにFRUITをランダム再生 ---
     // 季節サイクル（sinカーブ）で実効レートを変動させる。
@@ -361,13 +377,10 @@ export function animate() {
         ? window.fruitRegenIntervalSeconds : 60;
     if (animate.lastFruitRegenTime >= fruitRegenInterval) {
         const baseRate = fruitSpawnRate;
-        const cycleSec = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0)
-            ? window.seasonCycleSeconds : 120;
-        const amplitude = (typeof window !== 'undefined' && window.seasonAmplitude !== undefined)
-            ? Math.min(1, Math.max(0, window.seasonAmplitude)) : 0.6;
-        // sin: +1=真夏(rate最大), -1=真冬(rate最小)。最小レートは0（完全凶作）で上限なし。
-        const seasonalMultiplier = 1 + amplitude * Math.sin(2 * Math.PI * animate.simTime / cycleSec);
-        const rate = baseRate * Math.max(0, seasonalMultiplier);
+        // 季節倍率は毎秒更新の window.currentSeasonInfo から取得（未設定なら1）
+        const seasonalMultiplier = window.currentSeasonInfo ? window.currentSeasonInfo.multiplier : 1;
+        const rate = baseRate * seasonalMultiplier;
+
         for (let x = 0; x < gridSize; x++) {
             for (let z = 0; z < gridSize; z++) {
                 if (Math.random() >= rate) continue;

@@ -2122,7 +2122,33 @@ function renderCharacterList() {
 
         const statsDiv = document.createElement('div');
         statsDiv.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:0.82em;color:#2b3340;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
+
+        // --- Season indicator ---
+        const si = window.currentSeasonInfo;
+        const seasonHTML = si ? (() => {
+            const pct = Math.round(si.multiplier * 100);
+            // Progress bar: phase within the cycle (0–1)
+            const phasePct = Math.round(si.phase * 100);
+            // Color: summer=green, winter=blue, spring/autumn=amber
+            const barColor = si.name === 'Summer' ? '#16a34a'
+                : si.name === 'Winter' ? '#3b82f6'
+                : si.name === 'Spring' ? '#f59e0b' : '#ea580c';
+            return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 8px;">` +
+                `<span style="font-size:1.1em;">${si.icon}</span>` +
+                `<div style="flex:1;min-width:0;">` +
+                    `<div style="display:flex;justify-content:space-between;align-items:baseline;">` +
+                        `<span style="font-weight:600;color:#334155;">${si.name}</span>` +
+                        `<span style="font-size:0.85em;color:#64748b;">food ×${si.multiplier.toFixed(2)}</span>` +
+                    `</div>` +
+                    `<div style="margin-top:3px;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;">` +
+                        `<div style="height:100%;width:${phasePct}%;background:${barColor};border-radius:3px;transition:width 0.5s;"></div>` +
+                    `</div>` +
+                `</div>` +
+            `</div>`;
+        })() : '';
+
         statsDiv.innerHTML =
+            seasonHTML +
             `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">` +
                 `<b style="font-size:1.0em;">Population Pulse</b>` +
                 `<span style="font-size:0.9em;color:#55657a;">1m window</span>` +
