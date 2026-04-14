@@ -1906,35 +1906,66 @@ function createPopulationDetailsHTML(metrics) {
     );
 }
 
+// Event type → left-border color
+const _etlKindColor = {
+    birth:    '#4ade80',
+    death:    '#f87171',
+    famine:   '#ef4444',
+    recovery: '#86efac',
+    conflict: '#fb923c',
+    peace:    '#6ee7b7',
+    season:   '#fbbf24',
+    new_gen:  '#c084fc',
+    peak:     '#34d399',
+    warning:  '#facc15',
+    start:    '#60a5fa',
+    event:    '#94a3b8'
+};
+
 function createTimelineHandleHTML(ev) {
-    const badgeClass = ev.type === 'birth' ? 'timeline-badge-birth' : 'timeline-badge-death';
-    const badgeText = ev.type === 'birth' ? 'Birth' : 'Death';
-    return (
-        `<span class="timeline-inline-badge ${badgeClass}">${badgeText}</span>` +
-        `<span class="timeline-inline-summary">${_etlFormatEvent(ev)}</span>`
-    );
+    // Chronicle event (has .icon and .text)
+    if (ev.icon && ev.text && !ev.type) {
+        return `<span>${ev.icon}</span>&thinsp;<span style="font-size:0.9em;">${ev.text}</span>`;
+    }
+    const isB = ev.type === 'birth';
+    const dot = `<span style="color:${isB ? '#4ade80' : '#f87171'};font-size:1.1em;line-height:1;">●</span>`;
+    return dot + `&nbsp;<span style="font-size:0.9em;">${_etlFormatEvent(ev)}</span>`;
 }
 
 function createTimelineEventHTML(ev) {
-    const badgeClass = ev.type === 'birth' ? 'timeline-badge-birth' : 'timeline-badge-death';
-    const badgeText = ev.type === 'birth' ? 'Birth' : 'Death';
-    const meta = [
-        _etlFormatTime(ev.t),
-        ev.generation !== undefined ? `G${ev.generation}` : null,
-        ev.age !== undefined ? `${Math.round(ev.age)}s` : null,
-        ev.cause ? String(ev.cause).replace(/_/g, ' ') : null
-    ].filter(Boolean);
-    return (
-        `<div class="timeline-event-row ${ev.type === 'birth' ? 'is-birth' : 'is-death'}">` +
-            `<div class="timeline-event-main">` +
-                `<div class="timeline-event-top">` +
-                    `<span class="timeline-event-badge ${badgeClass}">${badgeText}</span>` +
-                    `<span class="timeline-event-title">${_etlFormatEvent(ev)}</span>` +
-                `</div>` +
-                `<div class="timeline-event-meta">${meta.join(' • ')}</div>` +
+    const isChronicle = ev.icon && ev.text && !ev.type;
+    const kind = isChronicle ? (ev.kind || 'event') : ev.type;
+    const borderColor = _etlKindColor[kind] || '#64748b';
+    const timeStr = _etlFormatTime(ev.t);
+
+    if (isChronicle) {
+        return `<div style="display:flex;align-items:flex-start;gap:7px;padding:4px 6px 4px 8px;` +
+            `border-left:3px solid ${borderColor};background:rgba(255,255,255,0.04);border-radius:0 4px 4px 0;margin-bottom:2px;">` +
+            `<span style="font-size:1.0em;line-height:1.6;flex-shrink:0;">${ev.icon}</span>` +
+            `<div style="flex:1;min-width:0;">` +
+                `<div style="color:#e2e8f0;font-size:0.88em;">${ev.text}</div>` +
+                `<div style="color:#64748b;font-size:0.76em;">${timeStr}</div>` +
             `</div>` +
-        `</div>`
-    );
+        `</div>`;
+    }
+
+    // Lifecycle birth / death
+    const isB = ev.type === 'birth';
+    const icon = isB ? '👶' : '💀';
+    const mainText = _etlFormatEvent(ev);
+    const meta = [
+        timeStr,
+        ev.generation !== undefined ? `G${ev.generation}` : null,
+        ev.age !== undefined ? `${Math.round(ev.age)}s` : null
+    ].filter(Boolean);
+    return `<div style="display:flex;align-items:flex-start;gap:7px;padding:4px 6px 4px 8px;` +
+        `border-left:3px solid ${borderColor};background:rgba(255,255,255,0.04);border-radius:0 4px 4px 0;margin-bottom:2px;">` +
+        `<span style="font-size:1.0em;line-height:1.6;flex-shrink:0;">${icon}</span>` +
+        `<div style="flex:1;min-width:0;">` +
+            `<div style="color:#e2e8f0;font-size:0.88em;">${mainText}</div>` +
+            `<div style="color:#64748b;font-size:0.76em;">${meta.join(' · ')}</div>` +
+        `</div>` +
+    `</div>`;
 }
 
 // --- Lifecycle Event Timeline ---
@@ -1984,15 +2015,18 @@ function _etlFormatTime(t) {
 
 function _etlFormatEvent(ev) {
     if (ev.type === 'birth') {
-        const charLabel = ev.childId !== undefined ? `#${ev.childId}` : '';
-        const gen = ev.generation !== undefined ? ` G${ev.generation}` : '';
-        return `🟢 Born ${charLabel}${gen}`;
+        const id = ev.childId !== undefined ? `#${ev.childId}` : '';
+        const gen = ev.generation !== undefined ? ` (G${ev.generation})` : '';
+        if (ev.parentIds && ev.parentIds.length >= 2) {
+            return `Born ${id}${gen} — #${ev.parentIds[0]} × #${ev.parentIds[1]}`;
+        }
+        return `Born ${id}${gen}`;
     } else {
-        const charLabel = ev.charId !== undefined ? `#${ev.charId}` : '';
+        const id = ev.charId !== undefined ? `#${ev.charId}` : '';
         const gen = ev.generation !== undefined ? ` G${ev.generation}` : '';
-        const age = ev.age !== undefined ? ` ${Math.round(ev.age)}s` : '';
-        const cause = ev.cause ? ` (${ev.cause})` : '';
-        return `🔴 Died ${charLabel}${gen}${age}${cause}`;
+        const age = ev.age !== undefined ? `, ${Math.round(ev.age)}s` : '';
+        const cause = ev.cause ? ` — ${ev.cause.replace(/_/g, ' ')}` : '';
+        return `Died ${id}${gen}${age}${cause}`;
     }
 }
 
@@ -2019,8 +2053,9 @@ function initEventTimelineDrawer() {
         `background:linear-gradient(90deg,#1e3a5f 0%,#1a2e4a 100%);color:#c8dcf0;cursor:pointer;` +
         `height:36px;box-sizing:border-box;user-select:none;">` +
             `<span style="font-size:0.94em;font-weight:700;letter-spacing:0.02em;white-space:nowrap;">📋 Timeline</span>` +
+            `<span id="etl-counts" style="font-size:0.82em;font-weight:600;background:rgba(255,255,255,0.1);border-radius:4px;padding:1px 5px;white-space:nowrap;"></span>` +
             `<span id="etl-latest" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
-            `font-size:0.88em;color:#a8c4df;padding-left:10px;"></span>` +
+            `font-size:0.88em;color:#a8c4df;padding-left:8px;"></span>` +
             `<span id="etl-toggle-icon" style="font-size:0.88em;transition:transform 200ms;">▲</span>` +
         `</div>` +
         `<div id="etl-body" style="display:none;background:rgba(14,24,42,0.96);` +
@@ -2040,19 +2075,32 @@ function initEventTimelineDrawer() {
 
 function renderEventTimeline() {
     syncLifecycleEventsFromStats();
-    const log = window.__lifecycleEventLog;
+    // Merge lifecycle events + chronicle events, sort newest first
+    const lifecycle = Array.isArray(window.__lifecycleEventLog) ? window.__lifecycleEventLog : [];
+    const chronicle = Array.isArray(window.__societyChronicle) ? window.__societyChronicle : [];
+    const merged = [...lifecycle, ...chronicle].sort((a, b) => b.t - a.t).slice(0, 50);
+
     const latestEl = document.getElementById('etl-latest');
     const listEl = document.getElementById('etl-list');
+    const countsEl = document.getElementById('etl-counts');
     if (!latestEl) return;
-    if (log.length === 0) {
-        latestEl.textContent = 'No events yet';
-        if (listEl) listEl.innerHTML =
-            `<div class="timeline-empty-state">No lifecycle events yet.</div>`;
+
+    // Update birth/death count badge
+    if (countsEl) {
+        const stats = typeof window.getPopulationStats === 'function' ? window.getPopulationStats() : null;
+        const births = stats ? stats.births : lifecycle.filter(e => e.type === 'birth').length;
+        const deaths = stats ? stats.deaths : lifecycle.filter(e => e.type === 'death').length;
+        countsEl.innerHTML = `<span style="color:#4ade80;">↑${births}</span>&thinsp;<span style="color:#f87171;">↓${deaths}</span>`;
+    }
+
+    if (merged.length === 0) {
+        latestEl.textContent = 'Waiting for first event…';
+        if (listEl) listEl.innerHTML = `<div style="padding:16px;color:#64748b;text-align:center;font-style:italic;">The colony hasn't started yet.</div>`;
         return;
     }
-    latestEl.innerHTML = createTimelineHandleHTML(log[0]);
+    latestEl.innerHTML = createTimelineHandleHTML(merged[0]);
     if (_drawerExpanded && listEl) {
-        listEl.innerHTML = log.map(createTimelineEventHTML).join('');
+        listEl.innerHTML = merged.map(createTimelineEventHTML).join('');
     }
 }
 
