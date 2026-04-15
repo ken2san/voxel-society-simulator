@@ -2890,16 +2890,20 @@ class Character {
         }
         // --- Needs decay (bak_game.js準拠) ---
         const oldSafety = this.needs.safety;
-        this.needs.hunger -= deltaTime * 0.7 * this.personality.diligence; // 減少速度を半分に
+        const hungerDecayRate = (typeof window !== 'undefined' && window.hungerDecayRate !== undefined) ? Number(window.hungerDecayRate) : 0.7;
+        const activeEnergyDrainRate = (typeof window !== 'undefined' && window.activeEnergyDrainRate !== undefined) ? Number(window.activeEnergyDrainRate) : 2;
+        const unsafeNightSafetyDecayRate = (typeof window !== 'undefined' && window.unsafeNightSafetyDecayRate !== undefined) ? Number(window.unsafeNightSafetyDecayRate) : 5;
+        const daytimeSafetyRecoveryRate = (typeof window !== 'undefined' && window.daytimeSafetyRecoveryRate !== undefined) ? Number(window.daytimeSafetyRecoveryRate) : 16;
+        this.needs.hunger -= deltaTime * hungerDecayRate * this.personality.diligence;
         const socialNeedDecayRate = (typeof window !== 'undefined' && window.socialNeedDecayRate !== undefined) ? Number(window.socialNeedDecayRate) : 1.5;
         this.needs.social -= deltaTime * socialNeedDecayRate;
         if (this.state === 'moving' || this.state === 'working') {
-            this.needs.energy -= deltaTime * 2;
+            this.needs.energy -= deltaTime * activeEnergyDrainRate;
         }
         if (isNight && !this.isSafe(isNight)) {
-            this.needs.safety -= deltaTime * 5;
+            this.needs.safety -= deltaTime * unsafeNightSafetyDecayRate;
         } else if (!isNight) {
-            this.needs.safety = Math.min(100, this.needs.safety + deltaTime * 16);
+            this.needs.safety = Math.min(100, this.needs.safety + deltaTime * daytimeSafetyRecoveryRate);
         }
         // --- needsの下限を0にクリップ ---
         this.needs.hunger = Math.max(this.needs.hunger, 0);
@@ -2964,7 +2968,8 @@ class Character {
 
         // Recovery
         if (this.state === 'resting') {
-            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * 18);
+            const restEnergyRecoveryRate = (typeof window !== 'undefined' && window.restEnergyRecoveryRate !== undefined) ? Number(window.restEnergyRecoveryRate) : 18;
+            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
                 this.learn && this.learn({ type: 'FOUND_SHELTER' });

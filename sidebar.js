@@ -197,6 +197,11 @@ function renderCharacterDetail() {
     const PARAM_DEFAULTS = {
         hungerEmergencyThreshold:           5,
         energyEmergencyThreshold:           20,
+        hungerDecayRate:                    0.7,
+        activeEnergyDrainRate:              2.0,
+        unsafeNightSafetyDecayRate:         5.0,
+        daytimeSafetyRecoveryRate:          16.0,
+        restEnergyRecoveryRate:             18.0,
         characterLifespan:                  240,
         homeReturnHungerLevel:              90,
         homeBuildingPriority:               80,
@@ -231,6 +236,17 @@ function renderCharacterDetail() {
         supportAllyWeight:                  0.12,
         supportNearbyWeight:                0.10,
         supportTopAffinityWeight:           0.22,
+        socialPressureFoodWeight:           0.28,
+        socialPressureHousingWeight:        0.30,
+        socialPressureTimeWeight:           0.22,
+        socialPressureSupportWeight:        0.10,
+        socialPressureStabilityWeight:      0.10,
+        opportunityPressureWeight:          0.36,
+        opportunitySupportWeight:           0.22,
+        opportunityStabilityWeight:         0.16,
+        opportunityConflictWeight:          0.10,
+        opportunityPopulationWeight:        0.10,
+        opportunityFoodWeight:              0.06,
         perceptionRange:                    2,
         pairReproductionCooldownSeconds:    60,
         maxAffinity:                        100,
@@ -781,6 +797,23 @@ function renderCharacterDetail() {
     supportDynamicsRow.dataset.label = 'Support Dynamics';
     tabPanels[1].appendChild(supportDynamicsRow);
 
+    const needsDynamicsRow = document.createElement('div');
+    needsDynamicsRow.style.display = 'flex';
+    needsDynamicsRow.style.alignItems = 'center';
+    needsDynamicsRow.style.flexWrap = 'wrap';
+    needsDynamicsRow.style.gap = '8px';
+    const needsDynamicsLabel = document.createElement('span');
+    needsDynamicsLabel.textContent = 'Needs Dynamics:';
+    needsDynamicsLabel.style.width = '140px';
+    needsDynamicsRow.appendChild(needsDynamicsLabel);
+    appendCompactSliderInput(needsDynamicsRow, 'Hun', 'hungerDecayRate', { min: 0, max: 2, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'MoveE', 'activeEnergyDrainRate', { min: 0, max: 5, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'NightS', 'unsafeNightSafetyDecayRate', { min: 0, max: 10, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'DayS', 'daytimeSafetyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'RestE', 'restEnergyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
+    needsDynamicsRow.dataset.label = 'Needs Dynamics';
+    tabPanels[2].appendChild(needsDynamicsRow);
+
     const supportWeightsRow = document.createElement('div');
     supportWeightsRow.style.display = 'flex';
     supportWeightsRow.style.alignItems = 'center';
@@ -830,6 +863,41 @@ function renderCharacterDetail() {
     appendCompactSliderInput(socialAdaptRow, 'Soc+', 'socialAdaptationBoost', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     socialAdaptRow.dataset.label = 'Adapt Weights';
     tabPanels[1].appendChild(socialAdaptRow);
+
+    const districtPressureRow = document.createElement('div');
+    districtPressureRow.style.display = 'flex';
+    districtPressureRow.style.alignItems = 'center';
+    districtPressureRow.style.flexWrap = 'wrap';
+    districtPressureRow.style.gap = '8px';
+    const districtPressureLabel = document.createElement('span');
+    districtPressureLabel.textContent = 'District Pressure:';
+    districtPressureLabel.style.width = '140px';
+    districtPressureRow.appendChild(districtPressureLabel);
+    appendCompactSliderInput(districtPressureRow, 'Food', 'socialPressureFoodWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtPressureRow, 'House', 'socialPressureHousingWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtPressureRow, 'Time', 'socialPressureTimeWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtPressureRow, 'Support', 'socialPressureSupportWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtPressureRow, 'Stable', 'socialPressureStabilityWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    districtPressureRow.dataset.label = 'District Pressure';
+    tabPanels[2].appendChild(districtPressureRow);
+
+    const districtOpportunityRow = document.createElement('div');
+    districtOpportunityRow.style.display = 'flex';
+    districtOpportunityRow.style.alignItems = 'center';
+    districtOpportunityRow.style.flexWrap = 'wrap';
+    districtOpportunityRow.style.gap = '8px';
+    const districtOpportunityLabel = document.createElement('span');
+    districtOpportunityLabel.textContent = 'District Opportunity:';
+    districtOpportunityLabel.style.width = '140px';
+    districtOpportunityRow.appendChild(districtOpportunityLabel);
+    appendCompactSliderInput(districtOpportunityRow, 'Press', 'opportunityPressureWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtOpportunityRow, 'Support', 'opportunitySupportWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtOpportunityRow, 'Stable', 'opportunityStabilityWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtOpportunityRow, 'Conflict', 'opportunityConflictWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtOpportunityRow, 'Pop', 'opportunityPopulationWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(districtOpportunityRow, 'Food', 'opportunityFoodWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    districtOpportunityRow.dataset.label = 'District Opportunity';
+    tabPanels[2].appendChild(districtOpportunityRow);
 
     // --- Dig cooldown controls ---
     const digRow = document.createElement('div');

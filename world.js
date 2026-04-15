@@ -293,23 +293,34 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         const supportAccess = roundDistrictValue(sum.supported / n);
         const relationshipStability = roundDistrictValue(sum.relationshipStability / n);
         const conflictLevel = roundDistrictValue(sum.conflict / n);
+        const socialPressureFoodWeight = (typeof window !== 'undefined' && window.socialPressureFoodWeight !== undefined) ? Number(window.socialPressureFoodWeight) : 0.28;
+        const socialPressureHousingWeight = (typeof window !== 'undefined' && window.socialPressureHousingWeight !== undefined) ? Number(window.socialPressureHousingWeight) : 0.30;
+        const socialPressureTimeWeight = (typeof window !== 'undefined' && window.socialPressureTimeWeight !== undefined) ? Number(window.socialPressureTimeWeight) : 0.22;
+        const socialPressureSupportWeight = (typeof window !== 'undefined' && window.socialPressureSupportWeight !== undefined) ? Number(window.socialPressureSupportWeight) : 0.10;
+        const socialPressureStabilityWeight = (typeof window !== 'undefined' && window.socialPressureStabilityWeight !== undefined) ? Number(window.socialPressureStabilityWeight) : 0.10;
         const socialPressure = roundDistrictValue(Math.max(0, Math.min(1,
-            (foodPressure * 0.28) +
-            (housingPressure * 0.30) +
-            (timeStress * 0.22) +
-            ((1 - supportAccess) * 0.10) +
-            ((1 - relationshipStability) * 0.10)
+            (foodPressure * socialPressureFoodWeight) +
+            (housingPressure * socialPressureHousingWeight) +
+            (timeStress * socialPressureTimeWeight) +
+            ((1 - supportAccess) * socialPressureSupportWeight) +
+            ((1 - relationshipStability) * socialPressureStabilityWeight)
         )));
         const populationBalance = roundDistrictValue(Math.max(0, Math.min(1,
             1 - (Math.abs(bucket.population - targetPopulationPerDistrict) / Math.max(1, targetPopulationPerDistrict * 1.5))
         )));
+        const opportunityPressureWeight = (typeof window !== 'undefined' && window.opportunityPressureWeight !== undefined) ? Number(window.opportunityPressureWeight) : 0.36;
+        const opportunitySupportWeight = (typeof window !== 'undefined' && window.opportunitySupportWeight !== undefined) ? Number(window.opportunitySupportWeight) : 0.22;
+        const opportunityStabilityWeight = (typeof window !== 'undefined' && window.opportunityStabilityWeight !== undefined) ? Number(window.opportunityStabilityWeight) : 0.16;
+        const opportunityConflictWeight = (typeof window !== 'undefined' && window.opportunityConflictWeight !== undefined) ? Number(window.opportunityConflictWeight) : 0.10;
+        const opportunityPopulationWeight = (typeof window !== 'undefined' && window.opportunityPopulationWeight !== undefined) ? Number(window.opportunityPopulationWeight) : 0.10;
+        const opportunityFoodWeight = (typeof window !== 'undefined' && window.opportunityFoodWeight !== undefined) ? Number(window.opportunityFoodWeight) : 0.06;
         const opportunityScore = roundDistrictValue(Math.max(0, Math.min(1,
-            ((1 - socialPressure) * 0.36) +
-            (supportAccess * 0.22) +
-            (relationshipStability * 0.16) +
-            ((1 - conflictLevel) * 0.10) +
-            (populationBalance * 0.10) +
-            ((1 - foodPressure) * 0.06)
+            ((1 - socialPressure) * opportunityPressureWeight) +
+            (supportAccess * opportunitySupportWeight) +
+            (relationshipStability * opportunityStabilityWeight) +
+            ((1 - conflictLevel) * opportunityConflictWeight) +
+            (populationBalance * opportunityPopulationWeight) +
+            ((1 - foodPressure) * opportunityFoodWeight)
         )));
         return {
             ...bucket,
