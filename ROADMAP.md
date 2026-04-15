@@ -132,6 +132,71 @@ Active phase: **Phase 1 → Phase 2 (overlap)**
 
 ---
 
+## Next Feature Brief — Social Pressure and Family Formation Abstraction
+
+### Goal
+
+Add a compact, observation-first model for why dense / pressured societies delay bonding,
+childbirth, and stable family formation — while keeping the sim fast, legible, and tunable.
+
+This is **not** a full realism project. The target is:
+
+- user changes a few meaningful sliders
+- visible behavior in the canvas changes in a believable direction
+- telemetry captures the difference clearly
+- AI or humans can interpret *why* the outcome changed
+
+### Design rule
+
+Do **not** simulate full conversations, detailed jobs, or a national economy.
+Instead, use a small number of causal latent variables that push behavior in the right direction.
+
+### Core variables to model
+
+| Variable | Meaning | Main effect |
+| -------- | ------- | ----------- |
+| `housingPressure` | lack of stable living space / nesting margin | suppresses reproduction and home stability |
+| `timeStress` | travel + work + recovery burden | reduces social time and readiness for children |
+| `relationshipStability` | whether a pair can persist long enough to plan | affects pair bonding and reproduction willingness |
+| `supportAccess` | nearby ally / bonded support network strength | improves safety, recovery, and child viability |
+| `futureUncertainty` | instability / fragility felt by the character | delays risky long-term decisions |
+| `normBias` | local imitation / social contagion around family formation | shifts behavior without scripting outcomes |
+
+### First implementation shape
+
+1. **Keep the abstraction small** — only the above variables, no detailed labor market.
+2. **Map them into existing AI weights** — do not replace the current rule/utility system.
+3. **Gate reproduction by readiness** rather than affinity alone.
+4. **Make the causes visible** in telemetry and sidebar metrics.
+5. **Prefer directional correctness over false precision.**
+
+### Observable requirements
+
+The feature is only acceptable if it is readable from both the canvas and telemetry:
+
+- high pressure → slower family formation, more delay, more isolation
+- stronger support → better survival, more stable pairs, more births
+- dense / fragile societies should *look* more stressed, not only produce different numbers
+- outcomes must be explainable from telemetry without guessing
+
+### Initial telemetry/UI additions for this feature
+
+- mean `housingPressure`
+- mean `supportAccess`
+- mean `relationshipStability`
+- count of reproduction attempts blocked by reason
+- isolation rate vs bonded-pair rate
+- trend card for “Social Pressure / Family Formation” in the observation panel
+
+### Non-goals
+
+- No dialogue simulation
+- No explicit marriage/legal system
+- No full macroeconomics
+- No Phase 4 persistence/backend spillover
+
+---
+
 ## Current Sprint — Character Movement Quality
 
 ### Goal
@@ -161,6 +226,77 @@ natural collision handling, no wall clipping, smooth visual feel.
 - avgWanderRatio: 69.3% | avgStuckLikeRatio: 8.1% | avgLowEnergyRatio: 10.9%
 - stallDetected: 0
 - Target after wall-slide: stuckLikeRatio < 5%
+
+---
+
+## Handoff — Session 2026-04-15 (Next feature scope)
+
+_This section captures the next intended feature so a new thread can continue without re-deriving the design._
+
+### User goal clarified
+
+The product goal is **not only realism** and **not only spectacle**.
+It is a glass-tank simulator where the user can:
+
+1. change a small set of parameters,
+2. watch the society respond in the canvas,
+3. capture telemetry,
+4. analyze the result with AI or by eye.
+
+So the next feature should optimize for **interpretable abstraction**:
+small causal systems, readable behavior, and directionally correct outcomes.
+
+### Next feature to implement
+
+**Social Pressure and Family Formation Abstraction**
+
+Focus on a compact model for why family formation slows under urban-like pressure.
+Do not attempt high-fidelity human psychology. Use a few latent variables and make them observable.
+
+### Recommended first implementation order
+
+1. **Add compact readiness signals** in character / pair logic
+   - `housingPressure`
+   - `timeStress`
+   - `supportAccess`
+   - `relationshipStability`
+   - `futureUncertainty`
+
+2. **Use them in existing AI decisions**
+   - reduce reproduction willingness under pressure
+   - reduce social persistence when stress / uncertainty are high
+   - improve recovery and child viability when support is high
+
+3. **Expose them as parameters** using the 3-step parameter rule
+   - workspace settings
+   - `PARAM_DEFAULTS`
+   - sidebar sliders
+
+4. **Instrument telemetry before tuning**
+   - blocked reproduction reasons
+   - support coverage
+   - pair stability trend
+   - isolation vs bonded-pair trend
+
+5. **Tune only after observation**
+   - the correct outcome is not “more births”
+   - the correct outcome is “believable response to pressure”
+
+### Suggested file targets
+
+| Concern | Likely file |
+| ------- | ----------- |
+| pair / household readiness helpers | `character.js` |
+| decision weighting and reproduction gating | `AI_rulebase.js` |
+| sliders / observation cards | `sidebar.js` |
+| telemetry export / meta summaries | `main.js`, `world.js`, `scripts/export-telemetry.mjs` |
+
+### Success criteria for the next thread
+
+- zero or low support settings visibly increase isolation and delay family formation
+- lower pressure / higher support settings visibly stabilize population dynamics
+- telemetry can explain *which pressure* suppressed births or stability
+- behavior remains lightweight and readable in real time
 
 ---
 
