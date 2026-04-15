@@ -2641,6 +2641,24 @@ console.log('[sidebar.js] loaded');
 // グローバルから呼び出せるように
 window.renderCharacterList = renderCharacterList;
 window.renderCharacterDetail = renderCharacterDetail;
+window.selectCharacterById = function selectCharacterById(id, options = {}) {
+    if (id === undefined || id === null) return;
+    openedCharId = String(id);
+    if (typeof window.renderCharacterList === 'function') window.renderCharacterList();
+    if (typeof updateSelectedCharacterMarker === 'function') updateSelectedCharacterMarker();
+
+    if (!options.silentScroll) {
+        requestAnimationFrame(() => {
+            const rows = leftSidebar?.querySelectorAll?.('.character-summary-row') || [];
+            rows.forEach(row => {
+                const rowId = row.children?.[0]?.textContent;
+                if (String(rowId) === String(id)) {
+                    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+            });
+        });
+    }
+};
 
 function renderCharacterList() {
     // console.log('[sidebar.js] window.characters:', window.characters); // ←デバッグ用ログを一時停止

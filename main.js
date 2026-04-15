@@ -113,6 +113,48 @@ async function init() {
         if (window.renderCharacterList) window.renderCharacterList();
         // Sidebar auto-update interval is managed on sidebar.js side
 
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let pointerDownPos = null;
+        const clickDragThreshold = 6;
+
+        const selectCharacterFromCanvasEvent = (event) => {
+            if (!renderer?.domElement || !camera || !Array.isArray(characters) || !window.selectCharacterById) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(pointer, camera);
+
+            const hitTargets = characters
+                .filter(char => char?.mesh?.visible !== false)
+                .map(char => char.mesh);
+            const hits = raycaster.intersectObjects(hitTargets, true);
+            const hit = hits.find(entry => entry?.object);
+            if (!hit) return;
+
+            let targetObject = hit.object;
+            while (targetObject?.parent && !String(targetObject.name || '').startsWith('Character')) {
+                targetObject = targetObject.parent;
+            }
+
+            const selected = characters.find(char => char?.mesh === targetObject || char?.mesh?.uuid === targetObject?.uuid);
+            if (selected) {
+                window.selectCharacterById(selected.id);
+            }
+        };
+
+        renderer.domElement.addEventListener('pointerdown', (event) => {
+            pointerDownPos = { x: event.clientX, y: event.clientY };
+        });
+        renderer.domElement.addEventListener('pointerup', (event) => {
+            if (!pointerDownPos) return;
+            const dx = event.clientX - pointerDownPos.x;
+            const dy = event.clientY - pointerDownPos.y;
+            pointerDownPos = null;
+            if (Math.hypot(dx, dy) > clickDragThreshold) return;
+            selectCharacterFromCanvasEvent(event);
+        });
+
         window.addEventListener('resize', onWindowResize);
         const msgBoxBtn = document.getElementById('messageBoxCloseBtn');
         if (msgBoxBtn) msgBoxBtn.addEventListener('click', () => document.getElementById('messageBox').classList.add('hidden'));
