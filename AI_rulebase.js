@@ -22,13 +22,13 @@ export function decideNextAction_rulebase(character, isNight) {
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
-    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
-    const explorationBaseRate = getTunableNumber('explorationBaseRate', 0.10, { min: 0, max: 0.4 });
+    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 28;
+    const explorationBaseRate = getTunableNumber('explorationBaseRate', 0.08, { min: 0, max: 0.4 });
     const explorationMinRate = getTunableNumber('explorationMinRate', 0.02, { min: 0, max: 0.2 });
-    const explorationMaxRate = getTunableNumber('explorationMaxRate', 0.20, { min: 0, max: 0.5 });
-    const explorationAdaptBoost = getTunableNumber('explorationAdaptBoost', 0.45, { min: 0, max: 1 });
-    const explorationForagePenalty = getTunableNumber('explorationForagePenalty', 0.55, { min: 0, max: 1 });
-    const explorationRestPenalty = getTunableNumber('explorationRestPenalty', 0.50, { min: 0, max: 1 });
+    const explorationMaxRate = getTunableNumber('explorationMaxRate', 0.16, { min: 0, max: 0.5 });
+    const explorationAdaptBoost = getTunableNumber('explorationAdaptBoost', 0.35, { min: 0, max: 1 });
+    const explorationForagePenalty = getTunableNumber('explorationForagePenalty', 0.65, { min: 0, max: 1 });
+    const explorationRestPenalty = getTunableNumber('explorationRestPenalty', 0.75, { min: 0, max: 1 });
     const socialAdaptationBoost = getTunableNumber('socialAdaptationBoost', 0.35, { min: 0, max: 1 });
     const socialForagePenalty = getTunableNumber('socialForagePenalty', 0.25, { min: 0, max: 1 });
     const socialRestPenalty = getTunableNumber('socialRestPenalty', 0.20, { min: 0, max: 1 });

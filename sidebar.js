@@ -196,7 +196,7 @@ function renderCharacterDetail() {
     // To add a new parameter: add ONE entry here. Init and global mirror are both automatic.
     const PARAM_DEFAULTS = {
         hungerEmergencyThreshold:           5,
-        energyEmergencyThreshold:           20,
+        energyEmergencyThreshold:           28,
         hungerDecayRate:                    0.7,
         activeEnergyDrainRate:              2.0,
         unsafeNightSafetyDecayRate:         5.0,
@@ -205,12 +205,12 @@ function renderCharacterDetail() {
         characterLifespan:                  240,
         homeReturnHungerLevel:              90,
         homeBuildingPriority:               80,
-        explorationBaseRate:                0.10,
+        explorationBaseRate:                0.08,
         explorationMinRate:                 0.02,
-        explorationMaxRate:                 0.20,
-        explorationAdaptBoost:              0.45,
-        explorationForagePenalty:           0.55,
-        explorationRestPenalty:             0.50,
+        explorationMaxRate:                 0.16,
+        explorationAdaptBoost:              0.35,
+        explorationForagePenalty:           0.65,
+        explorationRestPenalty:             0.75,
         socialAdaptationBoost:              0.35,
         socialForagePenalty:                0.25,
         socialRestPenalty:                  0.20,
@@ -1625,7 +1625,7 @@ function renderCharacterDetail() {
     hungerEmergencyVal.disabled = paramDisabled;
 
     // --- Energy Emergency Threshold Slider ---
-    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 20;
+    if (sidebarParams.energyEmergencyThreshold === undefined) sidebarParams.energyEmergencyThreshold = 28;
     const energyEmergencyRow = document.createElement('div');
     energyEmergencyRow.style.display = 'flex';
     energyEmergencyRow.style.alignItems = 'center';
