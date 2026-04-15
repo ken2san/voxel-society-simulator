@@ -2632,6 +2632,58 @@ function createPopulationNeedRow(label, value, color) {
     };
 }
 
+function computeSocietySocialMetrics(alive = []) {
+    const living = Array.isArray(alive) ? alive.filter(c => c && c.state !== 'dead') : [];
+    if (!living.length) {
+        return {
+            avgSupportPct: 0,
+            bondedChars: 0,
+            bondedRatePct: 0,
+            allyChars: 0,
+            alliesRatePct: 0,
+            nearbySupportChars: 0,
+            nearbyRatePct: 0
+        };
+    }
+
+    const snapshots = living.map(char => {
+        if (typeof char?.getRelationshipSnapshot !== 'function') return null;
+        try {
+            return char.getRelationshipSnapshot(6);
+        } catch (e) {
+            return null;
+        }
+    }).filter(Boolean);
+
+    if (!snapshots.length) {
+        return {
+            avgSupportPct: 0,
+            bondedChars: 0,
+            bondedRatePct: 0,
+            allyChars: 0,
+            alliesRatePct: 0,
+            nearbySupportChars: 0,
+            nearbyRatePct: 0
+        };
+    }
+
+    const count = snapshots.length;
+    const avgSupportPct = (snapshots.reduce((sum, snapshot) => sum + Number(snapshot.supportScore || 0), 0) / count) * 100;
+    const bondedChars = snapshots.filter(snapshot => Number(snapshot.bondedCount || 0) > 0).length;
+    const allyChars = snapshots.filter(snapshot => Number(snapshot.allyCount || 0) > 0).length;
+    const nearbySupportChars = snapshots.filter(snapshot => Number(snapshot.nearbySupport || 0) > 0).length;
+
+    return {
+        avgSupportPct: Number(avgSupportPct.toFixed(1)),
+        bondedChars,
+        bondedRatePct: Number(((bondedChars / count) * 100).toFixed(1)),
+        allyChars,
+        alliesRatePct: Number(((allyChars / count) * 100).toFixed(1)),
+        nearbySupportChars,
+        nearbyRatePct: Number(((nearbySupportChars / count) * 100).toFixed(1))
+    };
+}
+
 function createPopulationDetailsHTML(metrics) {
     window.__populationMetricGroups = {
         population: {
@@ -2680,6 +2732,15 @@ function createPopulationDetailsHTML(metrics) {
                 { key: 'avgSaf', label: 'Safety', color: '#22c55e' },
                 { key: 'avgSoc', label: 'Social', color: '#a855f7' }
             ]
+        },
+        social: {
+            title: 'Social ties',
+            series: [
+                { key: 'avgSupportPct', label: 'Support %', color: '#7c3aed' },
+                { key: 'bondedRatePct', label: 'Bonded %', color: '#db2777' },
+                { key: 'alliesRatePct', label: 'Allies %', color: '#2563eb' },
+                { key: 'nearbyRatePct', label: 'Nearby %', color: '#0f766e' }
+            ]
         }
     };
     return (
@@ -2716,6 +2777,12 @@ function createPopulationDetailsHTML(metrics) {
                 createPopulationNeedRow('Safety', metrics.avgSaf, 'linear-gradient(90deg, #22c55e 0%, #10b981 100%)'),
                 createPopulationNeedRow('Social', metrics.avgSoc, 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)')
             ], 'needs') +
+            createPopulationDetailCard('Social ties', '🤝', [
+                { label: 'Support', value: `${Number(metrics.avgSupportPct || 0).toFixed(1)}%` },
+                { label: 'Bonded', value: `${metrics.bondedChars} (${Number(metrics.bondedRatePct || 0).toFixed(1)}%)` },
+                { label: 'Allies', value: `${metrics.allyChars} (${Number(metrics.alliesRatePct || 0).toFixed(1)}%)` },
+                { label: 'Nearby', value: `${metrics.nearbySupportChars} (${Number(metrics.nearbyRatePct || 0).toFixed(1)}%)` }
+            ], 'social') +
         `</div>`
     );
 }
@@ -2999,6 +3066,7 @@ function renderCharacterList() {
         const avgEng   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.energy  || 0), 0) / alive.length).toFixed(0) : '—';
         const avgSaf   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.safety  || 0), 0) / alive.length).toFixed(0) : '—';
         const avgSoc   = alive.length ? (alive.reduce((s, c) => s + (c.needs?.social  || 0), 0) / alive.length).toFixed(0) : '—';
+        const socialMetrics = computeSocietySocialMetrics(alive);
         const criticalEnergyCount = alive.filter(c => Number(c.needs?.energy || 0) < 20).length;
         const criticalHungerCount = alive.filter(c => Number(c.needs?.hunger || 0) < 20).length;
 
@@ -3033,7 +3101,14 @@ function renderCharacterList() {
             avgHun: Number(avgHun) || 0,
             avgEng: Number(avgEng) || 0,
             avgSaf: Number(avgSaf) || 0,
-            avgSoc: Number(avgSoc) || 0
+            avgSoc: Number(avgSoc) || 0,
+            avgSupportPct: Number(socialMetrics.avgSupportPct || 0),
+            bondedChars: Number(socialMetrics.bondedChars || 0),
+            bondedRatePct: Number(socialMetrics.bondedRatePct || 0),
+            allyChars: Number(socialMetrics.allyChars || 0),
+            alliesRatePct: Number(socialMetrics.alliesRatePct || 0),
+            nearbySupportChars: Number(socialMetrics.nearbySupportChars || 0),
+            nearbyRatePct: Number(socialMetrics.nearbyRatePct || 0)
         });
         const pulseHistory = window.__populationPulseHistory || [];
         const birthRate = computePerMinuteDelta(pulseHistory, 'totalBorn', 60000);
@@ -3167,7 +3242,14 @@ function renderCharacterList() {
             avgHun,
             avgEng,
             avgSaf,
-            avgSoc
+            avgSoc,
+            avgSupportPct: socialMetrics.avgSupportPct,
+            bondedChars: socialMetrics.bondedChars,
+            bondedRatePct: socialMetrics.bondedRatePct,
+            allyChars: socialMetrics.allyChars,
+            alliesRatePct: socialMetrics.alliesRatePct,
+            nearbySupportChars: socialMetrics.nearbySupportChars,
+            nearbyRatePct: socialMetrics.nearbyRatePct
         });
 
         const statsDiv = document.createElement('div');
