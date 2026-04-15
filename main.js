@@ -78,9 +78,10 @@ async function init() {
             const focusPos = targetChar.mesh.position.clone();
             const desiredTarget = new THREE.Vector3(focusPos.x, Math.max(1.5, focusPos.y + 1.2), focusPos.z);
             const offset = camera.position.clone().sub(controls.target);
+            const desiredDistance = Math.min(Math.max(offset.length() * 0.78, 6), 14);
             const clampedOffset = offset.length() > 0.001
-                ? offset.clone().setLength(Math.min(Math.max(offset.length(), 8), 18))
-                : new THREE.Vector3(8, 8, 8);
+                ? offset.clone().setLength(desiredDistance)
+                : new THREE.Vector3(7, 7, 7);
 
             const desiredCameraPos = desiredTarget.clone().add(clampedOffset);
             const startTarget = controls.target.clone();

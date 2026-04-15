@@ -3081,8 +3081,11 @@ function renderCharacterList() {
             detailTr.appendChild(detailTd);
 
             tr.onclick = (e) => {
-                // すでに開いている詳細パネルを再度クリックした場合は何もしない（点滅防止）
+                // すでに開いている詳細パネルを再度クリックした場合は再フォーカスだけ行う
                 if (String(openedCharId) === String(char.id)) {
+                    if (typeof window.focusCharacterInView === 'function') {
+                        window.focusCharacterInView(char.id, { durationMs: 260 });
+                    }
                     e.stopPropagation();
                     return;
                 }
@@ -3094,6 +3097,9 @@ function renderCharacterList() {
                 tr.classList.add('is-open');
                 detailTr.style.display = '';
                 updateSelectedCharacterMarker();
+                if (typeof window.focusCharacterInView === 'function') {
+                    window.focusCharacterInView(char.id, { durationMs: 260 });
+                }
                 e.stopPropagation();
             };
             // ID
