@@ -2338,6 +2338,51 @@ class Character {
         return 'rival';
     }
 
+    getRelationshipSnapshot(limit = 5) {
+        const chars = (typeof window !== 'undefined' && Array.isArray(window.characters))
+            ? window.characters
+            : ((typeof characters !== 'undefined' && Array.isArray(characters)) ? characters : []);
+        const ties = this.relationships instanceof Map
+            ? Array.from(this.relationships.entries())
+                .map(([otherId, rawAffinity]) => {
+                    const other = chars.find(c => String(c?.id) === String(otherId) && c?.state !== 'dead');
+                    if (!other?.gridPos) return null;
+                    const affinity = Number(rawAffinity || 0);
+                    const relationshipClass = this.getRelationshipClass(otherId);
+                    const distance = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.y - other.gridPos.y) + Math.abs(this.gridPos.z - other.gridPos.z);
+                    return {
+                        other,
+                        otherId,
+                        affinity,
+                        relationshipClass,
+                        distance,
+                        inSameGroup: !!this.groupId && !!other.groupId && this.groupId === other.groupId
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => (b.affinity - a.affinity) || (a.distance - b.distance))
+            : [];
+
+        const bondedCount = ties.filter(t => t.relationshipClass === 'bonded').length;
+        const allyCount = ties.filter(t => t.relationshipClass === 'ally').length;
+        const nearbySupport = ties.filter(t => t.distance <= 3 && (t.relationshipClass === 'bonded' || t.relationshipClass === 'ally')).length;
+        const supportScore = Math.max(0, Math.min(1,
+            (bondedCount * 0.24) +
+            (allyCount * 0.12) +
+            (nearbySupport * 0.10) +
+            (ties.length > 0 ? Math.min(0.22, (ties[0].affinity / 100) * 0.22) : 0)
+        ));
+
+        return {
+            networkSize: ties.length,
+            bondedCount,
+            allyCount,
+            nearbySupport,
+            supportScore: Math.round(supportScore * 100) / 100,
+            ties: ties.slice(0, Math.max(1, Number(limit) || 5))
+        };
+    }
+
     getEffectiveLifespan() {
         const baseLifespan = (typeof window !== 'undefined' && window.characterLifespan !== undefined)
             ? Number(window.characterLifespan) : 240;

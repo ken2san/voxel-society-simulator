@@ -2104,6 +2104,65 @@ function applySelectedCharacterSceneHighlight(char) {
     window.__selectedSceneCharacter = char;
 }
 
+function ensureRelationshipMarkerLayer() {
+    if (typeof document === 'undefined' || !document.body) return null;
+    let layer = window.__selectedRelationshipLayer;
+    if (layer && layer.parentNode) return layer;
+
+    layer = document.createElement('div');
+    layer.style.position = 'fixed';
+    layer.style.inset = '0';
+    layer.style.zIndex = '1095';
+    layer.style.pointerEvents = 'none';
+    document.body.appendChild(layer);
+    window.__selectedRelationshipLayer = layer;
+    return layer;
+}
+
+function clearSelectedRelationshipMarkers() {
+    const layer = ensureRelationshipMarkerLayer();
+    if (layer) layer.innerHTML = '';
+}
+
+function getRelationshipBadgeMeta(relationshipClass) {
+    if (relationshipClass === 'bonded') return { icon: '❤', bg: 'rgba(190,24,93,0.88)', border: '#f9a8d4' };
+    if (relationshipClass === 'ally') return { icon: '🤝', bg: 'rgba(30,64,175,0.88)', border: '#93c5fd' };
+    return { icon: '•', bg: 'rgba(51,65,85,0.84)', border: '#cbd5e1' };
+}
+
+function updateSelectedRelationshipMarkers(char) {
+    const layer = ensureRelationshipMarkerLayer();
+    if (!layer || !char || typeof char.getRelationshipSnapshot !== 'function') {
+        clearSelectedRelationshipMarkers();
+        return;
+    }
+
+    const snapshot = char.getRelationshipSnapshot(4);
+    layer.innerHTML = '';
+    (snapshot?.ties || []).forEach(tie => {
+        if (!tie?.other || typeof tie.other.getScreenPosition !== 'function') return;
+        const pos = tie.other.getScreenPosition();
+        if (!pos) return;
+        const meta = getRelationshipBadgeMeta(tie.relationshipClass);
+        const badge = document.createElement('div');
+        badge.style.position = 'fixed';
+        badge.style.left = `${pos.x}px`;
+        badge.style.top = `${pos.y - 28}px`;
+        badge.style.transform = 'translate(-50%, -50%)';
+        badge.style.padding = '2px 7px';
+        badge.style.borderRadius = '999px';
+        badge.style.background = meta.bg;
+        badge.style.border = `1px solid ${meta.border}`;
+        badge.style.color = '#fff';
+        badge.style.fontSize = '11px';
+        badge.style.fontWeight = '700';
+        badge.style.boxShadow = '0 2px 8px rgba(0,0,0,0.18)';
+        badge.textContent = `${meta.icon} ${tie.other.id}`;
+        badge.title = `${tie.relationshipClass} · affinity ${Math.round(tie.affinity)} · dist ${tie.distance}`;
+        layer.appendChild(badge);
+    });
+}
+
 function updateSelectedCharacterMarker() {
     const marker = ensureSelectedCharacterMarker();
     if (!marker) return;
@@ -2111,6 +2170,7 @@ function updateSelectedCharacterMarker() {
     const selectedId = openedCharId != null ? String(openedCharId) : '';
     if (!selectedId || !Array.isArray(window.characters)) {
         clearSelectedCharacterSceneHighlight();
+        clearSelectedRelationshipMarkers();
         marker.style.opacity = '0';
         marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
         return;
@@ -2119,15 +2179,18 @@ function updateSelectedCharacterMarker() {
     const char = window.characters.find(c => String(c?.id) === selectedId && c?.state !== 'dead');
     if (!char || typeof char.getScreenPosition !== 'function') {
         clearSelectedCharacterSceneHighlight();
+        clearSelectedRelationshipMarkers();
         marker.style.opacity = '0';
         marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
         return;
     }
 
     applySelectedCharacterSceneHighlight(char);
+    updateSelectedRelationshipMarkers(char);
 
     const screenPos = char.getScreenPosition();
     if (!screenPos) {
+        clearSelectedRelationshipMarkers();
         marker.style.opacity = '0';
         marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
         return;
@@ -2138,7 +2201,8 @@ function updateSelectedCharacterMarker() {
     marker.style.opacity = '1';
     marker.style.transform = 'translate(-50%, -50%) scale(1)';
     const label = marker.firstElementChild;
-    if (label) label.textContent = `ID ${selectedId}`;
+    const snapshot = typeof char.getRelationshipSnapshot === 'function' ? char.getRelationshipSnapshot(4) : null;
+    if (label) label.textContent = `ID ${selectedId} · ties ${Number(snapshot?.networkSize || 0)}`;
 }
 
 if (window.__selectedCharacterMarkerInterval) clearInterval(window.__selectedCharacterMarkerInterval);
@@ -3474,39 +3538,71 @@ function createCharacterDetailCard(char) {
         infoBox.appendChild(stateDiv);
     }
     card.appendChild(infoBox);
-    // 関係性リスト
-    if (char.relationships && Array.isArray(char.relationships) && window.characters) {
-        const relBox = document.createElement('div');
-        relBox.innerHTML = '<b>Relationship List</b>';
-        relBox.style.marginBottom = '10px';
-        char.relationships.forEach((val, idx) => {
-            const relChar = window.characters[idx];
-            if (!relChar || relChar.id === char.id) return;
-            const relRow = document.createElement('div');
-            relRow.className = 'relation-row';
-            const relIcon = document.createElement('span');
-            relIcon.textContent = relChar.role === 'leader' ? '👑' : relChar.role === 'worker' ? '🧑‍🌾' : '🙂';
-            relIcon.style.fontSize = '1.1em';
-            relRow.appendChild(relIcon);
-            const relName = document.createElement('span');
-            relName.className = 'relation-label';
-            relName.textContent = relChar.id;
-            relRow.appendChild(relName);
-            const relBarBg = document.createElement('div');
-            relBarBg.className = 'relation-bar-bg';
-            const relBar = document.createElement('div');
-            relBar.className = 'relation-bar';
-            relBar.style.width = Math.max(0, Math.min(100, val)) + '%';
-            relBarBg.appendChild(relBar);
-            relRow.appendChild(relBarBg);
-            const relVal = document.createElement('span');
-            relVal.className = 'relation-val';
-            relVal.textContent = val;
-            relRow.appendChild(relVal);
-            relBox.appendChild(relRow);
+    // Relationship network summary and strongest ties.
+    const networkSnapshot = typeof char.getRelationshipSnapshot === 'function' ? char.getRelationshipSnapshot(6) : null;
+    const relBox = document.createElement('div');
+    relBox.style.marginBottom = '10px';
+    relBox.style.padding = '8px 10px';
+    relBox.style.border = '1px solid #e2e8f0';
+    relBox.style.borderRadius = '10px';
+    relBox.style.background = '#fafcff';
+    relBox.innerHTML =
+        `<div style="font-weight:700;color:#0f172a;margin-bottom:6px;">Relationship Network</div>` +
+        `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">` +
+            `<span style="padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:0.82em;font-weight:700;">support ${Math.round((networkSnapshot?.supportScore || 0) * 100)}%</span>` +
+            `<span style="padding:2px 8px;border-radius:999px;background:#fdf2f8;color:#be185d;font-size:0.82em;font-weight:700;">bonded ${Number(networkSnapshot?.bondedCount || 0)}</span>` +
+            `<span style="padding:2px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:0.82em;font-weight:700;">allies ${Number(networkSnapshot?.allyCount || 0)}</span>` +
+            `<span style="padding:2px 8px;border-radius:999px;background:#f8fafc;color:#475569;font-size:0.82em;font-weight:700;">nearby ${Number(networkSnapshot?.nearbySupport || 0)}</span>` +
+        `</div>`;
+
+    if (networkSnapshot?.ties?.length) {
+        networkSnapshot.ties.forEach(tie => {
+            const row = document.createElement('div');
+            row.style.display = 'grid';
+            row.style.gridTemplateColumns = 'auto 1fr auto';
+            row.style.alignItems = 'center';
+            row.style.gap = '8px';
+            row.style.marginTop = '5px';
+
+            const meta = getRelationshipBadgeMeta(tie.relationshipClass);
+            const left = document.createElement('div');
+            left.style.minWidth = '42px';
+            left.style.fontWeight = '700';
+            left.style.color = '#0f172a';
+            left.textContent = `${meta.icon} ${tie.other.id}`;
+            row.appendChild(left);
+
+            const barWrap = document.createElement('div');
+            barWrap.innerHTML =
+                `<div style="height:7px;border-radius:999px;background:#e2e8f0;overflow:hidden;">` +
+                    `<div style="width:${Math.max(0, Math.min(100, tie.affinity))}%;height:100%;background:${meta.bg};"></div>` +
+                `</div>` +
+                `<div style="margin-top:2px;font-size:0.78em;color:#64748b;">${tie.relationshipClass}${tie.inSameGroup ? ' · same group' : ''}${tie.distance <= 3 ? ' · nearby' : ''}</div>`;
+            row.appendChild(barWrap);
+
+            const right = document.createElement('div');
+            right.style.fontSize = '0.82em';
+            right.style.fontWeight = '700';
+            right.style.color = '#334155';
+            right.textContent = `${Math.round(tie.affinity)}`;
+            row.appendChild(right);
+            relBox.appendChild(row);
         });
-        card.appendChild(relBox);
+
+        const hint = document.createElement('div');
+        hint.style.marginTop = '8px';
+        hint.style.fontSize = '0.78em';
+        hint.style.color = '#64748b';
+        hint.textContent = 'Top ties are also marked in the scene while this character is selected.';
+        relBox.appendChild(hint);
+    } else {
+        const empty = document.createElement('div');
+        empty.style.fontSize = '0.84em';
+        empty.style.color = '#64748b';
+        empty.textContent = 'No meaningful social ties yet.';
+        relBox.appendChild(empty);
     }
+    card.appendChild(relBox);
     return card;
 }
 

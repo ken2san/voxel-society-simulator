@@ -243,8 +243,13 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             const relationshipValues = c.relationships instanceof Map
                 ? Array.from(c.relationships.values()).map(Number).filter(Number.isFinite)
                 : [];
-            const hasSupport = !!c.groupId || relationshipValues.some(v => v >= 60);
-            if (hasSupport) sum.supported += 1;
+            const networkSnapshot = typeof c.getRelationshipSnapshot === 'function' ? c.getRelationshipSnapshot(4) : null;
+            const supportStrength = Math.max(
+                Number(networkSnapshot?.supportScore || 0),
+                c.groupId ? 0.22 : 0,
+                relationshipValues.some(v => v >= 60) ? 0.18 : 0
+            );
+            sum.supported += clamp01(supportStrength);
             if (c._nearEnemy) sum.conflict += 1;
             const timeStress = ((Math.max(0, 55 - hunger) / 55) + (Math.max(0, 45 - energy) / 45)) / 2;
             sum.timeStress += Math.max(0, Math.min(1, timeStress));

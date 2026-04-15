@@ -148,6 +148,7 @@ If an older handoff says “implement next” but conflicts with the sections ab
 - Stability hotfixes shipped for rollout issues: startup freeze reduction, initial population preservation, and off-screen thought-bubble flicker cleanup
 - Observation polish: left-pane district badges and district migration flow cues now make 4+ district movement easier to read live
 - District opportunity scoring is now live: bounded-rational wandering can drift toward lower-pressure, higher-support districts instead of moving as pure local randomness
+- Relationship visibility improved: selected characters now surface top social ties and support-network cues so group structure is observable from outside the sim
 
 ---
 
