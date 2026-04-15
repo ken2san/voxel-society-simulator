@@ -15,6 +15,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 8080",
     "analyze:telemetry": "node scripts/analyze-telemetry.mjs",
     "compare:telemetry": "node scripts/compare-telemetry.mjs",
+    "regress:telemetry": "node scripts/regress-telemetry.mjs",
     "benchmark:telemetry": "node scripts/benchmark-telemetry.mjs",
     "benchmark:latest": "node scripts/benchmark-telemetry.mjs --latest"
   }
