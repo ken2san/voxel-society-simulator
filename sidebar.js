@@ -2115,6 +2115,14 @@ let rightSidebar = null;
 // サマリー表で開いている詳細キャラID
 let openedCharId = undefined;
 
+function closeOpenedCharacterDetail(root = leftSidebar) {
+    openedCharId = null;
+    updateSelectedCharacterMarker();
+    if (!root) return;
+    root.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
+    root.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
+}
+
 function ensureSelectedCharacterMarker() {
     if (typeof document === 'undefined' || !document.body) return null;
     let marker = window.__selectedCharacterMarker;
@@ -3324,15 +3332,21 @@ function renderCharacterList() {
             detailTd.colSpan = showAreaColumn ? 10 : 9;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
-            detailTd.appendChild(createCharacterDetailCard(char));
+            const detailCard = createCharacterDetailCard(char);
+            detailCard.title = 'Tap to close';
+            detailCard.addEventListener('click', (e) => {
+                if (String(openedCharId) === String(char.id)) {
+                    closeOpenedCharacterDetail(leftSidebar);
+                }
+                e.stopPropagation();
+            });
+            detailTd.appendChild(detailCard);
             detailTr.appendChild(detailTd);
 
             tr.onclick = (e) => {
-                // すでに開いている詳細パネルを再度クリックした場合は再フォーカスだけ行う
+                // すでに開いている詳細パネルを再度クリックした場合は閉じる
                 if (String(openedCharId) === String(char.id)) {
-                    if (typeof window.focusCharacterInView === 'function') {
-                        window.focusCharacterInView(char.id, { durationMs: 260 });
-                    }
+                    closeOpenedCharacterDetail(leftSidebar);
                     e.stopPropagation();
                     return;
                 }
@@ -3428,10 +3442,7 @@ function renderCharacterList() {
                 node = node.parentElement;
             }
             // 全ての詳細パネルを閉じる
-            openedCharId = null;
-            updateSelectedCharacterMarker();
-            leftSidebar.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
-            leftSidebar.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
+            closeOpenedCharacterDetail(leftSidebar);
         };
     } else if (isDistrictFiltered && chars.length > 0) {
         const emptyState = document.createElement('div');
