@@ -242,7 +242,9 @@ for (const [sec, group] of [...socialBySecond.entries()].sort((a, b) => a[0] - b
 
 // ── events (re-keyed with sec) ─────────────────────────────────────────────
 
-const exportEvents = events.map(e => ({ ...e, t_sec: toSec(e.t), sim_sec: toSimSec(e.t) }));
+const exportEvents = events
+    .filter(e => e && e.kind !== 'action-transition')
+    .map(e => ({ ...e, t_sec: toSec(e.t), sim_sec: toSimSec(e.t) }));
 
 // ── assemble ──────────────────────────────────────────────────────────────────
 

@@ -755,7 +755,49 @@ window.__simTelemetry = {
             this.counters.droppedSamples++;
             return;
         }
-        this.samples.push(sample);
+        if (!this._profiledIds) this._profiledIds = new Set();
+        const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+        const compact = {
+            t: sample.t,
+            id: sample.id,
+            state: sample.state,
+            action: sample.action || null,
+            groupId: sample.groupId || null,
+            generation: Number(sample.generation || 0),
+            isChild: !!sample.isChild,
+            lifeStage: sample.lifeStage ?? (sample.isChild ? 'child' : 'adult'),
+            age: round2(sample.age),
+            lifespan: Number(sample.lifespan || 0),
+            lifeRatio: round2(sample.lifeRatio),
+            pathLen: Number(sample.pathLen || 0),
+            actionCooldown: round2(sample.actionCooldown),
+            microPause: round2(sample.microPause),
+            moveDistance: round2(sample.moveDistance),
+            nearEnemy: !!sample.nearEnemy,
+            needs: sample.needs ? {
+                hunger: round2(sample.needs.hunger),
+                energy: round2(sample.needs.energy),
+                safety: round2(sample.needs.safety),
+                social: round2(sample.needs.social)
+            } : undefined,
+            social: sample.social ? {
+                relationshipCount: Number(sample.social.relationshipCount || 0),
+                avgAffinity: round2(sample.social.avgAffinity),
+                groupSize: Number(sample.social.groupSize || 1)
+            } : undefined
+        };
+        if (!this._profiledIds.has(compact.id) && sample.personality) {
+            compact.personality = {
+                bravery: round2(sample.personality.bravery),
+                diligence: round2(sample.personality.diligence),
+                sociality: round2(sample.personality.sociality),
+                curiosity: round2(sample.personality.curiosity),
+                resourcefulness: round2(sample.personality.resourcefulness),
+                resilience: round2(sample.personality.resilience)
+            };
+            this._profiledIds.add(compact.id);
+        }
+        this.samples.push(compact);
     },
     addWorldSample(sample) {
         if (!sample) return;
@@ -766,11 +808,29 @@ window.__simTelemetry = {
     },
     addEvent(evt) {
         if (!evt) return;
+        if (evt.kind === 'action-transition') return;
         if (this.events.length >= window.simTelemetryConfig.maxEvents) {
             this.counters.droppedEvents++;
             return;
         }
-        this.events.push(evt);
+        const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+        const compact = {
+            ...evt,
+            actionCooldown: evt.actionCooldown !== undefined ? round2(evt.actionCooldown) : evt.actionCooldown,
+            microPause: evt.microPause !== undefined ? round2(evt.microPause) : evt.microPause,
+            age: evt.age !== undefined ? round2(evt.age) : evt.age
+        };
+        if (evt.needs) {
+            compact.needs = {
+                hunger: round2(evt.needs.hunger),
+                energy: round2(evt.needs.energy),
+                safety: round2(evt.needs.safety),
+                social: round2(evt.needs.social)
+            };
+        }
+        delete compact.target;
+        delete compact.pos;
+        this.events.push(compact);
     },
     snapshotMeta() {
         const popBase = window.getPopulationStats ? window.getPopulationStats() : null;
@@ -861,6 +921,7 @@ window.__simTelemetry = {
         this.worldSamples = [];
         this.events = [];
         this.counters = { droppedSamples: 0, droppedEvents: 0 };
+        this._profiledIds = new Set();
     }
 };
 
@@ -904,13 +965,13 @@ window.stopTelemetryTest = function stopTelemetryTest(opts = {}) {
     return null;
 };
 
-window.getTelemetryJSON = function getTelemetryJSON(pretty = true) {
+window.getTelemetryJSON = function getTelemetryJSON(pretty = false) {
     return JSON.stringify(window.__simTelemetry.exportObject(), null, pretty ? 2 : 0);
 };
 
 window.downloadTelemetryJSON = function downloadTelemetryJSON(fileName = null) {
     const safeName = fileName || `telemetry-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    const blob = new Blob([window.getTelemetryJSON(true)], { type: 'application/json' });
+    const blob = new Blob([window.getTelemetryJSON(false)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
