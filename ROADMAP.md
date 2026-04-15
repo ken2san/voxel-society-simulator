@@ -146,6 +146,7 @@ If an older handoff says “implement next” but conflicts with the sections ab
 - District scaling baseline is now live: `1 / 4 / 16` selector, active district switching, per-district observation summaries, and telemetry export support
 - District social-pressure link is now active through latent variables (`housingPressure`, `timeStress`, `supportAccess`, `relationshipStability`) instead of a separate pre-scaling system
 - Stability hotfixes shipped for rollout issues: startup freeze reduction, initial population preservation, and off-screen thought-bubble flicker cleanup
+- Observation polish: left-pane district badges and district migration flow cues now make 4+ district movement easier to read live
 
 ---
 

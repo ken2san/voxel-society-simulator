@@ -1811,20 +1811,23 @@ function renderCharacterDetail() {
     const districtSummary = document.createElement('div');
     districtSummary.style.fontSize = '0.82em';
     districtSummary.style.color = '#334155';
-    districtSummary.style.minHeight = '54px';
+    districtSummary.style.minHeight = '60px';
     districtSummary.style.display = 'grid';
     districtSummary.style.gridTemplateRows = 'auto auto';
     districtSummary.style.alignContent = 'start';
     districtSummary.style.rowGap = '4px';
     const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
+    const activeMigrationNet = Number(activeDistrictData?.migrationFlow?.net || 0);
+    const activeFlowColor = activeMigrationNet > 0 ? '#15803d' : (activeMigrationNet < 0 ? '#b91c1c' : '#64748b');
+    const activeFlowText = activeMigrationNet > 0 ? `+${activeMigrationNet}` : String(activeMigrationNet);
     districtSummary.innerHTML = activeDistrictData
-        ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population}</div>` +
+        ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population} · <span style="color:${activeFlowColor};">flow ${activeFlowText}</span></div>` +
           `<div style="color:#475569;line-height:1.25;font-size:0.95em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px;row-gap:2px;">` +
             `<span>pressure ${Math.round((activeDistrictData.socialPressure || 0) * 100)}%</span>` +
             `<span>support ${Math.round((activeDistrictData.supportAccess || 0) * 100)}%</span>` +
             `<span>stability ${Math.round((activeDistrictData.relationshipStability || 0) * 100)}%</span>` +
-            `<span>time ${Math.round((activeDistrictData.timeStress || 0) * 100)}%</span>` +
+            `<span>move ${Number(activeDistrictData.migrationFlow?.in || 0)} in / ${Number(activeDistrictData.migrationFlow?.out || 0)} out</span>` +
           `</div>`
         : '<div style="font-weight:700;color:#0f172a;line-height:1.2;">Watching the full baseline district</div><div></div>';
     districtPanel.appendChild(districtSummary);
@@ -1849,7 +1852,9 @@ function renderCharacterDetail() {
         btn.style.background = i === sidebarParams.activeDistrictIndex ? `hsl(${hue}, 90%, 82%)` : `hsl(${hue}, 85%, 94%)`;
         btn.style.cursor = 'pointer';
         if (summary) {
-            btn.title = `pop ${summary.population} | pressure ${Math.round((summary.socialPressure || 0) * 100)}% | support ${Math.round((summary.supportAccess || 0) * 100)}%`;
+            const flow = Number(summary.migrationFlow?.net || 0);
+            const flowText = flow > 0 ? `+${flow}` : String(flow);
+            btn.title = `pop ${summary.population} | pressure ${Math.round((summary.socialPressure || 0) * 100)}% | support ${Math.round((summary.supportAccess || 0) * 100)}% | flow ${flowText} (${Number(summary.migrationFlow?.in || 0)} in / ${Number(summary.migrationFlow?.out || 0)} out)`;
         }
         btn.onclick = () => {
             sidebarParams.activeDistrictIndex = i;
