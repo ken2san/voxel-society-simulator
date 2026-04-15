@@ -206,6 +206,16 @@ function renderCharacterDetail() {
         affinityDecayRate:                  0.01,
         socialNeedRecovery:                 1.0,
         bondPersistence:                    1.0,
+        acquaintanceAffinityThreshold:      30,
+        allyAffinityThreshold:              60,
+        bondedAffinityThreshold:            80,
+        nearbySupportRadius:                3,
+        supportGroupBonus:                  0.22,
+        supportAllyPresenceBonus:           0.18,
+        supportBondedWeight:                0.24,
+        supportAllyWeight:                  0.12,
+        supportNearbyWeight:                0.10,
+        supportTopAffinityWeight:           0.22,
         pairReproductionCooldownSeconds:    60,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
@@ -668,6 +678,77 @@ function renderCharacterDetail() {
     bondPersistenceRow.appendChild(bondPersistenceNumber);
     bondPersistenceRow.dataset.label = 'Bond Persistence';
     tabPanels[1].appendChild(bondPersistenceRow);
+
+    function appendCompactNumberInput(row, labelText, key, { min = 0, max = 100, step = 1, width = '58px' } = {}) {
+        const miniLabel = document.createElement('span');
+        miniLabel.textContent = labelText;
+        miniLabel.style.fontSize = '0.82em';
+        miniLabel.style.color = '#475569';
+        row.appendChild(miniLabel);
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = String(min);
+        input.max = String(max);
+        input.step = String(step);
+        input.value = String(sidebarParams[key]);
+        input.style.width = width;
+        input.disabled = paramDisabled;
+        input.addEventListener('input', e => {
+            const raw = Number(e.target.value);
+            const next = Number.isFinite(raw) ? Math.max(min, Math.min(max, raw)) : Number(sidebarParams[key]);
+            sidebarParams[key] = next;
+            window[key] = next;
+            e.target.value = String(next);
+        });
+        row.appendChild(input);
+    }
+
+    const relationThresholdRow = document.createElement('div');
+    relationThresholdRow.style.display = 'flex';
+    relationThresholdRow.style.alignItems = 'center';
+    relationThresholdRow.style.flexWrap = 'wrap';
+    relationThresholdRow.style.gap = '8px';
+    const relationThresholdLabel = document.createElement('span');
+    relationThresholdLabel.textContent = 'Tie Thresholds:';
+    relationThresholdLabel.style.width = '140px';
+    relationThresholdRow.appendChild(relationThresholdLabel);
+    appendCompactNumberInput(relationThresholdRow, 'Acq', 'acquaintanceAffinityThreshold');
+    appendCompactNumberInput(relationThresholdRow, 'Ally', 'allyAffinityThreshold');
+    appendCompactNumberInput(relationThresholdRow, 'Bond', 'bondedAffinityThreshold');
+    relationThresholdRow.dataset.label = 'Tie Thresholds';
+    tabPanels[1].appendChild(relationThresholdRow);
+
+    const supportModelRow = document.createElement('div');
+    supportModelRow.style.display = 'flex';
+    supportModelRow.style.alignItems = 'center';
+    supportModelRow.style.flexWrap = 'wrap';
+    supportModelRow.style.gap = '8px';
+    const supportModelLabel = document.createElement('span');
+    supportModelLabel.textContent = 'Support Inputs:';
+    supportModelLabel.style.width = '140px';
+    supportModelRow.appendChild(supportModelLabel);
+    appendCompactNumberInput(supportModelRow, 'Radius', 'nearbySupportRadius', { min: 1, max: 10, step: 1 });
+    appendCompactNumberInput(supportModelRow, 'Group+', 'supportGroupBonus', { min: 0, max: 1, step: 0.01, width: '64px' });
+    appendCompactNumberInput(supportModelRow, 'Ally+', 'supportAllyPresenceBonus', { min: 0, max: 1, step: 0.01, width: '64px' });
+    supportModelRow.dataset.label = 'Support Inputs';
+    tabPanels[1].appendChild(supportModelRow);
+
+    const supportWeightsRow = document.createElement('div');
+    supportWeightsRow.style.display = 'flex';
+    supportWeightsRow.style.alignItems = 'center';
+    supportWeightsRow.style.flexWrap = 'wrap';
+    supportWeightsRow.style.gap = '8px';
+    const supportWeightsLabel = document.createElement('span');
+    supportWeightsLabel.textContent = 'Support Weights:';
+    supportWeightsLabel.style.width = '140px';
+    supportWeightsRow.appendChild(supportWeightsLabel);
+    appendCompactNumberInput(supportWeightsRow, 'Bond', 'supportBondedWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
+    appendCompactNumberInput(supportWeightsRow, 'Ally', 'supportAllyWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
+    appendCompactNumberInput(supportWeightsRow, 'Near', 'supportNearbyWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
+    appendCompactNumberInput(supportWeightsRow, 'Top', 'supportTopAffinityWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
+    supportWeightsRow.dataset.label = 'Support Weights';
+    tabPanels[1].appendChild(supportWeightsRow);
 
     // --- Dig cooldown controls ---
     const digRow = document.createElement('div');
@@ -3668,7 +3749,7 @@ function createCharacterDetailCard(char) {
                 `<div style="height:7px;border-radius:999px;background:#e2e8f0;overflow:hidden;">` +
                     `<div style="width:${Math.max(0, Math.min(100, tie.affinity))}%;height:100%;background:${meta.bg};"></div>` +
                 `</div>` +
-                `<div style="margin-top:2px;font-size:0.78em;color:#64748b;">${tie.relationshipClass}${tie.inSameGroup ? ' · same group' : ''}${tie.distance <= 3 ? ' · nearby' : ''}</div>`;
+                `<div style="margin-top:2px;font-size:0.78em;color:#64748b;">${tie.relationshipClass}${tie.inSameGroup ? ' · same group' : ''}${tie.isNearbySupport ? ' · nearby' : ''}</div>`;
             row.appendChild(barWrap);
 
             const right = document.createElement('div');

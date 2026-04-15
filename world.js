@@ -244,10 +244,13 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
                 ? Array.from(c.relationships.values()).map(Number).filter(Number.isFinite)
                 : [];
             const networkSnapshot = typeof c.getRelationshipSnapshot === 'function' ? c.getRelationshipSnapshot(4) : null;
+            const allyAffinityThreshold = (typeof window !== 'undefined' && window.allyAffinityThreshold !== undefined) ? Number(window.allyAffinityThreshold) : 60;
+            const supportGroupBonus = (typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? Number(window.supportGroupBonus) : 0.22;
+            const supportAllyPresenceBonus = (typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? Number(window.supportAllyPresenceBonus) : 0.18;
             const supportStrength = Math.max(
                 Number(networkSnapshot?.supportScore || 0),
-                c.groupId ? 0.22 : 0,
-                relationshipValues.some(v => v >= 60) ? 0.18 : 0
+                c.groupId ? supportGroupBonus : 0,
+                relationshipValues.some(v => v >= allyAffinityThreshold) ? supportAllyPresenceBonus : 0
             );
             sum.supported += clamp01(supportStrength);
             if (c._nearEnemy) sum.conflict += 1;

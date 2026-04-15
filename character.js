@@ -2331,13 +2331,38 @@ class Character {
         return blockType && blockType.diggable;
     }
 
-    // Derived from affinity float — no stored state, safe to call any time.
+    getRelationshipThresholds() {
+        const floor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
+        const acquaintanceRaw = (typeof window !== 'undefined' && window.acquaintanceAffinityThreshold !== undefined) ? Number(window.acquaintanceAffinityThreshold) : 30;
+        const allyRaw = (typeof window !== 'undefined' && window.allyAffinityThreshold !== undefined) ? Number(window.allyAffinityThreshold) : 60;
+        const bondedRaw = (typeof window !== 'undefined' && window.bondedAffinityThreshold !== undefined) ? Number(window.bondedAffinityThreshold) : 80;
+        const acquaintance = Math.max(floor + 1, acquaintanceRaw);
+        const ally = Math.max(acquaintance + 1, allyRaw);
+        const bonded = Math.max(ally + 1, bondedRaw);
+        return { floor, acquaintance, ally, bonded };
+    }
+
+    getSupportModelParams() {
+        const clampWeight = (value, fallback) => {
+            const numeric = Number.isFinite(Number(value)) ? Number(value) : fallback;
+            return Math.max(0, Math.min(1, numeric));
+        };
+        return {
+            nearbyRadius: Math.max(1, Math.min(10, Number((typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? window.nearbySupportRadius : 3))),
+            bondedWeight: clampWeight((typeof window !== 'undefined' && window.supportBondedWeight !== undefined) ? window.supportBondedWeight : 0.24, 0.24),
+            allyWeight: clampWeight((typeof window !== 'undefined' && window.supportAllyWeight !== undefined) ? window.supportAllyWeight : 0.12, 0.12),
+            nearbyWeight: clampWeight((typeof window !== 'undefined' && window.supportNearbyWeight !== undefined) ? window.supportNearbyWeight : 0.10, 0.10),
+            topAffinityWeight: clampWeight((typeof window !== 'undefined' && window.supportTopAffinityWeight !== undefined) ? window.supportTopAffinityWeight : 0.22, 0.22)
+        };
+    }
+
+    // Derived from affinity float — parameterized for experiments.
     getRelationshipClass(otherId) {
         const aff = this.relationships.get(otherId) ?? 0;
-        const floor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
-        if (aff >= 80) return 'bonded';
-        if (aff >= 60) return 'ally';
-        if (aff >= 30) return 'acquaintance';
+        const { floor, acquaintance, ally, bonded } = this.getRelationshipThresholds();
+        if (aff >= bonded) return 'bonded';
+        if (aff >= ally) return 'ally';
+        if (aff >= acquaintance) return 'acquaintance';
         if (aff > floor + 3) return 'stranger';
         return 'rival';
     }
@@ -2360,6 +2385,7 @@ class Character {
                         affinity,
                         relationshipClass,
                         distance,
+                        isNearbySupport: false,
                         inSameGroup: !!this.groupId && !!other.groupId && this.groupId === other.groupId
                     };
                 })
@@ -2367,14 +2393,18 @@ class Character {
                 .sort((a, b) => (b.affinity - a.affinity) || (a.distance - b.distance))
             : [];
 
+        const { nearbyRadius, bondedWeight, allyWeight, nearbyWeight, topAffinityWeight } = this.getSupportModelParams();
+        ties.forEach(t => {
+            t.isNearbySupport = t.distance <= nearbyRadius && (t.relationshipClass === 'bonded' || t.relationshipClass === 'ally');
+        });
         const bondedCount = ties.filter(t => t.relationshipClass === 'bonded').length;
         const allyCount = ties.filter(t => t.relationshipClass === 'ally').length;
-        const nearbySupport = ties.filter(t => t.distance <= 3 && (t.relationshipClass === 'bonded' || t.relationshipClass === 'ally')).length;
+        const nearbySupport = ties.filter(t => t.distance <= nearbyRadius && (t.relationshipClass === 'bonded' || t.relationshipClass === 'ally')).length;
         const supportScore = Math.max(0, Math.min(1,
-            (bondedCount * 0.24) +
-            (allyCount * 0.12) +
-            (nearbySupport * 0.10) +
-            (ties.length > 0 ? Math.min(0.22, (ties[0].affinity / 100) * 0.22) : 0)
+            (bondedCount * bondedWeight) +
+            (allyCount * allyWeight) +
+            (nearbySupport * nearbyWeight) +
+            (ties.length > 0 ? Math.min(topAffinityWeight, (ties[0].affinity / 100) * topAffinityWeight) : 0)
         ));
 
         return {
@@ -2382,6 +2412,7 @@ class Character {
             bondedCount,
             allyCount,
             nearbySupport,
+            supportRadius: nearbyRadius,
             supportScore: Math.round(supportScore * 100) / 100,
             ties: ties.slice(0, Math.max(1, Number(limit) || 5))
         };
@@ -2807,16 +2838,17 @@ class Character {
         // --- Safety bonus: nearby ally/bonded characters provide comfort at night ---
         if (isNight && this.relationships && this.relationships.size > 0) {
             const _safetyChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+            const { ally, bonded } = this.getRelationshipThresholds();
+            const { nearbyRadius } = this.getSupportModelParams();
             for (const [otherId, aff] of this.relationships.entries()) {
-                if (aff >= 60) {
+                if (aff >= ally) {
                     const other = _safetyChars.find(c => c.id === otherId && c.state !== 'dead');
                     if (other) {
                         const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
-                        if (d <= 2) {
-                            // bonded: +3/s; ally: +1.5/s — enough to offset night decay (5/s) when 2 bondeds nearby
-                            const bonus = aff >= 80 ? 3 : 1.5;
+                        if (d <= nearbyRadius) {
+                            const bonus = aff >= bonded ? 3 : 1.5;
                             this.needs.safety = Math.min(100, this.needs.safety + deltaTime * bonus);
-                            break; // one nearby ally is enough
+                            break;
                         }
                     }
                 }
@@ -2890,12 +2922,14 @@ class Character {
                 // Food donation: well-fed ally/bonded shares food with nearby hungry partner (every 2s tick)
                 if (this.needs.hunger > 70) {
                     const _donateChars = _chars;
+                    const { ally } = this.getRelationshipThresholds();
+                    const { nearbyRadius } = this.getSupportModelParams();
                     for (const [otherId, aff] of this.relationships.entries()) {
-                        if (aff >= 60) { // ally or bonded
+                        if (aff >= ally) {
                             const other = _donateChars.find(c => c.id === otherId && c.state !== 'dead');
                             if (other && other.needs.hunger < 40) {
                                 const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
-                                if (d <= 3) {
+                                if (d <= nearbyRadius) {
                                     const donation = Math.min(20, this.needs.hunger - 50); // never drop below 50
                                     if (donation > 0) {
                                         this.needs.hunger -= donation;
@@ -2977,8 +3011,12 @@ class Character {
                 // loveTimerが<=0ならreproduceを先に実行する（timerリセットを防ぐため）。
                 const dist = Math.abs(this.gridPos.x - partner.gridPos.x) + Math.abs(this.gridPos.y - partner.gridPos.y) + Math.abs(this.gridPos.z - partner.gridPos.z);
 
+                const loveAffinityThreshold = (typeof window !== 'undefined' && window.reproduceAffinityThreshold !== undefined)
+                    ? Number(window.reproduceAffinityThreshold)
+                    : 60;
+
                 // If timer expired while still in socializing and conditions met, reproduce first
-                if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60 &&
+                if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= loveAffinityThreshold &&
                     this.needs.hunger > 15 && partner.needs.hunger > 15) {
                     const pressureGateOpen = this.shouldAttemptReproductionWith(partner);
                     // per-pair cooldown check (only gate — no permanent one-child-per-pair lock)
@@ -3008,7 +3046,7 @@ class Character {
                 }
 
                 // Set or refresh heart display if in proximity and affinity high enough
-                if (dist <= 1 && affinity >= 60) {
+                if (dist <= 1 && affinity >= loveAffinityThreshold) {
                     // Only start the timer if it's not currently 'showing'
                     if (this.loveTimer <= 0 && this.lovePhase !== 'showing') {
                         this.loveTimer = 3.0; // 3 seconds showing
@@ -3031,9 +3069,10 @@ class Character {
                 this.state = 'idle';
                 this.action = null;
             }
-            // SOCIALIZE終了条件を緩和：socialニーズが高くても続行（親密度60到達まで優先）
+            // SOCIALIZE終了条件を緩和：socialニーズが高くても続行（ally threshold到達まで優先）
             const currentAffinity = this.relationships.get(partner?.id) || 0;
-            if(this.needs.social >= 100 && currentAffinity >= 60) {
+            const { ally: socializeCompletionAffinity } = this.getRelationshipThresholds();
+            if(this.needs.social >= 100 && currentAffinity >= socializeCompletionAffinity) {
                 this.state = 'idle';
             }
         }
