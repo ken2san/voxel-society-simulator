@@ -949,29 +949,43 @@ class Character {
         // but keep each actual step local and reachable so behavior stays legible.
         if (type === 'WANDER' && !moveTo) {
             const districtIntent = pickDistrictMoveTargetForCharacter(this);
-            const candidateRange = districtIntent ? 4 : 2;
-            const candidates = this._getReachableGridCandidates(candidateRange, true, districtIntent ? 18 : 10);
+            const socialAnchor = this.getPreferredSupportTarget ? this.getPreferredSupportTarget() : null;
+            const { nearbyRadius } = this.getSupportModelParams();
+            const candidateRange = districtIntent ? 4 : (socialAnchor ? Math.max(2, nearbyRadius) : 2);
+            const candidates = this._getReachableGridCandidates(candidateRange, true, districtIntent ? 18 : (socialAnchor ? 14 : 10));
             if (candidates.length > 0) {
                 let selectedMoveTo = candidates[Math.floor(Math.random() * candidates.length)];
-                if (districtIntent?.targetPos) {
+                if (districtIntent?.targetPos || socialAnchor?.targetPos) {
                     const ranked = candidates
-                        .map(candidate => ({
-                            candidate,
-                            score:
-                                Math.abs(candidate.x - districtIntent.targetPos.x) +
-                                Math.abs(candidate.y - districtIntent.targetPos.y) +
-                                Math.abs(candidate.z - districtIntent.targetPos.z) +
-                                (Math.random() * 1.35)
-                        }))
+                        .map(candidate => {
+                            let score = Math.random() * 1.35;
+                            if (districtIntent?.targetPos) {
+                                score +=
+                                    Math.abs(candidate.x - districtIntent.targetPos.x) +
+                                    Math.abs(candidate.y - districtIntent.targetPos.y) +
+                                    Math.abs(candidate.z - districtIntent.targetPos.z);
+                            }
+                            if (socialAnchor?.targetPos) {
+                                const pullWeight = Math.max(0.2, 1 - Number(socialAnchor.pullStrength || 0));
+                                score += (
+                                    Math.abs(candidate.x - socialAnchor.targetPos.x) +
+                                    Math.abs(candidate.y - socialAnchor.targetPos.y) +
+                                    Math.abs(candidate.z - socialAnchor.targetPos.z)
+                                ) * pullWeight;
+                            }
+                            return { candidate, score };
+                        })
                         .sort((a, b) => a.score - b.score);
-                    const pool = ranked.slice(0, Math.min(4, ranked.length));
+                    const pool = ranked.slice(0, Math.min(socialAnchor ? 6 : 4, ranked.length));
                     selectedMoveTo = (pool[Math.floor(Math.random() * pool.length)] || ranked[0]).candidate;
-                    this._lastDistrictChoice = {
-                        districtIndex: districtIntent.districtIndex,
-                        utility: Number(districtIntent.utility || 0),
-                        commitment: Number(districtIntent.commitment || 0),
-                        at: Date.now()
-                    };
+                    if (districtIntent) {
+                        this._lastDistrictChoice = {
+                            districtIndex: districtIntent.districtIndex,
+                            utility: Number(districtIntent.utility || 0),
+                            commitment: Number(districtIntent.commitment || 0),
+                            at: Date.now()
+                        };
+                    }
                 }
                 this.action = { type, target, item };
                 this.setNavigationTarget(selectedMoveTo);
@@ -2175,7 +2189,12 @@ class Character {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 2;
         const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
-        const searchRange = Math.max(baseRange, 2 + Math.round(sociality * 2));
+        const { nearbyRadius } = this.getSupportModelParams();
+        const searchRange = Math.max(baseRange, nearbyRadius, 2 + Math.round(sociality * 2));
+
+        const preferred = this.getPreferredSupportTarget(searchRange);
+        if (preferred?.char) return preferred.char;
+
         for (const char of chars) {
             if (!char || char.id === this.id || char.state === 'dead') continue;
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
@@ -2188,6 +2207,49 @@ class Character {
                 best = char;
             }
         }
+        return best;
+    }
+
+    getPreferredSupportTarget(maxDistance = null) {
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
+        const searchRange = Math.max(2, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : (nearbyRadius * 2));
+        let best = null;
+        let bestScore = -Infinity;
+
+        for (const char of chars) {
+            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
+            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+            if (dist <= 0 || dist > searchRange) continue;
+
+            const affinity = Number(this.relationships.get(char.id) || 0);
+            const relationClass = this.getRelationshipClass(char.id);
+            const sameGroup = !!this.groupId && !!char.groupId && this.groupId === char.groupId;
+            const strongTie = relationClass === 'ally' || relationClass === 'bonded';
+            const anchored = String(this._socialAnchorId || '') === String(char.id);
+            if (!sameGroup && !strongTie && !anchored) continue;
+
+            const tieStrength = Math.max(0, Math.min(1,
+                (affinity / 100) +
+                (sameGroup ? groupBonus : 0) +
+                (strongTie ? allyPresenceBonus : 0) +
+                (anchored ? allyPresenceBonus : 0)
+            ));
+            const normalizedDistance = dist / Math.max(1, searchRange);
+            const score = tieStrength - normalizedDistance + (Math.random() * 0.05);
+            if (score > bestScore) {
+                const adjacent = this.findAdjacentSpot(char.gridPos);
+                bestScore = score;
+                best = {
+                    char,
+                    targetPos: adjacent || char.gridPos,
+                    pullStrength: tieStrength,
+                    distance: dist,
+                    relationClass
+                };
+            }
+        }
+
         return best;
     }
 
@@ -2349,6 +2411,8 @@ class Character {
         };
         return {
             nearbyRadius: Math.max(1, Math.min(10, Number((typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? window.nearbySupportRadius : 3))),
+            groupBonus: clampWeight((typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? window.supportGroupBonus : 0.22, 0.22),
+            allyPresenceBonus: clampWeight((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.18, 0.18),
             bondedWeight: clampWeight((typeof window !== 'undefined' && window.supportBondedWeight !== undefined) ? window.supportBondedWeight : 0.24, 0.24),
             allyWeight: clampWeight((typeof window !== 'undefined' && window.supportAllyWeight !== undefined) ? window.supportAllyWeight : 0.12, 0.12),
             nearbyWeight: clampWeight((typeof window !== 'undefined' && window.supportNearbyWeight !== undefined) ? window.supportNearbyWeight : 0.10, 0.10),
@@ -2393,17 +2457,20 @@ class Character {
                 .sort((a, b) => (b.affinity - a.affinity) || (a.distance - b.distance))
             : [];
 
-        const { nearbyRadius, bondedWeight, allyWeight, nearbyWeight, topAffinityWeight } = this.getSupportModelParams();
+        const { nearbyRadius, groupBonus, allyPresenceBonus, bondedWeight, allyWeight, nearbyWeight, topAffinityWeight } = this.getSupportModelParams();
         ties.forEach(t => {
             t.isNearbySupport = t.distance <= nearbyRadius && (t.relationshipClass === 'bonded' || t.relationshipClass === 'ally');
         });
         const bondedCount = ties.filter(t => t.relationshipClass === 'bonded').length;
         const allyCount = ties.filter(t => t.relationshipClass === 'ally').length;
         const nearbySupport = ties.filter(t => t.distance <= nearbyRadius && (t.relationshipClass === 'bonded' || t.relationshipClass === 'ally')).length;
+        const hasStrongTie = ties.some(t => t.relationshipClass === 'bonded' || t.relationshipClass === 'ally');
         const supportScore = Math.max(0, Math.min(1,
             (bondedCount * bondedWeight) +
             (allyCount * allyWeight) +
             (nearbySupport * nearbyWeight) +
+            (this.groupId ? groupBonus : 0) +
+            (hasStrongTie ? allyPresenceBonus : 0) +
             (ties.length > 0 ? Math.min(topAffinityWeight, (ties[0].affinity / 100) * topAffinityWeight) : 0)
         ));
 
@@ -2835,22 +2902,31 @@ class Character {
         this.needs.energy = Math.max(this.needs.energy, 0);
         this.needs.safety = Math.max(this.needs.safety, 0);
 
-        // --- Safety bonus: nearby ally/bonded characters provide comfort at night ---
-        if (isNight && this.relationships && this.relationships.size > 0) {
-            const _safetyChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+        // --- Support comfort: nearby trusted ties reduce social depletion and improve night safety ---
+        if (this.relationships && this.relationships.size > 0) {
+            const _supportChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
             const { ally, bonded } = this.getRelationshipThresholds();
-            const { nearbyRadius } = this.getSupportModelParams();
+            const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
+            let hasNearbyTrustedTie = false;
             for (const [otherId, aff] of this.relationships.entries()) {
-                if (aff >= ally) {
-                    const other = _safetyChars.find(c => c.id === otherId && c.state !== 'dead');
-                    if (other) {
-                        const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
-                        if (d <= nearbyRadius) {
-                            const bonus = aff >= bonded ? 3 : 1.5;
-                            this.needs.safety = Math.min(100, this.needs.safety + deltaTime * bonus);
-                            break;
-                        }
+                if (aff < ally) continue;
+                const other = _supportChars.find(c => c.id === otherId && c.state !== 'dead');
+                if (!other?.gridPos) continue;
+                const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
+                if (d <= nearbyRadius) {
+                    hasNearbyTrustedTie = true;
+                    this._socialAnchorId = other.id;
+                    if (isNight) {
+                        const bonus = aff >= bonded ? 3 : 1.5;
+                        this.needs.safety = Math.min(100, this.needs.safety + deltaTime * bonus);
                     }
+                    break;
+                }
+            }
+            if (hasNearbyTrustedTie || this.groupId) {
+                const passiveSupport = (hasNearbyTrustedTie ? allyPresenceBonus : 0) + (this.groupId ? (groupBonus * 0.5) : 0);
+                if (passiveSupport > 0) {
+                    this.needs.social = Math.min(100, this.needs.social + (deltaTime * 3 * passiveSupport));
                 }
             }
         }
@@ -2975,6 +3051,8 @@ class Character {
             const partner = this.action?.target;
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
             const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
+            const { ally: socializeCompletionAffinity } = this.getRelationshipThresholds();
+            const { nearbyRadius } = this.getSupportModelParams();
 
             if (partner && partner.state === 'socializing') {
                 // 双方の緊急ニーズをチェック（中断条件）
@@ -3045,6 +3123,11 @@ class Character {
                     }
                 }
 
+                if (dist <= Math.max(1, nearbyRadius) && affinity >= socializeCompletionAffinity) {
+                    this._socialAnchorId = partner.id;
+                    partner._socialAnchorId = this.id;
+                }
+
                 // Set or refresh heart display if in proximity and affinity high enough
                 if (dist <= 1 && affinity >= loveAffinityThreshold) {
                     // Only start the timer if it's not currently 'showing'
@@ -3071,7 +3154,6 @@ class Character {
             }
             // SOCIALIZE終了条件を緩和：socialニーズが高くても続行（ally threshold到達まで優先）
             const currentAffinity = this.relationships.get(partner?.id) || 0;
-            const { ally: socializeCompletionAffinity } = this.getRelationshipThresholds();
             if(this.needs.social >= 100 && currentAffinity >= socializeCompletionAffinity) {
                 this.state = 'idle';
             }
