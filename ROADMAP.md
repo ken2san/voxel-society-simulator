@@ -69,7 +69,7 @@ Omitting any of the three steps is considered incomplete. Parameters that skip t
 
 ### Goal
 
-Keep the colony simulation stable and predictable under normal gameplay load.
+Keep the colony simulation stable, readable, and predictable under normal observation load.
 
 ### Scope
 
@@ -78,29 +78,31 @@ Keep the colony simulation stable and predictable under normal gameplay load.
 
 ---
 
-## Phase 2 - Gameplay Loop Quality
+## Phase 2 - Observation and Behavior Legibility
 
 ### Goal
 
-Make core survival/build loops readable, debuggable, and fun without adding backend complexity.
+Make core survival, bonding, and household-formation loops readable, debuggable, and interpretable without adding backend complexity.
 
 ### Scope
 
-- Improve balancing and diagnostics for gathering, building, hunger, energy, and social actions.
-- Improve UI feedback (sidebar/labels/icons) without regressing simulation correctness.
+- Improve balancing and diagnostics for gathering, sheltering, hunger, energy, and social actions.
+- Improve UI feedback so internal state changes are easy to watch and explain.
+- Prioritize behaviors that are visually legible and directionally believable over game-like optimization.
 
 ---
 
-## Phase 3 - Production Hardening
+## Phase 3 - Tooling, Regression, and Analysis Support
 
 ### Goal
 
-Prepare for reliable build/deploy workflows and maintainable operations.
+Support reliable iteration, comparison, and handoff without pulling the project away from its observation-first focus.
 
 ### Scope
 
-- Harden Docker/Cloud Run deployment flow and document operational commands.
+- Keep build, export, and telemetry-analysis workflows reliable.
 - Add lightweight regression checks and improve developer documentation.
+- Treat deployment and infra work as secondary support tasks, not the product direction.
 
 ---
 
@@ -119,6 +121,18 @@ Potential themes:
 ## Current Status
 
 Active phase: **Phase 1 → Phase 2 (overlap)**
+
+### Current priority rule
+
+When this roadmap is read by a new thread, use the sections in this order:
+
+1. Project Concept
+2. Current Status
+3. Next Feature Brief
+4. Current Sprint
+5. Historical archive sections below only as reference
+
+If an older handoff says “implement next” but conflicts with the sections above, the older handoff is archival and should not override the current direction.
 
 ### Verified progress as of 2026-04-15
 
@@ -197,12 +211,12 @@ The feature is only acceptable if it is readable from both the canvas and teleme
 
 ---
 
-## Current Sprint — Character Movement Quality
+## Current Sprint — Character Motion Readability
 
 ### Goal
 
-Bring character movement to a level comparable to standard game characters:
-natural collision handling, no wall clipping, smooth visual feel.
+Make character movement legible and believable for observation:
+natural collision handling, no wall clipping, and smoother visual intent.
 
 ### Tasks
 
@@ -229,7 +243,7 @@ natural collision handling, no wall clipping, smooth visual feel.
 
 ---
 
-## Handoff — Session 2026-04-15 (Next feature scope)
+## Active Handoff — Session 2026-04-15 (Next feature scope)
 
 _This section captures the next intended feature so a new thread can continue without re-deriving the design._
 
@@ -300,7 +314,7 @@ Do not attempt high-fidelity human psychology. Use a few latent variables and ma
 
 ---
 
-## Handoff — Session 2026-04-14 PM (System Design)
+## Archive — Historical Handoff — Session 2026-04-14 PM (System Design)
 
 _This section is updated at the end of each working session so the next AI thread can pick up without re-explanation._
 
@@ -364,7 +378,7 @@ After Crisis Mode: **Spatial Memory** (add `_knownFoodSpots` Map to constructor,
 
 ---
 
-## Handoff — Session 2026-04-14 AM
+## Archive — Historical Handoff — Session 2026-04-14 AM
 
 _This section is updated at the end of each working session so the next AI thread can pick up without re-explanation._
 
@@ -421,7 +435,7 @@ Every new parameter requires all 3 steps:
 
 ---
 
-## System Design Architecture
+## Archive — System Design Architecture
 
 _Last reviewed: 2026-04-14_
 
@@ -461,7 +475,7 @@ Social structure must be real before generational drift can be read.
 
 ---
 
-## System Design Backlog — Active (Layer 1–2)
+## Archive — System Design Backlog — Completed Foundation Work
 
 ### 1 — ~~Crisis Mode~~ ✅ Done `Layer 1` (commit `10b622b`)
 
@@ -550,7 +564,7 @@ window.__deathRecords.push({
 
 ---
 
-## System Design Backlog — Deferred
+## Deferred Observation Backlog
 
 ### B — Resource Sharing ✅ Done (implemented as part of Relationship Tiers, item 4)
 Food donation is live: ally/bonded characters donate food every 2s tick when nearby.
