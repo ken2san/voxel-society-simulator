@@ -147,6 +147,7 @@ If an older handoff says “implement next” but conflicts with the sections ab
 - District social-pressure link is now active through latent variables (`housingPressure`, `timeStress`, `supportAccess`, `relationshipStability`) instead of a separate pre-scaling system
 - Stability hotfixes shipped for rollout issues: startup freeze reduction, initial population preservation, and off-screen thought-bubble flicker cleanup
 - Observation polish: left-pane district badges and district migration flow cues now make 4+ district movement easier to read live
+- District opportunity scoring is now live: bounded-rational wandering can drift toward lower-pressure, higher-support districts instead of moving as pure local randomness
 
 ---
 

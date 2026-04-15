@@ -100,6 +100,10 @@ function roundDistrictValue(value) {
     return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function clamp01(value) {
+    return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
 export function getDistrictMode() {
     return districtMode;
 }
@@ -197,6 +201,8 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         relationshipStability: 0,
         conflictLevel: 0,
         socialPressure: 0,
+        populationBalance: 0,
+        opportunityScore: 0,
         avgNeeds: { hunger: 0, energy: 0, safety: 0, social: 0 }
     }));
     const sums = Array.from({ length: count }, () => ({
@@ -267,6 +273,9 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         }
     }
 
+    const alivePopulationTotal = buckets.reduce((acc, bucket) => acc + bucket.population, 0);
+    const targetPopulationPerDistrict = Math.max(1, alivePopulationTotal / Math.max(1, count));
+
     return buckets.map((bucket, index) => {
         const n = Math.max(1, bucket.population);
         const sum = sums[index];
@@ -283,6 +292,17 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             ((1 - supportAccess) * 0.10) +
             ((1 - relationshipStability) * 0.10)
         )));
+        const populationBalance = roundDistrictValue(Math.max(0, Math.min(1,
+            1 - (Math.abs(bucket.population - targetPopulationPerDistrict) / Math.max(1, targetPopulationPerDistrict * 1.5))
+        )));
+        const opportunityScore = roundDistrictValue(Math.max(0, Math.min(1,
+            ((1 - socialPressure) * 0.36) +
+            (supportAccess * 0.22) +
+            (relationshipStability * 0.16) +
+            ((1 - conflictLevel) * 0.10) +
+            (populationBalance * 0.10) +
+            ((1 - foodPressure) * 0.06)
+        )));
         return {
             ...bucket,
             foodPressure,
@@ -293,6 +313,8 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             relationshipStability,
             conflictLevel,
             socialPressure,
+            populationBalance,
+            opportunityScore,
             avgNeeds: {
                 hunger: roundDistrictValue(sum.hunger / n),
                 energy: roundDistrictValue(sum.energy / n),
@@ -308,6 +330,115 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
     });
 }
 
+function getDistrictAnchorForCharacter(character, bounds) {
+    if (!character?.gridPos || !bounds) return null;
+    const homeInBounds = character.homePosition && getDistrictIndexForPosition(character.homePosition, districtMode) === bounds.index;
+    const preferred = homeInBounds
+        ? character.homePosition
+        : { x: Math.floor(bounds.centerX), y: Number(character.gridPos.y || 1), z: Math.floor(bounds.centerZ) };
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const spread = attempt < 3 ? 0.35 : 1.0;
+        const rx = preferred.x + (Math.random() - 0.5) * ((bounds.maxX - bounds.minX + 1) * spread);
+        const rz = preferred.z + (Math.random() - 0.5) * ((bounds.maxZ - bounds.minZ + 1) * spread);
+        const x = Math.max(bounds.minX, Math.min(bounds.maxX, Math.round(rx)));
+        const z = Math.max(bounds.minZ, Math.min(bounds.maxZ, Math.round(rz)));
+        const groundY = Math.max(0, Math.min(maxHeight - 1, findGroundY(x, z)));
+        const y = Math.max(1, Math.min(maxHeight, groundY + 1));
+        const key = `${x},${y},${z}`;
+        const belowKey = `${x},${y - 1},${z}`;
+        if (!worldData.has(key) && worldData.has(belowKey)) {
+            return { x, y, z };
+        }
+    }
+
+    return {
+        x: Math.max(bounds.minX, Math.min(bounds.maxX, Math.floor(bounds.centerX))),
+        y: Math.max(1, Math.min(maxHeight, Number(character.gridPos.y || 1))),
+        z: Math.max(bounds.minZ, Math.min(bounds.maxZ, Math.floor(bounds.centerZ)))
+    };
+}
+
+export function pickDistrictMoveTargetForCharacter(character, sourceChars = characters) {
+    if (!character?.gridPos || districtMode === 1) return null;
+    const summaries = refreshDistrictSummaryCache(sourceChars);
+    if (!Array.isArray(summaries) || summaries.length < 2) return null;
+
+    const currentIndex = getDistrictIndexForPosition(character.gridPos, districtMode);
+    const currentSummary = summaries[currentIndex] || null;
+    const curiosity = clamp01(character.personality?.curiosity ?? 0.5);
+    const sociality = clamp01(character.personality?.sociality ?? 0.5);
+    const resilience = clamp01(character.personality?.resilience ?? 0.5);
+    const hungerStress = clamp01((55 - Number(character.needs?.hunger || 0)) / 55);
+    const energyStress = clamp01((45 - Number(character.needs?.energy || 0)) / 45);
+    const socialStress = clamp01((50 - Number(character.needs?.social || 0)) / 50);
+    const currentPressure = clamp01(currentSummary?.socialPressure ?? 0);
+    const moveUrgency = clamp01(
+        ((hungerStress * 0.30) + (energyStress * 0.18) + (socialStress * 0.18) + (currentPressure * 0.34))
+        * (1.10 - (resilience * 0.20))
+    );
+    const homeIndex = character.homePosition ? getDistrictIndexForPosition(character.homePosition, districtMode) : null;
+
+    const scored = summaries.map(summary => {
+        const bounds = getDistrictBounds(summary.index, districtMode);
+        const distNorm = clamp01(
+            (Math.abs(bounds.centerX - character.gridPos.x) + Math.abs(bounds.centerZ - character.gridPos.z))
+            / Math.max(1, gridSize)
+        );
+        const opportunity = clamp01(summary.opportunityScore ?? (1 - clamp01(summary.socialPressure ?? 0)));
+        const familiarityBonus = (summary.index === currentIndex ? 0.08 : 0) + (homeIndex === summary.index ? 0.10 : 0);
+        const socialBonus = clamp01(summary.supportAccess ?? 0) * (0.05 + sociality * 0.05);
+        const distancePenalty = distNorm * (0.12 - curiosity * 0.04);
+        const utility = clamp01(opportunity + familiarityBonus + socialBonus - distancePenalty);
+        return { summary, bounds, utility };
+    });
+
+    const currentUtility = scored[currentIndex]?.utility ?? clamp01(currentSummary?.opportunityScore ?? 0.5);
+    const bestUtility = Math.max(...scored.map(item => item.utility));
+    if (bestUtility <= currentUtility + 0.02 && moveUrgency < 0.28) {
+        return null;
+    }
+
+    const beta = 1.8 + (curiosity * 1.8) + (moveUrgency * 2.4) + (sociality * 0.8);
+    const maxUtility = Math.max(...scored.map(item => item.utility));
+    const weighted = scored.map(item => {
+        const stayBias = item.summary.index === currentIndex ? (0.10 - moveUrgency * 0.08) : 0;
+        const weight = Math.exp(((item.utility - stayBias) - maxUtility) * beta);
+        return { ...item, weight };
+    });
+    const totalWeight = weighted.reduce((acc, item) => acc + item.weight, 0);
+    if (!(totalWeight > 0)) return null;
+
+    let roll = Math.random() * totalWeight;
+    let chosen = weighted[weighted.length - 1];
+    for (const item of weighted) {
+        roll -= item.weight;
+        if (roll <= 0) {
+            chosen = item;
+            break;
+        }
+    }
+
+    const improvement = chosen.utility - currentUtility;
+    const commitment = clamp01((moveUrgency * 0.46) + (curiosity * 0.20) + (Math.max(0, improvement) * 1.45));
+    if (chosen.summary.index === currentIndex || commitment < 0.24) {
+        return null;
+    }
+
+    const targetPos = getDistrictAnchorForCharacter(character, chosen.bounds);
+    if (!targetPos) return null;
+
+    return {
+        districtIndex: chosen.summary.index,
+        label: chosen.summary.label,
+        targetPos,
+        utility: roundDistrictValue(chosen.utility),
+        currentUtility: roundDistrictValue(currentUtility),
+        commitment: roundDistrictValue(commitment),
+        opportunityScore: roundDistrictValue(chosen.summary.opportunityScore ?? chosen.utility)
+    };
+}
+
 export function getDistrictSocialContextForPosition(pos, sourceChars = characters) {
     const index = getDistrictIndexForPosition(pos, districtMode);
     const summary = refreshDistrictSummaryCache(sourceChars)[index];
@@ -318,7 +449,8 @@ export function getDistrictSocialContextForPosition(pos, sourceChars = character
         timeStress: 0,
         supportAccess: 0,
         relationshipStability: 0,
-        socialPressure: 0
+        socialPressure: 0,
+        opportunityScore: 0.5
     };
 }
 
@@ -359,6 +491,7 @@ function emitDistrictChange() {
     window.getDistrictRuntime = getDistrictRuntimeForPosition;
     window.getDistrictObservationSummary = () => refreshDistrictSummaryCache();
     window.getDistrictSocialContextForPosition = (pos) => getDistrictSocialContextForPosition(pos);
+    window.pickDistrictMoveTargetForCharacter = (character) => pickDistrictMoveTargetForCharacter(character);
     window.getDistrictState = getDistrictState;
     try {
         window.dispatchEvent(new CustomEvent('district-changed', { detail: getDistrictState() }));

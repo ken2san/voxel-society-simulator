@@ -1,7 +1,7 @@
 // --- 落下先が安全か（抜け出せるか）判定 ---
 
 import * as THREE from 'three';
-import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight } from './world.js';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter } from './world.js';
 import { decideNextAction_rulebase } from './AI_rulebase.js';
 import { decideNextAction_utility } from './AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
@@ -945,17 +945,40 @@ class Character {
         this.actionHistory.push(type);
         if (this.actionHistory.length > 20) this.actionHistory.shift();
 
-        // --- WANDER時は到達可能な候補のみ選ぶ（新システム使用） ---
+        // Prefer bounded-rational movement: bias wandering toward higher-opportunity districts,
+        // but keep each actual step local and reachable so behavior stays legible.
         if (type === 'WANDER' && !moveTo) {
-            const candidates = this._getReachableGridCandidates(2, true, 10);
+            const districtIntent = pickDistrictMoveTargetForCharacter(this);
+            const candidateRange = districtIntent ? 4 : 2;
+            const candidates = this._getReachableGridCandidates(candidateRange, true, districtIntent ? 18 : 10);
             if (candidates.length > 0) {
-                const selectedMoveTo = candidates[Math.floor(Math.random() * candidates.length)];
+                let selectedMoveTo = candidates[Math.floor(Math.random() * candidates.length)];
+                if (districtIntent?.targetPos) {
+                    const ranked = candidates
+                        .map(candidate => ({
+                            candidate,
+                            score:
+                                Math.abs(candidate.x - districtIntent.targetPos.x) +
+                                Math.abs(candidate.y - districtIntent.targetPos.y) +
+                                Math.abs(candidate.z - districtIntent.targetPos.z) +
+                                (Math.random() * 1.35)
+                        }))
+                        .sort((a, b) => a.score - b.score);
+                    const pool = ranked.slice(0, Math.min(4, ranked.length));
+                    selectedMoveTo = (pool[Math.floor(Math.random() * pool.length)] || ranked[0]).candidate;
+                    this._lastDistrictChoice = {
+                        districtIndex: districtIntent.districtIndex,
+                        utility: Number(districtIntent.utility || 0),
+                        commitment: Number(districtIntent.commitment || 0),
+                        at: Date.now()
+                    };
+                }
                 this.action = { type, target, item };
                 this.setNavigationTarget(selectedMoveTo);
                 this.state = 'moving';
                 return;
             }
-            // 到達可能な候補がなければ従来通り
+            // Fall through if there are no reachable candidates.
         }
 
         // Reservation and failed-target avoidance: if the target is a grid position, check reservations and failure counts
