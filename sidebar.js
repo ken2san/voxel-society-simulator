@@ -1792,6 +1792,7 @@ function renderCharacterDetail() {
                 worldMod.setDistrictMode?.(mode);
                 worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
                 renderCharacterDetail();
+                window.renderCharacterList && window.renderCharacterList();
             });
         };
         districtModeRow.appendChild(btn);
@@ -1862,6 +1863,7 @@ function renderCharacterDetail() {
             import('./world.js').then(worldMod => {
                 worldMod.setActiveDistrict?.(i);
                 renderCharacterDetail();
+                window.renderCharacterList && window.renderCharacterList();
             });
         };
         districtGrid.appendChild(btn);
@@ -2517,6 +2519,16 @@ function renderCharacterList() {
         }
     } catch (e) {}
     const chars = Array.isArray(window.characters) ? window.characters : [];
+    const districtMode = Number(window.sidebarParams?.districtMode || window.districtMode || 1);
+    const activeDistrictIndex = Number(window.sidebarParams?.activeDistrictIndex ?? window.activeDistrictIndex ?? 0);
+    const isDistrictFiltered = districtMode > 1 && typeof window.getDistrictRuntime === 'function';
+    const visibleChars = isDistrictFiltered
+        ? chars.filter(char => {
+            if (!char?.gridPos) return false;
+            const runtime = window.getDistrictRuntime(char.gridPos);
+            return Number(runtime?.index ?? char.districtIndex ?? 0) === activeDistrictIndex;
+        })
+        : chars;
     const popStats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
     const hasPopulationHistory = !!(popStats && (
         Number(popStats.initialPopulation || 0) > 0 ||
@@ -2537,6 +2549,7 @@ function renderCharacterList() {
         `<div>` +
             `<div class="character-list-kicker">Observation</div>` +
             `<h3 class="character-list-title">Society Overview</h3>` +
+            `${isDistrictFiltered ? `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Showing D${activeDistrictIndex + 1} characters only · global metrics stay above</div>` : ''}` +
         `</div>`;
     leftSidebar.appendChild(listHeader);
 
@@ -2842,7 +2855,11 @@ function renderCharacterList() {
     }
 
     // --- 全体サマリー表（アコーディオン型詳細展開付き） ---
-    if (chars.length > 0) {
+    if (openedCharId && !visibleChars.some(char => String(char.id) === String(openedCharId))) {
+        openedCharId = null;
+    }
+
+    if (visibleChars.length > 0) {
         const tableShell = document.createElement('div');
         tableShell.className = 'character-table-shell';
         const summaryTable = document.createElement('table');
@@ -2879,7 +2896,7 @@ function renderCharacterList() {
         summaryTable.appendChild(thead);
         // ボディ
         const tbody = document.createElement('tbody');
-        chars.forEach(char => {
+        visibleChars.forEach(char => {
             const tr = document.createElement('tr');
             tr.className = 'character-summary-row';
             if (String(openedCharId) === String(char.id)) tr.classList.add('is-open');
@@ -2997,6 +3014,15 @@ function renderCharacterList() {
             leftSidebar.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
             leftSidebar.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
         };
+    } else if (isDistrictFiltered && chars.length > 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'character-table-shell';
+        emptyState.style.padding = '10px 12px';
+        emptyState.style.marginTop = '8px';
+        emptyState.style.color = '#64748b';
+        emptyState.style.fontSize = '0.9em';
+        emptyState.textContent = `No characters are currently visible in D${activeDistrictIndex + 1}. Global society metrics remain above.`;
+        leftSidebar.appendChild(emptyState);
     } else if (hasPopulationHistory) {
         const emptyState = document.createElement('div');
         emptyState.className = 'character-table-shell';
