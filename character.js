@@ -1021,14 +1021,14 @@ class Character {
             this.setNavigationTarget(moveTo);
             this.state = 'moving';
         } else if (type === 'SOCIALIZE' && moveTo) {
-            // SOCIALIZE の場合は距離をチェック
-            const dist = Math.abs(this.gridPos.x - moveTo.x) + Math.abs(this.gridPos.y - moveTo.y) + Math.abs(this.gridPos.z - moveTo.z);
+            // SOCIALIZE should approach a reachable adjacent spot, not the partner's occupied tile.
+            const partnerPos = target?.gridPos || moveTo;
+            const dist = Math.abs(this.gridPos.x - partnerPos.x) + Math.abs(this.gridPos.y - partnerPos.y) + Math.abs(this.gridPos.z - partnerPos.z);
             if (dist <= 1) {
-                // 隣接していれば即座に実行
                 this.performAction();
             } else {
-                // 遠い場合は移動
-                this.setNavigationTarget(moveTo);
+                const socialSpot = this.findAdjacentSpot(partnerPos) || moveTo;
+                this.setNavigationTarget(socialSpot);
                 this.state = 'moving';
             }
         } else {
@@ -2170,21 +2170,25 @@ class Character {
     }
     // --- AI & Action Methods ---
     findClosestPartner() {
-        let closest = null;
-        let minDist = Infinity;
-        // Use global characters array (browser global or fallback)
+        let best = null;
+        let bestScore = -Infinity;
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        // Use global perception range if set, else default to 2
-        const perceptionRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? window.perceptionRange : 2;
+        const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 2;
+        const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
+        const searchRange = Math.max(baseRange, 2 + Math.round(sociality * 2));
         for (const char of chars) {
-            if (char.id === this.id) continue;
+            if (!char || char.id === this.id || char.state === 'dead') continue;
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-            if (dist < minDist && dist <= perceptionRange) { // perceptionRangeマス以内のみ対象
-                minDist = dist;
-                closest = char;
+            if (dist <= 0 || dist > searchRange) continue;
+            const affinity = Number(this.relationships.get(char.id) || 0);
+            const sameGroupBonus = (this.groupId && char.groupId && this.groupId === char.groupId) ? 8 : 0;
+            const score = affinity + sameGroupBonus - (dist * 9) + (Math.random() * 1.5);
+            if (score > bestScore) {
+                bestScore = score;
+                best = char;
             }
         }
-        return closest;
+        return best;
     }
 
     findClosestFood() {
