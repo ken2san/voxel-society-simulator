@@ -22,18 +22,19 @@ export function decideNextAction_rulebase(character, isNight) {
     // === CONFIGURATION ===
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
-    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 28;
-    const explorationBaseRate = getTunableNumber('explorationBaseRate', 0.08, { min: 0, max: 0.4 });
+    const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 32;
+    const explorationBaseRate = getTunableNumber('explorationBaseRate', 0.05, { min: 0, max: 0.4 });
     const explorationMinRate = getTunableNumber('explorationMinRate', 0.02, { min: 0, max: 0.2 });
-    const explorationMaxRate = getTunableNumber('explorationMaxRate', 0.16, { min: 0, max: 0.5 });
-    const explorationAdaptBoost = getTunableNumber('explorationAdaptBoost', 0.35, { min: 0, max: 1 });
-    const explorationForagePenalty = getTunableNumber('explorationForagePenalty', 0.65, { min: 0, max: 1 });
-    const explorationRestPenalty = getTunableNumber('explorationRestPenalty', 0.75, { min: 0, max: 1 });
+    const explorationMaxRate = getTunableNumber('explorationMaxRate', 0.12, { min: 0, max: 0.5 });
+    const explorationAdaptBoost = getTunableNumber('explorationAdaptBoost', 0.25, { min: 0, max: 1 });
+    const explorationForagePenalty = getTunableNumber('explorationForagePenalty', 0.75, { min: 0, max: 1 });
+    const explorationRestPenalty = getTunableNumber('explorationRestPenalty', 0.9, { min: 0, max: 1 });
     const socialAdaptationBoost = getTunableNumber('socialAdaptationBoost', 0.35, { min: 0, max: 1 });
     const socialForagePenalty = getTunableNumber('socialForagePenalty', 0.25, { min: 0, max: 1 });
     const socialRestPenalty = getTunableNumber('socialRestPenalty', 0.20, { min: 0, max: 1 });
-    const lowPrioritySocialOffset = getTunableNumber('lowPrioritySocialOffset', 60, { min: 0, max: 100 });
+    const lowPrioritySocialOffset = getTunableNumber('lowPrioritySocialOffset', 12, { min: 0, max: 100 });
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const socialDriftThreshold = clamp(socialThreshold + lowPrioritySocialOffset, 0, 92);
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
     const aging = character.getAgingProfile
         ? character.getAgingProfile()
@@ -85,13 +86,18 @@ export function decideNextAction_rulebase(character, isNight) {
         return;
     }
 
-    // === PRIORITY 1: RANDOM EXPLORATION (base 10%; curiosity scales it) ===
-    const explorationWeight = clamp(
-        explorationBaseRate * (character.personality.curiosity ?? 1.0) * (aging.exploreMul || 1.0)
-            * (1 + (adapt.explore * explorationAdaptBoost) - (adapt.forage * explorationForagePenalty) - (adapt.rest * explorationRestPenalty)),
-        explorationMinRate,
-        explorationMaxRate
-    );
+    // === PRIORITY 1: RANDOM EXPLORATION (only when the character can afford to roam) ===
+    const canExploreFreely = character.needs.energy > (effectiveEnergyEmergency + 18)
+        && character.needs.hunger > 30
+        && character.needs.social > socialDriftThreshold;
+    const explorationWeight = canExploreFreely
+        ? clamp(
+            explorationBaseRate * (character.personality.curiosity ?? 1.0) * (aging.exploreMul || 1.0)
+                * (1 + (adapt.explore * explorationAdaptBoost) - (adapt.forage * explorationForagePenalty) - (adapt.rest * explorationRestPenalty)),
+            explorationMinRate,
+            explorationMaxRate
+        )
+        : 0;
     if (Math.random() < explorationWeight) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         const nearbyPartnerRange = getTunableNumber('perceptionRange', 3, { min: 1, max: 8 });
@@ -723,12 +729,14 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 9: SOCIAL NEEDS (Lower priority) ===
-    if (character.needs.social < socialThreshold + lowPrioritySocialOffset) {
+    if (character.needs.social < socialDriftThreshold
+        && character.needs.energy > (effectiveEnergyEmergency + 6)
+        && character.needs.hunger > 25) {
         const partner = character.findClosestPartner();
         if (partner) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos);
             return;
-        } else {
+        } else if (character.needs.energy > (effectiveEnergyEmergency + 16) && character.needs.hunger > 45) {
             character.setNextAction('WANDER');
             return;
         }
