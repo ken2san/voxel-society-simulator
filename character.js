@@ -3355,6 +3355,18 @@ class Character {
                 if (now >= this._telemetryNextAt) {
                     const lifespan = this.getEffectiveLifespan();
                     const inventoryCount = Array.isArray(this.inventory) ? this.inventory.filter(Boolean).length : 0;
+                    const telemetryBucket = Math.floor(now / Math.max(200, intervalMs));
+                    if (window.__telemetryAliveByIdBucket !== telemetryBucket) {
+                        window.__telemetryAliveByIdBucket = telemetryBucket;
+                        window.__telemetryAliveById = new Map(
+                            (Array.isArray(window.characters) ? window.characters : [])
+                                .filter(c => c && c.state !== 'dead')
+                                .map(c => [String(c.id), c])
+                        );
+                    }
+                    const telemetryAliveById = window.__telemetryAliveById instanceof Map
+                        ? window.__telemetryAliveById
+                        : new Map();
                     const homeDistance = this.homePosition
                         ? (Math.abs((this.gridPos?.x || 0) - this.homePosition.x)
                             + Math.abs((this.gridPos?.y || 0) - this.homePosition.y)
@@ -3398,14 +3410,57 @@ class Character {
                         },
                         social: (() => {
                             const rels = this.relationships;
-                            if (!rels || rels.size === 0) return { relationshipCount: 0, avgAffinity: 0, groupSize: 1 };
-                            const values = Array.from(rels.values());
-                            const avg = values.reduce((s, v) => s + v, 0) / values.length;
                             const gId = this.groupId || null;
                             const gSize = gId && Array.isArray(window.characters)
-                                ? window.characters.filter(c => c.groupId === gId && !c.isDead).length
+                                ? window.characters.filter(c => c.groupId === gId && c.state !== 'dead').length
                                 : 1;
-                            return { relationshipCount: values.length, avgAffinity: Number(avg.toFixed(2)), groupSize: gSize };
+                            if (!(rels instanceof Map) || rels.size === 0) {
+                                return {
+                                    relationshipCount: 0,
+                                    avgAffinity: 0,
+                                    groupSize: gSize,
+                                    bondedCount: 0,
+                                    allyCount: 0,
+                                    nearbySupport: 0,
+                                    supportScore: 0
+                                };
+                            }
+                            const values = Array.from(rels.values()).map(Number).filter(Number.isFinite);
+                            const avg = values.reduce((s, v) => s + v, 0) / Math.max(1, values.length);
+                            const allyThreshold = (typeof window !== 'undefined' && window.allyAffinityThreshold !== undefined) ? Number(window.allyAffinityThreshold) : 60;
+                            const bondedThreshold = (typeof window !== 'undefined' && window.bondedAffinityThreshold !== undefined) ? Number(window.bondedAffinityThreshold) : 80;
+                            const nearbyRadius = (typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? Number(window.nearbySupportRadius) : 3;
+                            const bondedWeight = (typeof window !== 'undefined' && window.supportBondedWeight !== undefined) ? Number(window.supportBondedWeight) : 0.24;
+                            const allyWeight = (typeof window !== 'undefined' && window.supportAllyWeight !== undefined) ? Number(window.supportAllyWeight) : 0.12;
+                            const nearbyWeight = (typeof window !== 'undefined' && window.supportNearbyWeight !== undefined) ? Number(window.supportNearbyWeight) : 0.10;
+                            const topAffinityWeight = (typeof window !== 'undefined' && window.supportTopAffinityWeight !== undefined) ? Number(window.supportTopAffinityWeight) : 0.22;
+                            let nearbySupport = 0;
+                            for (const [otherId, rawAffinity] of rels.entries()) {
+                                const affinity = Number(rawAffinity || 0);
+                                if (affinity < allyThreshold) continue;
+                                const other = telemetryAliveById.get(String(otherId));
+                                if (!other?.gridPos || !this.gridPos) continue;
+                                const dist = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.y - other.gridPos.y) + Math.abs(this.gridPos.z - other.gridPos.z);
+                                if (dist <= nearbyRadius) nearbySupport += 1;
+                            }
+                            const bondedCount = values.filter(v => v >= bondedThreshold).length;
+                            const allyCount = values.filter(v => v >= allyThreshold).length;
+                            const topAffinity = values.length ? Math.max(...values) : 0;
+                            const supportScore = Math.max(0, Math.min(1,
+                                (bondedCount * bondedWeight) +
+                                (allyCount * allyWeight) +
+                                (nearbySupport * nearbyWeight) +
+                                Math.min(topAffinityWeight, (topAffinity / 100) * topAffinityWeight)
+                            ));
+                            return {
+                                relationshipCount: values.length,
+                                avgAffinity: Number(avg.toFixed(2)),
+                                groupSize: gSize,
+                                bondedCount,
+                                allyCount,
+                                nearbySupport,
+                                supportScore: Number(supportScore.toFixed(2))
+                            };
                         })(),
                         home: {
                             hasHome: !!this.homePosition,

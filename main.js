@@ -881,7 +881,11 @@ window.__simTelemetry = {
             social: sample.social ? {
                 relationshipCount: Number(sample.social.relationshipCount || 0),
                 avgAffinity: round2(sample.social.avgAffinity),
-                groupSize: Number(sample.social.groupSize || 1)
+                groupSize: Number(sample.social.groupSize || 1),
+                bondedCount: Number(sample.social.bondedCount || 0),
+                allyCount: Number(sample.social.allyCount || 0),
+                nearbySupport: Number(sample.social.nearbySupport || 0),
+                supportScore: round2(sample.social.supportScore)
             } : undefined,
             home: sample.home ? {
                 hasHome: !!sample.home.hasHome,
@@ -1004,6 +1008,16 @@ window.__simTelemetry = {
                 affinityDecayRate: window.affinityDecayRate,
                 socialNeedRecovery: window.socialNeedRecovery,
                 bondPersistence: window.bondPersistence,
+                acquaintanceAffinityThreshold: window.acquaintanceAffinityThreshold,
+                allyAffinityThreshold: window.allyAffinityThreshold,
+                bondedAffinityThreshold: window.bondedAffinityThreshold,
+                nearbySupportRadius: window.nearbySupportRadius,
+                supportGroupBonus: window.supportGroupBonus,
+                supportAllyPresenceBonus: window.supportAllyPresenceBonus,
+                supportBondedWeight: window.supportBondedWeight,
+                supportAllyWeight: window.supportAllyWeight,
+                supportNearbyWeight: window.supportNearbyWeight,
+                supportTopAffinityWeight: window.supportTopAffinityWeight,
                 maxAffinity: window.maxAffinity,
                 autoRecoverStall: window.autoRecoverStall,
                 movingReplanStallMs: window.movingReplanStallMs,

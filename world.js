@@ -961,6 +961,73 @@ export function animate() {
                 const n = _alive.length;
                 return { hunger: +(sum.hunger/n).toFixed(1), energy: +(sum.energy/n).toFixed(1), safety: +(sum.safety/n).toFixed(1), social: +(sum.social/n).toFixed(1) };
             })();
+            const _socialTrends = (() => {
+                if (_alive.length === 0) {
+                    return {
+                        avgRelationships: 0,
+                        avgAffinity: 0,
+                        bondedChars: 0,
+                        bondedRate: 0,
+                        allyChars: 0,
+                        alliesRate: 0,
+                        nearbySupportChars: 0,
+                        nearbySupportRate: 0
+                    };
+                }
+                const _allyThreshold = (typeof window !== 'undefined' && window.allyAffinityThreshold !== undefined) ? Number(window.allyAffinityThreshold) : 60;
+                const _bondedThreshold = (typeof window !== 'undefined' && window.bondedAffinityThreshold !== undefined) ? Number(window.bondedAffinityThreshold) : 80;
+                const _nearbyRadius = (typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? Number(window.nearbySupportRadius) : 3;
+                const _aliveById = new Map(_alive.map(c => [String(c?.id), c]));
+                let _relationshipTotal = 0;
+                let _avgAffinityTotal = 0;
+                let _bondedChars = 0;
+                let _allyChars = 0;
+                let _nearbyChars = 0;
+
+                for (const c of _alive) {
+                    const _entries = c?.relationships instanceof Map ? Array.from(c.relationships.entries()) : [];
+                    const _affinityValues = _entries
+                        .map(([, rawAffinity]) => Number(rawAffinity))
+                        .filter(Number.isFinite);
+                    _relationshipTotal += _affinityValues.length;
+                    _avgAffinityTotal += _affinityValues.length
+                        ? (_affinityValues.reduce((sum, value) => sum + value, 0) / _affinityValues.length)
+                        : 0;
+
+                    let _hasBonded = false;
+                    let _hasAlly = false;
+                    let _hasNearby = false;
+
+                    for (const [otherId, rawAffinity] of _entries) {
+                        const _affinity = Number(rawAffinity || 0);
+                        if (_affinity >= _bondedThreshold) _hasBonded = true;
+                        if (_affinity >= _allyThreshold) {
+                            _hasAlly = true;
+                            const _other = _aliveById.get(String(otherId));
+                            if (!_hasNearby && c?.gridPos && _other?.gridPos) {
+                                const _dist = Math.abs(c.gridPos.x - _other.gridPos.x) + Math.abs(c.gridPos.y - _other.gridPos.y) + Math.abs(c.gridPos.z - _other.gridPos.z);
+                                if (_dist <= _nearbyRadius) _hasNearby = true;
+                            }
+                        }
+                    }
+
+                    if (_hasBonded) _bondedChars += 1;
+                    if (_hasAlly) _allyChars += 1;
+                    if (_hasNearby) _nearbyChars += 1;
+                }
+
+                const _n = Math.max(1, _alive.length);
+                return {
+                    avgRelationships: +(_relationshipTotal / _n).toFixed(2),
+                    avgAffinity: +(_avgAffinityTotal / _n).toFixed(2),
+                    bondedChars: _bondedChars,
+                    bondedRate: +(_bondedChars / _n).toFixed(3),
+                    allyChars: _allyChars,
+                    alliesRate: +(_allyChars / _n).toFixed(3),
+                    nearbySupportChars: _nearbyChars,
+                    nearbySupportRate: +(_nearbyChars / _n).toFixed(3)
+                };
+            })();
             const _prevDistrictState = animate._districtTelemetryState instanceof Map ? animate._districtTelemetryState : new Map();
             const _districts = getDistrictSummaries(_chars, _prevDistrictState);
             const _nextDistrictState = new Map();
@@ -983,6 +1050,7 @@ export function animate() {
                 stageMix: _stageMix,
                 conflictPairs: _conflictPairs,
                 avgNeeds: _needsAvg,
+                socialTrends: _socialTrends,
                 districtMode,
                 activeDistrictIndex,
                 activeDistrict: _districts[activeDistrictIndex] ?? null,

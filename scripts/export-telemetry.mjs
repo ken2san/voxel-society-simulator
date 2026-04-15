@@ -11,11 +11,11 @@
  * Output structure:
  * {
  *   meta:             { params, duration, worldSize }
- *   worldTimeline:    [ { t_sec, fruitCount, pop, groups, isolated, stageMix, conflictPairs, avgNeeds, season, districts } ]
+ *   worldTimeline:    [ { t_sec, fruitCount, pop, groups, isolated, stageMix, conflictPairs, avgNeeds, season, socialTrends, districts } ]
  *   characterProfiles:[ { id, gen, isChild, lifeStageFirst, lifeStageLast, parentIds, born_t, died_t, cause, lifespan, peakLifeRatio } ]
  *   stageSummary:     [ { t_sec, child, young, adult, elder, dependencyRatio } ]
  *   districtSummary:  [ { t_sec, districtMode, activeDistrictIndex, districts } ]
- *   socialSummary:    { t_sec: { avgRelationships, avgAffinity, isolationRate, conflictRate } }
+ *   socialSummary:    [ { t_sec, avgRelationships, avgAffinity, avgBondedCount, avgAllyCount, avgNearbySupport, avgSupportScore, isolationRate, conflictRate, bondedRate, alliesRate, nearbySupportRate } ]
  *   events:           [ { t_sec, kind, ...fields } ]
  * }
  */
@@ -90,6 +90,7 @@ if (worldSamples.length > 0) {
         conflictPairs: s.conflictPairs,
         avgNeeds:     s.avgNeeds,
         season:       s.season,
+        socialTrends: s.socialTrends ?? null,
         districtMode: s.districtMode ?? 1,
         activeDistrictIndex: s.activeDistrictIndex ?? 0,
         activeDistrict: s.activeDistrict ?? null,
@@ -115,6 +116,7 @@ if (worldSamples.length > 0) {
                 safety: round2(avg(alive.map(s => s.needs?.safety ?? 0))),
                 social: round2(avg(alive.map(s => s.needs?.social ?? 0)))
             },
+            socialTrends: null,
             stageMix: stageMixBySecond.get(sec) ?? (() => {
                 const mix = { child: 0, young: 0, adult: 0, elder: 0 };
                 for (const s of alive) {
@@ -231,17 +233,29 @@ for (const s of samples) {
     socialBySecond.get(sec).push(s);
 }
 
+const worldBySec = new Map(worldTimeline.map(w => [w.t_sec, w]));
 const socialSummary = [];
 for (const [sec, group] of [...socialBySecond.entries()].sort((a, b) => a[0] - b[0])) {
     const alive = group.filter(s => s.state !== 'dead');
     if (!alive.length) continue;
+    const worldSocial = worldBySec.get(sec)?.socialTrends ?? null;
     socialSummary.push({
         t_sec:              sec,
-        avgRelationships:   round2(avg(alive.map(s => s.social?.relationshipCount ?? 0))),
-        avgAffinity:        round2(avg(alive.map(s => s.social?.avgAffinity ?? 0))),
+        avgRelationships:   worldSocial?.avgRelationships ?? round2(avg(alive.map(s => s.social?.relationshipCount ?? 0))),
+        avgAffinity:        worldSocial?.avgAffinity ?? round2(avg(alive.map(s => s.social?.avgAffinity ?? 0))),
         avgGroupSize:       round2(avg(alive.map(s => s.social?.groupSize ?? 1))),
+        avgBondedCount:     round2(avg(alive.map(s => s.social?.bondedCount ?? 0))),
+        avgAllyCount:       round2(avg(alive.map(s => s.social?.allyCount ?? 0))),
+        avgNearbySupport:   round2(avg(alive.map(s => s.social?.nearbySupport ?? 0))),
+        avgSupportScore:    round2(avg(alive.map(s => s.social?.supportScore ?? 0))),
         isolationRate:      round2(alive.filter(s => !s.groupId).length / alive.length),
-        conflictRate:       round2(alive.filter(s => s.nearEnemy).length / alive.length)
+        conflictRate:       round2(alive.filter(s => s.nearEnemy).length / alive.length),
+        bondedChars:        Number(worldSocial?.bondedChars || 0),
+        bondedRate:         round2(Number(worldSocial?.bondedRate || 0)),
+        allyChars:          Number(worldSocial?.allyChars || 0),
+        alliesRate:         round2(Number(worldSocial?.alliesRate || 0)),
+        nearbySupportChars: Number(worldSocial?.nearbySupportChars || 0),
+        nearbySupportRate:  round2(Number(worldSocial?.nearbySupportRate || 0))
     });
 }
 
