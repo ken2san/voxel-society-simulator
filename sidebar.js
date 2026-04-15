@@ -2545,11 +2545,14 @@ function renderCharacterList() {
     // タイトルを追加
     const listHeader = document.createElement('div');
     listHeader.className = 'character-list-header';
+    const contextLabel = isDistrictFiltered
+        ? `Showing D${activeDistrictIndex + 1} characters only · global metrics stay above`
+        : 'Showing the whole society · baseline overview';
     listHeader.innerHTML =
         `<div>` +
             `<div class="character-list-kicker">Observation</div>` +
             `<h3 class="character-list-title">Society Overview</h3>` +
-            `${isDistrictFiltered ? `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Showing D${activeDistrictIndex + 1} characters only · global metrics stay above</div>` : ''}` +
+            `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">${contextLabel}</div>` +
         `</div>`;
     leftSidebar.appendChild(listHeader);
 
@@ -2864,7 +2867,7 @@ function renderCharacterList() {
         tableShell.className = 'character-table-shell';
         const summaryTable = document.createElement('table');
         summaryTable.className = 'character-summary-table';
-        const showAreaColumn = !isDistrictFiltered;
+        const showAreaColumn = false;
         // ヘッダー（日本語で分かりやすく＆見やすいスタイル）
         const thead = document.createElement('thead');
         const trh = document.createElement('tr');
