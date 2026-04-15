@@ -3124,7 +3124,7 @@ class Character {
                         try { console.log(`[LOVE] ${this.id} loveTimer expired, reproducing with ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                         this.reproduceWith && this.reproduceWith(partner);
                         window._pairReproTimestamps.set(_pairKey2, _pairNow2);
-                        const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
+                        const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 42;
                         this.relationships.set(partner.id, resetVal);
                         partner.relationships.set(this.id, resetVal);
                         this.lovePhase = 'completed';
@@ -3310,7 +3310,7 @@ class Character {
                                     console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
                                     this.reproduceWith && this.reproduceWith(partner);
                                     window._pairReproTimestamps.set(key, now);
-                                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 30;
+                                    const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 42;
                                     this.relationships.set(partner.id, resetVal);
                                     partner.relationships.set(this.id, resetVal);
                                     this.lovePhase = 'completed';

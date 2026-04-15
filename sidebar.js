@@ -248,16 +248,16 @@ function renderCharacterDetail() {
         opportunityPopulationWeight:        0.10,
         opportunityFoodWeight:              0.06,
         perceptionRange:                    3,
-        pairReproductionCooldownSeconds:    90,
+        pairReproductionCooldownSeconds:    72,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
         fruitRegenIntervalSeconds:          60,
         seasonCycleSeconds:                 120,
         seasonAmplitude:                    0.6,
-        initialAgeMaxRatio:                 0.45,
+        initialAgeMaxRatio:                 0.40,
         traitAffinityCapReduction:          0.6,
         affinityFloor:                       5,
-        minReproductionAgeRatio:             0.2,
+        minReproductionAgeRatio:             0.18,
         isolationPenalty:                    0.4,
         autoRecoverStall:                   true,
         recoverActionCooldown:              0.5,
@@ -267,7 +267,8 @@ function renderCharacterDetail() {
         recentDigCooldownMs:                10000,
         digActionCooldown:                  2200,
         worldReservationTTL:                5000,
-        reproduceAffinityThreshold:         60,
+        reproduceAffinityThreshold:         58,
+        affinityResetAfterReproduce:        42,
         mutationRate:                       0.05,
         starvationDeathDelaySeconds:        10,
         districtMode:                       1,
@@ -1009,7 +1010,7 @@ function renderCharacterDetail() {
     tabPanels[1].appendChild(perceptionRow);
 
     // --- 繁殖後の友好度リセット値スライダー ---
-    if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 30;
+    if (sidebarParams.affinityResetAfterReproduce === undefined) sidebarParams.affinityResetAfterReproduce = 42;
     const affinityResetRow = document.createElement('div');
     affinityResetRow.style.display = 'flex';
     affinityResetRow.style.alignItems = 'center';
@@ -1240,7 +1241,7 @@ function renderCharacterDetail() {
     tabPanels[1].appendChild(affinityFloorRow);
 
     // --- Min Reproduction Age Ratio Slider ---
-    if (sidebarParams.minReproductionAgeRatio === undefined) sidebarParams.minReproductionAgeRatio = 0.2;
+    if (sidebarParams.minReproductionAgeRatio === undefined) sidebarParams.minReproductionAgeRatio = 0.18;
     const minAgeRow = document.createElement('div');
     minAgeRow.style.display = 'flex'; minAgeRow.style.alignItems = 'center'; minAgeRow.style.gap = '10px';
     const minAgeLabel = document.createElement('span');
@@ -1489,7 +1490,7 @@ function renderCharacterDetail() {
     charNumVal.disabled = paramDisabled;
 
     // --- Initial Age Spread Slider ---
-    if (sidebarParams.initialAgeMaxRatio === undefined) sidebarParams.initialAgeMaxRatio = 0.45;
+    if (sidebarParams.initialAgeMaxRatio === undefined) sidebarParams.initialAgeMaxRatio = 0.40;
     const ageSpreadRow = document.createElement('div');
     ageSpreadRow.style.display = 'flex';
     ageSpreadRow.style.alignItems = 'center';
