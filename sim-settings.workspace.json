@@ -65,7 +65,7 @@
       "fruitRegenIntervalSeconds": 60,
       "seasonCycleSeconds": 120,
       "seasonAmplitude": 0.6,
-      "initialAgeMaxRatio": 0.5,
+      "initialAgeMaxRatio": 0.45,
       "traitAffinityCapReduction": 0.6,
       "affinityFloor": 5,
       "minReproductionAgeRatio": 0.2,

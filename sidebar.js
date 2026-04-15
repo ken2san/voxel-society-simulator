@@ -254,7 +254,7 @@ function renderCharacterDetail() {
         fruitRegenIntervalSeconds:          60,
         seasonCycleSeconds:                 120,
         seasonAmplitude:                    0.6,
-        initialAgeMaxRatio:                 0.5,
+        initialAgeMaxRatio:                 0.45,
         traitAffinityCapReduction:          0.6,
         affinityFloor:                       5,
         minReproductionAgeRatio:             0.2,
@@ -1489,7 +1489,7 @@ function renderCharacterDetail() {
     charNumVal.disabled = paramDisabled;
 
     // --- Initial Age Spread Slider ---
-    if (sidebarParams.initialAgeMaxRatio === undefined) sidebarParams.initialAgeMaxRatio = 0.5;
+    if (sidebarParams.initialAgeMaxRatio === undefined) sidebarParams.initialAgeMaxRatio = 0.45;
     const ageSpreadRow = document.createElement('div');
     ageSpreadRow.style.display = 'flex';
     ageSpreadRow.style.alignItems = 'center';

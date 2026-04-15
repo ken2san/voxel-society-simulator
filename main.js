@@ -16,7 +16,9 @@ function applyInitialAgeSpread(targetChars = characters) {
     targetChars.forEach(c => {
         if (!c) return;
         const lifespan = (typeof c.getEffectiveLifespan === 'function') ? c.getEffectiveLifespan() : (window.characterLifespan || 240);
-        c.age = Math.random() * lifespan * ratio;
+        // Middle-biased spread avoids overloading fresh runs with late-life characters.
+        const spreadUnit = (Math.random() + Math.random()) * 0.5;
+        c.age = spreadUnit * lifespan * ratio;
         c.maturityAge = maturityAge;
         // Important: age spread must also reconcile the child/adult flag immediately.
         c.isChild = c.age < maturityAge;
