@@ -2413,6 +2413,10 @@ class Character {
             nearbyRadius: Math.max(1, Math.min(10, Number((typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? window.nearbySupportRadius : 3))),
             groupBonus: clampWeight((typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? window.supportGroupBonus : 0.22, 0.22),
             allyPresenceBonus: clampWeight((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.18, 0.18),
+            comfortRecoveryRate: Math.max(0, Math.min(8, Number((typeof window !== 'undefined' && window.supportComfortRecoveryRate !== undefined) ? window.supportComfortRecoveryRate : 3))),
+            groupComfortScale: Math.max(0, Math.min(2, Number((typeof window !== 'undefined' && window.supportGroupComfortScale !== undefined) ? window.supportGroupComfortScale : 0.5))),
+            nightSafetyAllyBonus: Math.max(0, Math.min(6, Number((typeof window !== 'undefined' && window.supportNightSafetyAllyBonus !== undefined) ? window.supportNightSafetyAllyBonus : 1.5))),
+            nightSafetyBondedBonus: Math.max(0, Math.min(8, Number((typeof window !== 'undefined' && window.supportNightSafetyBondedBonus !== undefined) ? window.supportNightSafetyBondedBonus : 3))),
             bondedWeight: clampWeight((typeof window !== 'undefined' && window.supportBondedWeight !== undefined) ? window.supportBondedWeight : 0.24, 0.24),
             allyWeight: clampWeight((typeof window !== 'undefined' && window.supportAllyWeight !== undefined) ? window.supportAllyWeight : 0.12, 0.12),
             nearbyWeight: clampWeight((typeof window !== 'undefined' && window.supportNearbyWeight !== undefined) ? window.supportNearbyWeight : 0.10, 0.10),
@@ -2887,7 +2891,8 @@ class Character {
         // --- Needs decay (bak_game.js準拠) ---
         const oldSafety = this.needs.safety;
         this.needs.hunger -= deltaTime * 0.7 * this.personality.diligence; // 減少速度を半分に
-        this.needs.social -= deltaTime * 1.5; // 社交ニーズの減少を速めて頻繁に交流するように
+        const socialNeedDecayRate = (typeof window !== 'undefined' && window.socialNeedDecayRate !== undefined) ? Number(window.socialNeedDecayRate) : 1.5;
+        this.needs.social -= deltaTime * socialNeedDecayRate;
         if (this.state === 'moving' || this.state === 'working') {
             this.needs.energy -= deltaTime * 2;
         }
@@ -2906,7 +2911,7 @@ class Character {
         if (this.relationships && this.relationships.size > 0) {
             const _supportChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
             const { ally, bonded } = this.getRelationshipThresholds();
-            const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
+            const { nearbyRadius, groupBonus, allyPresenceBonus, comfortRecoveryRate, groupComfortScale, nightSafetyAllyBonus, nightSafetyBondedBonus } = this.getSupportModelParams();
             let hasNearbyTrustedTie = false;
             for (const [otherId, aff] of this.relationships.entries()) {
                 if (aff < ally) continue;
@@ -2917,16 +2922,16 @@ class Character {
                     hasNearbyTrustedTie = true;
                     this._socialAnchorId = other.id;
                     if (isNight) {
-                        const bonus = aff >= bonded ? 3 : 1.5;
+                        const bonus = aff >= bonded ? nightSafetyBondedBonus : nightSafetyAllyBonus;
                         this.needs.safety = Math.min(100, this.needs.safety + deltaTime * bonus);
                     }
                     break;
                 }
             }
             if (hasNearbyTrustedTie || this.groupId) {
-                const passiveSupport = (hasNearbyTrustedTie ? allyPresenceBonus : 0) + (this.groupId ? (groupBonus * 0.5) : 0);
+                const passiveSupport = (hasNearbyTrustedTie ? allyPresenceBonus : 0) + (this.groupId ? (groupBonus * groupComfortScale) : 0);
                 if (passiveSupport > 0) {
-                    this.needs.social = Math.min(100, this.needs.social + (deltaTime * 3 * passiveSupport));
+                    this.needs.social = Math.min(100, this.needs.social + (deltaTime * comfortRecoveryRate * passiveSupport));
                 }
             }
         }

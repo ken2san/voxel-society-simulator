@@ -205,6 +205,11 @@ function renderCharacterDetail() {
         affinityIncreaseRate:               10,
         affinityDecayRate:                  0.01,
         socialNeedRecovery:                 1.0,
+        socialNeedDecayRate:                1.5,
+        supportComfortRecoveryRate:         3.0,
+        supportGroupComfortScale:           0.5,
+        supportNightSafetyAllyBonus:        1.5,
+        supportNightSafetyBondedBonus:      3.0,
         bondPersistence:                    1.0,
         acquaintanceAffinityThreshold:      30,
         allyAffinityThreshold:              60,
@@ -746,8 +751,25 @@ function renderCharacterDetail() {
     appendCompactSliderInput(supportModelRow, 'Radius', 'nearbySupportRadius', { min: 1, max: 10, step: 1, width: '54px', sliderWidth: '72px' });
     appendCompactSliderInput(supportModelRow, 'Group+', 'supportGroupBonus', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(supportModelRow, 'Ally+', 'supportAllyPresenceBonus', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportModelRow, 'Comfort', 'supportComfortRecoveryRate', { min: 0, max: 8, step: 0.1, width: '64px', sliderWidth: '72px' });
     supportModelRow.dataset.label = 'Support Inputs';
     tabPanels[1].appendChild(supportModelRow);
+
+    const supportDynamicsRow = document.createElement('div');
+    supportDynamicsRow.style.display = 'flex';
+    supportDynamicsRow.style.alignItems = 'center';
+    supportDynamicsRow.style.flexWrap = 'wrap';
+    supportDynamicsRow.style.gap = '8px';
+    const supportDynamicsLabel = document.createElement('span');
+    supportDynamicsLabel.textContent = 'Support Dynamics:';
+    supportDynamicsLabel.style.width = '140px';
+    supportDynamicsRow.appendChild(supportDynamicsLabel);
+    appendCompactSliderInput(supportDynamicsRow, 'Decay', 'socialNeedDecayRate', { min: 0, max: 4, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportDynamicsRow, 'Group×', 'supportGroupComfortScale', { min: 0, max: 2, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportDynamicsRow, 'NightA', 'supportNightSafetyAllyBonus', { min: 0, max: 6, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportDynamicsRow, 'NightB', 'supportNightSafetyBondedBonus', { min: 0, max: 8, step: 0.1, width: '64px', sliderWidth: '72px' });
+    supportDynamicsRow.dataset.label = 'Support Dynamics';
+    tabPanels[1].appendChild(supportDynamicsRow);
 
     const supportWeightsRow = document.createElement('div');
     supportWeightsRow.style.display = 'flex';
