@@ -1932,7 +1932,7 @@ function ensureMetricDialog() {
     dlg.id = 'population-metric-dialog';
     dlg.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,0.45);z-index:40;padding:20px;';
     dlg.innerHTML =
-        `<div id="population-metric-panel" style="width:min(560px,92vw);max-height:80vh;overflow:auto;background:#fff;border:1px solid #dbeafe;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,0.25);padding:14px;">` +
+        `<div id="population-metric-panel" style="width:min(880px,94vw);max-height:84vh;overflow:auto;background:#fff;border:1px solid #dbeafe;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,0.25);padding:14px;">` +
             `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">` +
                 `<div id="population-metric-title" style="font-weight:800;color:#1e3a8a;font-size:1.02em;">Metric trend</div>` +
                 `<span style="flex:1;"></span>` +
@@ -1954,9 +1954,37 @@ function ensureMetricDialog() {
     return dlg;
 }
 
-function openPopulationMetricDialog(metricKey, metricLabel, color = '#2563eb') {
+function openPopulationMetricDialog(metricOrGroup, metricLabel, color = '#2563eb') {
     const dlg = ensureMetricDialog();
     const history = Array.isArray(window.__populationMetricHistory) ? window.__populationMetricHistory : [];
+
+    if (metricOrGroup && Array.isArray(metricOrGroup.series)) {
+        dlg.querySelector('#population-metric-title').textContent = `${metricOrGroup.title} trends`;
+        dlg.querySelector('#population-metric-meta').innerHTML = [
+            ['Window', `${history.length}s`],
+            ['Series', metricOrGroup.series.length],
+            ['Updated', history.length ? 'live' : 'waiting']
+        ].map(([k, v]) => `<div style="background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:6px 10px;"><div style="font-size:0.75em;color:#64748b;">${k}</div><div style="font-weight:800;color:#0f172a;">${v}</div></div>`).join('');
+        dlg.querySelector('#population-metric-chart').innerHTML =
+            `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">` +
+            metricOrGroup.series.map(s => {
+                const values = history.map(h => Number(h[s.key] || 0));
+                const latest = values.length ? values[values.length - 1] : 0;
+                const delta = values.length >= 2 ? values[values.length - 1] - values[0] : 0;
+                return `<div style="border:1px solid #dbeafe;border-radius:12px;padding:8px;background:#ffffff;">` +
+                    `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:6px;">` +
+                        `<span style="font-weight:700;color:#334155;">${s.label}</span>` +
+                        `<span style="font-size:0.82em;color:${s.color};font-weight:700;">${latest.toFixed(1)} ${delta > 0 ? '▲' : delta < 0 ? '▼' : '•'}</span>` +
+                    `</div>` +
+                    createTrendChartSVG(values, s.color, 260, 120) +
+                `</div>`;
+            }).join('') +
+            `</div>`;
+        dlg.style.display = 'flex';
+        return;
+    }
+
+    const metricKey = metricOrGroup;
     const values = history.map(h => Number(h[metricKey] || 0));
     const latest = values.length ? values[values.length - 1] : 0;
     const min = values.length ? Math.min(...values) : 0;
@@ -1989,80 +2017,124 @@ function getSocietyPhase(pop, netRate, starving, conflictPairs, initialPop, elap
     return { phase: 'Stable', icon: '🏘️', color: '#1e40af', bg: '#f0f9ff' };
 }
 
-function createPopulationDetailCard(title, icon, rows) {
+function createPopulationDetailCard(title, icon, rows, groupKey = null) {
+    const trigger = groupKey
+        ? `<button type="button" class="population-group-trigger" data-group-key="${groupKey}" style="margin-left:auto;border:none;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:3px 8px;cursor:pointer;font-size:0.78em;font-weight:700;">Trends ↗</button>`
+        : '';
     return (
         `<section class="population-detail-card">` +
-            `<div class="population-detail-card-header">` +
+            `<div class="population-detail-card-header" style="display:flex;align-items:center;gap:6px;">` +
                 `<span class="population-detail-card-icon">${icon}</span>` +
                 `<span class="population-detail-card-title">${title}</span>` +
+                trigger +
             `</div>` +
             `<div class="population-detail-card-body">` +
                 rows.map(row => row.html || (
-                    row.metricKey
-                        ? `<button type="button" class="population-detail-row population-metric-trigger" data-metric-key="${row.metricKey}" data-metric-label="${row.label}" data-metric-color="${row.color || '#2563eb'}" style="width:100%;border:none;background:transparent;cursor:pointer;text-align:left;border-radius:8px;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;">` +
-                            `<span class="population-detail-label">${row.label}</span>` +
-                            `<span style="display:flex;align-items:center;gap:6px;"><span class="population-detail-value">${row.value}</span><span style="color:#94a3b8;font-size:0.85em;">↗</span></span>` +
-                        `</button>`
-                        : `<div class="population-detail-row">` +
-                            `<span class="population-detail-label">${row.label}</span>` +
-                            `<span class="population-detail-value">${row.value}</span>` +
-                        `</div>`
+                    `<div class="population-detail-row">` +
+                        `<span class="population-detail-label">${row.label}</span>` +
+                        `<span class="population-detail-value">${row.value}</span>` +
+                    `</div>`
                 )).join('') +
             `</div>` +
         `</section>`
     );
 }
 
-function createPopulationNeedRow(label, value, color, metricKey = null) {
+function createPopulationNeedRow(label, value, color) {
     const numericValue = Math.max(0, Math.min(100, Number(value) || 0));
     const body =
         `<div class="population-need-top">` +
             `<span class="population-detail-label">${label}</span>` +
-            `<span style="display:flex;align-items:center;gap:6px;"><span class="population-detail-value">${Math.round(numericValue)}</span>${metricKey ? `<span style="color:#94a3b8;font-size:0.85em;">↗</span>` : ''}</span>` +
+            `<span style="display:flex;align-items:center;gap:6px;"><span class="population-detail-value">${Math.round(numericValue)}</span></span>` +
         `</div>` +
         `<div class="population-need-bar-track">` +
             `<div class="population-need-bar-fill" style="width:${numericValue}%;background:${color};"></div>` +
         `</div>`;
     return {
-        html: metricKey
-            ? `<button type="button" class="population-need-row population-metric-trigger" data-metric-key="${metricKey}" data-metric-label="${label}" data-metric-color="#6366f1" style="width:100%;border:none;background:transparent;cursor:pointer;text-align:left;border-radius:8px;padding:0;">${body}</button>`
-            : `<div class="population-need-row">${body}</div>`
+        html: `<div class="population-need-row">${body}</div>`
     };
 }
 
 function createPopulationDetailsHTML(metrics) {
+    window.__populationMetricGroups = {
+        population: {
+            title: 'Population',
+            series: [
+                { key: 'totalBorn', label: 'Total born', color: '#2563eb' },
+                { key: 'dead', label: 'Dead', color: '#dc2626' },
+                { key: 'adults', label: 'Adults', color: '#0891b2' },
+                { key: 'children', label: 'Children', color: '#7c3aed' }
+            ]
+        },
+        lifecycle: {
+            title: 'Lifecycle',
+            series: [
+                { key: 'avgAge', label: 'Avg age', color: '#0f766e' },
+                { key: 'maxAge', label: 'Max age', color: '#334155' },
+                { key: 'oldAgeDeaths', label: 'Old age', color: '#475569' },
+                { key: 'starvationDeaths', label: 'Starved', color: '#b45309' }
+            ]
+        },
+        generation: {
+            title: 'Generation',
+            series: [
+                { key: 'maxGen', label: 'Max gen', color: '#16a34a' },
+                { key: 'avgGen', label: 'Avg gen', color: '#22c55e' }
+            ]
+        },
+        traits: {
+            title: 'Traits',
+            series: [
+                { key: 'avgBrav', label: 'Bravery', color: '#f59e0b' },
+                { key: 'avgDili', label: 'Diligence', color: '#f97316' },
+                { key: 'avgSoci', label: 'Sociality', color: '#a855f7' },
+                { key: 'avgCuri', label: 'Curiosity', color: '#3b82f6' },
+                { key: 'avgReso', label: 'Resourcefulness', color: '#14b8a6' },
+                { key: 'avgResi', label: 'Resilience', color: '#22c55e' }
+            ]
+        },
+        needs: {
+            title: 'Needs',
+            series: [
+                { key: 'avgHun', label: 'Hunger', color: '#f59e0b' },
+                { key: 'avgEng', label: 'Energy', color: '#3b82f6' },
+                { key: 'avgSaf', label: 'Safety', color: '#22c55e' },
+                { key: 'avgSoc', label: 'Social', color: '#a855f7' }
+            ]
+        }
+    };
     return (
         `<div class="population-detail-grid">` +
             createPopulationDetailCard('Population', '👥', [
-                { label: 'Total born', value: metrics.totalBorn, metricKey: 'totalBorn', color: '#2563eb' },
-                { label: 'Dead', value: metrics.dead, metricKey: 'dead', color: '#dc2626' },
-                { label: 'Adults', value: metrics.adults, metricKey: 'adults', color: '#0891b2' },
-                { label: 'Children', value: metrics.children, metricKey: 'children', color: '#7c3aed' }
-            ]) +
+                { label: 'Total born', value: metrics.totalBorn },
+                { label: 'Dead', value: metrics.dead },
+                { label: 'Adults', value: metrics.adults },
+                { label: 'Children', value: metrics.children }
+            ], 'population') +
             createPopulationDetailCard('Lifecycle', '⏳', [
-                { label: 'Avg age', value: `${metrics.avgAge}s`, metricKey: 'avgAge', color: '#0f766e' },
-                { label: 'Max age', value: `${metrics.maxAge}s`, metricKey: 'maxAge', color: '#334155' },
-                { label: 'Old age', value: metrics.oldAgeDeaths, metricKey: 'oldAgeDeaths', color: '#475569' },
-                { label: 'Starved', value: metrics.starvationDeaths, metricKey: 'starvationDeaths', color: '#b45309' }
-            ]) +
+                { label: 'Avg age', value: `${metrics.avgAge}s` },
+                { label: 'Max age', value: `${metrics.maxAge}s` },
+                { label: 'Old age', value: metrics.oldAgeDeaths },
+                { label: 'Starved', value: metrics.starvationDeaths }
+            ], 'lifecycle') +
             createPopulationDetailCard('Generation', '🌱', [
-                { label: 'Max gen', value: metrics.maxGen, metricKey: 'maxGen', color: '#16a34a' },
-                { label: 'Avg gen', value: metrics.avgGen, metricKey: 'avgGen', color: '#22c55e' }
-            ]) +
+                { label: 'Max gen', value: metrics.maxGen },
+                { label: 'Avg gen', value: metrics.avgGen }
+            ], 'generation') +
             createPopulationDetailCard('Traits', '🧠', [
-                { label: 'Bravery',         value: metrics.avgBrav, metricKey: 'avgBrav', color: '#f59e0b' },
-                { label: 'Diligence',       value: metrics.avgDili, metricKey: 'avgDili', color: '#f97316' },
-                { label: 'Sociality',       value: metrics.avgSoci, metricKey: 'avgSoci', color: '#a855f7' },
-                { label: 'Curiosity',       value: metrics.avgCuri, metricKey: 'avgCuri', color: '#3b82f6' },
-                { label: 'Resourcefulness', value: metrics.avgReso, metricKey: 'avgReso', color: '#14b8a6' },
-                { label: 'Resilience',      value: metrics.avgResi, metricKey: 'avgResi', color: '#22c55e' }
-            ]) +
+                { label: 'Bravery',         value: metrics.avgBrav },
+                { label: 'Diligence',       value: metrics.avgDili },
+                { label: 'Sociality',       value: metrics.avgSoci },
+                { label: 'Curiosity',       value: metrics.avgCuri },
+                { label: 'Resourcefulness', value: metrics.avgReso },
+                { label: 'Resilience',      value: metrics.avgResi }
+            ], 'traits') +
             createPopulationDetailCard('Needs', '⚡', [
-                createPopulationNeedRow('Hunger', metrics.avgHun, 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)', 'avgHun'),
-                createPopulationNeedRow('Energy', metrics.avgEng, 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)', 'avgEng'),
-                createPopulationNeedRow('Safety', metrics.avgSaf, 'linear-gradient(90deg, #22c55e 0%, #10b981 100%)', 'avgSaf'),
-                createPopulationNeedRow('Social', metrics.avgSoc, 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)', 'avgSoc')
-            ]) +
+                createPopulationNeedRow('Hunger', metrics.avgHun, 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'),
+                createPopulationNeedRow('Energy', metrics.avgEng, 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)'),
+                createPopulationNeedRow('Safety', metrics.avgSaf, 'linear-gradient(90deg, #22c55e 0%, #10b981 100%)'),
+                createPopulationNeedRow('Social', metrics.avgSoc, 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)')
+            ], 'needs') +
         `</div>`
     );
 }
@@ -2553,11 +2625,12 @@ function renderCharacterList() {
                 window.sidebarParams.chronicleExpanded = chronicleDetails.open;
             });
         }
-        statsDiv.querySelectorAll('.population-metric-trigger').forEach(btn => {
+        statsDiv.querySelectorAll('.population-group-trigger').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                openPopulationMetricDialog(btn.dataset.metricKey, btn.dataset.metricLabel, btn.dataset.metricColor || '#2563eb');
+                const group = window.__populationMetricGroups?.[btn.dataset.groupKey];
+                if (group) openPopulationMetricDialog(group);
             });
         });
         leftSidebar.appendChild(statsDiv);
