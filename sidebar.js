@@ -2836,8 +2836,9 @@ function createPopulationDetailsHTML(metrics) {
             series: [
                 { key: 'avgAge', label: 'Avg age', color: '#0f766e' },
                 { key: 'maxAge', label: 'Max age', color: '#334155' },
+                { key: 'starvingNow', label: 'Starving now', color: '#f97316' },
                 { key: 'oldAgeDeaths', label: 'Old age', color: '#475569' },
-                { key: 'starvationDeaths', label: 'Starved', color: '#b45309' }
+                { key: 'starvationDeaths', label: 'Starvation deaths', color: '#b45309' }
             ]
         },
         generation: {
@@ -2890,8 +2891,9 @@ function createPopulationDetailsHTML(metrics) {
             createPopulationDetailCard('Lifecycle', '⏳', [
                 { label: 'Avg age', value: `${metrics.avgAge}s` },
                 { label: 'Max age', value: `${metrics.maxAge}s` },
+                { label: 'Starving now', value: metrics.starvingNow },
                 { label: 'Old age', value: metrics.oldAgeDeaths },
-                { label: 'Starved', value: metrics.starvationDeaths }
+                { label: 'Starvation deaths', value: metrics.starvationDeaths }
             ], 'lifecycle') +
             createPopulationDetailCard('Generation', '🌱', [
                 { label: 'Max gen', value: metrics.maxGen },
@@ -3190,6 +3192,7 @@ function renderCharacterList() {
         const starvationDeaths = Number(deathsByCause.starvation || 0) + Number(deathsByCause.starved || 0);
         const oldAgeDeaths = Number(deathsByCause.old_age || 0) + Number(deathsByCause.oldage || 0) + Number(deathsByCause.oldAge || 0) + Number(deathsByCause['old age'] || 0);
         const unknownDeaths = Number(deathsByCause.unknown || 0);
+        const starvingNow = alive.filter(c => (c._starvationTimer || 0) > 0).length;
         const avgBrav  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.bravery         || 0), 0) / alive.length).toFixed(2) : '—';
         const avgDili  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.diligence        || 0), 0) / alive.length).toFixed(2) : '—';
         const avgSoci  = alive.length ? (alive.reduce((s, c) => s + (c.personality?.sociality        || 0), 0) / alive.length).toFixed(2) : '—';
@@ -3222,6 +3225,7 @@ function renderCharacterList() {
             elderCount,
             avgAge: Number(avgAge) || 0,
             maxAge: Number(maxAge) || 0,
+            starvingNow,
             starvationDeaths,
             oldAgeDeaths,
             maxGen,
@@ -3266,7 +3270,7 @@ function renderCharacterList() {
         const sparkEnergy = createSparklineSVG(energySeries, '#f59e0b');
 
         // --- Society Phase ---
-        const _starving = alive.filter(c => (c._starvationTimer || 0) > 0).length;
+        const _starving = starvingNow;
         const _conflictPairs = Math.round(alive.filter(c => c._nearEnemy).length / 2);
         const _initialPop = window.__simPopulationStats?.initialPopulation || alive.length;
         const _elapsedSec = window.__simPopulationStats ? (Date.now() - window.__simPopulationStats.startedAt) / 1000 : 0;
@@ -3362,6 +3366,7 @@ function renderCharacterList() {
             elderCount,
             avgAge,
             maxAge,
+            starvingNow,
             starvationDeaths,
             oldAgeDeaths,
             unknownDeaths,
