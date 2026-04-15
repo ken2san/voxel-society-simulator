@@ -2329,8 +2329,11 @@ class Character {
         const lifeRatio = this.getLifeRatio();
         const minAgeRatio = (typeof window !== 'undefined' && window.minReproductionAgeRatio !== undefined)
             ? Number(window.minReproductionAgeRatio) : 0.2;
+        const maturityAge = (typeof window !== 'undefined' && window.childMaturitySeconds !== undefined)
+            ? Number(window.childMaturitySeconds) : (this.maturityAge || 60);
         const childMax = Math.max(0.12, Math.min(0.22, minAgeRatio));
-        if (this.isChild || lifeRatio < childMax) return 'child';
+        const youngByAge = Number(this.age || 0) < Math.max(1, maturityAge);
+        if (youngByAge || lifeRatio < childMax) return 'child';
         if (lifeRatio < 0.38) return 'young';
         if (lifeRatio < 0.72) return 'adult';
         return 'elder';

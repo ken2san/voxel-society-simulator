@@ -6,7 +6,38 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // --- Global variables, Three.js initialization, UI events, loops, etc. ---
 
+function applyInitialAgeSpread(targetChars = characters) {
+    const ratioRaw = (typeof window !== 'undefined' && window.initialAgeMaxRatio !== undefined)
+        ? Number(window.initialAgeMaxRatio) : 0.5;
+    const ratio = Math.max(0, Math.min(1, Number.isFinite(ratioRaw) ? ratioRaw : 0.5));
+    const maturityAge = (typeof window !== 'undefined' && window.childMaturitySeconds !== undefined)
+        ? Number(window.childMaturitySeconds) : 60;
 
+    targetChars.forEach(c => {
+        if (!c) return;
+        const lifespan = (typeof c.getEffectiveLifespan === 'function') ? c.getEffectiveLifespan() : (window.characterLifespan || 240);
+        c.age = Math.random() * lifespan * ratio;
+        c.maturityAge = maturityAge;
+        // Important: age spread must also reconcile the child/adult flag immediately.
+        c.isChild = c.age < maturityAge;
+
+        // Keep visuals and movement in sync with the demographic state.
+        if (typeof c.movementSpeed === 'number' && typeof c._preChildMovementSpeed !== 'number') {
+            c._preChildMovementSpeed = c.movementSpeed;
+        }
+        if (c.isChild) {
+            if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed * 0.88;
+            if (c.mesh?.scale) c.mesh.scale.set(0.72, 0.72, 0.72);
+            if (c.body?.scale) c.body.scale.set(0.72, 0.72, 0.72);
+            if (c.head?.scale) c.head.scale.set(0.72, 0.72, 0.72);
+        } else {
+            if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed;
+            if (c.mesh?.scale) c.mesh.scale.set(1, 1, 1);
+            if (c.body?.scale) c.body.scale.set(1, 1, 1);
+            if (c.head?.scale) c.head.scale.set(1, 1, 1);
+        }
+    });
+}
 
 async function init() {
     try {
@@ -54,11 +85,7 @@ async function init() {
         }
         // Randomize initial ages to reduce synchronized cohort die-off.
         // Spread is controlled by initialAgeMaxRatio (0 = all age 0, 1 = up to full lifespan).
-        {
-            const lifespan = window.characterLifespan || 240;
-            const ratio = (window.initialAgeMaxRatio !== undefined) ? window.initialAgeMaxRatio : 0.5;
-            characters.forEach(c => { c.age = Math.random() * lifespan * ratio; });
-        }
+        applyInitialAgeSpread(characters);
         // Initialize relationships after all characters are created
 
         Character.initializeAllRelationships(characters);
@@ -107,6 +134,9 @@ async function init() {
         if (typeof window.loadSimulatorSettingsWorkspace === 'function') {
             await window.loadSimulatorSettingsWorkspace({ persist: false, silent: true });
         }
+        // Re-apply after settings load so the active slider/workspace value actually takes effect.
+        applyInitialAgeSpread(characters);
+        if (window.renderCharacterList) window.renderCharacterList();
 
         setupTelemetryManagerPanel();
 
@@ -431,11 +461,8 @@ async function regenerateWorld() {
         const pos = findValidSpawn();
         if (pos) await spawnCharacter(pos);
     }
-    // Randomize initial ages to reduce synchronized die-off.
-    {
-        const lifespan = window.characterLifespan || 240;
-        characters.forEach(c => { c.age = Math.random() * lifespan * 0.65; });
-    }
+    // Randomize initial ages to reduce synchronized die-off using the active slider value.
+    applyInitialAgeSpread(characters);
 
     // Update sidebar if available
     if (window.renderCharacterList) window.renderCharacterList();
