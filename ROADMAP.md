@@ -146,68 +146,111 @@ If an older handoff says “implement next” but conflicts with the sections ab
 
 ---
 
-## Next Feature Brief — Social Pressure and Family Formation Abstraction
+## Next Feature Brief — District-Scaled Observation Architecture
 
 ### Goal
 
-Add a compact, observation-first model for why dense / pressured societies delay bonding,
-childbirth, and stable family formation — while keeping the sim fast, legible, and tunable.
+Enable believable observation of larger communities by separating:
 
-This is **not** a full realism project. The target is:
+- the **internal society simulation** that may contain 100–200+ agents,
+- the **currently rendered voxel district** that the user is watching in detail.
 
-- user changes a few meaningful sliders
-- visible behavior in the canvas changes in a believable direction
-- telemetry captures the difference clearly
-- AI or humans can interpret *why* the outcome changed
+The immediate product problem is that a community of 10 is too small to show durable social circulation,
+but a fully rendered 100–200 agent voxel world is too expensive under the current architecture.
 
-### Design rule
+### Core decision
 
-Do **not** simulate full conversations, detailed jobs, or a national economy.
-Instead, use a small number of causal latent variables that push behavior in the right direction.
+Do **not** render or pathfind every agent at full fidelity all the time.
+Instead, split the society into square districts and render only the currently selected district in detail.
 
-### Core variables to model
+### User-facing model
 
-| Variable | Meaning | Main effect |
-| -------- | ------- | ----------- |
-| `housingPressure` | lack of stable living space / nesting margin | suppresses reproduction and home stability |
-| `timeStress` | travel + work + recovery burden | reduces social time and readiness for children |
-| `relationshipStability` | whether a pair can persist long enough to plan | affects pair bonding and reproduction willingness |
-| `supportAccess` | nearby ally / bonded support network strength | improves safety, recovery, and child viability |
-| `futureUncertainty` | instability / fragility felt by the character | delays risky long-term decisions |
-| `normBias` | local imitation / social contagion around family formation | shifts behavior without scripting outcomes |
+The world should support a square district selector:
 
-### First implementation shape
+- **1 district** = current single-view world (`1 x 1`)
+- **4 districts** = first scalable mode (`2 x 2`)
+- **16 districts** = higher-density observation mode (`4 x 4`)
 
-1. **Keep the abstraction small** — only the above variables, no detailed labor market.
-2. **Map them into existing AI weights** — do not replace the current rule/utility system.
-3. **Gate reproduction by readiness** rather than affinity alone.
-4. **Make the causes visible** in telemetry and sidebar metrics.
-5. **Prefer directional correctness over false precision.**
+The user can switch which district is being observed while the full society continues to evolve internally.
 
-### Observable requirements
+### Recommended implementation order
 
-The feature is only acceptable if it is readable from both the canvas and telemetry:
+1. **Preserve current behavior in 1-district mode**
+   - this is the baseline and fallback mode
+   - no behavior change should be required for old saves/tests
 
-- high pressure → slower family formation, more delay, more isolation
-- stronger support → better survival, more stable pairs, more births
-- dense / fragile societies should *look* more stressed, not only produce different numbers
-- outcomes must be explainable from telemetry without guessing
+2. **Implement 4-district mode first**
+   - this is the real target for the next thread
+   - one active district rendered in full detail
+   - the other 3 districts updated in lightweight aggregate form
 
-### Initial telemetry/UI additions for this feature
+3. **Add 16-district mode only after 4 is stable**
+   - same architecture, just finer square partitioning
+   - do not start here first
 
-- mean `housingPressure`
-- mean `supportAccess`
-- mean `relationshipStability`
-- count of reproduction attempts blocked by reason
-- isolation rate vs bonded-pair rate
-- trend card for “Social Pressure / Family Formation” in the observation panel
+### District simulation rules
+
+- Only the **active district** gets full mesh updates, pathfinding, and detailed per-agent motion.
+- Off-screen districts should use **low-fidelity updates**:
+  - births / deaths
+  - stage mix changes
+  - migration in / out
+  - food and pressure summaries
+  - pair / support stability summaries
+- Switching districts should not reset the world; it should reveal another live slice of the same society.
+
+### Minimum district state to track
+
+| District signal | Why it matters |
+| --------------- | -------------- |
+| population | basic viability / density |
+| births and deaths | local circulation |
+| stage mix | demographic waves |
+| food pressure | ecology constraint |
+| housing pressure | family-formation constraint |
+| support density | social resilience |
+| conflict level | instability / fragmentation |
+| migration flow | movement between districts |
+
+### UI / telemetry requirements
+
+- district selector with **1 / 4 / 16** square modes
+- ability to choose the observed district from a simple grid or heatmap
+- telemetry must include both:
+  - **global totals** for the whole society
+  - **per-district summaries** for comparison
+- observation sidebar should make it clear which district is currently being watched
+
+### Suggested file targets
+
+| Concern | Likely file |
+| ------- | ----------- |
+| district topology / active rendered district | `world.js` |
+| simulation mode, orchestration, telemetry meta | `main.js` |
+| district selector UI and observation panels | `sidebar.js` |
+| promotion / demotion between high- and low-fidelity agents | `character.js` or a new lightweight district manager |
+| export summaries | `scripts/export-telemetry.mjs` |
+
+### Success criteria
+
+- 1-district mode still behaves like the current sim
+- 4-district mode supports a noticeably larger society without frame collapse
+- the user can switch districts and keep observing a live society
+- telemetry explains both local and global demographic change
+- the architecture remains compatible with the later social-pressure feature
 
 ### Non-goals
 
-- No dialogue simulation
-- No explicit marriage/legal system
-- No full macroeconomics
-- No Phase 4 persistence/backend spillover
+- No attempt to render 100–200 agents simultaneously at full detail
+- No full-fidelity pathfinding in all districts at once
+- No Phase 4 persistence/backend work as part of this feature
+
+### Follow-on after scaling
+
+Once this architecture exists, the next behavior layer remains:
+**Social Pressure and Family Formation Abstraction**
+using compact latent variables such as `housingPressure`, `timeStress`, `supportAccess`, and `relationshipStability`.
+Those variables should plug naturally into the district summaries above rather than being implemented separately first.
 
 ---
 
@@ -262,55 +305,47 @@ small causal systems, readable behavior, and directionally correct outcomes.
 
 ### Next feature to implement
 
-**Social Pressure and Family Formation Abstraction**
+**District-Scaled Observation Architecture**
 
-Focus on a compact model for why family formation slows under urban-like pressure.
-Do not attempt high-fidelity human psychology. Use a few latent variables and make them observable.
+This is now the immediate next feature because larger community observation has become the main blocker.
+The social-pressure/family-formation work should continue **after** the scaling layer exists.
 
 ### Recommended first implementation order
 
-1. **Add compact readiness signals** in character / pair logic
-   - `housingPressure`
-   - `timeStress`
-   - `supportAccess`
-   - `relationshipStability`
-   - `futureUncertainty`
+1. **Introduce district modes without breaking the current single-world path**
+   - `1 x 1` stays as the current baseline
+   - `2 x 2` becomes the first real scalable mode
 
-2. **Use them in existing AI decisions**
-   - reduce reproduction willingness under pressure
-   - reduce social persistence when stress / uncertainty are high
-   - improve recovery and child viability when support is high
+2. **Separate rendered detail from internal society updates**
+   - active district = high fidelity
+   - non-active districts = aggregate updates only
 
-3. **Expose them as parameters** using the 3-step parameter rule
-   - workspace settings
-   - `PARAM_DEFAULTS`
-   - sidebar sliders
+3. **Add district selector UI**
+   - user-facing options: `1 / 4 / 16`
+   - square layout only for now
 
-4. **Instrument telemetry before tuning**
-   - blocked reproduction reasons
-   - support coverage
-   - pair stability trend
-   - isolation vs bonded-pair trend
+4. **Add per-district telemetry and global summaries**
+   - global population totals
+   - district population / pressure / migration comparisons
 
-5. **Tune only after observation**
-   - the correct outcome is not “more births”
-   - the correct outcome is “believable response to pressure”
+5. **Only then layer social-pressure behavior into the larger world**
+   - once scaling is stable, add readiness variables on top
 
 ### Suggested file targets
 
 | Concern | Likely file |
 | ------- | ----------- |
-| pair / household readiness helpers | `character.js` |
-| decision weighting and reproduction gating | `AI_rulebase.js` |
-| sliders / observation cards | `sidebar.js` |
-| telemetry export / meta summaries | `main.js`, `world.js`, `scripts/export-telemetry.mjs` |
+| district partitioning and active-view orchestration | `world.js`, `main.js` |
+| selector UI and observation summaries | `sidebar.js` |
+| agent fidelity switching / lightweight state | `character.js` or a new district manager |
+| telemetry export | `main.js`, `world.js`, `scripts/export-telemetry.mjs` |
 
 ### Success criteria for the next thread
 
-- zero or low support settings visibly increase isolation and delay family formation
-- lower pressure / higher support settings visibly stabilize population dynamics
-- telemetry can explain *which pressure* suppressed births or stability
-- behavior remains lightweight and readable in real time
+- district mode `1` remains backward-compatible
+- district mode `4` becomes usable for substantially larger populations
+- switching observed districts feels like observing another part of the same live society
+- the roadmap remains observation-first rather than turning into a pure optimization exercise
 
 ---
 
