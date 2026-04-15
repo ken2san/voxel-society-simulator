@@ -128,6 +128,7 @@ Active phase: **Phase 1 → Phase 2 (overlap)**
 - Deferred bonus already shipped: Generation Summary Banner in Chronicle/Timeline
 - Latest hotfix (commit `b4db325`): fixed food-target blacklist persistence that caused telemetry to show `EAT = 0%` despite fruit existing in the world; added Society Phase history trail so phase transitions are readable over time
 - Observation upgrade: lifespan-ratio life stages are now live — child / young / adult / elder affect behavior through soft weighting instead of rigid scripting, and the sidebar exposes stage-mix trends for population reading
+- Telemetry upgrade: demographic stage mix and dependency ratio are now exported so population dynamics can be compared across runs, not just watched live
 
 ---
 

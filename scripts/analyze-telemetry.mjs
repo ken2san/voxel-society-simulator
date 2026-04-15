@@ -138,6 +138,10 @@ if (meta.population) {
   console.log(`  - deaths.starvation: ${Number(p.deathsByCause?.starvation || 0)}`);
   console.log(`  - deaths.old_age: ${Number(p.deathsByCause?.old_age || 0)}`);
   console.log(`  - deaths.unknown: ${Number(p.deathsByCause?.unknown || 0)}`);
+  if (p.current?.stageCounts) {
+    const st = p.current.stageCounts;
+    console.log('  - stageMix.current:', `child=${st.child || 0} young=${st.young || 0} adult=${st.adult || 0} elder=${st.elder || 0}`);
+  }
 }
 
 const birthEvents = events.filter(e => e && e.kind === 'birth').length;
@@ -210,6 +214,33 @@ console.log(`avgLowSafetyRatio: ${pct(global.lowSafety / m)}`);
 console.log(`stallDetected: ${global.stall}, stallRecovered: ${global.recovered}`);
 
 console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high together, raise energy emergency threshold and reduce wander fallback pressure.');
+
+// --- Life-stage population dynamics ---
+{
+  const recStart = meta.startedAt ?? samples[0].t;
+  const BUCKET_SEC = 30;
+  const buckets = new Map();
+  for (const s of samples) {
+    const sec = Math.floor((s.t - recStart) / 1000 / BUCKET_SEC);
+    if (!buckets.has(sec)) buckets.set(sec, new Map());
+    const byId = buckets.get(sec);
+    byId.set(s.id, s.lifeStage ?? (s.isChild ? 'child' : 'adult'));
+  }
+
+  console.log('\n=== Life Stage Mix Over Time ===');
+  console.log('bucket_start_s  child  young  adult  elder  dependency');
+  for (const [idx, byId] of Array.from(buckets.entries()).sort((a, b) => a[0] - b[0])) {
+    const counts = { child: 0, young: 0, adult: 0, elder: 0 };
+    for (const st of byId.values()) {
+      if (counts[st] !== undefined) counts[st] += 1;
+    }
+    const working = counts.young + counts.adult;
+    const dependents = counts.child + counts.elder;
+    const depRatio = (dependents / Math.max(1, working)).toFixed(2);
+    console.log(`  t=${String(idx * BUCKET_SEC).padStart(5)}s  ${String(counts.child).padStart(5)}  ${String(counts.young).padStart(5)}  ${String(counts.adult).padStart(5)}  ${String(counts.elder).padStart(5)}  ${depRatio}`);
+  }
+  console.log('Hint: Rising dependency ratio means many children/elders are being supported by fewer working-age characters.');
+}
 
 // --- Age distribution over time (cohort wave detector) ---
 // Groups samples into 30-second simulation-time buckets.

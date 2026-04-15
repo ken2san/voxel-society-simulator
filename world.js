@@ -442,6 +442,11 @@ export function animate() {
             const _alive = _chars.filter(c => c && c.state !== 'dead');
             const _groups = new Set(_alive.map(c => c.groupId).filter(Boolean));
             const _isolated = _alive.filter(c => !c.groupId).length;
+            const _stageMix = { child: 0, young: 0, adult: 0, elder: 0 };
+            for (const c of _alive) {
+                const stage = c.getLifeStage ? c.getLifeStage() : (c.isChild ? 'child' : 'adult');
+                if (_stageMix[stage] !== undefined) _stageMix[stage] += 1;
+            }
             const _conflictPairs = (() => {
                 let cnt = 0;
                 for (const c of _alive) { if (c._nearEnemy) cnt++; }
@@ -467,6 +472,7 @@ export function animate() {
                 pop: _alive.length,
                 groups: _groups.size,
                 isolated: _isolated,
+                stageMix: _stageMix,
                 conflictPairs: _conflictPairs,
                 avgNeeds: _needsAvg
             });

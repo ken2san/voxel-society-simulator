@@ -11,11 +11,10 @@
  * Output structure:
  * {
  *   meta:             { params, duration, worldSize }
- *   worldTimeline:    [ { t_sec, fruitCount, pop, groups, isolated, conflictPairs, avgNeeds, season } ]
- *   characterProfiles:[ { id, gen, isChild, parentIds, born_t, died_t, cause, lifespan, peakLifeRatio } ]
- *   groupHistory:     { t_sec: [ { groupId, size, avgAffinity } ] }
+ *   worldTimeline:    [ { t_sec, fruitCount, pop, groups, isolated, stageMix, conflictPairs, avgNeeds, season } ]
+ *   characterProfiles:[ { id, gen, isChild, lifeStageFirst, lifeStageLast, parentIds, born_t, died_t, cause, lifespan, peakLifeRatio } ]
+ *   stageSummary:     [ { t_sec, child, young, adult, elder, dependencyRatio } ]
  *   socialSummary:    { t_sec: { avgRelationships, avgAffinity, isolationRate, conflictRate } }
- *   needsSummary:     [ { t_sec, avgHunger, avgEnergy, avgSafety, avgSocial } ]
  *   events:           [ { t_sec, kind, ...fields } ]
  * }
  */
@@ -63,6 +62,19 @@ const exportMeta = {
 // ── worldTimeline ─────────────────────────────────────────────────────────────
 // Use worldSamples if present; otherwise derive pop from per-char samples.
 
+const stageMixBySecond = new Map();
+for (const s of samples) {
+    if (s.state === 'dead') continue;
+    const sec = toSec(s.t);
+    if (!stageMixBySecond.has(sec)) stageMixBySecond.set(sec, { child: 0, young: 0, adult: 0, elder: 0, _ids: new Set() });
+    const bucket = stageMixBySecond.get(sec);
+    if (bucket._ids.has(s.id)) continue;
+    bucket._ids.add(s.id);
+    const st = s.lifeStage ?? (s.isChild ? 'child' : 'adult');
+    if (bucket[st] !== undefined) bucket[st] += 1;
+}
+for (const bucket of stageMixBySecond.values()) delete bucket._ids;
+
 let worldTimeline = [];
 
 if (worldSamples.length > 0) {
@@ -73,6 +85,7 @@ if (worldSamples.length > 0) {
         pop:          s.pop,
         groups:       s.groups,
         isolated:     s.isolated,
+        stageMix:     s.stageMix ?? stageMixBySecond.get(toSec(s.t)) ?? null,
         conflictPairs: s.conflictPairs,
         avgNeeds:     s.avgNeeds,
         season:       s.season
@@ -96,7 +109,15 @@ if (worldSamples.length > 0) {
                 energy: round2(avg(alive.map(s => s.needs?.energy ?? 0))),
                 safety: round2(avg(alive.map(s => s.needs?.safety ?? 0))),
                 social: round2(avg(alive.map(s => s.needs?.social ?? 0)))
-            }
+            },
+            stageMix: stageMixBySecond.get(sec) ?? (() => {
+                const mix = { child: 0, young: 0, adult: 0, elder: 0 };
+                for (const s of alive) {
+                    const st = s.lifeStage ?? (s.isChild ? 'child' : 'adult');
+                    if (mix[st] !== undefined) mix[st] += 1;
+                }
+                return mix;
+            })()
         });
     }
 }
@@ -153,6 +174,8 @@ for (const [id, entry] of charMap.entries()) {
         id,
         generation:    earliest.generation ?? 0,
         isChild:       !!earliest.isChild,
+        lifeStageFirst: earliest.lifeStage ?? (earliest.isChild ? 'child' : 'adult'),
+        lifeStageLast:  latest.lifeStage ?? (latest.isChild ? 'child' : 'adult'),
         parentIds:     birthEvt?.parents ?? null,
         born_t_sec:    birthEvt ? toSec(birthEvt.t) : toSec(earliest.t),
         died_t_sec:    deathEvt ? toSec(deathEvt.t) : (isDead ? toSec(latest.t) : null),
@@ -176,6 +199,22 @@ for (const [id, entry] of charMap.entries()) {
 
 // sort by generation then born_t
 characterProfiles.sort((a, b) => a.generation - b.generation || (a.born_t_sec ?? 0) - (b.born_t_sec ?? 0));
+
+// ── stageSummary ──────────────────────────────────────────────────────────────
+
+const stageSummary = worldTimeline.map(w => {
+    const mix = w.stageMix ?? { child: 0, young: 0, adult: 0, elder: 0 };
+    const working = (mix.young || 0) + (mix.adult || 0);
+    const dependents = (mix.child || 0) + (mix.elder || 0);
+    return {
+        t_sec: w.t_sec,
+        child: mix.child || 0,
+        young: mix.young || 0,
+        adult: mix.adult || 0,
+        elder: mix.elder || 0,
+        dependencyRatio: round2(dependents / Math.max(1, working))
+    };
+});
 
 // ── socialSummary ─────────────────────────────────────────────────────────────
 
@@ -211,6 +250,7 @@ const output = {
     meta:               exportMeta,
     worldTimeline,
     characterProfiles,
+    stageSummary,
     socialSummary,
     events:             exportEvents
 };

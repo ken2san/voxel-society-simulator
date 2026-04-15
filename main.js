@@ -776,12 +776,19 @@ window.__simTelemetry = {
         const popBase = window.getPopulationStats ? window.getPopulationStats() : null;
         const chars = Array.isArray(window.characters) ? window.characters : [];
         const alive = chars.filter(c => c && c.state !== 'dead');
-        const children = alive.filter(c => c && c.isChild).length;
+        const getStage = (c) => c?.getLifeStage ? c.getLifeStage() : (c?.isChild ? 'child' : 'adult');
+        const stageCounts = { child: 0, young: 0, adult: 0, elder: 0 };
+        for (const c of alive) {
+            const stage = getStage(c);
+            if (stageCounts[stage] !== undefined) stageCounts[stage] += 1;
+        }
+        const children = stageCounts.child;
         const currentPopulation = {
             totalTracked: chars.length,
             alive: alive.length,
             children,
-            adults: alive.length - children,
+            adults: stageCounts.young + stageCounts.adult + stageCounts.elder,
+            stageCounts,
             maxGeneration: chars.reduce((m, c) => Math.max(m, Number(c?.generation || 0)), 0)
         };
         const population = popBase
