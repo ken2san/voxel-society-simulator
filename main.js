@@ -69,6 +69,41 @@ async function init() {
         controls.enableDamping = true;
         controls.target.set(gridSize / 2, 2, gridSize / 2);
 
+        window.focusCharacterInView = function focusCharacterInView(charOrId, opts = {}) {
+            const targetChar = typeof charOrId === 'object'
+                ? charOrId
+                : characters.find(c => String(c?.id) === String(charOrId));
+            if (!targetChar?.mesh || !controls || !camera) return false;
+
+            const focusPos = targetChar.mesh.position.clone();
+            const desiredTarget = new THREE.Vector3(focusPos.x, Math.max(1.5, focusPos.y + 1.2), focusPos.z);
+            const offset = camera.position.clone().sub(controls.target);
+            const clampedOffset = offset.length() > 0.001
+                ? offset.clone().setLength(Math.min(Math.max(offset.length(), 8), 18))
+                : new THREE.Vector3(8, 8, 8);
+
+            const desiredCameraPos = desiredTarget.clone().add(clampedOffset);
+            const startTarget = controls.target.clone();
+            const startPos = camera.position.clone();
+            const duration = Math.max(120, Math.min(320, Number(opts.durationMs) || 220));
+            const startedAt = performance.now();
+
+            function step(now) {
+                const t = Math.min(1, (now - startedAt) / duration);
+                const eased = 1 - Math.pow(1 - t, 3);
+                controls.target.lerpVectors(startTarget, desiredTarget, eased);
+                camera.position.lerpVectors(startPos, desiredCameraPos, eased);
+                controls.update();
+                if (t < 1) {
+                    window.__focusCharacterAnim = requestAnimationFrame(step);
+                }
+            }
+
+            if (window.__focusCharacterAnim) cancelAnimationFrame(window.__focusCharacterAnim);
+            window.__focusCharacterAnim = requestAnimationFrame(step);
+            return true;
+        };
+
         const ambientLight = new THREE.AmbientLight(0xcccccc);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);

@@ -2646,6 +2646,9 @@ window.selectCharacterById = function selectCharacterById(id, options = {}) {
     openedCharId = String(id);
     if (typeof window.renderCharacterList === 'function') window.renderCharacterList();
     if (typeof updateSelectedCharacterMarker === 'function') updateSelectedCharacterMarker();
+    if (!options.skipCameraFocus && typeof window.focusCharacterInView === 'function') {
+        window.focusCharacterInView(id);
+    }
 
     if (!options.silentScroll) {
         requestAnimationFrame(() => {
