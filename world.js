@@ -84,6 +84,8 @@ export function getLeafSpawnRate() { return leafSpawnRate; }
 export const DISTRICT_MODE_OPTIONS = Object.freeze([1, 4, 16]);
 let districtMode = 1;
 let activeDistrictIndex = 0;
+let districtSummaryCache = [];
+let districtSummaryCacheUpdatedAt = 0;
 
 function clampDistrictMode(mode) {
     const numeric = Number(mode);
@@ -308,7 +310,7 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
 
 export function getDistrictSocialContextForPosition(pos, sourceChars = characters) {
     const index = getDistrictIndexForPosition(pos, districtMode);
-    const summary = getDistrictSummaries(sourceChars)[index];
+    const summary = refreshDistrictSummaryCache(sourceChars)[index];
     return summary || {
         index,
         foodPressure: 0,
@@ -318,6 +320,19 @@ export function getDistrictSocialContextForPosition(pos, sourceChars = character
         relationshipStability: 0,
         socialPressure: 0
     };
+}
+
+export function refreshDistrictSummaryCache(sourceChars = characters, { force = false } = {}) {
+    const now = Date.now();
+    if (!force && districtSummaryCache.length > 0 && (now - districtSummaryCacheUpdatedAt) < 250) {
+        return districtSummaryCache;
+    }
+    districtSummaryCache = getDistrictSummaries(sourceChars);
+    districtSummaryCacheUpdatedAt = now;
+    if (typeof window !== 'undefined') {
+        window.__districtSummaryCache = districtSummaryCache;
+    }
+    return districtSummaryCache;
 }
 
 export function getDistrictState() {
@@ -342,7 +357,7 @@ function emitDistrictChange() {
     window.districtMode = districtMode;
     window.activeDistrictIndex = activeDistrictIndex;
     window.getDistrictRuntime = getDistrictRuntimeForPosition;
-    window.getDistrictObservationSummary = () => getDistrictSummaries();
+    window.getDistrictObservationSummary = () => refreshDistrictSummaryCache();
     window.getDistrictSocialContextForPosition = (pos) => getDistrictSocialContextForPosition(pos);
     window.getDistrictState = getDistrictState;
     try {
@@ -366,6 +381,8 @@ export function setDistrictMode(mode = 1) {
     districtMode = clampDistrictMode(mode);
     activeDistrictIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(activeDistrictIndex) || 0));
     if (districtMode === 1) activeDistrictIndex = 0;
+    districtSummaryCache = [];
+    districtSummaryCacheUpdatedAt = 0;
     applyDistrictVisualization();
     focusCameraOnActiveDistrict();
     emitDistrictChange();
@@ -375,6 +392,7 @@ export function setDistrictMode(mode = 1) {
 export function setActiveDistrict(index = 0) {
     activeDistrictIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(index) || 0));
     if (districtMode === 1) activeDistrictIndex = 0;
+    districtSummaryCacheUpdatedAt = 0;
     applyDistrictVisualization();
     focusCameraOnActiveDistrict();
     emitDistrictChange();
@@ -672,6 +690,7 @@ export function animate() {
     worldTime += deltaTime;
     updateWorldLighting();
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
+    refreshDistrictSummaryCache(characters);
     if (controls) controls.update();
     for (const char of characters) char.update(deltaTime, isNight, camera);
 
