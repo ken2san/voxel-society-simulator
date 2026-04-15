@@ -2125,25 +2125,108 @@ function clearSelectedRelationshipMarkers() {
 }
 
 function getRelationshipBadgeMeta(relationshipClass) {
-    if (relationshipClass === 'bonded') return { icon: '❤', bg: 'rgba(190,24,93,0.88)', border: '#f9a8d4' };
-    if (relationshipClass === 'ally') return { icon: '🤝', bg: 'rgba(30,64,175,0.88)', border: '#93c5fd' };
-    return { icon: '•', bg: 'rgba(51,65,85,0.84)', border: '#cbd5e1' };
+    if (relationshipClass === 'bonded') return { icon: '❤', bg: 'rgba(190,24,93,0.88)', border: '#f9a8d4', stroke: '#ec4899' };
+    if (relationshipClass === 'ally') return { icon: '🤝', bg: 'rgba(30,64,175,0.88)', border: '#93c5fd', stroke: '#3b82f6' };
+    if (relationshipClass === 'acquaintance') return { icon: '•', bg: 'rgba(8,145,178,0.82)', border: '#67e8f9', stroke: '#06b6d4' };
+    return { icon: '•', bg: 'rgba(51,65,85,0.84)', border: '#cbd5e1', stroke: '#94a3b8' };
 }
 
-function updateSelectedRelationshipMarkers(char) {
+function describeRelationshipSnapshot(snapshot) {
+    if (!snapshot || Number(snapshot.networkSize || 0) <= 0) {
+        return {
+            label: 'Isolated',
+            blurb: 'No strong ties are visible yet.',
+            bg: '#f8fafc',
+            color: '#64748b'
+        };
+    }
+    if (Number(snapshot.bondedCount || 0) >= 2 || ((snapshot.bondedCount || 0) >= 1 && (snapshot.allyCount || 0) >= 2)) {
+        return {
+            label: 'Social hub',
+            blurb: 'Multiple strong ties anchor this character in the group.',
+            bg: '#fdf2f8',
+            color: '#be185d'
+        };
+    }
+    if (Number(snapshot.nearbySupport || 0) >= 2) {
+        return {
+            label: 'Supported',
+            blurb: 'Trusted allies are currently close enough to help.',
+            bg: '#eff6ff',
+            color: '#1d4ed8'
+        };
+    }
+    if (Number(snapshot.bondedCount || 0) >= 1) {
+        return {
+            label: 'Bonded',
+            blurb: 'A close relationship is shaping this character’s behavior.',
+            bg: '#fdf2f8',
+            color: '#be185d'
+        };
+    }
+    return {
+        label: 'Loose ties',
+        blurb: 'They know others, but the network is still shallow.',
+        bg: '#f8fafc',
+        color: '#475569'
+    };
+}
+
+function updateSelectedRelationshipMarkers(char, selectedPos = null) {
     const layer = ensureRelationshipMarkerLayer();
     if (!layer || !char || typeof char.getRelationshipSnapshot !== 'function') {
         clearSelectedRelationshipMarkers();
-        return;
+        return null;
+    }
+
+    const sourcePos = selectedPos || (typeof char.getScreenPosition === 'function' ? char.getScreenPosition() : null);
+    if (!sourcePos) {
+        clearSelectedRelationshipMarkers();
+        return null;
     }
 
     const snapshot = char.getRelationshipSnapshot(4);
     layer.innerHTML = '';
+
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', String(window.innerWidth || 0));
+    svg.setAttribute('height', String(window.innerHeight || 0));
+    svg.style.position = 'fixed';
+    svg.style.inset = '0';
+    svg.style.overflow = 'visible';
+    layer.appendChild(svg);
+
     (snapshot?.ties || []).forEach(tie => {
         if (!tie?.other || typeof tie.other.getScreenPosition !== 'function') return;
         const pos = tie.other.getScreenPosition();
         if (!pos) return;
         const meta = getRelationshipBadgeMeta(tie.relationshipClass);
+
+        const line = document.createElementNS(svgNS, 'line');
+        line.setAttribute('x1', String(sourcePos.x));
+        line.setAttribute('y1', String(sourcePos.y - 10));
+        line.setAttribute('x2', String(pos.x));
+        line.setAttribute('y2', String(pos.y - 6));
+        line.setAttribute('stroke', meta.stroke);
+        line.setAttribute('stroke-width', String((1.5 + Math.max(0, tie.affinity - 40) / 30).toFixed(2)));
+        line.setAttribute('stroke-linecap', 'round');
+        line.setAttribute('opacity', String(Math.max(0.32, Math.min(0.9, tie.affinity / 100))));
+        if (tie.relationshipClass === 'ally' || tie.relationshipClass === 'acquaintance') {
+            line.setAttribute('stroke-dasharray', tie.relationshipClass === 'ally' ? '6 5' : '3 5');
+        }
+        svg.appendChild(line);
+
+        const halo = document.createElementNS(svgNS, 'circle');
+        halo.setAttribute('cx', String(pos.x));
+        halo.setAttribute('cy', String(pos.y - 6));
+        halo.setAttribute('r', String(tie.relationshipClass === 'bonded' ? 11 : 9));
+        halo.setAttribute('fill', 'none');
+        halo.setAttribute('stroke', meta.stroke);
+        halo.setAttribute('stroke-width', '2');
+        halo.setAttribute('opacity', '0.45');
+        svg.appendChild(halo);
+
         const badge = document.createElement('div');
         badge.style.position = 'fixed';
         badge.style.left = `${pos.x}px`;
@@ -2161,6 +2244,8 @@ function updateSelectedRelationshipMarkers(char) {
         badge.title = `${tie.relationshipClass} · affinity ${Math.round(tie.affinity)} · dist ${tie.distance}`;
         layer.appendChild(badge);
     });
+
+    return snapshot;
 }
 
 function updateSelectedCharacterMarker() {
@@ -2186,7 +2271,6 @@ function updateSelectedCharacterMarker() {
     }
 
     applySelectedCharacterSceneHighlight(char);
-    updateSelectedRelationshipMarkers(char);
 
     const screenPos = char.getScreenPosition();
     if (!screenPos) {
@@ -2196,13 +2280,15 @@ function updateSelectedCharacterMarker() {
         return;
     }
 
+    const snapshot = updateSelectedRelationshipMarkers(char, screenPos) || (typeof char.getRelationshipSnapshot === 'function' ? char.getRelationshipSnapshot(4) : null);
+    const socialDescriptor = describeRelationshipSnapshot(snapshot);
+
     marker.style.left = `${screenPos.x}px`;
     marker.style.top = `${screenPos.y - 34}px`;
     marker.style.opacity = '1';
     marker.style.transform = 'translate(-50%, -50%) scale(1)';
     const label = marker.firstElementChild;
-    const snapshot = typeof char.getRelationshipSnapshot === 'function' ? char.getRelationshipSnapshot(4) : null;
-    if (label) label.textContent = `ID ${selectedId} · ties ${Number(snapshot?.networkSize || 0)}`;
+    if (label) label.textContent = `ID ${selectedId} · ${socialDescriptor.label}`;
 }
 
 if (window.__selectedCharacterMarkerInterval) clearInterval(window.__selectedCharacterMarkerInterval);
@@ -3546,8 +3632,13 @@ function createCharacterDetailCard(char) {
     relBox.style.border = '1px solid #e2e8f0';
     relBox.style.borderRadius = '10px';
     relBox.style.background = '#fafcff';
+    const socialDescriptor = describeRelationshipSnapshot(networkSnapshot);
     relBox.innerHTML =
         `<div style="font-weight:700;color:#0f172a;margin-bottom:6px;">Relationship Network</div>` +
+        `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;">` +
+            `<span style="padding:2px 8px;border-radius:999px;background:${socialDescriptor.bg};color:${socialDescriptor.color};font-size:0.82em;font-weight:800;white-space:nowrap;">${socialDescriptor.label}</span>` +
+            `<span style="font-size:0.82em;color:#475569;line-height:1.35;">${socialDescriptor.blurb}</span>` +
+        `</div>` +
         `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">` +
             `<span style="padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:0.82em;font-weight:700;">support ${Math.round((networkSnapshot?.supportScore || 0) * 100)}%</span>` +
             `<span style="padding:2px 8px;border-radius:999px;background:#fdf2f8;color:#be185d;font-size:0.82em;font-weight:700;">bonded ${Number(networkSnapshot?.bondedCount || 0)}</span>` +
@@ -3593,7 +3684,7 @@ function createCharacterDetailCard(char) {
         hint.style.marginTop = '8px';
         hint.style.fontSize = '0.78em';
         hint.style.color = '#64748b';
-        hint.textContent = 'Top ties are also marked in the scene while this character is selected.';
+        hint.textContent = 'Top ties are linked with live lines and badges in the scene while this character is selected.';
         relBox.appendChild(hint);
     } else {
         const empty = document.createElement('div');

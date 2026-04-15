@@ -149,6 +149,7 @@ If an older handoff says “implement next” but conflicts with the sections ab
 - Observation polish: left-pane district badges and district migration flow cues now make 4+ district movement easier to read live
 - District opportunity scoring is now live: bounded-rational wandering can drift toward lower-pressure, higher-support districts instead of moving as pure local randomness
 - Relationship visibility improved: selected characters now surface top social ties and support-network cues so group structure is observable from outside the sim
+- Selected-character observation now includes live tie lines in the scene, making support hubs and bonded pairs readable at a glance
 
 ---
 
