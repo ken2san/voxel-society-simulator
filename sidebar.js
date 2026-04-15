@@ -2337,8 +2337,15 @@ function renderCharacterList() {
             return; // keep user's typing uninterrupted
         }
     } catch (e) {}
-    // キャラが未生成（シム未起動）なら何も表示しない
-    if (!window.characters || !Array.isArray(window.characters) || (!window.simulationRunning && window.characters.length === 0)) {
+    const chars = Array.isArray(window.characters) ? window.characters : [];
+    const popStats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
+    const hasPopulationHistory = !!(popStats && (
+        Number(popStats.initialPopulation || 0) > 0 ||
+        Number(popStats.births || 0) > 0 ||
+        Number(popStats.deaths || 0) > 0
+    ));
+    // キャラ未生成かつ観測履歴も無い時だけ空表示にする
+    if ((!Array.isArray(window.characters) || (!window.simulationRunning && chars.length === 0)) && !hasPopulationHistory) {
         leftSidebar.innerHTML = '';
         return;
     }
@@ -2355,19 +2362,18 @@ function renderCharacterList() {
     leftSidebar.appendChild(listHeader);
 
     // --- 母集団統計パネル ---
-    if (window.characters && window.characters.length > 0) {
-        const popStats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
-        const alive = window.characters.filter(c => c.state !== 'dead');
-        const dead = popStats ? Number(popStats.deaths || 0) : (window.characters.length - alive.length);
+    if (chars.length > 0 || hasPopulationHistory) {
+        const alive = chars.filter(c => c.state !== 'dead');
+        const dead = popStats ? Number(popStats.deaths || 0) : (chars.length - alive.length);
         const totalBorn = popStats
             ? Number(popStats.initialPopulation || 0) + Number(popStats.births || 0)
-            : window.characters.length;
+            : chars.length;
         const getLifeStage = (c) => c.getLifeStage ? c.getLifeStage() : (c.isChild ? 'child' : 'adult');
         const childCount = alive.filter(c => getLifeStage(c) === 'child').length;
         const youngCount = alive.filter(c => getLifeStage(c) === 'young').length;
         const adultCount = alive.filter(c => getLifeStage(c) === 'adult').length;
         const elderCount = alive.filter(c => getLifeStage(c) === 'elder').length;
-        const maxGen   = window.characters.reduce((m, c) => Math.max(m, c.generation || 0), 0);
+        const maxGen   = chars.reduce((m, c) => Math.max(m, c.generation || 0), 0);
         const avgGen   = alive.length ? (alive.reduce((s, c) => s + (c.generation || 0), 0) / alive.length).toFixed(1) : '—';
         const avgAge   = alive.length ? (alive.reduce((s, c) => s + (c.age || 0), 0) / alive.length).toFixed(1) : '—';
         const maxAge   = alive.length ? Math.max(...alive.map(c => Number(c.age || 0))).toFixed(1) : '—';
@@ -2558,6 +2564,9 @@ function renderCharacterList() {
 
         const statsDiv = document.createElement('div');
         statsDiv.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:0.82em;color:#2b3340;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
+        const extinctionNotice = alive.length === 0
+            ? `<div style="margin:6px 0 8px 0;padding:6px 8px;border-radius:8px;background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;font-weight:600;">Population extinct — metrics preserved for inspection.</div>`
+            : '';
 
         // --- Season indicator ---
         const si = window.currentSeasonInfo;
@@ -2586,6 +2595,7 @@ function renderCharacterList() {
         const _currentPhaseSec = _lastPhaseEntry ? Math.round((Date.now() - _lastPhaseEntry.t) / 1000) : 0;
         statsDiv.innerHTML =
             seasonHTML +
+            extinctionNotice +
             `<div style="margin-bottom:6px;padding:4px 8px;border-radius:8px;background:${phase.bg};border:1px solid ${phase.color}33;">` +
                 `<div style="display:flex;align-items:center;gap:6px;">` +
                     `<span style="font-size:1.05em;">${phase.icon}</span>` +
@@ -2653,7 +2663,7 @@ function renderCharacterList() {
     }
 
     // --- 全体サマリー表（アコーディオン型詳細展開付き） ---
-    if (window.characters && window.characters.length > 0) {
+    if (chars.length > 0) {
         const tableShell = document.createElement('div');
         tableShell.className = 'character-table-shell';
         const summaryTable = document.createElement('table');
@@ -2689,7 +2699,7 @@ function renderCharacterList() {
         summaryTable.appendChild(thead);
         // ボディ
         const tbody = document.createElement('tbody');
-        window.characters.forEach(char => {
+        chars.forEach(char => {
             const tr = document.createElement('tr');
             tr.className = 'character-summary-row';
             if (String(openedCharId) === String(char.id)) tr.classList.add('is-open');
@@ -2793,6 +2803,15 @@ function renderCharacterList() {
             leftSidebar.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
             leftSidebar.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
         };
+    } else if (hasPopulationHistory) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'character-table-shell';
+        emptyState.style.padding = '10px 12px';
+        emptyState.style.marginTop = '8px';
+        emptyState.style.color = '#64748b';
+        emptyState.style.fontSize = '0.9em';
+        emptyState.textContent = 'No active character cards remain, but the society metrics above are preserved.';
+        leftSidebar.appendChild(emptyState);
     }
     renderEventTimeline();
 // サマリー表の詳細カード生成
