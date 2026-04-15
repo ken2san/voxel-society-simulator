@@ -127,6 +127,7 @@ Active phase: **Phase 1 → Phase 2 (overlap)**
 - Layer 3 complete: Death Record tombstones
 - Deferred bonus already shipped: Generation Summary Banner in Chronicle/Timeline
 - Latest hotfix (commit `b4db325`): fixed food-target blacklist persistence that caused telemetry to show `EAT = 0%` despite fruit existing in the world; added Society Phase history trail so phase transitions are readable over time
+- Observation upgrade: lifespan-ratio life stages are now live — child / young / adult / elder affect behavior through soft weighting instead of rigid scripting, and the sidebar exposes stage-mix trends for population reading
 
 ---
 
@@ -464,3 +465,16 @@ The numbers problem: the value today tells you nothing about where it's going.
 | **Activity bar animation** | The activity bars currently snap. Smoothing them with CSS `transition: width 0.4s ease` makes the shift between Eating/Moving/Idle feel like a living readout. |
 
 Priority: activity bar CSS transition (1 line) → threshold flash → delta arrow → per-value sparkline.
+
+### Population dynamics refinement — life stages (implemented 2026-04-15)
+
+To make the colony read more like a living population and less like a binary child/adult switch:
+
+- Replace the 2-state framing with four observation stages: child / young / adult / elder.
+- Use lifespan ratio, not raw age seconds, so short-lived and long-lived individuals age fairly.
+- Apply soft behavioral weighting rather than hard scripting:
+  - young → slightly more movement, exploration, and sociality
+  - adult → stable work/fertility baseline
+  - elder → earlier rest, lower work/exploration, lower fertility
+- Keep only one hard gate: children cannot reproduce until maturity window.
+- Surface the stage mix in sidebar trend views so demographic waves become observable.

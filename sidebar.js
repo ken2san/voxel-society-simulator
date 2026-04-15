@@ -2058,12 +2058,14 @@ function createPopulationNeedRow(label, value, color) {
 function createPopulationDetailsHTML(metrics) {
     window.__populationMetricGroups = {
         population: {
-            title: 'Population',
+            title: 'Population mix',
             series: [
-                { key: 'totalBorn', label: 'Total born', color: '#2563eb' },
-                { key: 'dead', label: 'Dead', color: '#dc2626' },
-                { key: 'adults', label: 'Adults', color: '#0891b2' },
-                { key: 'children', label: 'Children', color: '#7c3aed' }
+                { key: 'alive', label: 'Alive', color: '#2563eb' },
+                { key: 'childCount', label: 'Child', color: '#7c3aed' },
+                { key: 'youngCount', label: 'Young', color: '#0ea5e9' },
+                { key: 'adultCount', label: 'Adult', color: '#16a34a' },
+                { key: 'elderCount', label: 'Elder', color: '#f59e0b' },
+                { key: 'dead', label: 'Dead', color: '#dc2626' }
             ]
         },
         lifecycle: {
@@ -2106,10 +2108,12 @@ function createPopulationDetailsHTML(metrics) {
     return (
         `<div class="population-detail-grid">` +
             createPopulationDetailCard('Population', '👥', [
-                { label: 'Total born', value: metrics.totalBorn },
-                { label: 'Dead', value: metrics.dead },
-                { label: 'Adults', value: metrics.adults },
-                { label: 'Children', value: metrics.children }
+                { label: 'Alive', value: metrics.alive },
+                { label: 'Child', value: metrics.childCount },
+                { label: 'Young', value: metrics.youngCount },
+                { label: 'Adult', value: metrics.adultCount },
+                { label: 'Elder', value: metrics.elderCount },
+                { label: 'Dead', value: metrics.dead }
             ], 'population') +
             createPopulationDetailCard('Lifecycle', '⏳', [
                 { label: 'Avg age', value: `${metrics.avgAge}s` },
@@ -2354,8 +2358,11 @@ function renderCharacterList() {
         const totalBorn = popStats
             ? Number(popStats.initialPopulation || 0) + Number(popStats.births || 0)
             : window.characters.length;
-        const children = alive.filter(c => c.isChild).length;
-        const adults   = alive.length - children;
+        const getLifeStage = (c) => c.getLifeStage ? c.getLifeStage() : (c.isChild ? 'child' : 'adult');
+        const childCount = alive.filter(c => getLifeStage(c) === 'child').length;
+        const youngCount = alive.filter(c => getLifeStage(c) === 'young').length;
+        const adultCount = alive.filter(c => getLifeStage(c) === 'adult').length;
+        const elderCount = alive.filter(c => getLifeStage(c) === 'elder').length;
         const maxGen   = window.characters.reduce((m, c) => Math.max(m, c.generation || 0), 0);
         const avgGen   = alive.length ? (alive.reduce((s, c) => s + (c.generation || 0), 0) / alive.length).toFixed(1) : '—';
         const avgAge   = alive.length ? (alive.reduce((s, c) => s + (c.age || 0), 0) / alive.length).toFixed(1) : '—';
@@ -2389,8 +2396,10 @@ function renderCharacterList() {
             alive: alive.length,
             totalBorn,
             dead,
-            adults,
-            children,
+            childCount,
+            youngCount,
+            adultCount,
+            elderCount,
             avgAge: Number(avgAge) || 0,
             maxAge: Number(maxAge) || 0,
             starvationDeaths,
@@ -2518,9 +2527,12 @@ function renderCharacterList() {
         const detailsChevron = detailsExpanded ? '▾' : '▸';
         const detailsHTML = createPopulationDetailsHTML({
             totalBorn,
+            alive: alive.length,
             dead,
-            adults,
-            children,
+            childCount,
+            youngCount,
+            adultCount,
+            elderCount,
             avgAge,
             maxAge,
             starvationDeaths,

@@ -2325,16 +2325,44 @@ class Character {
         return Math.max(0, Math.min(1.5, Number(this.age || 0) / Math.max(1, effectiveLifespan)));
     }
 
+    getLifeStage() {
+        const lifeRatio = this.getLifeRatio();
+        const minAgeRatio = (typeof window !== 'undefined' && window.minReproductionAgeRatio !== undefined)
+            ? Number(window.minReproductionAgeRatio) : 0.2;
+        const childMax = Math.max(0.12, Math.min(0.22, minAgeRatio));
+        if (this.isChild || lifeRatio < childMax) return 'child';
+        if (lifeRatio < 0.38) return 'young';
+        if (lifeRatio < 0.72) return 'adult';
+        return 'elder';
+    }
+
     getAgingProfile() {
         const lifeRatio = this.getLifeRatio();
+        const stage = this.getLifeStage();
         const late = Math.max(0, Math.min(1, (lifeRatio - 0.65) / 0.35));
         const smoothLate = late * late * (3 - 2 * late);
+
+        const stageBase = {
+            child: { mobilityMul: 0.88, exploreMul: 0.92, socialMul: 1.12, workMul: 0.55, restThresholdBonus: 4, fertilityBase: 0.0 },
+            young: { mobilityMul: 1.08, exploreMul: 1.12, socialMul: 1.06, workMul: 0.96, restThresholdBonus: -2, fertilityBase: 1.05 },
+            adult: { mobilityMul: 1.00, exploreMul: 0.98, socialMul: 1.00, workMul: 1.08, restThresholdBonus: 0, fertilityBase: 1.00 },
+            elder: { mobilityMul: 0.94, exploreMul: 0.88, socialMul: 0.96, workMul: 0.78, restThresholdBonus: 10, fertilityBase: 0.55 }
+        }[stage] || { mobilityMul: 1.0, exploreMul: 1.0, socialMul: 1.0, workMul: 1.0, restThresholdBonus: 0, fertilityBase: 1.0 };
+
+        const lateMobility = 1.0 - (0.22 * smoothLate);
+        const lateExplore = 1.0 - (0.40 * smoothLate);
+        const lateFertility = lifeRatio <= 0.55 ? 1.0 : Math.max(0, 1.0 - ((lifeRatio - 0.55) / 0.35));
+
         return {
+            stage,
             lifeRatio,
-            mobilityMul: 1.0 - (0.22 * smoothLate),
-            exploreMul: 1.0 - (0.40 * smoothLate),
-            // Fertility declines earlier and faster than mobility in most species.
-            fertilityMul: lifeRatio <= 0.55 ? 1.0 : Math.max(0, 1.0 - ((lifeRatio - 0.55) / 0.35))
+            mobilityMul: stageBase.mobilityMul * lateMobility,
+            exploreMul: stageBase.exploreMul * lateExplore,
+            socialMul: stageBase.socialMul,
+            workMul: stageBase.workMul,
+            restThresholdBonus: stageBase.restThresholdBonus,
+            // Soft demographic weighting: no rigid scripting except the child reproduction gate.
+            fertilityMul: stageBase.fertilityBase * lateFertility
         };
     }
 
@@ -3145,6 +3173,7 @@ class Character {
                         groupId: this.groupId || null,
                         generation: Number(this.generation || 0),
                         isChild: !!this.isChild,
+                        lifeStage: this.getLifeStage ? this.getLifeStage() : (!!this.isChild ? 'child' : 'adult'),
                         age: Number(this.age || 0),
                         lifespan: lifespan,
                         lifeRatio: Number(this.getLifeRatio().toFixed(4)),

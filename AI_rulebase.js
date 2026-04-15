@@ -19,7 +19,9 @@ export function decideNextAction_rulebase(character, isNight) {
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
-    const aging = character.getAgingProfile ? character.getAgingProfile() : { mobilityMul: 1.0, exploreMul: 1.0 };
+    const aging = character.getAgingProfile
+        ? character.getAgingProfile()
+        : { mobilityMul: 1.0, exploreMul: 1.0, socialMul: 1.0, workMul: 1.0, restThresholdBonus: 0, stage: 'adult' };
     // resilience: hardy characters tolerate lower energy before forcing REST
     const effectiveEnergyEmergency = (energyEmergency / Math.max(0.3, character.personality.resilience ?? 1.0))
         * (1 + (1 - (aging.mobilityMul || 1.0)) * 0.8);
@@ -95,7 +97,7 @@ export function decideNextAction_rulebase(character, isNight) {
 
     // === PRIORITY 2: SOCIAL NEEDS ===
     // sociality scales the threshold: social characters seek interaction earlier
-    const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0) * (1 + adapt.social * 0.35 - adapt.forage * 0.25 - adapt.rest * 0.20);
+    const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0) * (aging.socialMul || 1.0) * (1 + adapt.social * 0.35 - adapt.forage * 0.25 - adapt.rest * 0.20);
     if (character.needs.social <= effectiveSocialThreshold) {
         const partner = character.findClosestPartner && character.findClosestPartner();
         if (partner) {
@@ -110,7 +112,7 @@ export function decideNextAction_rulebase(character, isNight) {
     // === PRIORITY 3: HOME BUILDING (Priority-configurable) ===
     // UI設定の優先順位をチェック
     const homeBuildingPriority = (typeof window !== 'undefined' && window.homeBuildingPriority !== undefined) ? window.homeBuildingPriority : 50;
-    const shouldBuildHome = Math.random() * 100 < homeBuildingPriority;
+    const shouldBuildHome = Math.random() * 100 < (homeBuildingPriority * (aging.workMul || 1.0));
 
     // 最善の木材ターゲット選択とprovisionalHomeからの復帰
     function findClosestReachableWood() {
@@ -669,7 +671,7 @@ export function decideNextAction_rulebase(character, isNight) {
     // === PRIORITY 7: ENERGY MANAGEMENT ===
     // bravery direction fix: low bravery → high rest threshold (cautious, conserves energy);
     //                        high bravery → low rest threshold (pushes through fatigue).
-    const effectiveRestThreshold = clamp(45 + (2.0 - (character.personality.bravery ?? 1.0)) * 18 + (adapt.rest * 15), 25, 75);
+    const effectiveRestThreshold = clamp(45 + (2.0 - (character.personality.bravery ?? 1.0)) * 18 + (adapt.rest * 15) + (aging.restThresholdBonus || 0), 25, 75);
     if (character.needs.energy < effectiveRestThreshold) {
         if (character.isSafe(isNight)) {
             character.setNextAction('REST');
@@ -716,7 +718,7 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 10: PRODUCTIVE WORK (Random chance) ===
-    if (Math.random() < 0.3 * character.personality.diligence) {
+    if (Math.random() < 0.3 * character.personality.diligence * (aging.workMul || 1.0)) {
         const digTarget = character.findDiggableBlock && character.findDiggableBlock();
         if (digTarget) {
             const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(digTarget);
