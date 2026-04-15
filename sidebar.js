@@ -1218,14 +1218,25 @@ function renderCharacterDetail() {
         const prevSpec = getPopulationCapacityByDistrictMode(previousMode);
         charNumInput.max = spec.max;
         charNumVal.max = spec.max;
+
+        const runningCharacterCount = Array.isArray(window.characters)
+            ? window.characters.filter(c => c && c.state !== 'dead').length
+            : 0;
+        const isLockedToActiveRun = !!paramDisabled && runningCharacterCount > 0;
+
         let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
-        if (autoTune && nextVal <= prevSpec.recommended) {
+        if (isLockedToActiveRun) {
+            nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || runningCharacterCount));
+        } else if (autoTune && nextVal <= prevSpec.recommended) {
             nextVal = spec.recommended;
         }
+
         sidebarParams.charNum = nextVal;
         charNumInput.value = nextVal;
         charNumVal.value = nextVal;
-        populationHint.textContent = `Recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
+        populationHint.textContent = isLockedToActiveRun
+            ? `Current run: ${runningCharacterCount} characters · recommended ${spec.recommended} for the next ${mode}-district start · max ${spec.max}`
+            : `Recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
     };
 
     // 双方向同期＋sidebarParams更新
