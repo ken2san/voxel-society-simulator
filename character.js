@@ -2458,6 +2458,57 @@ class Character {
         return '-';
     }
 
+    getDistrictSocialContext() {
+        const fallback = {
+            index: this.districtIndex ?? 0,
+            foodPressure: 0,
+            housingPressure: 0,
+            timeStress: 0,
+            supportAccess: 0,
+            relationshipStability: 0,
+            socialPressure: 0
+        };
+        try {
+            if (typeof window !== 'undefined' && typeof window.getDistrictSocialContextForPosition === 'function') {
+                return {
+                    ...fallback,
+                    ...(window.getDistrictSocialContextForPosition(this.gridPos) || {})
+                };
+            }
+        } catch (e) {
+            // ignore helper lookup issues
+        }
+        return fallback;
+    }
+
+    getReproductionReadiness(partner) {
+        const ctx = this.getDistrictSocialContext();
+        const affinity = Number(this.relationships.get(partner?.id) || 0);
+        const bondStrength = Math.max(0, Math.min(1, affinity / 100));
+        const support = Number(ctx.supportAccess ?? ctx.supportDensity ?? 0);
+        const stability = Number(ctx.relationshipStability ?? 0);
+        const readiness = Math.max(0, Math.min(1,
+            ((1 - Number(ctx.housingPressure || 0)) * 0.26) +
+            ((1 - Number(ctx.timeStress || 0)) * 0.24) +
+            (support * 0.20) +
+            (stability * 0.20) +
+            (bondStrength * 0.10) +
+            (this.homePosition ? 0.05 : 0) +
+            (partner?.homePosition ? 0.05 : 0)
+        ));
+        return {
+            ...ctx,
+            affinity,
+            readiness: Math.round(readiness * 100) / 100
+        };
+    }
+
+    shouldAttemptReproductionWith(partner) {
+        const ctx = this.getReproductionReadiness(partner);
+        this._lastReproductionBlockInfo = ctx;
+        return ctx.readiness >= 0.52 || (ctx.affinity >= 82 && ctx.relationshipStability >= 0.45);
+    }
+
     update(deltaTime, isNight, camera) {
         const districtRuntime = (typeof window !== 'undefined' && typeof window.getDistrictRuntime === 'function')
             ? window.getDistrictRuntime(this.gridPos)
@@ -2856,13 +2907,14 @@ class Character {
                 // If timer expired while still in socializing and conditions met, reproduce first
                 if (this.loveTimer <= 0 && this.lovePhase === 'showing' && affinity >= 60 &&
                     this.needs.hunger > 15 && partner.needs.hunger > 15) {
+                    const pressureGateOpen = this.shouldAttemptReproductionWith(partner);
                     // per-pair cooldown check (only gate — no permanent one-child-per-pair lock)
                     const _pairKey2 = `${Math.min(this.id, partner.id)}-${Math.max(this.id, partner.id)}`;
                     if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
                     const _pairLast2 = window._pairReproTimestamps.get(_pairKey2) || 0;
                     const _pairNow2 = Date.now() / 1000;
                     const _cooldown2 = window.pairReproductionCooldownSeconds || 60;
-                    if (_pairLast2 === 0 || (_pairNow2 - _pairLast2) >= _cooldown2) {
+                    if (pressureGateOpen && (_pairLast2 === 0 || (_pairNow2 - _pairLast2) >= _cooldown2)) {
                         // 繁殖年齢ウィンドウ: 寿命の minReproductionAgeRatio 未満なら繁殖不可
                         const _minAgeRatio = (typeof window !== 'undefined' && window.minReproductionAgeRatio !== undefined) ? window.minReproductionAgeRatio : 0.2;
                         const _lifespan = this.lifespan || (typeof window !== 'undefined' && window.characterLifespan) || 240;
@@ -3047,6 +3099,9 @@ class Character {
                                         console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: too young (ageRatio=${(this.age/_ls2).toFixed(2)} partnerRatio=${(partner.age/_pls2).toFixed(2)} min=${_minAgeRatio2})`);
                                     } else if (this.needs.hunger <= 15 || partner.needs.hunger <= 15) {
                                         console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: hunger crisis (self=${this.needs.hunger.toFixed(1)} partner=${partner.needs.hunger.toFixed(1)})`);
+                                    } else if (!this.shouldAttemptReproductionWith(partner)) {
+                                        const ctx = this._lastReproductionBlockInfo || this.getReproductionReadiness(partner);
+                                        console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: district pressure high (pressure=${(ctx.socialPressure || 0).toFixed(2)} readiness=${(ctx.readiness || 0).toFixed(2)})`);
                                     } else {
                                     console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
                                     this.reproduceWith && this.reproduceWith(partner);
@@ -4435,6 +4490,12 @@ class Character {
             return;
         }
 
+        const readinessCtx = this.getReproductionReadiness(partner);
+        if (!(readinessCtx.readiness >= 0.52 || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45))) {
+            try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)})`); } catch(e){}
+            return;
+        }
+
         const myFertility = this.getAgingProfile ? this.getAgingProfile().fertilityMul : 1.0;
         const partnerFertility = (partner && partner.getAgingProfile) ? partner.getAgingProfile().fertilityMul : 1.0;
         const fertilityChance = Math.max(0, Math.min(1, myFertility * partnerFertility));
@@ -4489,9 +4550,8 @@ class Character {
         if (!spawnPos) spawnPos = this.gridPos;
     // Spawn child
     try { console.log(`[REPRO] ${this.id} calling spawnCharacter at`, spawnPos, 'genes=', childGenes); } catch(e){}
-    spawnCharacter(spawnPos, childGenes);
+    const child = spawnCharacter(spawnPos, childGenes);
         // Set child color and initial needs after spawn
-        const child = typeof characters !== 'undefined' ? characters[characters.length-1] : null;
         if (child && child.bodyMaterial && child.bodyMaterial.color) {
             child.bodyMaterial.color.setRGB(childColor.r, childColor.g, childColor.b);
             child.needs = {

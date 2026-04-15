@@ -189,8 +189,12 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         stageMix: { child: 0, young: 0, adult: 0, elder: 0 },
         foodPressure: 0,
         housingPressure: 0,
+        timeStress: 0,
         supportDensity: 0,
+        supportAccess: 0,
+        relationshipStability: 0,
         conflictLevel: 0,
+        socialPressure: 0,
         avgNeeds: { hunger: 0, energy: 0, safety: 0, social: 0 }
     }));
     const sums = Array.from({ length: count }, () => ({
@@ -201,7 +205,9 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         lowFood: 0,
         noHome: 0,
         supported: 0,
-        conflict: 0
+        conflict: 0,
+        timeStress: 0,
+        relationshipStability: 0
     }));
 
     for (const c of Array.isArray(sourceChars) ? sourceChars : []) {
@@ -216,28 +222,45 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             bucket.population += 1;
             const stage = c.getLifeStage ? c.getLifeStage() : (c.isChild ? 'child' : 'adult');
             if (bucket.stageMix[stage] !== undefined) bucket.stageMix[stage] += 1;
-            sum.hunger += Number(c.needs?.hunger || 0);
-            sum.energy += Number(c.needs?.energy || 0);
-            sum.safety += Number(c.needs?.safety || 0);
-            sum.social += Number(c.needs?.social || 0);
-            if (Number(c.needs?.hunger || 0) < 40) sum.lowFood += 1;
+            const hunger = Number(c.needs?.hunger || 0);
+            const energy = Number(c.needs?.energy || 0);
+            const safety = Number(c.needs?.safety || 0);
+            const social = Number(c.needs?.social || 0);
+            sum.hunger += hunger;
+            sum.energy += energy;
+            sum.safety += safety;
+            sum.social += social;
+            if (hunger < 40) sum.lowFood += 1;
             if (!c.homePosition) sum.noHome += 1;
-            const hasSupport = !!c.groupId || Array.from(c.relationships?.values?.() || []).some(v => Number(v) >= 60);
+            const relationshipValues = c.relationships instanceof Map
+                ? Array.from(c.relationships.values()).map(Number).filter(Number.isFinite)
+                : [];
+            const hasSupport = !!c.groupId || relationshipValues.some(v => v >= 60);
             if (hasSupport) sum.supported += 1;
             if (c._nearEnemy) sum.conflict += 1;
+            const timeStress = ((Math.max(0, 55 - hunger) / 55) + (Math.max(0, 45 - energy) / 45)) / 2;
+            sum.timeStress += Math.max(0, Math.min(1, timeStress));
+            if (relationshipValues.length > 0) {
+                const avgAffinity = relationshipValues.reduce((acc, value) => acc + value, 0) / relationshipValues.length;
+                sum.relationshipStability += Math.max(0, Math.min(1, avgAffinity / 100));
+            }
         }
 
-        if (hasPrevState && prev) {
-            if (prev.alive && !alive) {
-                const deathBucket = buckets[Math.max(0, Math.min(count - 1, Number(prev.districtIndex) || 0))];
-                deathBucket.deaths += 1;
-            } else if (!prev.alive && alive) {
+        if (hasPrevState) {
+            if (alive && !prev) {
                 bucket.births += 1;
-            }
-            if (alive && prev.districtIndex !== undefined && prev.districtIndex !== index) {
-                bucket.migrationIn += 1;
-                const prevBucket = buckets[Math.max(0, Math.min(count - 1, Number(prev.districtIndex) || 0))];
-                prevBucket.migrationOut += 1;
+            } else if (prev) {
+                if (prev.alive && !alive) {
+                    const deathBucket = buckets[Math.max(0, Math.min(count - 1, Number(prev.districtIndex) || 0))];
+                    deathBucket.deaths += 1;
+                } else if (!prev.alive && alive) {
+                    bucket.births += 1;
+                }
+                if (alive && prev.districtIndex !== undefined && prev.districtIndex !== index) {
+                    bucket.migrationIn += 1;
+                    const prevBucket = buckets[Math.max(0, Math.min(count - 1, Number(prev.districtIndex) || 0))];
+                    prevBucket.migrationOut += 1;
+                }
             }
         }
     }
@@ -245,12 +268,29 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
     return buckets.map((bucket, index) => {
         const n = Math.max(1, bucket.population);
         const sum = sums[index];
+        const foodPressure = roundDistrictValue(sum.lowFood / n);
+        const housingPressure = roundDistrictValue(sum.noHome / n);
+        const timeStress = roundDistrictValue(sum.timeStress / n);
+        const supportAccess = roundDistrictValue(sum.supported / n);
+        const relationshipStability = roundDistrictValue(sum.relationshipStability / n);
+        const conflictLevel = roundDistrictValue(sum.conflict / n);
+        const socialPressure = roundDistrictValue(Math.max(0, Math.min(1,
+            (foodPressure * 0.28) +
+            (housingPressure * 0.30) +
+            (timeStress * 0.22) +
+            ((1 - supportAccess) * 0.10) +
+            ((1 - relationshipStability) * 0.10)
+        )));
         return {
             ...bucket,
-            foodPressure: roundDistrictValue(sum.lowFood / n),
-            housingPressure: roundDistrictValue(sum.noHome / n),
-            supportDensity: roundDistrictValue(sum.supported / n),
-            conflictLevel: roundDistrictValue(sum.conflict / n),
+            foodPressure,
+            housingPressure,
+            timeStress,
+            supportDensity: supportAccess,
+            supportAccess,
+            relationshipStability,
+            conflictLevel,
+            socialPressure,
             avgNeeds: {
                 hunger: roundDistrictValue(sum.hunger / n),
                 energy: roundDistrictValue(sum.energy / n),
@@ -264,6 +304,20 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             }
         };
     });
+}
+
+export function getDistrictSocialContextForPosition(pos, sourceChars = characters) {
+    const index = getDistrictIndexForPosition(pos, districtMode);
+    const summary = getDistrictSummaries(sourceChars)[index];
+    return summary || {
+        index,
+        foodPressure: 0,
+        housingPressure: 0,
+        timeStress: 0,
+        supportAccess: 0,
+        relationshipStability: 0,
+        socialPressure: 0
+    };
 }
 
 export function getDistrictState() {
@@ -289,6 +343,7 @@ function emitDistrictChange() {
     window.activeDistrictIndex = activeDistrictIndex;
     window.getDistrictRuntime = getDistrictRuntimeForPosition;
     window.getDistrictObservationSummary = () => getDistrictSummaries();
+    window.getDistrictSocialContextForPosition = (pos) => getDistrictSocialContextForPosition(pos);
     window.getDistrictState = getDistrictState;
     try {
         window.dispatchEvent(new CustomEvent('district-changed', { detail: getDistrictState() }));
@@ -805,9 +860,8 @@ export function animate() {
 
     renderer.render(scene, camera);
 }
-export async function spawnCharacter(pos, genes = null) {
+export function spawnCharacter(pos, genes = null) {
     if (pos) {
-        const { Character } = await import('./character.js');
         if (typeof window !== 'undefined' && window.DEBUG_MODE) {
             try { console.log('[SPAWN] spawnCharacter called at', pos, 'genes=', genes); } catch (e) {}
         }

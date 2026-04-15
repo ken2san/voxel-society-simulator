@@ -1773,8 +1773,9 @@ function renderCharacterDetail() {
     districtSummary.style.color = '#334155';
     const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
-    districtSummary.textContent = activeDistrictData
-        ? `Watching D${activeDistrictData.index + 1} | pop ${activeDistrictData.population} | food ${Math.round((activeDistrictData.foodPressure || 0) * 100)}% | housing ${Math.round((activeDistrictData.housingPressure || 0) * 100)}%`
+    districtSummary.innerHTML = activeDistrictData
+        ? `<div style="font-weight:700;color:#0f172a;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population}</div>` +
+          `<div style="margin-top:4px;color:#475569;">pressure ${Math.round((activeDistrictData.socialPressure || 0) * 100)}% · support ${Math.round((activeDistrictData.supportAccess || 0) * 100)}% · stability ${Math.round((activeDistrictData.relationshipStability || 0) * 100)}% · time ${Math.round((activeDistrictData.timeStress || 0) * 100)}%</div>`
         : 'Watching the full baseline district';
     districtPanel.appendChild(districtSummary);
 
@@ -1795,6 +1796,9 @@ function renderCharacterDetail() {
         btn.style.border = i === sidebarParams.activeDistrictIndex ? '2px solid #f59e0b' : '1px solid #cbd5e1';
         btn.style.background = i === sidebarParams.activeDistrictIndex ? '#fef3c7' : '#ffffff';
         btn.style.cursor = 'pointer';
+        if (summary) {
+            btn.title = `pop ${summary.population} | pressure ${Math.round((summary.socialPressure || 0) * 100)}% | support ${Math.round((summary.supportAccess || 0) * 100)}%`;
+        }
         btn.onclick = () => {
             sidebarParams.activeDistrictIndex = i;
             window.activeDistrictIndex = i;
