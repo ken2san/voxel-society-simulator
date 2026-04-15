@@ -1,6 +1,6 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-04-14_
+_Last updated: 2026-04-15_
 
 ---
 
@@ -119,6 +119,14 @@ Potential themes:
 ## Current Status
 
 Active phase: **Phase 1 → Phase 2 (overlap)**
+
+### Verified progress as of 2026-04-15
+
+- Layer 1 complete: Crisis Mode, Spatial Memory, Full Trait Activation
+- Layer 2 complete: Relationship Tiers, ally food sharing, bonded night aid
+- Layer 3 complete: Death Record tombstones
+- Deferred bonus already shipped: Generation Summary Banner in Chronicle/Timeline
+- Latest hotfix (commit `b4db325`): fixed food-target blacklist persistence that caused telemetry to show `EAT = 0%` despite fruit existing in the world; added Society Phase history trail so phase transitions are readable over time
 
 ---
 
