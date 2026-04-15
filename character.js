@@ -8,11 +8,17 @@ import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
 
 // --- Helper: 3Dオブジェクトのワールド座標をスクリーン座標に変換 ---
 function toScreenPosition(obj, camera, canvas = null) {
+    if (!obj || !camera || obj.visible === false) return null;
     // obj: THREE.Object3D, camera: THREE.Camera, canvas: HTMLCanvasElement
     const vector = new THREE.Vector3();
     obj.updateMatrixWorld();
     vector.setFromMatrixPosition(obj.matrixWorld);
     vector.project(camera);
+
+    // Outside the camera frustum or behind the camera: do not show DOM overlays.
+    if (!Number.isFinite(vector.x) || !Number.isFinite(vector.y) || !Number.isFinite(vector.z)) return null;
+    if (vector.z < -1 || vector.z > 1) return null;
+
     let rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
     if (!canvas) {
         canvas = document.getElementById('gameCanvas');
@@ -22,6 +28,10 @@ function toScreenPosition(obj, camera, canvas = null) {
     }
     const x = (vector.x + 1) / 2 * rect.width + rect.left;
     const y = (1 - vector.y) / 2 * rect.height + rect.top;
+    const margin = 24;
+    if (x < rect.left - margin || x > rect.left + rect.width + margin || y < rect.top - margin || y > rect.top + rect.height + margin) {
+        return null;
+    }
     return { x, y };
 }
 // charactersはグローバル参照のまま（循環参照回避のため）
@@ -405,10 +415,12 @@ class Character {
 
         // キャラクターの頭上に配置
         const screenPos = this.getScreenPosition();
-        if (screenPos) {
-            this.actionIconDiv.style.left = (screenPos.x - 20) + 'px';
-            this.actionIconDiv.style.top = (screenPos.y - 60) + 'px';
+        if (!screenPos) {
+            this.actionIconDiv.style.opacity = 0;
+            return;
         }
+        this.actionIconDiv.style.left = (screenPos.x - 20) + 'px';
+        this.actionIconDiv.style.top = (screenPos.y - 60) + 'px';
 
         // バウンスアニメーション: only re-run animation when enough time passed since last animation
         try {
@@ -433,19 +445,8 @@ class Character {
 
     // スクリーン座標を取得
     getScreenPosition() {
-        if (!this.mesh || !window.camera || !window.renderer) return null;
-
-        const vector = new THREE.Vector3();
-        vector.setFromMatrixPosition(this.mesh.matrixWorld);
-        vector.project(window.camera);
-
-        const widthHalf = window.renderer.domElement.clientWidth / 2;
-        const heightHalf = window.renderer.domElement.clientHeight / 2;
-
-        return {
-            x: (vector.x * widthHalf) + widthHalf,
-            y: -(vector.y * heightHalf) + heightHalf
-        };
+        if (!this.mesh || !window.camera || !window.renderer || this.mesh.visible === false) return null;
+        return toScreenPosition(this.iconAnchor || this.mesh, window.camera, window.renderer.domElement);
     }
 
     // アイテム種類に応じてcarriedItemMeshのマテリアルを変更
@@ -4403,24 +4404,33 @@ class Character {
 
 
     updateThoughtBubble(isNight, camera) {
+        if (!this.thoughtBubble) return;
+        const hideBubble = () => {
+            this.thoughtBubble.setAttribute('data-show', 'false');
+            this.thoughtBubble.style.display = 'none';
+        };
+        if (!this.mesh || this.mesh.visible === false || !camera || !this.iconAnchor) {
+            hideBubble();
+            return;
+        }
         // --- ハートマーク優先表示 ---
         if (this.loveTimer > 0) {
+            const canvas = document.getElementById('gameCanvas');
+            const pos = toScreenPosition(this.iconAnchor, camera, canvas);
+            if (!pos) {
+                hideBubble();
+                return;
+            }
             this.thoughtBubble.textContent = '❤️';
             this.thoughtBubble.setAttribute('data-show', 'true');
             this.thoughtBubble.style.display = '';
             this.thoughtBubble.style.background = 'rgba(255,220,235,0.96)';
             this.thoughtBubble.style.borderColor = '#f9a8d4';
-            // 位置更新
-            if (camera && this.iconAnchor) {
-                const canvas = document.getElementById('gameCanvas');
-                const pos = toScreenPosition(this.iconAnchor, camera, canvas);
-                this.thoughtBubble.style.left = `${pos.x - 18}px`;
-                this.thoughtBubble.style.top = `${pos.y - 48}px`;
-                this.thoughtBubble.style.position = 'fixed';
-            }
+            this.thoughtBubble.style.left = `${pos.x - 18}px`;
+            this.thoughtBubble.style.top = `${pos.y - 48}px`;
+            this.thoughtBubble.style.position = 'fixed';
             return;
         }
-        if (!this.thoughtBubble) return;
         let html = '';
         if (this.groupId) {
             const groupColors = [
@@ -4450,10 +4460,14 @@ class Character {
         if (icons.length === 0) icons.push('🙂');
         html += icons.map(ic => ` <span style="font-size:0.98em;vertical-align:middle;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">${ic}</span>`).join('');
         if (html) {
-            this.thoughtBubble.innerHTML = html;
-            this.thoughtBubble.setAttribute('data-show', 'true');
             const canvas = document.getElementById('gameCanvas');
             const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
+            if (!screenPos) {
+                hideBubble();
+                return;
+            }
+            this.thoughtBubble.innerHTML = html;
+            this.thoughtBubble.setAttribute('data-show', 'true');
             this.thoughtBubble.style.left = `${screenPos.x - 14}px`;
             this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
             this.thoughtBubble.style.position = 'fixed';
@@ -4477,8 +4491,7 @@ class Character {
             this.thoughtBubble.style.padding = '2px 8px';
             this.thoughtBubble.style.fontSize = '1.08em';
         } else {
-            this.thoughtBubble.setAttribute('data-show', 'false');
-            this.thoughtBubble.style.display = 'none';
+            hideBubble();
         }
     }
 
