@@ -2043,12 +2043,73 @@ function ensureSelectedCharacterMarker() {
     return marker;
 }
 
+function clearSelectedCharacterSceneHighlight() {
+    const prev = window.__selectedSceneCharacter;
+    if (!prev?.mesh) {
+        window.__selectedSceneCharacter = null;
+        return;
+    }
+
+    try {
+        if (prev.mesh.userData?.__selectionBaseScale) {
+            prev.mesh.scale.copy(prev.mesh.userData.__selectionBaseScale);
+            delete prev.mesh.userData.__selectionBaseScale;
+        }
+        prev.mesh.traverse(node => {
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            materials.forEach(mat => {
+                if (!mat?.emissive || mat.userData?.__selectionPrevEmissive === undefined) return;
+                mat.emissive.setHex(mat.userData.__selectionPrevEmissive);
+                if (typeof mat.userData.__selectionPrevEmissiveIntensity === 'number' && 'emissiveIntensity' in mat) {
+                    mat.emissiveIntensity = mat.userData.__selectionPrevEmissiveIntensity;
+                }
+                delete mat.userData.__selectionPrevEmissive;
+                delete mat.userData.__selectionPrevEmissiveIntensity;
+            });
+        });
+    } catch (e) {}
+
+    window.__selectedSceneCharacter = null;
+}
+
+function applySelectedCharacterSceneHighlight(char) {
+    if (!char?.mesh) {
+        clearSelectedCharacterSceneHighlight();
+        return;
+    }
+    if (String(window.__selectedSceneCharacter?.id) === String(char.id)) return;
+
+    clearSelectedCharacterSceneHighlight();
+
+    try {
+        if (!char.mesh.userData) char.mesh.userData = {};
+        char.mesh.userData.__selectionBaseScale = char.mesh.scale.clone();
+        char.mesh.scale.multiplyScalar(1.14);
+        char.mesh.traverse(node => {
+            const materials = Array.isArray(node.material) ? node.material : [node.material];
+            materials.forEach(mat => {
+                if (!mat?.emissive) return;
+                if (!mat.userData) mat.userData = {};
+                if (mat.userData.__selectionPrevEmissive === undefined) {
+                    mat.userData.__selectionPrevEmissive = mat.emissive.getHex();
+                    mat.userData.__selectionPrevEmissiveIntensity = ('emissiveIntensity' in mat) ? Number(mat.emissiveIntensity || 1) : 1;
+                }
+                mat.emissive.setHex(0xf59e0b);
+                if ('emissiveIntensity' in mat) mat.emissiveIntensity = Math.max(1.35, Number(mat.emissiveIntensity || 1));
+            });
+        });
+    } catch (e) {}
+
+    window.__selectedSceneCharacter = char;
+}
+
 function updateSelectedCharacterMarker() {
     const marker = ensureSelectedCharacterMarker();
     if (!marker) return;
 
     const selectedId = openedCharId != null ? String(openedCharId) : '';
     if (!selectedId || !Array.isArray(window.characters)) {
+        clearSelectedCharacterSceneHighlight();
         marker.style.opacity = '0';
         marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
         return;
@@ -2056,10 +2117,13 @@ function updateSelectedCharacterMarker() {
 
     const char = window.characters.find(c => String(c?.id) === selectedId && c?.state !== 'dead');
     if (!char || typeof char.getScreenPosition !== 'function') {
+        clearSelectedCharacterSceneHighlight();
         marker.style.opacity = '0';
         marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
         return;
     }
+
+    applySelectedCharacterSceneHighlight(char);
 
     const screenPos = char.getScreenPosition();
     if (!screenPos) {
