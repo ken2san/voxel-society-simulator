@@ -39,6 +39,10 @@ function applyInitialAgeSpread(targetChars = characters) {
     });
 }
 
+if (typeof window !== 'undefined') {
+    window.applyInitialAgeSpread = applyInitialAgeSpread;
+}
+
 async function init() {
     try {
         // Setup canvas and context

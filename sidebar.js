@@ -1787,7 +1787,11 @@ function renderCharacterDetail() {
                     window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
                     window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
                     window.characterLifespan = sidebarParams.characterLifespan;
+                    window.initialAgeMaxRatio = sidebarParams.initialAgeMaxRatio;
                     window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
+                    if (typeof window.applyInitialAgeSpread === 'function') {
+                        window.applyInitialAgeSpread(window.characters);
+                    }
                     if (typeof window.resetPopulationStats === 'function') {
                         window.resetPopulationStats(window.characters.length);
                     }
