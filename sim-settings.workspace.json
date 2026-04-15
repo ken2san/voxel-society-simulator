@@ -28,6 +28,7 @@
       "supportAllyWeight": 0.12,
       "supportNearbyWeight": 0.1,
       "supportTopAffinityWeight": 0.22,
+      "perceptionRange": 2,
       "pairReproductionCooldownSeconds": 90,
       "reproductionCooldownSeconds": 10,
       "fruitRegenIntervalSeconds": 60,

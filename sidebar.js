@@ -216,6 +216,7 @@ function renderCharacterDetail() {
         supportAllyWeight:                  0.12,
         supportNearbyWeight:                0.10,
         supportTopAffinityWeight:           0.22,
+        perceptionRange:                    2,
         pairReproductionCooldownSeconds:    60,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
@@ -679,12 +680,22 @@ function renderCharacterDetail() {
     bondPersistenceRow.dataset.label = 'Bond Persistence';
     tabPanels[1].appendChild(bondPersistenceRow);
 
-    function appendCompactNumberInput(row, labelText, key, { min = 0, max = 100, step = 1, width = '58px' } = {}) {
+    function appendCompactSliderInput(row, labelText, key, { min = 0, max = 100, step = 1, width = '56px', sliderWidth = '88px' } = {}) {
         const miniLabel = document.createElement('span');
         miniLabel.textContent = labelText;
         miniLabel.style.fontSize = '0.82em';
         miniLabel.style.color = '#475569';
         row.appendChild(miniLabel);
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = String(min);
+        slider.max = String(max);
+        slider.step = String(step);
+        slider.value = String(sidebarParams[key]);
+        slider.style.width = sliderWidth;
+        slider.disabled = paramDisabled;
+        row.appendChild(slider);
 
         const input = document.createElement('input');
         input.type = 'number';
@@ -694,13 +705,17 @@ function renderCharacterDetail() {
         input.value = String(sidebarParams[key]);
         input.style.width = width;
         input.disabled = paramDisabled;
-        input.addEventListener('input', e => {
-            const raw = Number(e.target.value);
+
+        const syncValue = (value) => {
+            const raw = Number(value);
             const next = Number.isFinite(raw) ? Math.max(min, Math.min(max, raw)) : Number(sidebarParams[key]);
             sidebarParams[key] = next;
             window[key] = next;
-            e.target.value = String(next);
-        });
+            slider.value = String(next);
+            input.value = String(next);
+        };
+        slider.addEventListener('input', e => syncValue(e.target.value));
+        input.addEventListener('input', e => syncValue(e.target.value));
         row.appendChild(input);
     }
 
@@ -713,9 +728,9 @@ function renderCharacterDetail() {
     relationThresholdLabel.textContent = 'Tie Thresholds:';
     relationThresholdLabel.style.width = '140px';
     relationThresholdRow.appendChild(relationThresholdLabel);
-    appendCompactNumberInput(relationThresholdRow, 'Acq', 'acquaintanceAffinityThreshold');
-    appendCompactNumberInput(relationThresholdRow, 'Ally', 'allyAffinityThreshold');
-    appendCompactNumberInput(relationThresholdRow, 'Bond', 'bondedAffinityThreshold');
+    appendCompactSliderInput(relationThresholdRow, 'Acq', 'acquaintanceAffinityThreshold', { min: 0, max: 100, step: 1, width: '54px', sliderWidth: '72px' });
+    appendCompactSliderInput(relationThresholdRow, 'Ally', 'allyAffinityThreshold', { min: 0, max: 100, step: 1, width: '54px', sliderWidth: '72px' });
+    appendCompactSliderInput(relationThresholdRow, 'Bond', 'bondedAffinityThreshold', { min: 0, max: 100, step: 1, width: '54px', sliderWidth: '72px' });
     relationThresholdRow.dataset.label = 'Tie Thresholds';
     tabPanels[1].appendChild(relationThresholdRow);
 
@@ -728,9 +743,9 @@ function renderCharacterDetail() {
     supportModelLabel.textContent = 'Support Inputs:';
     supportModelLabel.style.width = '140px';
     supportModelRow.appendChild(supportModelLabel);
-    appendCompactNumberInput(supportModelRow, 'Radius', 'nearbySupportRadius', { min: 1, max: 10, step: 1 });
-    appendCompactNumberInput(supportModelRow, 'Group+', 'supportGroupBonus', { min: 0, max: 1, step: 0.01, width: '64px' });
-    appendCompactNumberInput(supportModelRow, 'Ally+', 'supportAllyPresenceBonus', { min: 0, max: 1, step: 0.01, width: '64px' });
+    appendCompactSliderInput(supportModelRow, 'Radius', 'nearbySupportRadius', { min: 1, max: 10, step: 1, width: '54px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportModelRow, 'Group+', 'supportGroupBonus', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportModelRow, 'Ally+', 'supportAllyPresenceBonus', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     supportModelRow.dataset.label = 'Support Inputs';
     tabPanels[1].appendChild(supportModelRow);
 
@@ -743,10 +758,10 @@ function renderCharacterDetail() {
     supportWeightsLabel.textContent = 'Support Weights:';
     supportWeightsLabel.style.width = '140px';
     supportWeightsRow.appendChild(supportWeightsLabel);
-    appendCompactNumberInput(supportWeightsRow, 'Bond', 'supportBondedWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
-    appendCompactNumberInput(supportWeightsRow, 'Ally', 'supportAllyWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
-    appendCompactNumberInput(supportWeightsRow, 'Near', 'supportNearbyWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
-    appendCompactNumberInput(supportWeightsRow, 'Top', 'supportTopAffinityWeight', { min: 0, max: 1, step: 0.01, width: '64px' });
+    appendCompactSliderInput(supportWeightsRow, 'Bond', 'supportBondedWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportWeightsRow, 'Ally', 'supportAllyWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportWeightsRow, 'Near', 'supportNearbyWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(supportWeightsRow, 'Top', 'supportTopAffinityWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     supportWeightsRow.dataset.label = 'Support Weights';
     tabPanels[1].appendChild(supportWeightsRow);
 
