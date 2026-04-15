@@ -2459,6 +2459,32 @@ class Character {
     }
 
     update(deltaTime, isNight, camera) {
+        const districtRuntime = (typeof window !== 'undefined' && typeof window.getDistrictRuntime === 'function')
+            ? window.getDistrictRuntime(this.gridPos)
+            : { index: 0, isActive: true, shouldRender: true, updateInterval: 0 };
+        this.districtIndex = districtRuntime.index ?? 0;
+        const shouldRender = districtRuntime.shouldRender !== false;
+        if (this.mesh) this.mesh.visible = shouldRender;
+        if (!shouldRender) {
+            if (this.thoughtBubble) {
+                this.thoughtBubble.setAttribute('data-show', 'false');
+                this.thoughtBubble.style.display = 'none';
+            }
+            if (this.actionIconDiv) {
+                this.actionIconDiv.style.opacity = 0;
+            }
+        }
+        if (!districtRuntime.isActive && Number(districtRuntime.updateInterval || 0) > 0) {
+            this._districtUpdateAccumulator = (this._districtUpdateAccumulator || 0) + deltaTime;
+            if (this._districtUpdateAccumulator < districtRuntime.updateInterval) {
+                return;
+            }
+            deltaTime = this._districtUpdateAccumulator;
+            this._districtUpdateAccumulator = 0;
+        } else {
+            this._districtUpdateAccumulator = 0;
+        }
+
         // 死亡以外のstateになったら目・口の色を黒にリセット
         if (this.state !== 'dead') {
             if (this.eyeMeshL && this.eyeMeshR) {

@@ -39,7 +39,9 @@
       "worldReservationTTL": 5000,
       "reproduceAffinityThreshold": 60,
       "mutationRate": 0.05,
-      "starvationDeathDelaySeconds": 10
+      "starvationDeathDelaySeconds": 10,
+      "districtMode": 1,
+      "activeDistrictIndex": 0
     },
     "telemetryConfig": {
       "sampleIntervalMs": 800,

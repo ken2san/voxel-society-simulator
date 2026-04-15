@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -140,6 +140,8 @@ async function init() {
         }
         // Re-apply after settings load so the active slider/workspace value actually takes effect.
         applyInitialAgeSpread(characters);
+        setDistrictMode(Number(window.sidebarParams?.districtMode) || 1);
+        setActiveDistrict(Number(window.sidebarParams?.activeDistrictIndex) || 0);
         if (window.renderCharacterList) window.renderCharacterList();
 
         setupTelemetryManagerPanel();
@@ -935,7 +937,9 @@ window.__simTelemetry = {
                 minReproductionAgeRatio: window.minReproductionAgeRatio,
                 affinityFloor: window.affinityFloor,
                 isolationPenalty: window.isolationPenalty,
-                traitAffinityCapReduction: window.traitAffinityCapReduction
+                traitAffinityCapReduction: window.traitAffinityCapReduction,
+                districtMode: window.districtMode,
+                activeDistrictIndex: window.activeDistrictIndex
             },
             population
         };

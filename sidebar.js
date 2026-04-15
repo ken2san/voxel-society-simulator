@@ -224,6 +224,8 @@ function renderCharacterDetail() {
         reproduceAffinityThreshold:         60,
         mutationRate:                       0.05,
         starvationDeathDelaySeconds:        10,
+        districtMode:                       1,
+        activeDistrictIndex:                0,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
@@ -1716,6 +1718,97 @@ function renderCharacterDetail() {
     tabPanels[0].appendChild(randomRow);
     randomCheck.disabled = paramDisabled;
 
+    // District observation controls
+    const districtMode = [1, 4, 16].includes(Number(sidebarParams.districtMode)) ? Number(sidebarParams.districtMode) : 1;
+    sidebarParams.districtMode = districtMode;
+    sidebarParams.activeDistrictIndex = Math.max(0, Math.min(districtMode - 1, Number(sidebarParams.activeDistrictIndex) || 0));
+    window.districtMode = districtMode;
+    window.activeDistrictIndex = sidebarParams.activeDistrictIndex;
+
+    const districtModeRow = document.createElement('div');
+    districtModeRow.style.display = 'flex';
+    districtModeRow.style.alignItems = 'center';
+    districtModeRow.style.gap = '10px';
+    districtModeRow.style.flexWrap = 'wrap';
+    const districtModeLabel = document.createElement('span');
+    districtModeLabel.textContent = 'District Mode:';
+    districtModeLabel.style.width = '140px';
+    districtModeRow.appendChild(districtModeLabel);
+    [1, 4, 16].forEach(mode => {
+        const btn = document.createElement('button');
+        btn.textContent = String(mode);
+        btn.style.padding = '4px 10px';
+        btn.style.borderRadius = '999px';
+        btn.style.border = mode === districtMode ? '2px solid #2563eb' : '1px solid #cbd5e1';
+        btn.style.background = mode === districtMode ? '#dbeafe' : '#f8fafc';
+        btn.style.fontWeight = '700';
+        btn.style.cursor = 'pointer';
+        btn.onclick = () => {
+            sidebarParams.districtMode = mode;
+            if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;
+            window.districtMode = mode;
+            window.activeDistrictIndex = sidebarParams.activeDistrictIndex;
+            import('./world.js').then(worldMod => {
+                worldMod.setDistrictMode?.(mode);
+                worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
+                renderCharacterDetail();
+            });
+        };
+        districtModeRow.appendChild(btn);
+    });
+    districtModeRow.dataset.label = 'District Mode';
+    tabPanels[0].appendChild(districtModeRow);
+
+    const districtPanel = document.createElement('div');
+    districtPanel.style.display = 'flex';
+    districtPanel.style.flexDirection = 'column';
+    districtPanel.style.gap = '8px';
+    districtPanel.style.padding = '8px 10px';
+    districtPanel.style.border = '1px solid #dbe4f0';
+    districtPanel.style.borderRadius = '10px';
+    districtPanel.style.background = '#f8fbff';
+
+    const districtSummary = document.createElement('div');
+    districtSummary.style.fontSize = '0.82em';
+    districtSummary.style.color = '#334155';
+    const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
+    const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
+    districtSummary.textContent = activeDistrictData
+        ? `Watching D${activeDistrictData.index + 1} | pop ${activeDistrictData.population} | food ${Math.round((activeDistrictData.foodPressure || 0) * 100)}% | housing ${Math.round((activeDistrictData.housingPressure || 0) * 100)}%`
+        : 'Watching the full baseline district';
+    districtPanel.appendChild(districtSummary);
+
+    const districtGrid = document.createElement('div');
+    const districtSide = Math.max(1, Math.round(Math.sqrt(districtMode)));
+    districtGrid.style.display = 'grid';
+    districtGrid.style.gridTemplateColumns = `repeat(${districtSide}, minmax(0, 1fr))`;
+    districtGrid.style.gap = '6px';
+
+    for (let i = 0; i < districtMode; i++) {
+        const btn = document.createElement('button');
+        const summary = districtData[i];
+        btn.textContent = summary ? `D${i + 1} · ${summary.population}` : `D${i + 1}`;
+        btn.style.padding = '6px 4px';
+        btn.style.borderRadius = '8px';
+        btn.style.fontWeight = '700';
+        btn.style.fontSize = '0.78em';
+        btn.style.border = i === sidebarParams.activeDistrictIndex ? '2px solid #f59e0b' : '1px solid #cbd5e1';
+        btn.style.background = i === sidebarParams.activeDistrictIndex ? '#fef3c7' : '#ffffff';
+        btn.style.cursor = 'pointer';
+        btn.onclick = () => {
+            sidebarParams.activeDistrictIndex = i;
+            window.activeDistrictIndex = i;
+            import('./world.js').then(worldMod => {
+                worldMod.setActiveDistrict?.(i);
+                renderCharacterDetail();
+            });
+        };
+        districtGrid.appendChild(btn);
+    }
+    districtPanel.appendChild(districtGrid);
+    districtPanel.dataset.label = 'Observed District';
+    tabPanels[0].appendChild(districtPanel);
+
     // Start/Pause toggle button (pinned at top)
     if (window.simulationRunning === undefined) window.simulationRunning = false;
     const toggleBtn = document.createElement('button');
@@ -1755,6 +1848,10 @@ function renderCharacterDetail() {
             import('./world.js').then(worldMod => {
                 if (typeof worldMod.removeAllCharacterObjects === 'function') {
                     worldMod.removeAllCharacterObjects();
+                }
+                if (typeof worldMod.setDistrictMode === 'function') {
+                    worldMod.setDistrictMode(Number(sidebarParams.districtMode) || 1);
+                    worldMod.setActiveDistrict(Number(sidebarParams.activeDistrictIndex) || 0);
                 }
                 // Reset module-level ID counter via exported function
                 if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();

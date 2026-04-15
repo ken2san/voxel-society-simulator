@@ -11,9 +11,10 @@
  * Output structure:
  * {
  *   meta:             { params, duration, worldSize }
- *   worldTimeline:    [ { t_sec, fruitCount, pop, groups, isolated, stageMix, conflictPairs, avgNeeds, season } ]
+ *   worldTimeline:    [ { t_sec, fruitCount, pop, groups, isolated, stageMix, conflictPairs, avgNeeds, season, districts } ]
  *   characterProfiles:[ { id, gen, isChild, lifeStageFirst, lifeStageLast, parentIds, born_t, died_t, cause, lifespan, peakLifeRatio } ]
  *   stageSummary:     [ { t_sec, child, young, adult, elder, dependencyRatio } ]
+ *   districtSummary:  [ { t_sec, districtMode, activeDistrictIndex, districts } ]
  *   socialSummary:    { t_sec: { avgRelationships, avgAffinity, isolationRate, conflictRate } }
  *   events:           [ { t_sec, kind, ...fields } ]
  * }
@@ -88,7 +89,11 @@ if (worldSamples.length > 0) {
         stageMix:     s.stageMix ?? stageMixBySecond.get(toSec(s.t)) ?? null,
         conflictPairs: s.conflictPairs,
         avgNeeds:     s.avgNeeds,
-        season:       s.season
+        season:       s.season,
+        districtMode: s.districtMode ?? 1,
+        activeDistrictIndex: s.activeDistrictIndex ?? 0,
+        activeDistrict: s.activeDistrict ?? null,
+        districts:    s.districts ?? []
     }));
 } else {
     // Fallback: derive from per-char samples (older telemetry files)
@@ -240,6 +245,17 @@ for (const [sec, group] of [...socialBySecond.entries()].sort((a, b) => a[0] - b
     });
 }
 
+const districtSummary = worldTimeline
+    .filter(w => Array.isArray(w.districts) && w.districts.length > 0)
+    .map(w => ({
+        t_sec: w.t_sec,
+        sim_sec: w.sim_sec,
+        districtMode: w.districtMode ?? 1,
+        activeDistrictIndex: w.activeDistrictIndex ?? 0,
+        activeDistrict: w.activeDistrict ?? null,
+        districts: w.districts
+    }));
+
 // ── events (re-keyed with sec) ─────────────────────────────────────────────
 
 function keepMeaningfulEvent(e) {
@@ -267,6 +283,7 @@ const output = {
     worldTimeline,
     characterProfiles,
     stageSummary,
+    districtSummary,
     socialSummary,
     events:             exportEvents
 };

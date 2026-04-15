@@ -44,6 +44,8 @@ export function setWorldObjects(objs) {
     gameCanvas = objs.gameCanvas;
     minimapCanvas = objs.minimapCanvas;
     minimapCtx = objs.minimapCtx;
+    applyDistrictVisualization();
+    emitDistrictChange();
 }
 export const blockSize = 1;
 export const gridSize = 16;
@@ -78,6 +80,255 @@ export function getFruitSpawnRate() { return fruitSpawnRate; }
 export function getStoneSpawnRate() { return stoneSpawnRate; }
 export function getCaveSpawnRate() { return caveSpawnRate; }
 export function getLeafSpawnRate() { return leafSpawnRate; }
+
+export const DISTRICT_MODE_OPTIONS = Object.freeze([1, 4, 16]);
+let districtMode = 1;
+let activeDistrictIndex = 0;
+
+function clampDistrictMode(mode) {
+    const numeric = Number(mode);
+    return DISTRICT_MODE_OPTIONS.includes(numeric) ? numeric : 1;
+}
+
+function getDistrictGridSide(mode = districtMode) {
+    return Math.max(1, Math.round(Math.sqrt(clampDistrictMode(mode))));
+}
+
+function roundDistrictValue(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+export function getDistrictMode() {
+    return districtMode;
+}
+
+export function getActiveDistrictIndex() {
+    return activeDistrictIndex;
+}
+
+export function getDistrictCount(mode = districtMode) {
+    const side = getDistrictGridSide(mode);
+    return side * side;
+}
+
+export function getDistrictCellSize(mode = districtMode) {
+    return gridSize / getDistrictGridSide(mode);
+}
+
+export function getDistrictIndexForPosition(pos, mode = districtMode) {
+    const side = getDistrictGridSide(mode);
+    if (side <= 1) return 0;
+    const cellSize = gridSize / side;
+    const x = Math.max(0, Math.min(gridSize - 1, Math.floor(Number(pos?.x) || 0)));
+    const z = Math.max(0, Math.min(gridSize - 1, Math.floor(Number(pos?.z) || 0)));
+    const col = Math.max(0, Math.min(side - 1, Math.floor(x / cellSize)));
+    const row = Math.max(0, Math.min(side - 1, Math.floor(z / cellSize)));
+    return row * side + col;
+}
+
+export function getDistrictBounds(index, mode = districtMode) {
+    const side = getDistrictGridSide(mode);
+    const count = side * side;
+    const safeIndex = Math.max(0, Math.min(count - 1, Number(index) || 0));
+    const cellSize = gridSize / side;
+    const row = Math.floor(safeIndex / side);
+    const col = safeIndex % side;
+    const minX = Math.floor(col * cellSize);
+    const maxX = Math.min(gridSize - 1, Math.floor((col + 1) * cellSize) - 1);
+    const minZ = Math.floor(row * cellSize);
+    const maxZ = Math.min(gridSize - 1, Math.floor((row + 1) * cellSize) - 1);
+    return {
+        index: safeIndex,
+        row,
+        col,
+        minX,
+        maxX,
+        minZ,
+        maxZ,
+        centerX: (minX + maxX + 1) / 2,
+        centerZ: (minZ + maxZ + 1) / 2
+    };
+}
+
+function isGridPositionInActiveDistrict(pos) {
+    if (districtMode === 1) return true;
+    return getDistrictIndexForPosition(pos, districtMode) === activeDistrictIndex;
+}
+
+function setObjectDistrictVisibility(obj, pos) {
+    if (!obj) return;
+    obj.visible = isGridPositionInActiveDistrict(pos);
+}
+
+export function getDistrictRuntimeForPosition(pos) {
+    const index = getDistrictIndexForPosition(pos, districtMode);
+    const isActive = districtMode === 1 || index === activeDistrictIndex;
+    return {
+        mode: districtMode,
+        sideLength: getDistrictGridSide(districtMode),
+        index,
+        activeDistrictIndex,
+        isActive,
+        shouldRender: isActive || districtMode === 1,
+        updateInterval: isActive ? 0 : (districtMode >= 16 ? 0.9 : 0.45),
+        bounds: getDistrictBounds(index, districtMode)
+    };
+}
+
+export function getDistrictSummaries(sourceChars = characters, prevStateMap = null) {
+    const count = getDistrictCount(districtMode);
+    const hasPrevState = prevStateMap instanceof Map && prevStateMap.size > 0;
+    const buckets = Array.from({ length: count }, (_, index) => ({
+        index,
+        label: `D${index + 1}`,
+        population: 0,
+        births: 0,
+        deaths: 0,
+        migrationIn: 0,
+        migrationOut: 0,
+        stageMix: { child: 0, young: 0, adult: 0, elder: 0 },
+        foodPressure: 0,
+        housingPressure: 0,
+        supportDensity: 0,
+        conflictLevel: 0,
+        avgNeeds: { hunger: 0, energy: 0, safety: 0, social: 0 }
+    }));
+    const sums = Array.from({ length: count }, () => ({
+        hunger: 0,
+        energy: 0,
+        safety: 0,
+        social: 0,
+        lowFood: 0,
+        noHome: 0,
+        supported: 0,
+        conflict: 0
+    }));
+
+    for (const c of Array.isArray(sourceChars) ? sourceChars : []) {
+        if (!c?.gridPos) continue;
+        const index = getDistrictIndexForPosition(c.gridPos, districtMode);
+        const bucket = buckets[index];
+        const sum = sums[index];
+        const alive = c.state !== 'dead';
+        const prev = hasPrevState ? prevStateMap.get(c.id) : null;
+
+        if (alive) {
+            bucket.population += 1;
+            const stage = c.getLifeStage ? c.getLifeStage() : (c.isChild ? 'child' : 'adult');
+            if (bucket.stageMix[stage] !== undefined) bucket.stageMix[stage] += 1;
+            sum.hunger += Number(c.needs?.hunger || 0);
+            sum.energy += Number(c.needs?.energy || 0);
+            sum.safety += Number(c.needs?.safety || 0);
+            sum.social += Number(c.needs?.social || 0);
+            if (Number(c.needs?.hunger || 0) < 40) sum.lowFood += 1;
+            if (!c.homePosition) sum.noHome += 1;
+            const hasSupport = !!c.groupId || Array.from(c.relationships?.values?.() || []).some(v => Number(v) >= 60);
+            if (hasSupport) sum.supported += 1;
+            if (c._nearEnemy) sum.conflict += 1;
+        }
+
+        if (hasPrevState && prev) {
+            if (prev.alive && !alive) {
+                const deathBucket = buckets[Math.max(0, Math.min(count - 1, Number(prev.districtIndex) || 0))];
+                deathBucket.deaths += 1;
+            } else if (!prev.alive && alive) {
+                bucket.births += 1;
+            }
+            if (alive && prev.districtIndex !== undefined && prev.districtIndex !== index) {
+                bucket.migrationIn += 1;
+                const prevBucket = buckets[Math.max(0, Math.min(count - 1, Number(prev.districtIndex) || 0))];
+                prevBucket.migrationOut += 1;
+            }
+        }
+    }
+
+    return buckets.map((bucket, index) => {
+        const n = Math.max(1, bucket.population);
+        const sum = sums[index];
+        return {
+            ...bucket,
+            foodPressure: roundDistrictValue(sum.lowFood / n),
+            housingPressure: roundDistrictValue(sum.noHome / n),
+            supportDensity: roundDistrictValue(sum.supported / n),
+            conflictLevel: roundDistrictValue(sum.conflict / n),
+            avgNeeds: {
+                hunger: roundDistrictValue(sum.hunger / n),
+                energy: roundDistrictValue(sum.energy / n),
+                safety: roundDistrictValue(sum.safety / n),
+                social: roundDistrictValue(sum.social / n)
+            },
+            migrationFlow: {
+                in: bucket.migrationIn,
+                out: bucket.migrationOut,
+                net: bucket.migrationIn - bucket.migrationOut
+            }
+        };
+    });
+}
+
+export function getDistrictState() {
+    return {
+        mode: districtMode,
+        sideLength: getDistrictGridSide(districtMode),
+        activeIndex: activeDistrictIndex,
+        activeBounds: getDistrictBounds(activeDistrictIndex, districtMode),
+        districts: Array.from({ length: getDistrictCount(districtMode) }, (_, index) => getDistrictBounds(index, districtMode))
+    };
+}
+
+function focusCameraOnActiveDistrict() {
+    if (!controls) return;
+    const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
+    controls.target.set(bounds.centerX, 2, bounds.centerZ);
+    if (camera) camera.lookAt(controls.target);
+}
+
+function emitDistrictChange() {
+    if (typeof window === 'undefined') return;
+    window.districtMode = districtMode;
+    window.activeDistrictIndex = activeDistrictIndex;
+    window.getDistrictRuntime = getDistrictRuntimeForPosition;
+    window.getDistrictObservationSummary = () => getDistrictSummaries();
+    window.getDistrictState = getDistrictState;
+    try {
+        window.dispatchEvent(new CustomEvent('district-changed', { detail: getDistrictState() }));
+    } catch (err) {
+        // ignore event dispatch issues in non-browser contexts
+    }
+}
+
+export function applyDistrictVisualization() {
+    if (scene) {
+        for (const [key, block] of visualBlocks.entries()) {
+            const [x, y, z] = key.split(',').map(Number);
+            setObjectDistrictVisibility(block, { x, y, z });
+        }
+    }
+    drawMinimap();
+}
+
+export function setDistrictMode(mode = 1) {
+    districtMode = clampDistrictMode(mode);
+    activeDistrictIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(activeDistrictIndex) || 0));
+    if (districtMode === 1) activeDistrictIndex = 0;
+    applyDistrictVisualization();
+    focusCameraOnActiveDistrict();
+    emitDistrictChange();
+    return getDistrictState();
+}
+
+export function setActiveDistrict(index = 0) {
+    activeDistrictIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(index) || 0));
+    if (districtMode === 1) activeDistrictIndex = 0;
+    applyDistrictVisualization();
+    focusCameraOnActiveDistrict();
+    emitDistrictChange();
+    return getDistrictState();
+}
+
+if (typeof window !== 'undefined') {
+    emitDistrictChange();
+}
 
 export const worldData = new Map();
 export const visualBlocks = new Map();
@@ -192,6 +443,7 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     }
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(block.geometry), edgeMaterial);
     block.add(edges);
+    setObjectDistrictVisibility(block, { x, y, z });
     visualBlocks.set(key, block);
     scene.add(block);
     if(updateMinimap) drawMinimap();
@@ -303,7 +555,7 @@ export function isSafeSpot(pos) {
     return false;
 }
 export function drawMinimap() {
-    if(!minimapCtx) return;
+    if(!minimapCtx || !minimapCanvas) return;
     const minimapSize = minimapCanvas.width;
     const cellSize = minimapSize / gridSize;
     minimapCtx.clearRect(0, 0, minimapSize, minimapSize);
@@ -319,6 +571,36 @@ export function drawMinimap() {
                 }
             }
         }
+    }
+
+    if (districtMode > 1) {
+        const side = getDistrictGridSide(districtMode);
+        const active = getDistrictBounds(activeDistrictIndex, districtMode);
+        const districtWidth = (active.maxX - active.minX + 1) * cellSize;
+        const districtHeight = (active.maxZ - active.minZ + 1) * cellSize;
+
+        minimapCtx.save();
+        minimapCtx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+        minimapCtx.fillRect(active.minX * cellSize, active.minZ * cellSize, districtWidth, districtHeight);
+
+        minimapCtx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
+        minimapCtx.lineWidth = 1;
+        for (let i = 1; i < side; i++) {
+            const pos = i * (minimapSize / side);
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(pos, 0);
+            minimapCtx.lineTo(pos, minimapSize);
+            minimapCtx.stroke();
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(0, pos);
+            minimapCtx.lineTo(minimapSize, pos);
+            minimapCtx.stroke();
+        }
+
+        minimapCtx.strokeStyle = 'rgba(255, 215, 0, 0.95)';
+        minimapCtx.lineWidth = 2;
+        minimapCtx.strokeRect(active.minX * cellSize, active.minZ * cellSize, districtWidth, districtHeight);
+        minimapCtx.restore();
     }
 }
 export function animate() {
@@ -464,6 +746,17 @@ export function animate() {
                 const n = _alive.length;
                 return { hunger: +(sum.hunger/n).toFixed(1), energy: +(sum.energy/n).toFixed(1), safety: +(sum.safety/n).toFixed(1), social: +(sum.social/n).toFixed(1) };
             })();
+            const _prevDistrictState = animate._districtTelemetryState instanceof Map ? animate._districtTelemetryState : new Map();
+            const _districts = getDistrictSummaries(_chars, _prevDistrictState);
+            const _nextDistrictState = new Map();
+            for (const c of _chars) {
+                if (!c?.gridPos) continue;
+                _nextDistrictState.set(c.id, {
+                    districtIndex: getDistrictIndexForPosition(c.gridPos, districtMode),
+                    alive: c.state !== 'dead'
+                });
+            }
+            animate._districtTelemetryState = _nextDistrictState;
 
             window.__simTelemetry.addWorldSample({
                 t: Date.now(),
@@ -474,7 +767,11 @@ export function animate() {
                 isolated: _isolated,
                 stageMix: _stageMix,
                 conflictPairs: _conflictPairs,
-                avgNeeds: _needsAvg
+                avgNeeds: _needsAvg,
+                districtMode,
+                activeDistrictIndex,
+                activeDistrict: _districts[activeDistrictIndex] ?? null,
+                districts: _districts
             });
         }
     }
@@ -511,11 +808,13 @@ export function animate() {
 export async function spawnCharacter(pos, genes = null) {
     if (pos) {
         const { Character } = await import('./character.js');
-    if (typeof window !== 'undefined' && window.DEBUG_MODE) {
-        try { console.log('[SPAWN] spawnCharacter called at', pos, 'genes=', genes); } catch (e) {}
+        if (typeof window !== 'undefined' && window.DEBUG_MODE) {
+            try { console.log('[SPAWN] spawnCharacter called at', pos, 'genes=', genes); } catch (e) {}
+        }
+        const char = new Character(scene, pos, nextCharacterId++, genes);
+        characters.push(char);
+        return char;
     }
-    const char = new Character(scene, pos, nextCharacterId++, genes);
-    characters.push(char);
-    }
+    return null;
 }
 // ...other world functions as needed...
