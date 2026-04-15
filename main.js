@@ -696,11 +696,17 @@ window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
         latestBirth: null,
         latestDeath: null
     };
-    // Reset unified event log and generation tracker on new simulation
+    // Reset unified event log and sidebar-derived trend histories on a fresh simulation run.
     window.__eventLog = [];
     window.__maxGenSeen = 0;
-    window.__deathRecords = []; // reset death record tombstones
-    window.__phaseHistory = []; // reset Society Phase trail
+    window.__deathRecords = [];
+    window.__phaseHistory = [];
+    window.__populationPulseHistory = [];
+    window.__populationMetricHistory = [];
+    window.characterHistory = {};
+    if (window.__selectedCharacterMarker) {
+        window.__selectedCharacterMarker.style.opacity = '0';
+    }
     return window.__simPopulationStats;
 };
 
