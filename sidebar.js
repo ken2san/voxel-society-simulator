@@ -1171,6 +1171,13 @@ function renderCharacterDetail() {
     cooldownCeilRow.dataset.label = 'Max Action Cooldown';
     tabPanels[3].appendChild(cooldownCeilRow);
 
+    const initialDistrictMode = [1, 4, 16].includes(Number(sidebarParams.districtMode)) ? Number(sidebarParams.districtMode) : 1;
+    const getPopulationCapacityByDistrictMode = (mode) => {
+        if (mode >= 16) return { recommended: 48, max: 120, label: 'high density' };
+        if (mode >= 4) return { recommended: 24, max: 80, label: 'district scaling' };
+        return { recommended: 10, max: 50, label: 'baseline' };
+    };
+
     // キャラ数
     const charNumRow = document.createElement('div');
     charNumRow.style.display = 'flex';
@@ -1180,11 +1187,12 @@ function renderCharacterDetail() {
     charNumLabel.textContent = 'Number of Characters:';
     charNumLabel.style.width = '140px';
     charNumRow.appendChild(charNumLabel);
+    const charCapacity = getPopulationCapacityByDistrictMode(initialDistrictMode);
     const charNumInput = document.createElement('input');
     charNumInput.type = 'range';
     charNumInput.min = 5;
-    charNumInput.max = 50;
-    charNumInput.value = sidebarParams.charNum;
+    charNumInput.max = charCapacity.max;
+    charNumInput.value = Math.max(5, Math.min(charCapacity.max, Number(sidebarParams.charNum) || charCapacity.recommended));
     charNumInput.style.flex = '1';
     charNumInput.style.margin = '0 8px';
     charNumInput.id = 'charNumInput';
@@ -1193,23 +1201,49 @@ function renderCharacterDetail() {
     const charNumVal = document.createElement('input');
     charNumVal.type = 'number';
     charNumVal.min = 5;
-    charNumVal.max = 50;
-    charNumVal.value = sidebarParams.charNum;
+    charNumVal.max = charCapacity.max;
+    charNumVal.value = Math.max(5, Math.min(charCapacity.max, Number(sidebarParams.charNum) || charCapacity.recommended));
     charNumVal.style.width = '48px';
     charNumVal.id = 'charNumVal';
     charNumVal.name = 'charNumVal';
     charNumRow.appendChild(charNumVal);
+    const populationHint = document.createElement('div');
+    populationHint.style.fontSize = '0.76em';
+    populationHint.style.color = '#64748b';
+    populationHint.style.marginTop = '-4px';
+    populationHint.style.marginLeft = '140px';
+
+    const syncPopulationCapacityUI = (mode, { autoTune = false, previousMode = mode } = {}) => {
+        const spec = getPopulationCapacityByDistrictMode(mode);
+        const prevSpec = getPopulationCapacityByDistrictMode(previousMode);
+        charNumInput.max = spec.max;
+        charNumVal.max = spec.max;
+        let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
+        if (autoTune && nextVal <= prevSpec.recommended) {
+            nextVal = spec.recommended;
+        }
+        sidebarParams.charNum = nextVal;
+        charNumInput.value = nextVal;
+        charNumVal.value = nextVal;
+        populationHint.textContent = `Recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
+    };
+
     // 双方向同期＋sidebarParams更新
     charNumInput.oninput = () => {
         charNumVal.value = charNumInput.value;
         sidebarParams.charNum = parseInt(charNumInput.value);
     };
     charNumVal.oninput = () => {
-        charNumInput.value = charNumVal.value;
-        sidebarParams.charNum = parseInt(charNumVal.value);
+        const maxAllowed = Number(charNumVal.max || charCapacity.max);
+        const safeValue = Math.max(5, Math.min(maxAllowed, Number(charNumVal.value) || 5));
+        charNumInput.value = safeValue;
+        charNumVal.value = safeValue;
+        sidebarParams.charNum = safeValue;
     };
     charNumRow.dataset.label = 'Number of Characters';
     tabPanels[0].appendChild(charNumRow);
+    tabPanels[0].appendChild(populationHint);
+    syncPopulationCapacityUI(initialDistrictMode);
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
 
@@ -1723,7 +1757,7 @@ function renderCharacterDetail() {
     randomCheck.disabled = paramDisabled;
 
     // District observation controls
-    const districtMode = [1, 4, 16].includes(Number(sidebarParams.districtMode)) ? Number(sidebarParams.districtMode) : 1;
+    const districtMode = initialDistrictMode;
     sidebarParams.districtMode = districtMode;
     sidebarParams.activeDistrictIndex = Math.max(0, Math.min(districtMode - 1, Number(sidebarParams.activeDistrictIndex) || 0));
     window.districtMode = districtMode;
@@ -1748,10 +1782,12 @@ function renderCharacterDetail() {
         btn.style.fontWeight = '700';
         btn.style.cursor = 'pointer';
         btn.onclick = () => {
+            const previousMode = sidebarParams.districtMode || 1;
             sidebarParams.districtMode = mode;
             if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;
             window.districtMode = mode;
             window.activeDistrictIndex = sidebarParams.activeDistrictIndex;
+            syncPopulationCapacityUI(mode, { autoTune: true, previousMode });
             import('./world.js').then(worldMod => {
                 worldMod.setDistrictMode?.(mode);
                 worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
@@ -1797,8 +1833,10 @@ function renderCharacterDetail() {
         btn.style.borderRadius = '8px';
         btn.style.fontWeight = '700';
         btn.style.fontSize = '0.78em';
-        btn.style.border = i === sidebarParams.activeDistrictIndex ? '2px solid #f59e0b' : '1px solid #cbd5e1';
-        btn.style.background = i === sidebarParams.activeDistrictIndex ? '#fef3c7' : '#ffffff';
+        const pressure = Number(summary?.socialPressure || 0);
+        const hue = Math.max(0, 120 - Math.round(pressure * 120));
+        btn.style.border = i === sidebarParams.activeDistrictIndex ? `2px solid hsl(${hue}, 85%, 38%)` : '1px solid #cbd5e1';
+        btn.style.background = i === sidebarParams.activeDistrictIndex ? `hsl(${hue}, 90%, 82%)` : `hsl(${hue}, 85%, 94%)`;
         btn.style.cursor = 'pointer';
         if (summary) {
             btn.title = `pop ${summary.population} | pressure ${Math.round((summary.socialPressure || 0) * 100)}% | support ${Math.round((summary.supportAccess || 0) * 100)}%`;

@@ -143,6 +143,9 @@ If an older handoff says “implement next” but conflicts with the sections ab
 - Latest hotfix (commit `b4db325`): fixed food-target blacklist persistence that caused telemetry to show `EAT = 0%` despite fruit existing in the world; added Society Phase history trail so phase transitions are readable over time
 - Observation upgrade: lifespan-ratio life stages are now live — child / young / adult / elder affect behavior through soft weighting instead of rigid scripting, and the sidebar exposes stage-mix trends for population reading
 - Telemetry upgrade: demographic stage mix and dependency ratio are now exported so population dynamics can be compared across runs, not just watched live
+- District scaling baseline is now live: `1 / 4 / 16` selector, active district switching, per-district observation summaries, and telemetry export support
+- District social-pressure link is now active through latent variables (`housingPressure`, `timeStress`, `supportAccess`, `relationshipStability`) instead of a separate pre-scaling system
+- Stability hotfixes shipped for rollout issues: startup freeze reduction, initial population preservation, and off-screen thought-bubble flicker cleanup
 
 ---
 
@@ -178,15 +181,27 @@ The user can switch which district is being observed while the full society cont
 1. **Preserve current behavior in 1-district mode**
    - this is the baseline and fallback mode
    - no behavior change should be required for old saves/tests
+   - **Status:** baseline compatibility preserved
 
 2. **Implement 4-district mode first**
    - this is the real target for the next thread
    - one active district rendered in full detail
    - the other 3 districts updated in lightweight aggregate form
+   - **Status:** baseline implementation live; now in stabilization / scaling polish
 
 3. **Add 16-district mode only after 4 is stable**
    - same architecture, just finer square partitioning
    - do not start here first
+   - **Status:** selector exists, but tuning should continue to follow 4-district validation first
+
+### Current district-scaling status snapshot
+
+- ✅ Active district switching and minimap framing
+- ✅ Per-district telemetry and export summaries
+- ✅ District-aware social pressure connection
+- ✅ Initial rollout regressions fixed (startup responsiveness, initial population, bubble flicker)
+- 🔲 Next: scale-friendly population presets and continue lightweight off-screen behavior tuning
+- 🔲 Next: validate larger-community observation in `4` mode with telemetry
 
 ### District simulation rules
 
