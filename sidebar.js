@@ -2864,13 +2864,14 @@ function renderCharacterList() {
         tableShell.className = 'character-table-shell';
         const summaryTable = document.createElement('table');
         summaryTable.className = 'character-summary-table';
+        const showAreaColumn = !isDistrictFiltered;
         // ヘッダー（日本語で分かりやすく＆見やすいスタイル）
         const thead = document.createElement('thead');
         const trh = document.createElement('tr');
         const headerLabels = [
             'ID',
             'Grp',
-            'Area',
+            ...(showAreaColumn ? ['Area'] : []),
             'Status',
             'Mood',
             'Hun',
@@ -2911,7 +2912,7 @@ function renderCharacterList() {
                 detailTr.style.display = 'none';
             }
             const detailTd = document.createElement('td');
-            detailTd.colSpan = 10;
+            detailTd.colSpan = showAreaColumn ? 10 : 9;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
             detailTd.appendChild(createCharacterDetailCard(char));
@@ -2952,20 +2953,21 @@ function renderCharacterList() {
                 tdGroup.textContent = '-';
             }
             tr.appendChild(tdGroup);
-            // Area / district label
-            const tdArea = document.createElement('td');
-            const runtime = (typeof window.getDistrictRuntime === 'function')
-                ? window.getDistrictRuntime(char.gridPos)
-                : null;
-            const districtIndex = runtime?.index ?? char.districtIndex ?? 0;
-            const districtLabel = `D${Number(districtIndex) + 1}`;
-            tdArea.textContent = districtLabel;
-            tdArea.title = runtime
-                ? `Area: ${districtLabel}${runtime.isActive ? ' · observed' : ''}`
-                : `Area: ${districtLabel}`;
-            tdArea.style.fontWeight = runtime?.isActive ? '700' : '600';
-            tdArea.style.color = runtime?.isActive ? '#b45309' : '#475569';
-            tr.appendChild(tdArea);
+            if (showAreaColumn) {
+                const tdArea = document.createElement('td');
+                const runtime = (typeof window.getDistrictRuntime === 'function')
+                    ? window.getDistrictRuntime(char.gridPos)
+                    : null;
+                const districtIndex = runtime?.index ?? char.districtIndex ?? 0;
+                const districtLabel = `D${Number(districtIndex) + 1}`;
+                tdArea.textContent = districtLabel;
+                tdArea.title = runtime
+                    ? `Area: ${districtLabel}${runtime.isActive ? ' · observed' : ''}`
+                    : `Area: ${districtLabel}`;
+                tdArea.style.fontWeight = runtime?.isActive ? '700' : '600';
+                tdArea.style.color = runtime?.isActive ? '#b45309' : '#475569';
+                tr.appendChild(tdArea);
+            }
             // Status: activity / urgency signals, distinct from emotional mood.
             const tdIcons = document.createElement('td');
             const status = getStatusDisplay(char);
