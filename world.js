@@ -245,8 +245,8 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
                 : [];
             const networkSnapshot = typeof c.getRelationshipSnapshot === 'function' ? c.getRelationshipSnapshot(4) : null;
             const allyAffinityThreshold = (typeof window !== 'undefined' && window.allyAffinityThreshold !== undefined) ? Number(window.allyAffinityThreshold) : 60;
-            const supportGroupBonus = (typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? Number(window.supportGroupBonus) : 0.22;
-            const supportAllyPresenceBonus = (typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? Number(window.supportAllyPresenceBonus) : 0.18;
+            const supportGroupBonus = (typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? Number(window.supportGroupBonus) : 0.26;
+            const supportAllyPresenceBonus = (typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? Number(window.supportAllyPresenceBonus) : 0.22;
             const supportStrength = Math.max(
                 Number(networkSnapshot?.supportScore || 0),
                 c.groupId ? supportGroupBonus : 0,

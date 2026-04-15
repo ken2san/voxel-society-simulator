@@ -2187,7 +2187,7 @@ class Character {
         let best = null;
         let bestScore = -Infinity;
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 2;
+        const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 3;
         const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
         const { nearbyRadius } = this.getSupportModelParams();
         const searchRange = Math.max(baseRange, nearbyRadius, 2 + Math.round(sociality * 2));
@@ -2410,9 +2410,9 @@ class Character {
             return Math.max(0, Math.min(1, numeric));
         };
         return {
-            nearbyRadius: Math.max(1, Math.min(10, Number((typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? window.nearbySupportRadius : 3))),
-            groupBonus: clampWeight((typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? window.supportGroupBonus : 0.22, 0.22),
-            allyPresenceBonus: clampWeight((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.18, 0.18),
+            nearbyRadius: Math.max(1, Math.min(10, Number((typeof window !== 'undefined' && window.nearbySupportRadius !== undefined) ? window.nearbySupportRadius : 4))),
+            groupBonus: clampWeight((typeof window !== 'undefined' && window.supportGroupBonus !== undefined) ? window.supportGroupBonus : 0.26, 0.26),
+            allyPresenceBonus: clampWeight((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.22, 0.22),
             comfortRecoveryRate: Math.max(0, Math.min(8, Number((typeof window !== 'undefined' && window.supportComfortRecoveryRate !== undefined) ? window.supportComfortRecoveryRate : 3))),
             groupComfortScale: Math.max(0, Math.min(2, Number((typeof window !== 'undefined' && window.supportGroupComfortScale !== undefined) ? window.supportGroupComfortScale : 0.5))),
             nightSafetyAllyBonus: Math.max(0, Math.min(6, Number((typeof window !== 'undefined' && window.supportNightSafetyAllyBonus !== undefined) ? window.supportNightSafetyAllyBonus : 1.5))),

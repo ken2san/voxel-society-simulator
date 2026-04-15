@@ -94,11 +94,12 @@ export function decideNextAction_rulebase(character, isNight) {
     );
     if (Math.random() < explorationWeight) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const nearbyPartnerRange = getTunableNumber('perceptionRange', 3, { min: 1, max: 8 });
         let nearbyPartner = null;
         for (const char of chars) {
             if (char.id === character.id) continue;
             const dist = Math.abs(character.gridPos.x - char.gridPos.x) + Math.abs(character.gridPos.y - char.gridPos.y) + Math.abs(character.gridPos.z - char.gridPos.z);
-            if (dist <= 2) { nearbyPartner = char; break; }
+            if (dist <= nearbyPartnerRange) { nearbyPartner = char; break; }
         }
         if (nearbyPartner) {
             character.setNextAction('SOCIALIZE', nearbyPartner, nearbyPartner.gridPos);

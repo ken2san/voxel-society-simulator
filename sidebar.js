@@ -229,9 +229,9 @@ function renderCharacterDetail() {
         acquaintanceAffinityThreshold:      30,
         allyAffinityThreshold:              60,
         bondedAffinityThreshold:            78,
-        nearbySupportRadius:                3,
-        supportGroupBonus:                  0.22,
-        supportAllyPresenceBonus:           0.18,
+        nearbySupportRadius:                4,
+        supportGroupBonus:                  0.26,
+        supportAllyPresenceBonus:           0.22,
         supportBondedWeight:                0.24,
         supportAllyWeight:                  0.12,
         supportNearbyWeight:                0.10,
@@ -247,7 +247,7 @@ function renderCharacterDetail() {
         opportunityConflictWeight:          0.10,
         opportunityPopulationWeight:        0.10,
         opportunityFoodWeight:              0.06,
-        perceptionRange:                    2,
+        perceptionRange:                    3,
         pairReproductionCooldownSeconds:    90,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
@@ -966,7 +966,7 @@ function renderCharacterDetail() {
     tabPanels[3].appendChild(reservationRow);
 
     // --- Perception/Socialize Range Slider ---
-    if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 2;
+    if (sidebarParams.perceptionRange === undefined) sidebarParams.perceptionRange = 3;
     const perceptionRow = document.createElement('div');
     perceptionRow.style.display = 'flex';
     perceptionRow.style.alignItems = 'center';
