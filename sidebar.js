@@ -200,6 +200,16 @@ function renderCharacterDetail() {
         characterLifespan:                  240,
         homeReturnHungerLevel:              90,
         homeBuildingPriority:               80,
+        explorationBaseRate:                0.10,
+        explorationMinRate:                 0.02,
+        explorationMaxRate:                 0.20,
+        explorationAdaptBoost:              0.45,
+        explorationForagePenalty:           0.55,
+        explorationRestPenalty:             0.50,
+        socialAdaptationBoost:              0.35,
+        socialForagePenalty:                0.25,
+        socialRestPenalty:                  0.20,
+        lowPrioritySocialOffset:            60,
         initialAffinityMin:                 20,
         initialAffinityMax:                 40,
         affinityIncreaseRate:               10,
@@ -786,6 +796,40 @@ function renderCharacterDetail() {
     appendCompactSliderInput(supportWeightsRow, 'Top', 'supportTopAffinityWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     supportWeightsRow.dataset.label = 'Support Weights';
     tabPanels[1].appendChild(supportWeightsRow);
+
+    const socialDecisionRow = document.createElement('div');
+    socialDecisionRow.style.display = 'flex';
+    socialDecisionRow.style.alignItems = 'center';
+    socialDecisionRow.style.flexWrap = 'wrap';
+    socialDecisionRow.style.gap = '8px';
+    const socialDecisionLabel = document.createElement('span');
+    socialDecisionLabel.textContent = 'Decision Biases:';
+    socialDecisionLabel.style.width = '140px';
+    socialDecisionRow.appendChild(socialDecisionLabel);
+    appendCompactSliderInput(socialDecisionRow, 'Exp', 'explorationBaseRate', { min: 0, max: 0.4, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialDecisionRow, 'ExpMin', 'explorationMinRate', { min: 0, max: 0.2, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialDecisionRow, 'ExpMax', 'explorationMaxRate', { min: 0, max: 0.5, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialDecisionRow, 'SocOff', 'lowPrioritySocialOffset', { min: 0, max: 100, step: 1, width: '64px', sliderWidth: '72px' });
+    socialDecisionRow.dataset.label = 'Decision Biases';
+    tabPanels[1].appendChild(socialDecisionRow);
+
+    const socialAdaptRow = document.createElement('div');
+    socialAdaptRow.style.display = 'flex';
+    socialAdaptRow.style.alignItems = 'center';
+    socialAdaptRow.style.flexWrap = 'wrap';
+    socialAdaptRow.style.gap = '8px';
+    const socialAdaptLabel = document.createElement('span');
+    socialAdaptLabel.textContent = 'Adapt Weights:';
+    socialAdaptLabel.style.width = '140px';
+    socialAdaptRow.appendChild(socialAdaptLabel);
+    appendCompactSliderInput(socialAdaptRow, 'Exp+', 'explorationAdaptBoost', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialAdaptRow, 'ExpFor-', 'explorationForagePenalty', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialAdaptRow, 'ExpRes-', 'explorationRestPenalty', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialAdaptRow, 'Forage-', 'socialForagePenalty', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialAdaptRow, 'Rest-', 'socialRestPenalty', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialAdaptRow, 'Soc+', 'socialAdaptationBoost', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    socialAdaptRow.dataset.label = 'Adapt Weights';
+    tabPanels[1].appendChild(socialAdaptRow);
 
     // --- Dig cooldown controls ---
     const digRow = document.createElement('div');

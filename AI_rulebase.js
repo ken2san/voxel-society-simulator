@@ -3,6 +3,12 @@
 // It is designed to be called as: decideNextAction_rulebase(character, isNight)
 import { worldData, BLOCK_TYPES, ITEM_TYPES, maxHeight, removeBlock, addBlock } from './world.js';
 
+function getTunableNumber(key, fallback, { min = -Infinity, max = Infinity } = {}) {
+    const raw = (typeof window !== 'undefined' && window[key] !== undefined) ? Number(window[key]) : fallback;
+    const numeric = Number.isFinite(raw) ? raw : fallback;
+    return Math.max(min, Math.min(max, numeric));
+}
+
 export function decideNextAction_rulebase(character, isNight) {
     // === RULE-BASED AI DECISION SYSTEM ===
     // Priority Order: Social → Home Building → Role-based → Survival → Work
@@ -17,6 +23,16 @@ export function decideNextAction_rulebase(character, isNight) {
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
+    const explorationBaseRate = getTunableNumber('explorationBaseRate', 0.10, { min: 0, max: 0.4 });
+    const explorationMinRate = getTunableNumber('explorationMinRate', 0.02, { min: 0, max: 0.2 });
+    const explorationMaxRate = getTunableNumber('explorationMaxRate', 0.20, { min: 0, max: 0.5 });
+    const explorationAdaptBoost = getTunableNumber('explorationAdaptBoost', 0.45, { min: 0, max: 1 });
+    const explorationForagePenalty = getTunableNumber('explorationForagePenalty', 0.55, { min: 0, max: 1 });
+    const explorationRestPenalty = getTunableNumber('explorationRestPenalty', 0.50, { min: 0, max: 1 });
+    const socialAdaptationBoost = getTunableNumber('socialAdaptationBoost', 0.35, { min: 0, max: 1 });
+    const socialForagePenalty = getTunableNumber('socialForagePenalty', 0.25, { min: 0, max: 1 });
+    const socialRestPenalty = getTunableNumber('socialRestPenalty', 0.20, { min: 0, max: 1 });
+    const lowPrioritySocialOffset = getTunableNumber('lowPrioritySocialOffset', 60, { min: 0, max: 100 });
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
     const aging = character.getAgingProfile
@@ -71,10 +87,10 @@ export function decideNextAction_rulebase(character, isNight) {
 
     // === PRIORITY 1: RANDOM EXPLORATION (base 10%; curiosity scales it) ===
     const explorationWeight = clamp(
-        0.10 * (character.personality.curiosity ?? 1.0) * (aging.exploreMul || 1.0)
-            * (1 + (adapt.explore * 0.45) - (adapt.forage * 0.55) - (adapt.rest * 0.50)),
-        0.02,
-        0.20
+        explorationBaseRate * (character.personality.curiosity ?? 1.0) * (aging.exploreMul || 1.0)
+            * (1 + (adapt.explore * explorationAdaptBoost) - (adapt.forage * explorationForagePenalty) - (adapt.rest * explorationRestPenalty)),
+        explorationMinRate,
+        explorationMaxRate
     );
     if (Math.random() < explorationWeight) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
@@ -97,7 +113,7 @@ export function decideNextAction_rulebase(character, isNight) {
 
     // === PRIORITY 2: SOCIAL NEEDS ===
     // sociality scales the threshold: social characters seek interaction earlier
-    const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0) * (aging.socialMul || 1.0) * (1 + adapt.social * 0.35 - adapt.forage * 0.25 - adapt.rest * 0.20);
+    const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0) * (aging.socialMul || 1.0) * (1 + adapt.social * socialAdaptationBoost - adapt.forage * socialForagePenalty - adapt.rest * socialRestPenalty);
     if (character.needs.social <= effectiveSocialThreshold) {
         const partner = character.findClosestPartner && character.findClosestPartner();
         if (partner) {
@@ -706,7 +722,7 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 9: SOCIAL NEEDS (Lower priority) ===
-    if (character.needs.social < socialThreshold + 60) {
+    if (character.needs.social < socialThreshold + lowPrioritySocialOffset) {
         const partner = character.findClosestPartner();
         if (partner) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos);

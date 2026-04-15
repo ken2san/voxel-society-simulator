@@ -63,6 +63,13 @@ Any new tunable parameter **must** complete all three steps:
 
 Omitting any of the three steps is considered incomplete. Parameters that skip the slider step are not adjustable and violate the observability principle.
 
+### Hardcode Policy
+
+- **Experiment-facing coefficients must not stay as unexplained literals.** If changing a number would alter telemetry, social structure, fertility, migration, survival, or other observed outcomes, that number belongs in the simulator settings and sidebar.
+- **Hardcoded values are allowed only when they are theory-backed implementation constants** such as geometry invariants, safety clamps, rendering/layout values, or anti-thrash guardrails.
+- **Any intentional hardcoded constant should be locally justified** with a short comment explaining why it is not treated as an experimental parameter.
+- When uncertain, treat the number as a tunable first.
+
 ---
 
 ## Phase 1 - Core Simulation Stability
