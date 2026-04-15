@@ -3061,7 +3061,7 @@ class Character {
             const partner = this.action?.target;
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
             const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
-            const { ally: socializeCompletionAffinity } = this.getRelationshipThresholds();
+            const { bonded: socializeCompletionAffinity } = this.getRelationshipThresholds();
             const { nearbyRadius } = this.getSupportModelParams();
 
             if (partner && partner.state === 'socializing') {
@@ -3162,7 +3162,7 @@ class Character {
                 this.state = 'idle';
                 this.action = null;
             }
-            // SOCIALIZE終了条件を緩和：socialニーズが高くても続行（ally threshold到達まで優先）
+            // Let strong conversations continue until the tie reaches the bonded tier.
             const currentAffinity = this.relationships.get(partner?.id) || 0;
             if(this.needs.social >= 100 && currentAffinity >= socializeCompletionAffinity) {
                 this.state = 'idle';
