@@ -769,9 +769,21 @@ window.__simTelemetry = {
             age: round2(sample.age),
             lifespan: Number(sample.lifespan || 0),
             lifeRatio: round2(sample.lifeRatio),
+            pos: sample.pos ? {
+                x: Number(sample.pos.x || 0),
+                y: Number(sample.pos.y || 0),
+                z: Number(sample.pos.z || 0)
+            } : undefined,
+            target: sample.target ? {
+                x: Number(sample.target.x || 0),
+                y: Number(sample.target.y || 0),
+                z: Number(sample.target.z || 0)
+            } : null,
             pathLen: Number(sample.pathLen || 0),
             actionCooldown: round2(sample.actionCooldown),
             microPause: round2(sample.microPause),
+            blockedRetry: Number(sample.blockedRetry || 0),
+            bfsFailCount: Number(sample.bfsFailCount || 0),
             moveDistance: round2(sample.moveDistance),
             nearEnemy: !!sample.nearEnemy,
             needs: sample.needs ? {
@@ -784,6 +796,20 @@ window.__simTelemetry = {
                 relationshipCount: Number(sample.social.relationshipCount || 0),
                 avgAffinity: round2(sample.social.avgAffinity),
                 groupSize: Number(sample.social.groupSize || 1)
+            } : undefined,
+            home: sample.home ? {
+                hasHome: !!sample.home.hasHome,
+                distance: sample.home.distance != null ? Number(sample.home.distance) : null
+            } : undefined,
+            inventory: sample.inventory ? {
+                count: Number(sample.inventory.count || 0),
+                hasTool: !!sample.inventory.hasTool,
+                hasWood: !!sample.inventory.hasWood
+            } : undefined,
+            decisionPressure: sample.decisionPressure ? {
+                lowHunger: !!sample.decisionPressure.lowHunger,
+                lowEnergy: !!sample.decisionPressure.lowEnergy,
+                stallLike: !!sample.decisionPressure.stallLike
             } : undefined
         };
         if (!this._profiledIds.has(compact.id) && sample.personality) {
@@ -808,7 +834,17 @@ window.__simTelemetry = {
     },
     addEvent(evt) {
         if (!evt) return;
-        if (evt.kind === 'action-transition') return;
+        if (evt.kind === 'action-transition') {
+            const getAction = (value) => {
+                const part = String(value || '').split('|').pop();
+                return (!part || part === '-') ? null : part;
+            };
+            const fromAction = getAction(evt.from);
+            const toAction = getAction(evt.to ?? evt.action);
+            const importantActions = new Set(['COLLECT_FOOD', 'EAT', 'REST', 'SOCIALIZE', 'BUILD_HOME', 'DIG', 'FLEE', 'ATTACK', 'REPRODUCE']);
+            if (fromAction === toAction && (toAction === 'WANDER' || toAction === null)) return;
+            if (!importantActions.has(fromAction) && !importantActions.has(toAction)) return;
+        }
         if (this.events.length >= window.simTelemetryConfig.maxEvents) {
             this.counters.droppedEvents++;
             return;
@@ -828,8 +864,6 @@ window.__simTelemetry = {
                 social: round2(evt.needs.social)
             };
         }
-        delete compact.target;
-        delete compact.pos;
         this.events.push(compact);
     },
     snapshotMeta() {

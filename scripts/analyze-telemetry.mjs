@@ -146,17 +146,15 @@ if (meta.population) {
 
 const birthEvents = events.filter(e => e && e.kind === 'birth').length;
 const deathEvents = events.filter(e => e && e.kind === 'death');
-let actionTransitions = events.filter(e => e && e.kind === 'action-transition');
-if (actionTransitions.length === 0) {
-  for (const [id, arr] of byId.entries()) {
-    let prevKey = null;
-    for (const s of arr) {
-      const key = `${s.state || 'unknown'}|${s.action || '-'}`;
-      if (prevKey !== null && key !== prevKey) {
-        actionTransitions.push({ id, from: prevKey, to: key });
-      }
-      prevKey = key;
+const actionTransitions = [];
+for (const [id, arr] of byId.entries()) {
+  let prevKey = null;
+  for (const s of arr) {
+    const key = `${s.state || 'unknown'}|${s.action || '-'}`;
+    if (prevKey !== null && key !== prevKey) {
+      actionTransitions.push({ id, from: prevKey, to: key });
     }
+    prevKey = key;
   }
 }
 const deathByCause = deathEvents.reduce((acc, e) => {

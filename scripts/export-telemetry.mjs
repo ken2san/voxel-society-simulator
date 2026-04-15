@@ -242,8 +242,22 @@ for (const [sec, group] of [...socialBySecond.entries()].sort((a, b) => a[0] - b
 
 // ── events (re-keyed with sec) ─────────────────────────────────────────────
 
+function keepMeaningfulEvent(e) {
+    if (!e) return false;
+    if (e.kind !== 'action-transition') return true;
+    const getAction = (value) => {
+        const part = String(value || '').split('|').pop();
+        return (!part || part === '-') ? null : part;
+    };
+    const fromAction = getAction(e.from);
+    const toAction = getAction(e.to ?? e.action);
+    const importantActions = new Set(['COLLECT_FOOD', 'EAT', 'REST', 'SOCIALIZE', 'BUILD_HOME', 'DIG', 'FLEE', 'ATTACK', 'REPRODUCE']);
+    if (fromAction === toAction && (toAction === 'WANDER' || toAction === null)) return false;
+    return importantActions.has(fromAction) || importantActions.has(toAction);
+}
+
 const exportEvents = events
-    .filter(e => e && e.kind !== 'action-transition')
+    .filter(keepMeaningfulEvent)
     .map(e => ({ ...e, t_sec: toSec(e.t), sim_sec: toSimSec(e.t) }));
 
 // ── assemble ──────────────────────────────────────────────────────────────────
