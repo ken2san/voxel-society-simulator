@@ -1817,15 +1817,22 @@ function renderCharacterDetail() {
     if (window.simulationRunning === undefined) window.simulationRunning = false;
     const toggleBtn = document.createElement('button');
     function updateToggleBtn() {
-        if (!window.characters || window.characters.length === 0) {
+        if (window.__simStarting) {
+            toggleBtn.textContent = 'Starting…';
+            toggleBtn.style.background = 'linear-gradient(90deg,#dbeafe 10%,#fde68a 100%)';
+            toggleBtn.disabled = true;
+        } else if (!window.characters || window.characters.length === 0) {
             toggleBtn.textContent = 'Start';
             toggleBtn.style.background = 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
+            toggleBtn.disabled = false;
         } else if (window.simulationRunning) {
             toggleBtn.textContent = 'Pause';
             toggleBtn.style.background = 'linear-gradient(90deg,#ffe8a3 10%,#ffd5b3 100%)';
+            toggleBtn.disabled = false;
         } else {
             toggleBtn.textContent = 'Start';
             toggleBtn.style.background = 'linear-gradient(90deg,#bfffb2 10%,#dcffe0 100%)';
+            toggleBtn.disabled = false;
         }
     }
     toggleBtn.style.fontSize = '1.0em';
@@ -1838,66 +1845,73 @@ function renderCharacterDetail() {
     toggleBtn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
     updateToggleBtn();
     toggleBtn.onclick = () => {
+        if (window.__simStarting) return;
         if (!window.simulationRunning) {
             // Start: regenerate character array from sidebar params (reset)
             const num = parseInt(sidebarParams.charNum);
             const socialTh = parseInt(sidebarParams.socialTh);
             const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
             const useRandom = !!sidebarParams.useRandom;
+            window.__simStarting = true;
+            updateToggleBtn();
             // Reset existing characters and IDs
             window.characters = [];
             // Reflect group threshold globally
             window.groupAffinityThreshold = groupAffinityTh;
             // Call removeAllCharacterObjects from world.js
-            import('./world.js').then(worldMod => {
-                if (typeof worldMod.removeAllCharacterObjects === 'function') {
-                    worldMod.removeAllCharacterObjects();
-                }
-                if (typeof worldMod.setDistrictMode === 'function') {
-                    worldMod.setDistrictMode(Number(sidebarParams.districtMode) || 1);
-                    worldMod.setActiveDistrict(Number(sidebarParams.activeDistrictIndex) || 0);
-                }
-                // Reset module-level ID counter via exported function
-                if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();
-                if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
-                const spawnAll = async () => {
-                    for (let i = 0; i < num; i++) {
-                        const pos = worldMod.findValidSpawn();
-                        if (pos) {
-                            const char = await worldMod.spawnCharacter(pos);
-                            if (char) {
-                                char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
-                                char.needs = {
-                                    hunger: 100,
-                                    energy: 100,
-                                    safety: 100,
-                                    social: socialTh
-                                };
-                                char.mood = 'neutral';
+            import('./world.js').then(async (worldMod) => {
+                try {
+                    if (typeof worldMod.removeAllCharacterObjects === 'function') {
+                        worldMod.removeAllCharacterObjects();
+                    }
+                    if (typeof worldMod.setDistrictMode === 'function') {
+                        worldMod.setDistrictMode(Number(sidebarParams.districtMode) || 1);
+                        worldMod.setActiveDistrict(Number(sidebarParams.activeDistrictIndex) || 0);
+                    }
+                    // Reset module-level ID counter via exported function
+                    if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();
+                    if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
+                    const spawnBatchSize = Math.max(4, Math.min(12, Math.ceil(num / 5)));
+                    const spawnAll = async () => {
+                        for (let i = 0; i < num; i++) {
+                            const pos = worldMod.findValidSpawn();
+                            if (pos) {
+                                const char = worldMod.spawnCharacter(pos);
+                                if (char) {
+                                    char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
+                                    char.needs = {
+                                        hunger: 100,
+                                        energy: 100,
+                                        safety: 100,
+                                        social: socialTh
+                                    };
+                                }
+                            }
+                            if ((i + 1) % spawnBatchSize === 0) {
+                                await new Promise(resolve => window.requestAnimationFrame(resolve));
                             }
                         }
-                    }
-                    window.characters = worldMod.characters;
-                    // --- Reflect parameters to window before group initialization ---
-                    window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
-                    window.initialAffinityMin = sidebarParams.initialAffinityMin;
-                    window.initialAffinityMax = sidebarParams.initialAffinityMax;
-                    window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
-                    window.socialThreshold = socialTh;
-                    window.perceptionRange = sidebarParams.perceptionRange;
-                    window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
-                    window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
-                    window.characterLifespan = sidebarParams.characterLifespan;
-                    window.initialAgeMaxRatio = sidebarParams.initialAgeMaxRatio;
-                    window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
-                    if (typeof window.applyInitialAgeSpread === 'function') {
-                        window.applyInitialAgeSpread(window.characters);
-                    }
-                    if (typeof window.resetPopulationStats === 'function') {
-                        window.resetPopulationStats(window.characters.length);
-                    }
-                    // --- Initialize groups here ---
-                    import('./character.js').then(charMod => {
+                        window.characters = worldMod.characters;
+                        // --- Reflect parameters to window before group initialization ---
+                        window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+                        window.initialAffinityMin = sidebarParams.initialAffinityMin;
+                        window.initialAffinityMax = sidebarParams.initialAffinityMax;
+                        window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
+                        window.socialThreshold = socialTh;
+                        window.perceptionRange = sidebarParams.perceptionRange;
+                        window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
+                        window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
+                        window.characterLifespan = sidebarParams.characterLifespan;
+                        window.initialAgeMaxRatio = sidebarParams.initialAgeMaxRatio;
+                        window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
+                        if (typeof window.applyInitialAgeSpread === 'function') {
+                            window.applyInitialAgeSpread(window.characters);
+                        }
+                        if (typeof window.resetPopulationStats === 'function') {
+                            window.resetPopulationStats(window.characters.length);
+                        }
+                        // --- Initialize groups here ---
+                        const charMod = await import('./character.js');
                         if (typeof charMod.Character?.initializeAllRelationships === 'function') {
                             charMod.Character.initializeAllRelationships(window.characters);
                         }
@@ -1905,11 +1919,18 @@ function renderCharacterDetail() {
                             charMod.Character.detectGroupsAndElectLeaders(window.characters);
                         }
                         window.simulationRunning = true;
+                        window.__simStarting = false;
+                        updateToggleBtn();
                         window.renderCharacterList && window.renderCharacterList();
                         renderCharacterDetail();
-                    });
-                };
-                spawnAll();
+                    };
+                    await spawnAll();
+                } catch (err) {
+                    console.error('[Simulation] start failed', err);
+                    window.__simStarting = false;
+                    updateToggleBtn();
+                    renderCharacterDetail();
+                }
             });
         } else {
             window.simulationRunning = false;
