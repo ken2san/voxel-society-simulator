@@ -2017,6 +2017,68 @@ let leftSidebar = null;
 let rightSidebar = null;
 // サマリー表で開いている詳細キャラID
 let openedCharId = undefined;
+
+function ensureSelectedCharacterMarker() {
+    if (typeof document === 'undefined' || !document.body) return null;
+    let marker = window.__selectedCharacterMarker;
+    if (marker && marker.parentNode) return marker;
+
+    marker = document.createElement('div');
+    marker.style.position = 'fixed';
+    marker.style.left = '0px';
+    marker.style.top = '0px';
+    marker.style.zIndex = '1100';
+    marker.style.pointerEvents = 'none';
+    marker.style.opacity = '0';
+    marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+    marker.style.transition = 'opacity 0.15s ease, transform 0.15s ease, left 0.08s linear, top 0.08s linear';
+    marker.style.display = 'flex';
+    marker.style.flexDirection = 'column';
+    marker.style.alignItems = 'center';
+    marker.innerHTML =
+        `<div style="padding:2px 7px;border-radius:999px;background:rgba(15,23,42,0.88);color:#f8fafc;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.18);">Tracking</div>` +
+        `<div style="margin-top:2px;width:20px;height:20px;border:3px solid #f59e0b;border-radius:999px;background:rgba(251,191,36,0.14);box-shadow:0 0 0 2px rgba(255,255,255,0.85) inset, 0 0 10px rgba(245,158,11,0.35);"></div>`;
+    document.body.appendChild(marker);
+    window.__selectedCharacterMarker = marker;
+    return marker;
+}
+
+function updateSelectedCharacterMarker() {
+    const marker = ensureSelectedCharacterMarker();
+    if (!marker) return;
+
+    const selectedId = openedCharId != null ? String(openedCharId) : '';
+    if (!selectedId || !Array.isArray(window.characters)) {
+        marker.style.opacity = '0';
+        marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+        return;
+    }
+
+    const char = window.characters.find(c => String(c?.id) === selectedId && c?.state !== 'dead');
+    if (!char || typeof char.getScreenPosition !== 'function') {
+        marker.style.opacity = '0';
+        marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+        return;
+    }
+
+    const screenPos = char.getScreenPosition();
+    if (!screenPos) {
+        marker.style.opacity = '0';
+        marker.style.transform = 'translate(-50%, -50%) scale(0.9)';
+        return;
+    }
+
+    marker.style.left = `${screenPos.x}px`;
+    marker.style.top = `${screenPos.y - 34}px`;
+    marker.style.opacity = '1';
+    marker.style.transform = 'translate(-50%, -50%) scale(1)';
+    const label = marker.firstElementChild;
+    if (label) label.textContent = `ID ${selectedId}`;
+}
+
+if (window.__selectedCharacterMarkerInterval) clearInterval(window.__selectedCharacterMarkerInterval);
+window.__selectedCharacterMarkerInterval = setInterval(updateSelectedCharacterMarker, 120);
+
 // Lightweight population pulse history for compact trend visualization.
 if (!window.__populationPulseHistory) window.__populationPulseHistory = [];
 if (!window.__populationMetricHistory) window.__populationMetricHistory = [];
@@ -2871,6 +2933,7 @@ function renderCharacterList() {
     // --- 全体サマリー表（アコーディオン型詳細展開付き） ---
     if (openedCharId && !visibleChars.some(char => String(char.id) === String(openedCharId))) {
         openedCharId = null;
+        updateSelectedCharacterMarker();
     }
 
     if (visibleChars.length > 0) {
@@ -2945,6 +3008,7 @@ function renderCharacterList() {
                 openedCharId = String(char.id);
                 tr.classList.add('is-open');
                 detailTr.style.display = '';
+                updateSelectedCharacterMarker();
                 e.stopPropagation();
             };
             // ID
@@ -3027,6 +3091,7 @@ function renderCharacterList() {
             }
             // 全ての詳細パネルを閉じる
             openedCharId = null;
+            updateSelectedCharacterMarker();
             leftSidebar.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
             leftSidebar.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
         };
@@ -3049,6 +3114,7 @@ function renderCharacterList() {
         emptyState.textContent = 'No active character cards remain, but the society metrics above are preserved.';
         leftSidebar.appendChild(emptyState);
     }
+    updateSelectedCharacterMarker();
     renderEventTimeline();
 // サマリー表の詳細カード生成
 function createCharacterDetailCard(char) {
