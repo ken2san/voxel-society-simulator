@@ -1823,6 +1823,7 @@ let rightSidebar = null;
 let openedCharId = undefined;
 // Lightweight population pulse history for compact trend visualization.
 if (!window.__populationPulseHistory) window.__populationPulseHistory = [];
+if (!window.__populationMetricHistory) window.__populationMetricHistory = [];
 
 function pushPopulationPulseSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return;
@@ -1839,6 +1840,16 @@ function pushPopulationPulseSnapshot(snapshot) {
         avgEnergy: Number(snapshot.avgEnergy || 0)
     });
     if (arr.length > 180) arr.shift(); // Keep about 3 minutes at 1 Hz.
+}
+
+function pushPopulationMetricSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    const arr = window.__populationMetricHistory;
+    const now = Number(snapshot.t || Date.now());
+    const last = arr[arr.length - 1];
+    if (last && now - last.t < 800) return;
+    arr.push({ ...snapshot, t: now });
+    if (arr.length > 180) arr.shift();
 }
 
 function computePerMinuteDelta(history, key, windowMs = 60000) {
@@ -1878,6 +1889,90 @@ function createSparklineSVG(values, color, width = 86, height = 24) {
     );
 }
 
+function createTrendChartSVG(values, color = '#2563eb', width = 460, height = 220) {
+    if (!Array.isArray(values) || values.length === 0) {
+        return `<div style="padding:24px;text-align:center;color:#94a3b8;">No metric history yet.</div>`;
+    }
+    const padL = 36, padR = 10, padT = 12, padB = 28;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1e-6, max - min);
+    const innerW = width - padL - padR;
+    const innerH = height - padT - padB;
+    const step = values.length > 1 ? innerW / (values.length - 1) : 0;
+    const points = values.map((v, i) => {
+        const x = padL + i * step;
+        const y = padT + innerH - ((v - min) / span) * innerH;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+    const gridYs = [0, 0.5, 1].map(r => {
+        const y = padT + innerH * r;
+        return `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="rgba(148,163,184,0.35)" stroke-dasharray="3 4"></line>`;
+    }).join('');
+    return (
+        `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">` +
+            `<rect x="0" y="0" width="${width}" height="${height}" rx="12" fill="#f8fbff"></rect>` +
+            gridYs +
+            `<line x1="${padL}" y1="${height - padB}" x2="${width - padR}" y2="${height - padB}" stroke="#cbd5e1"></line>` +
+            `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${height - padB}" stroke="#cbd5e1"></line>` +
+            `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>` +
+            `<text x="8" y="${padT + 8}" fill="#64748b" font-size="11">${max.toFixed(1)}</text>` +
+            `<text x="8" y="${height - padB + 4}" fill="#64748b" font-size="11">${min.toFixed(1)}</text>` +
+            `<text x="${padL}" y="${height - 8}" fill="#94a3b8" font-size="11">3m ago</text>` +
+            `<text x="${width / 2 - 16}" y="${height - 8}" fill="#94a3b8" font-size="11">90s</text>` +
+            `<text x="${width - 34}" y="${height - 8}" fill="#94a3b8" font-size="11">now</text>` +
+        `</svg>`
+    );
+}
+
+function ensureMetricDialog() {
+    let dlg = document.getElementById('population-metric-dialog');
+    if (dlg) return dlg;
+    dlg = document.createElement('div');
+    dlg.id = 'population-metric-dialog';
+    dlg.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,0.45);z-index:40;padding:20px;';
+    dlg.innerHTML =
+        `<div id="population-metric-panel" style="width:min(560px,92vw);max-height:80vh;overflow:auto;background:#fff;border:1px solid #dbeafe;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,0.25);padding:14px;">` +
+            `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">` +
+                `<div id="population-metric-title" style="font-weight:800;color:#1e3a8a;font-size:1.02em;">Metric trend</div>` +
+                `<span style="flex:1;"></span>` +
+                `<button type="button" id="population-metric-close" style="border:none;background:#eff6ff;color:#1d4ed8;border-radius:8px;padding:6px 10px;cursor:pointer;font-weight:700;">Close</button>` +
+            `</div>` +
+            `<div id="population-metric-meta" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"></div>` +
+            `<div id="population-metric-chart"></div>` +
+        `</div>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('click', (e) => {
+        if (e.target === dlg) dlg.style.display = 'none';
+    });
+    dlg.querySelector('#population-metric-close').addEventListener('click', () => {
+        dlg.style.display = 'none';
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dlg.style.display !== 'none') dlg.style.display = 'none';
+    });
+    return dlg;
+}
+
+function openPopulationMetricDialog(metricKey, metricLabel, color = '#2563eb') {
+    const dlg = ensureMetricDialog();
+    const history = Array.isArray(window.__populationMetricHistory) ? window.__populationMetricHistory : [];
+    const values = history.map(h => Number(h[metricKey] || 0));
+    const latest = values.length ? values[values.length - 1] : 0;
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 0;
+    const delta = values.length >= 2 ? (values[values.length - 1] - values[0]) : 0;
+    dlg.querySelector('#population-metric-title').textContent = `${metricLabel} trend`;
+    dlg.querySelector('#population-metric-meta').innerHTML = [
+        ['Current', latest],
+        ['Min', min],
+        ['Max', max],
+        ['Δ 3m', delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)]
+    ].map(([k, v]) => `<div style="background:#f8fbff;border:1px solid #dbeafe;border-radius:10px;padding:6px 10px;"><div style="font-size:0.75em;color:#64748b;">${k}</div><div style="font-weight:800;color:#0f172a;">${typeof v === 'number' ? v.toFixed(1) : v}</div></div>`).join('');
+    dlg.querySelector('#population-metric-chart').innerHTML = createTrendChartSVG(values, color);
+    dlg.style.display = 'flex';
+}
+
 // --- Society Phase derivation ---
 function getSocietyPhase(pop, netRate, starving, conflictPairs, initialPop, elapsedSec) {
     if (pop === 0) return { phase: 'Extinct',    icon: '💀', color: '#7f1d1d', bg: '#fef2f2' };
@@ -1903,29 +1998,35 @@ function createPopulationDetailCard(title, icon, rows) {
             `</div>` +
             `<div class="population-detail-card-body">` +
                 rows.map(row => row.html || (
-                    `<div class="population-detail-row">` +
-                        `<span class="population-detail-label">${row.label}</span>` +
-                        `<span class="population-detail-value">${row.value}</span>` +
-                    `</div>`
+                    row.metricKey
+                        ? `<button type="button" class="population-detail-row population-metric-trigger" data-metric-key="${row.metricKey}" data-metric-label="${row.label}" data-metric-color="${row.color || '#2563eb'}" style="width:100%;border:none;background:transparent;cursor:pointer;text-align:left;border-radius:8px;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;">` +
+                            `<span class="population-detail-label">${row.label}</span>` +
+                            `<span style="display:flex;align-items:center;gap:6px;"><span class="population-detail-value">${row.value}</span><span style="color:#94a3b8;font-size:0.85em;">↗</span></span>` +
+                        `</button>`
+                        : `<div class="population-detail-row">` +
+                            `<span class="population-detail-label">${row.label}</span>` +
+                            `<span class="population-detail-value">${row.value}</span>` +
+                        `</div>`
                 )).join('') +
             `</div>` +
         `</section>`
     );
 }
 
-function createPopulationNeedRow(label, value, color) {
+function createPopulationNeedRow(label, value, color, metricKey = null) {
     const numericValue = Math.max(0, Math.min(100, Number(value) || 0));
+    const body =
+        `<div class="population-need-top">` +
+            `<span class="population-detail-label">${label}</span>` +
+            `<span style="display:flex;align-items:center;gap:6px;"><span class="population-detail-value">${Math.round(numericValue)}</span>${metricKey ? `<span style="color:#94a3b8;font-size:0.85em;">↗</span>` : ''}</span>` +
+        `</div>` +
+        `<div class="population-need-bar-track">` +
+            `<div class="population-need-bar-fill" style="width:${numericValue}%;background:${color};"></div>` +
+        `</div>`;
     return {
-        html:
-            `<div class="population-need-row">` +
-                `<div class="population-need-top">` +
-                    `<span class="population-detail-label">${label}</span>` +
-                    `<span class="population-detail-value">${Math.round(numericValue)}</span>` +
-                `</div>` +
-                `<div class="population-need-bar-track">` +
-                    `<div class="population-need-bar-fill" style="width:${numericValue}%;background:${color};"></div>` +
-                `</div>` +
-            `</div>`
+        html: metricKey
+            ? `<button type="button" class="population-need-row population-metric-trigger" data-metric-key="${metricKey}" data-metric-label="${label}" data-metric-color="#6366f1" style="width:100%;border:none;background:transparent;cursor:pointer;text-align:left;border-radius:8px;padding:0;">${body}</button>`
+            : `<div class="population-need-row">${body}</div>`
     };
 }
 
@@ -1933,34 +2034,34 @@ function createPopulationDetailsHTML(metrics) {
     return (
         `<div class="population-detail-grid">` +
             createPopulationDetailCard('Population', '👥', [
-                { label: 'Total born', value: metrics.totalBorn },
-                { label: 'Dead', value: metrics.dead },
-                { label: 'Adults', value: metrics.adults },
-                { label: 'Children', value: metrics.children }
+                { label: 'Total born', value: metrics.totalBorn, metricKey: 'totalBorn', color: '#2563eb' },
+                { label: 'Dead', value: metrics.dead, metricKey: 'dead', color: '#dc2626' },
+                { label: 'Adults', value: metrics.adults, metricKey: 'adults', color: '#0891b2' },
+                { label: 'Children', value: metrics.children, metricKey: 'children', color: '#7c3aed' }
             ]) +
             createPopulationDetailCard('Lifecycle', '⏳', [
-                { label: 'Avg age', value: `${metrics.avgAge}s` },
-                { label: 'Max age', value: `${metrics.maxAge}s` },
-                { label: 'Old age', value: metrics.oldAgeDeaths },
-                { label: 'Starved', value: metrics.starvationDeaths }
+                { label: 'Avg age', value: `${metrics.avgAge}s`, metricKey: 'avgAge', color: '#0f766e' },
+                { label: 'Max age', value: `${metrics.maxAge}s`, metricKey: 'maxAge', color: '#334155' },
+                { label: 'Old age', value: metrics.oldAgeDeaths, metricKey: 'oldAgeDeaths', color: '#475569' },
+                { label: 'Starved', value: metrics.starvationDeaths, metricKey: 'starvationDeaths', color: '#b45309' }
             ]) +
             createPopulationDetailCard('Generation', '🌱', [
-                { label: 'Max gen', value: metrics.maxGen },
-                { label: 'Avg gen', value: metrics.avgGen }
+                { label: 'Max gen', value: metrics.maxGen, metricKey: 'maxGen', color: '#16a34a' },
+                { label: 'Avg gen', value: metrics.avgGen, metricKey: 'avgGen', color: '#22c55e' }
             ]) +
-            createPopulationDetailCard('Traits', '�', [
-                { label: 'Bravery',         value: metrics.avgBrav },
-                { label: 'Diligence',       value: metrics.avgDili },
-                { label: 'Sociality',       value: metrics.avgSoci },
-                { label: 'Curiosity',       value: metrics.avgCuri },
-                { label: 'Resourcefulness', value: metrics.avgReso },
-                { label: 'Resilience',      value: metrics.avgResi }
+            createPopulationDetailCard('Traits', '🧠', [
+                { label: 'Bravery',         value: metrics.avgBrav, metricKey: 'avgBrav', color: '#f59e0b' },
+                { label: 'Diligence',       value: metrics.avgDili, metricKey: 'avgDili', color: '#f97316' },
+                { label: 'Sociality',       value: metrics.avgSoci, metricKey: 'avgSoci', color: '#a855f7' },
+                { label: 'Curiosity',       value: metrics.avgCuri, metricKey: 'avgCuri', color: '#3b82f6' },
+                { label: 'Resourcefulness', value: metrics.avgReso, metricKey: 'avgReso', color: '#14b8a6' },
+                { label: 'Resilience',      value: metrics.avgResi, metricKey: 'avgResi', color: '#22c55e' }
             ]) +
             createPopulationDetailCard('Needs', '⚡', [
-                createPopulationNeedRow('Hunger', metrics.avgHun, 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)'),
-                createPopulationNeedRow('Energy', metrics.avgEng, 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)'),
-                createPopulationNeedRow('Safety', metrics.avgSaf, 'linear-gradient(90deg, #22c55e 0%, #10b981 100%)'),
-                createPopulationNeedRow('Social', metrics.avgSoc, 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)')
+                createPopulationNeedRow('Hunger', metrics.avgHun, 'linear-gradient(90deg, #f59e0b 0%, #f97316 100%)', 'avgHun'),
+                createPopulationNeedRow('Energy', metrics.avgEng, 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)', 'avgEng'),
+                createPopulationNeedRow('Safety', metrics.avgSaf, 'linear-gradient(90deg, #22c55e 0%, #10b981 100%)', 'avgSaf'),
+                createPopulationNeedRow('Social', metrics.avgSoc, 'linear-gradient(90deg, #a855f7 0%, #ec4899 100%)', 'avgSoc')
             ]) +
         `</div>`
     );
@@ -2211,6 +2312,30 @@ function renderCharacterList() {
             deaths: dead,
             avgEnergy: Number(avgEng) || 0
         });
+        pushPopulationMetricSnapshot({
+            t: Date.now(),
+            alive: alive.length,
+            totalBorn,
+            dead,
+            adults,
+            children,
+            avgAge: Number(avgAge) || 0,
+            maxAge: Number(maxAge) || 0,
+            starvationDeaths,
+            oldAgeDeaths,
+            maxGen,
+            avgGen: Number(avgGen) || 0,
+            avgBrav: Number(avgBrav) || 0,
+            avgDili: Number(avgDili) || 0,
+            avgSoci: Number(avgSoci) || 0,
+            avgCuri: Number(avgCuri) || 0,
+            avgReso: Number(avgReso) || 0,
+            avgResi: Number(avgResi) || 0,
+            avgHun: Number(avgHun) || 0,
+            avgEng: Number(avgEng) || 0,
+            avgSaf: Number(avgSaf) || 0,
+            avgSoc: Number(avgSoc) || 0
+        });
         const pulseHistory = window.__populationPulseHistory || [];
         const birthRate = computePerMinuteDelta(pulseHistory, 'totalBorn', 60000);
         const deathRate = computePerMinuteDelta(pulseHistory, 'deaths', 60000);
@@ -2428,6 +2553,13 @@ function renderCharacterList() {
                 window.sidebarParams.chronicleExpanded = chronicleDetails.open;
             });
         }
+        statsDiv.querySelectorAll('.population-metric-trigger').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openPopulationMetricDialog(btn.dataset.metricKey, btn.dataset.metricLabel, btn.dataset.metricColor || '#2563eb');
+            });
+        });
         leftSidebar.appendChild(statsDiv);
     }
 
