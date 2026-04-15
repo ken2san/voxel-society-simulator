@@ -1811,12 +1811,22 @@ function renderCharacterDetail() {
     const districtSummary = document.createElement('div');
     districtSummary.style.fontSize = '0.82em';
     districtSummary.style.color = '#334155';
+    districtSummary.style.minHeight = '54px';
+    districtSummary.style.display = 'grid';
+    districtSummary.style.gridTemplateRows = 'auto auto';
+    districtSummary.style.alignContent = 'start';
+    districtSummary.style.rowGap = '4px';
     const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
     districtSummary.innerHTML = activeDistrictData
-        ? `<div style="font-weight:700;color:#0f172a;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population}</div>` +
-          `<div style="margin-top:4px;color:#475569;">pressure ${Math.round((activeDistrictData.socialPressure || 0) * 100)}% · support ${Math.round((activeDistrictData.supportAccess || 0) * 100)}% · stability ${Math.round((activeDistrictData.relationshipStability || 0) * 100)}% · time ${Math.round((activeDistrictData.timeStress || 0) * 100)}%</div>`
-        : 'Watching the full baseline district';
+        ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population}</div>` +
+          `<div style="color:#475569;line-height:1.25;font-size:0.95em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px;row-gap:2px;">` +
+            `<span>pressure ${Math.round((activeDistrictData.socialPressure || 0) * 100)}%</span>` +
+            `<span>support ${Math.round((activeDistrictData.supportAccess || 0) * 100)}%</span>` +
+            `<span>stability ${Math.round((activeDistrictData.relationshipStability || 0) * 100)}%</span>` +
+            `<span>time ${Math.round((activeDistrictData.timeStress || 0) * 100)}%</span>` +
+          `</div>`
+        : '<div style="font-weight:700;color:#0f172a;line-height:1.2;">Watching the full baseline district</div><div></div>';
     districtPanel.appendChild(districtSummary);
 
     const districtGrid = document.createElement('div');
