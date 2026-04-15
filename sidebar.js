@@ -156,9 +156,8 @@ window.__sidebarNeedsInterval = setInterval(() => {
 
 // Global registration
 window.renderCharacterNeeds = renderCharacterNeeds;
-// Explicitly initialize so it doesn't auto-start in initial state
-window.characters = undefined;
-window.simulationRunning = false;
+// Keep any initial population created by main.js visible in the sidebar.
+if (window.simulationRunning === undefined) window.simulationRunning = false;
 // Right sidebar: Selected character details
 function renderCharacterDetail() {
     if (!rightSidebar) return;
@@ -176,13 +175,18 @@ function renderCharacterDetail() {
     }
     // --- Hold values in sidebarParams ---
     if (!window.sidebarParams) {
+        const existingCharCount = Array.isArray(window.characters) && window.characters.length > 0
+            ? window.characters.length
+            : 10;
         window.sidebarParams = {
-            charNum: 10,
+            charNum: existingCharCount,
             socialTh: 30,
             groupAffinityTh: 50,
             useRandom: false,
             populationMetricsExpanded: false
         };
+    } else if ((window.sidebarParams.charNum === undefined || window.sidebarParams.charNum <= 0) && Array.isArray(window.characters) && window.characters.length > 0) {
+        window.sidebarParams.charNum = window.characters.length;
     }
     const sidebarParams = window.sidebarParams;
     // Disable parameter fields during simulation (defined only once)
