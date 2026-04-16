@@ -223,7 +223,7 @@ function renderCharacterDetail() {
         socialAnchorBias:                   0.18,
         initialAffinityMin:                 10,
         initialAffinityMax:                 35,
-        affinityIncreaseRate:               6,
+        affinityIncreaseRate:               9,
         affinityDecayRate:                  0.01,
         socialNeedRecovery:                 1.0,
         socialNeedDecayRate:                1.5,
