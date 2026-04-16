@@ -998,16 +998,34 @@ class Character {
         // Reservation and failed-target avoidance: if the target is a grid position, check reservations and failure counts
         if (target && target.x !== undefined && target.y !== undefined && target.z !== undefined) {
             const tkey = `${target.x},${target.y},${target.z}`;
+            const isFoodAction = type === 'COLLECT_FOOD' || type === 'EAT';
+            const retargetFood = () => {
+                if (!isFoodAction) return false;
+                if (!this._failedFoodTargets) this._failedFoodTargets = new Map();
+                this._failedFoodTargets.set(tkey, Date.now());
+                const altFood = this.findClosestFood ? this.findClosestFood() : null;
+                if (!altFood) return false;
+                const altKey = `${altFood.x},${altFood.y},${altFood.z}`;
+                if (altKey === tkey) return false;
+                const altSpot = this.findAdjacentSpot ? this.findAdjacentSpot(altFood) : null;
+                if (!altSpot) return false;
+                this.log('Food target busy, retargeting to alternate fruit', { from: tkey, to: altKey });
+                this.setNextAction(type, altFood, altSpot, item);
+                return true;
+            };
+
             // If this target is known to have repeated failures, skip it
             // Check temporary blacklist first
             if (Character.isBlacklisted(tkey)) {
                 this.log('Skipping blacklisted target:', tkey);
+                if (retargetFood()) return;
                 this.setNextAction('WANDER');
                 return;
             }
             const failCount = Character.getFailedCount(tkey) || 0;
             if (failCount >= 3) {
                 this.log('Skipping frequently failing target:', tkey, 'failCount=', failCount);
+                if (retargetFood()) return;
                 // Fallback to wander
                 this.setNextAction('WANDER');
                 return;
@@ -1016,7 +1034,8 @@ class Character {
             // Use reservation utility which performs TTL cleanup
             const existing = Character.getReservation(tkey);
             if (existing && existing.owner !== this.id) {
-                this.log('Target reserved by another, falling back to WANDER:', tkey);
+                this.log('Target reserved by another:', tkey);
+                if (retargetFood()) return;
                 this.setNextAction('WANDER');
                 return;
             }
@@ -1024,7 +1043,8 @@ class Character {
             // Try to reserve; if reservation fails (race), fallback
             const reserved = Character.reserveTarget(tkey, this.id, 3000);
             if (!reserved) {
-                this.log('Failed to reserve target (race), falling back to WANDER:', tkey);
+                this.log('Failed to reserve target (race):', tkey);
+                if (retargetFood()) return;
                 this.setNextAction('WANDER');
                 return;
             }
@@ -2286,6 +2306,10 @@ class Character {
                 if (Date.now() - _failTs < foodRetryMs) continue;
                 this._failedFoodTargets.delete(key);
             }
+            const reservation = Character.getReservation(key);
+            if (reservation && reservation.owner !== this.id) continue;
+            if (Character.isBlacklisted(key)) continue;
+
             const rawBlockVal = typeof id === 'object' && id !== null && id.id !== undefined ? id.id : id;
             const type = Object.values(BLOCK_TYPES).find(t => t.id === rawBlockVal);
             if (type && type.isEdible) {
