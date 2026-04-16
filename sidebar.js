@@ -263,7 +263,7 @@ function renderCharacterDetail() {
         initialAgeMaxRatio:                 0.65,
         traitAffinityCapReduction:          0.6,
         affinityFloor:                       5,
-        minReproductionAgeRatio:             0.12,
+        minReproductionAgeRatio:             0.18,
         isolationPenalty:                    0.4,
         autoRecoverStall:                   true,
         recoverActionCooldown:              0.5,
