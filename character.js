@@ -5040,6 +5040,18 @@ class Character {
                             child.relationships.set(sid, _kclamp(Math.max(child.relationships.get(sid) || 0, _sibBonus)));
                         }
                     }
+                    // Community intro: seed a small base affinity with all other living characters
+                    const _introBonus = _kclamp(Math.round(_kinshipBonus * 0.35));
+                    for (const other of _kchars) {
+                        if (!other || other.id === child.id || other.id === this.id || other.id === partner.id || _sibIds.has(other.id)) continue;
+                        if (!other.relationships) continue;
+                        const _existing = child.relationships.get(other.id) || 0;
+                        if (_existing < _introBonus) {
+                            child.relationships.set(other.id, _introBonus);
+                            const _otherExisting = other.relationships.get(child.id) || 0;
+                            if (_otherExisting < _introBonus) other.relationships.set(child.id, _introBonus);
+                        }
+                    }
                 } catch (_ke) { /* kinship affinity setup error — non-fatal */ }
                 // prevent immediate group/role assignment - keep child as a neutral worker until maturity
                 child.groupId = null;
