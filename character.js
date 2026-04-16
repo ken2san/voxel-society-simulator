@@ -2656,24 +2656,98 @@ class Character {
         return fallback;
     }
 
+    getReproductionModelParams() {
+        const getNum = (key, fallback, min = 0, max = 1) => {
+            const raw = (typeof window !== 'undefined' && window[key] !== undefined) ? Number(window[key]) : fallback;
+            const numeric = Number.isFinite(raw) ? raw : fallback;
+            return Math.max(min, Math.min(max, numeric));
+        };
+        return {
+            readinessThreshold: getNum('reproductionReadinessThreshold', 0.52, 0, 1),
+            anxietyCohesionBonus: getNum('reproductionAnxietyCohesionBonus', 0.08, 0, 0.4),
+            pressurePenalty: getNum('reproductionPressurePenalty', 0.18, 0, 0.6)
+        };
+    }
+
     getReproductionReadiness(partner) {
+        const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
         const ctx = this.getDistrictSocialContext();
+        const params = this.getReproductionModelParams();
         const affinity = Number(this.relationships.get(partner?.id) || 0);
-        const bondStrength = Math.max(0, Math.min(1, affinity / 100));
-        const support = Number(ctx.supportAccess ?? ctx.supportDensity ?? 0);
-        const stability = Number(ctx.relationshipStability ?? 0);
-        const readiness = Math.max(0, Math.min(1,
-            ((1 - Number(ctx.housingPressure || 0)) * 0.26) +
-            ((1 - Number(ctx.timeStress || 0)) * 0.24) +
-            (support * 0.20) +
-            (stability * 0.20) +
-            (bondStrength * 0.10) +
+        const thresholds = (typeof this.getRelationshipThresholds === 'function')
+            ? this.getRelationshipThresholds()
+            : { ally: 60, bonded: 78 };
+        const networkSnapshot = (typeof this.getRelationshipSnapshot === 'function')
+            ? this.getRelationshipSnapshot(6)
+            : null;
+
+        const bondStrength = clamp01(affinity / 100);
+        const support = clamp01(ctx.supportAccess ?? ctx.supportDensity ?? 0);
+        const stability = clamp01(ctx.relationshipStability ?? 0);
+        const foodPressure = clamp01(ctx.foodPressure ?? 0);
+        const housingPressure = clamp01(ctx.housingPressure ?? 0);
+        const timeStress = clamp01(ctx.timeStress ?? 0);
+        const socialPressure = clamp01(ctx.socialPressure ?? 0);
+        const nearbySupport = clamp01(networkSnapshot?.supportScore ?? 0);
+
+        const pairBond = clamp01(
+            (bondStrength * 0.68) +
+            (affinity >= thresholds.ally ? 0.14 : 0) +
+            (affinity >= thresholds.bonded ? 0.18 : 0) +
+            ((partner && this._lovePartnerId === partner.id) ? 0.06 : 0)
+        );
+
+        const localSupport = clamp01(
+            (support * 0.50) +
+            (nearbySupport * 0.25) +
+            (stability * 0.15) +
             (this.homePosition ? 0.05 : 0) +
             (partner?.homePosition ? 0.05 : 0)
-        ));
+        );
+
+        const selfNeedMargin = clamp01(
+            (Number(this.needs?.hunger || 0) / 100) * 0.35 +
+            (Number(this.needs?.energy || 0) / 100) * 0.35 +
+            (Number(this.needs?.safety || 0) / 100) * 0.30
+        );
+        const partnerNeedMargin = clamp01(
+            (Number(partner?.needs?.hunger || 0) / 100) * 0.35 +
+            (Number(partner?.needs?.energy || 0) / 100) * 0.35 +
+            (Number(partner?.needs?.safety || 0) / 100) * 0.30
+        );
+
+        const livelihoodViability = clamp01(
+            ((1 - foodPressure) * 0.26) +
+            ((1 - housingPressure) * 0.24) +
+            ((1 - timeStress) * 0.18) +
+            (selfNeedMargin * 0.16) +
+            (partnerNeedMargin * 0.16)
+        );
+
+        const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
+        const futureExpectation = clamp01(
+            (livelihoodViability * 0.55) +
+            (localSupport * 0.20) +
+            (pairBond * 0.15) +
+            (moderateThreatCohesion * params.anxietyCohesionBonus) -
+            (socialPressure * params.pressurePenalty)
+        );
+
+        const readiness = clamp01(
+            (pairBond * 0.30) +
+            (localSupport * 0.24) +
+            (livelihoodViability * 0.26) +
+            (futureExpectation * 0.20)
+        );
+
         return {
             ...ctx,
             affinity,
+            pairBond: Math.round(pairBond * 100) / 100,
+            localSupport: Math.round(localSupport * 100) / 100,
+            livelihoodViability: Math.round(livelihoodViability * 100) / 100,
+            futureExpectation: Math.round(futureExpectation * 100) / 100,
+            moderateThreatCohesion: Math.round(moderateThreatCohesion * 100) / 100,
             readiness: Math.round(readiness * 100) / 100
         };
     }
@@ -2681,7 +2755,8 @@ class Character {
     shouldAttemptReproductionWith(partner) {
         const ctx = this.getReproductionReadiness(partner);
         this._lastReproductionBlockInfo = ctx;
-        return ctx.readiness >= 0.52 || (ctx.affinity >= 82 && ctx.relationshipStability >= 0.45);
+        const threshold = this.getReproductionModelParams().readinessThreshold;
+        return ctx.readiness >= threshold || (ctx.pairBond >= 0.78 && ctx.futureExpectation >= Math.max(0.45, threshold - 0.04));
     }
 
     update(deltaTime, isNight, camera) {

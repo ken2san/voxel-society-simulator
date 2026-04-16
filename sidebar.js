@@ -268,6 +268,9 @@ function renderCharacterDetail() {
         digActionCooldown:                  2200,
         worldReservationTTL:                5000,
         reproduceAffinityThreshold:         58,
+        reproductionReadinessThreshold:     0.52,
+        reproductionAnxietyCohesionBonus:   0.08,
+        reproductionPressurePenalty:        0.18,
         affinityResetAfterReproduce:        42,
         mutationRate:                       0.05,
         starvationDeathDelaySeconds:        10,
@@ -864,6 +867,21 @@ function renderCharacterDetail() {
     appendCompactSliderInput(socialAdaptRow, 'Soc+', 'socialAdaptationBoost', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     socialAdaptRow.dataset.label = 'Adapt Weights';
     tabPanels[1].appendChild(socialAdaptRow);
+
+    const reproductionModelRow = document.createElement('div');
+    reproductionModelRow.style.display = 'flex';
+    reproductionModelRow.style.alignItems = 'center';
+    reproductionModelRow.style.flexWrap = 'wrap';
+    reproductionModelRow.style.gap = '8px';
+    const reproductionModelLabel = document.createElement('span');
+    reproductionModelLabel.textContent = 'Birth Layers:';
+    reproductionModelLabel.style.width = '140px';
+    reproductionModelRow.appendChild(reproductionModelLabel);
+    appendCompactSliderInput(reproductionModelRow, 'Gate', 'reproductionReadinessThreshold', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(reproductionModelRow, 'Threat+', 'reproductionAnxietyCohesionBonus', { min: 0, max: 0.4, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(reproductionModelRow, 'Press-', 'reproductionPressurePenalty', { min: 0, max: 0.6, step: 0.01, width: '64px', sliderWidth: '72px' });
+    reproductionModelRow.dataset.label = 'Birth Layers';
+    tabPanels[1].appendChild(reproductionModelRow);
 
     const districtPressureRow = document.createElement('div');
     districtPressureRow.style.display = 'flex';
