@@ -169,9 +169,18 @@ const actionPairs = actionTransitions.reduce((acc, e) => {
   acc[key] = (acc[key] || 0) + 1;
   return acc;
 }, {});
+// births by generation
+const birthsByGen = events.filter(e => e && e.kind === 'birth').reduce((acc, e) => {
+  const g = Number(e.generation ?? 0);
+  acc[g] = (acc[g] || 0) + 1;
+  return acc;
+}, {});
 if (birthEvents > 0 || deathEvents.length > 0 || actionTransitions.length > 0) {
   console.log('Lifecycle events:');
   console.log(`  - birthEvents: ${birthEvents}`);
+  for (const [gen, count] of Object.entries(birthsByGen).sort((a,b)=>Number(a[0])-Number(b[0]))) {
+    console.log(`  - birthEvents.gen${gen}: ${count}`);
+  }
   console.log(`  - deathEvents: ${deathEvents.length}`);
   for (const [cause, count] of Object.entries(deathByCause)) {
     console.log(`  - deathEvents.${cause}: ${count}`);
@@ -330,6 +339,16 @@ console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high tog
     console.log('Group size distribution (char count per group size):');
     for (const [size, count] of Array.from(gsMap.entries()).sort((a, b) => a[0] - b[0])) {
       console.log(`  groupSize=${size}: ${count} chars`);
+    }
+    // generation distribution at final snapshot
+    const genMap = new Map();
+    for (const c of charStats) {
+      const g = Number(c.gen ?? 0);
+      genMap.set(g, (genMap.get(g) || 0) + 1);
+    }
+    console.log('Generation distribution (surviving chars at final snapshot):');
+    for (const [g, count] of Array.from(genMap.entries()).sort((a, b) => a[0] - b[0])) {
+      console.log(`  gen${g}: ${count} chars`);
     }
     console.log('Hint: Many chars in groupSize=1 = ideological fragmentation working. Larger clusters = homogeneous community forming.');
   }
