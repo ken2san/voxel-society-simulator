@@ -5026,6 +5026,10 @@ class Character {
                     child.relationships.set(partner.id, _kclamp(_kinshipBonus));
                     this.relationships.set(child.id, _kclamp(Math.max(this.relationships.get(child.id) || 0, _kinshipBonus)));
                     partner.relationships.set(child.id, _kclamp(Math.max(partner.relationships.get(child.id) || 0, _kinshipBonus)));
+                    // Seed social anchor: child and parents seek each other preferentially
+                    child._socialAnchorId = this.id;
+                    if (!this._socialAnchorId) this._socialAnchorId = child.id;
+                    if (!partner._socialAnchorId) partner._socialAnchorId = child.id;
                     // Sibling <-> Child (existing children of either parent)
                     const _sibBonus = _kclamp(Math.round(_kinshipBonus * 0.75));
                     const _kchars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
@@ -5038,6 +5042,8 @@ class Character {
                         if (sib && sib.relationships) {
                             sib.relationships.set(child.id, _kclamp(Math.max(sib.relationships.get(child.id) || 0, _sibBonus)));
                             child.relationships.set(sid, _kclamp(Math.max(child.relationships.get(sid) || 0, _sibBonus)));
+                            // Anchor siblings to each other if not yet anchored
+                            if (!sib._socialAnchorId) sib._socialAnchorId = child.id;
                         }
                     }
                     // Community intro: seed a small base affinity with all other living characters
