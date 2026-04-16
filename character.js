@@ -2298,7 +2298,7 @@ class Character {
         }
 
         const foodRetryMs = Math.max(5000, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25) * 1000);
-        let minScore = Infinity, closest = null;
+        const candidates = [];
         for (const [key, id] of worldData.entries()) {
             // Skip positions that this character recently failed to reach, but only briefly.
             const _failTs = this._failedFoodTargets?.get(key);
@@ -2317,13 +2317,28 @@ class Character {
                 const adjacentSpot = this.findAdjacentSpot({ x, y, z });
                 if (!adjacentSpot) continue;
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                // Known food spawn locations get a 50% scoring bonus — experienced characters head there first
                 const score = this._knownFoodSpots?.has(key) ? dist * 0.5 : dist;
-                if (score < minScore) {
-                    minScore = score;
-                    closest = { x, y, z };
-                }
+                candidates.push({ x, y, z, key, adjacentSpot, score });
             }
+        }
+
+        candidates.sort((a, b) => a.score - b.score);
+
+        let closest = null;
+        const pathCheckLimit = Math.min(6, candidates.length);
+        for (let i = 0; i < pathCheckLimit; i++) {
+            const candidate = candidates[i];
+            const path = this.findPath ? this.findPath(this.gridPos, candidate.adjacentSpot) : null;
+            if (path && path.length > 0) {
+                closest = { x: candidate.x, y: candidate.y, z: candidate.z };
+                break;
+            }
+        }
+
+        // Fall back to the nearest visible fruit if the local reachability probe found none.
+        if (!closest && candidates.length > 0) {
+            const fallback = candidates[0];
+            closest = { x: fallback.x, y: fallback.y, z: fallback.z };
         }
 
         // On-miss invalidation: purge remembered spots that no longer have food
