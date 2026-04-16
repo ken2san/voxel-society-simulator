@@ -16,8 +16,9 @@ function applyInitialAgeSpread(targetChars = characters) {
     targetChars.forEach(c => {
         if (!c) return;
         const lifespan = (typeof c.getEffectiveLifespan === 'function') ? c.getEffectiveLifespan() : (window.characterLifespan || 240);
-        // Middle-biased spread avoids overloading fresh runs with late-life characters.
-        const spreadUnit = (Math.random() + Math.random()) * 0.5;
+        // Uniform spread produces genuine demographic variety (young/adult/middle-aged at start)
+        // which breaks the cohort wave where all characters age out simultaneously.
+        const spreadUnit = Math.random();
         c.age = spreadUnit * lifespan * ratio;
         c.maturityAge = maturityAge;
         // Important: age spread must also reconcile the child/adult flag immediately.
