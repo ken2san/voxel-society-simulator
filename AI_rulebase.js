@@ -33,6 +33,8 @@ export function decideNextAction_rulebase(character, isNight) {
     const socialForagePenalty = getTunableNumber('socialForagePenalty', 0.25, { min: 0, max: 1 });
     const socialRestPenalty = getTunableNumber('socialRestPenalty', 0.20, { min: 0, max: 1 });
     const lowPrioritySocialOffset = getTunableNumber('lowPrioritySocialOffset', 12, { min: 0, max: 100 });
+    const supportSeekingDrive = getTunableNumber('supportSeekingDrive', 0.18, { min: 0, max: 0.6 });
+    const socialAnchorBias = getTunableNumber('socialAnchorBias', 0.28, { min: 0, max: 1 });
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const socialDriftThreshold = clamp(socialThreshold + lowPrioritySocialOffset, 0, 92);
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
@@ -84,6 +86,23 @@ export function decideNextAction_rulebase(character, isNight) {
         character.log(`Action: WANDER (hunger crisis, no food in range hunger=${character.needs.hunger.toFixed(1)})`);
         character.setNextAction('WANDER');
         return;
+    }
+
+    // === PRIORITY 0.75: SEEK TRUSTED SUPPORT WHEN ANXIOUS OR LONELY ===
+    const supportUrgency = clamp(
+        (Math.max(0, 55 - character.needs.social) / 55) * 0.55 +
+        (Math.max(0, 50 - character.needs.safety) / 50) * 0.45,
+        0,
+        1
+    );
+    if (character.needs.energy > (effectiveEnergyEmergency + 8) && character.needs.hunger > 25) {
+        const trustedTarget = character.getPreferredSupportTarget && character.getPreferredSupportTarget();
+        const supportSeekChance = clamp((supportUrgency * supportSeekingDrive) + ((character._socialAnchorId ? 1 : 0) * socialAnchorBias * 0.25), 0, 1);
+        if (trustedTarget?.char && Math.random() < supportSeekChance) {
+            character.log(`Action: SOCIALIZE (support-seeking pull=${supportSeekChance.toFixed(2)})`);
+            character.setNextAction('SOCIALIZE', trustedTarget.char, trustedTarget.targetPos || trustedTarget.char.gridPos);
+            return;
+        }
     }
 
     // === PRIORITY 1: RANDOM EXPLORATION (only when the character can afford to roam) ===

@@ -215,6 +215,9 @@ function renderCharacterDetail() {
         socialForagePenalty:                0.25,
         socialRestPenalty:                  0.20,
         lowPrioritySocialOffset:            12,
+        supportSeekingDrive:                0.18,
+        trustedTieBonus:                    14,
+        socialAnchorBias:                   0.28,
         initialAffinityMin:                 10,
         initialAffinityMax:                 35,
         affinityIncreaseRate:               6,
@@ -847,6 +850,9 @@ function renderCharacterDetail() {
     appendCompactSliderInput(socialDecisionRow, 'ExpMin', 'explorationMinRate', { min: 0, max: 0.2, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(socialDecisionRow, 'ExpMax', 'explorationMaxRate', { min: 0, max: 0.5, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(socialDecisionRow, 'SocOff', 'lowPrioritySocialOffset', { min: 0, max: 100, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialDecisionRow, 'Seek', 'supportSeekingDrive', { min: 0, max: 0.6, step: 0.01, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialDecisionRow, 'Trust+', 'trustedTieBonus', { min: 0, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(socialDecisionRow, 'Anchor', 'socialAnchorBias', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     socialDecisionRow.dataset.label = 'Decision Biases';
     tabPanels[1].appendChild(socialDecisionRow);
 

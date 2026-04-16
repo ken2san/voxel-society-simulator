@@ -2190,7 +2190,8 @@ class Character {
         const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 3;
         const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
         const { nearbyRadius } = this.getSupportModelParams();
-        const searchRange = Math.max(baseRange, nearbyRadius, 2 + Math.round(sociality * 2));
+        const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
+        const searchRange = Math.max(baseRange + Math.round(socialAnchorBias * 2), nearbyRadius, 2 + Math.round(sociality * 2));
 
         const preferred = this.getPreferredSupportTarget(searchRange);
         if (preferred?.char) return preferred.char;
@@ -2200,8 +2201,15 @@ class Character {
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
             if (dist <= 0 || dist > searchRange) continue;
             const affinity = Number(this.relationships.get(char.id) || 0);
+            const relationClass = this.getRelationshipClass(char.id);
+            const anchored = String(this._socialAnchorId || '') === String(char.id);
             const sameGroupBonus = (this.groupId && char.groupId && this.groupId === char.groupId) ? 8 : 0;
-            const score = affinity + sameGroupBonus - (dist * 9) + (Math.random() * 1.5);
+            const trustBonus = relationClass === 'bonded'
+                ? trustedTieBonus
+                : (relationClass === 'ally' ? trustedTieBonus * 0.65 : 0);
+            const anchorBonus = anchored ? trustedTieBonus * (0.35 + (socialAnchorBias * 0.65)) : 0;
+            const distancePenalty = dist * (anchored || relationClass === 'ally' || relationClass === 'bonded' ? 6.5 : 9);
+            const score = affinity + sameGroupBonus + trustBonus + anchorBonus - distancePenalty + (Math.random() * 1.5);
             if (score > bestScore) {
                 bestScore = score;
                 best = char;
@@ -2213,6 +2221,7 @@ class Character {
     getPreferredSupportTarget(maxDistance = null) {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
+        const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
         const searchRange = Math.max(2, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : (nearbyRadius * 2));
         let best = null;
         let bestScore = -Infinity;
@@ -2236,7 +2245,7 @@ class Character {
                 (anchored ? allyPresenceBonus : 0)
             ));
             const normalizedDistance = dist / Math.max(1, searchRange);
-            const score = tieStrength - normalizedDistance + (Math.random() * 0.05);
+            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : 0) + (anchored ? socialAnchorBias : 0) - normalizedDistance + (Math.random() * 0.05);
             if (score > bestScore) {
                 const adjacent = this.findAdjacentSpot(char.gridPos);
                 bestScore = score;
@@ -2421,6 +2430,18 @@ class Character {
             allyWeight: clampWeight((typeof window !== 'undefined' && window.supportAllyWeight !== undefined) ? window.supportAllyWeight : 0.12, 0.12),
             nearbyWeight: clampWeight((typeof window !== 'undefined' && window.supportNearbyWeight !== undefined) ? window.supportNearbyWeight : 0.10, 0.10),
             topAffinityWeight: clampWeight((typeof window !== 'undefined' && window.supportTopAffinityWeight !== undefined) ? window.supportTopAffinityWeight : 0.22, 0.22)
+        };
+    }
+
+    getSocialDecisionParams() {
+        const clampNumber = (value, fallback, min = 0, max = 1) => {
+            const numeric = Number.isFinite(Number(value)) ? Number(value) : fallback;
+            return Math.max(min, Math.min(max, numeric));
+        };
+        return {
+            supportSeekingDrive: clampNumber((typeof window !== 'undefined' && window.supportSeekingDrive !== undefined) ? window.supportSeekingDrive : 0.18, 0.18, 0, 0.6),
+            trustedTieBonus: clampNumber((typeof window !== 'undefined' && window.trustedTieBonus !== undefined) ? window.trustedTieBonus : 14, 14, 0, 40),
+            socialAnchorBias: clampNumber((typeof window !== 'undefined' && window.socialAnchorBias !== undefined) ? window.socialAnchorBias : 0.28, 0.28, 0, 1)
         };
     }
 
