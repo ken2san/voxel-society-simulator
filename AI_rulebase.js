@@ -36,6 +36,7 @@ export function decideNextAction_rulebase(character, isNight) {
     const lowPrioritySocialOffset = getTunableNumber('lowPrioritySocialOffset', 12, { min: 0, max: 100 });
     const supportSeekingDrive = getTunableNumber('supportSeekingDrive', 0.18, { min: 0, max: 0.6 });
     const socialAnchorBias = getTunableNumber('socialAnchorBias', 0.28, { min: 0, max: 1 });
+    const wanderReserveEnergy = getTunableNumber('wanderReserveEnergy', 10, { min: 0, max: 30 });
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const socialDriftThreshold = clamp(socialThreshold + lowPrioritySocialOffset, 0, 92);
     const adapt = character.adaptiveTendencies || { forage: 0, rest: 0, social: 0, explore: 0 };
@@ -45,6 +46,8 @@ export function decideNextAction_rulebase(character, isNight) {
     // resilience: hardy characters tolerate lower energy before forcing REST
     const effectiveEnergyEmergency = (energyEmergency / Math.max(0.3, character.personality.resilience ?? 1.0))
         * (1 + (1 - (aging.mobilityMul || 1.0)) * 0.8);
+    const effectiveRestThreshold = clamp(45 + (2.0 - (character.personality.bravery ?? 1.0)) * 18 + (adapt.rest * 15) + (aging.restThresholdBonus || 0), 25, 75);
+    const readyToRoamThreshold = Math.max(effectiveEnergyEmergency + 16, effectiveRestThreshold + wanderReserveEnergy);
 
     // === PRIORITY 0: EMERGENCY ENERGY — force REST before any other decision ===
     // Home-building and wandering both consume energy; a depleted character must rest
@@ -120,7 +123,7 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 1: RANDOM EXPLORATION (only when the character can afford to roam) ===
-    const canExploreFreely = character.needs.energy > (effectiveEnergyEmergency + 18)
+    const canExploreFreely = character.needs.energy > Math.max(effectiveEnergyEmergency + 18, effectiveRestThreshold + wanderReserveEnergy)
         && character.needs.hunger > 30
         && character.needs.social > socialDriftThreshold;
     const explorationWeight = canExploreFreely
@@ -161,7 +164,12 @@ export function decideNextAction_rulebase(character, isNight) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos);
             return;
         }
-        character.setNextAction('WANDER');
+        if (character.needs.energy > readyToRoamThreshold && character.needs.hunger > 35) {
+            character.setNextAction('WANDER');
+        } else {
+            character.setNextAction('REST');
+            character.log('Action: REST (social search paused to preserve energy)');
+        }
         return;
     }
 
@@ -727,7 +735,6 @@ export function decideNextAction_rulebase(character, isNight) {
     // === PRIORITY 7: ENERGY MANAGEMENT ===
     // bravery direction fix: low bravery → high rest threshold (cautious, conserves energy);
     //                        high bravery → low rest threshold (pushes through fatigue).
-    const effectiveRestThreshold = clamp(45 + (2.0 - (character.personality.bravery ?? 1.0)) * 18 + (adapt.rest * 15) + (aging.restThresholdBonus || 0), 25, 75);
     if (character.needs.energy < effectiveRestThreshold) {
         if (character.isSafe(isNight)) {
             character.setNextAction('REST');
@@ -741,6 +748,9 @@ export function decideNextAction_rulebase(character, isNight) {
                 return;
             }
         }
+        character.log('Action: REST (tired fallback, no shelter found)');
+        character.setNextAction('REST');
+        return;
     }
 
     // === PRIORITY 8: FOOD COLLECTION (resourcefulness: proactive characters forage earlier) ===
@@ -769,7 +779,7 @@ export function decideNextAction_rulebase(character, isNight) {
         if (partner) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos);
             return;
-        } else if (character.needs.energy > (effectiveEnergyEmergency + 16) && character.needs.hunger > 45) {
+        } else if (character.needs.energy > readyToRoamThreshold && character.needs.hunger > 45) {
             character.setNextAction('WANDER');
             return;
         }
@@ -823,6 +833,12 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === DEFAULT: WANDERING ===
+    if (character.needs.energy < readyToRoamThreshold && character.needs.hunger > 20) {
+        character.setNextAction('REST');
+        character.log('Action: REST (preserve energy, skip default wander)');
+        return;
+    }
+
     const wanderSpots = [];
     for (let dx = -2; dx <= 2; dx++) {
         for (let dz = -2; dz <= 2; dz++) {

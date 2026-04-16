@@ -9,6 +9,7 @@
       "groupAffinityTh": 60,
       "hungerEmergencyThreshold": 10,
       "energyEmergencyThreshold": 32,
+      "wanderReserveEnergy": 10,
       "hungerDecayRate": 0.7,
       "foodSeekHungerThreshold": 35,
       "foodTargetRetrySeconds": 25,
