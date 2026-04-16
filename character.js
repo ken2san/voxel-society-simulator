@@ -5041,7 +5041,7 @@ class Character {
                         }
                     }
                     // Community intro: seed a small base affinity with all other living characters
-                    const _introBonus = _kclamp(Math.round(_kinshipBonus * 0.35));
+                    const _introBonus = _kclamp(Math.round(_kinshipBonus * 0.60));
                     for (const other of _kchars) {
                         if (!other || other.id === child.id || other.id === this.id || other.id === partner.id || _sibIds.has(other.id)) continue;
                         if (!other.relationships) continue;
