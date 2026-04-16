@@ -2191,6 +2191,7 @@ class Character {
         const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
         const { nearbyRadius } = this.getSupportModelParams();
         const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
+        const { acquaintance } = this.getRelationshipThresholds();
         const searchRange = Math.max(baseRange + Math.round(socialAnchorBias * 2), nearbyRadius, 2 + Math.round(sociality * 2));
 
         const preferred = this.getPreferredSupportTarget(searchRange);
@@ -2202,13 +2203,16 @@ class Character {
             if (dist <= 0 || dist > searchRange) continue;
             const affinity = Number(this.relationships.get(char.id) || 0);
             const relationClass = this.getRelationshipClass(char.id);
-            const anchored = String(this._socialAnchorId || '') === String(char.id);
+            const familiarTie = affinity >= acquaintance;
+            const anchored = String(this._socialAnchorId || '') === String(char.id) && familiarTie;
             const sameGroupBonus = (this.groupId && char.groupId && this.groupId === char.groupId) ? 8 : 0;
             const trustBonus = relationClass === 'bonded'
                 ? trustedTieBonus
-                : (relationClass === 'ally' ? trustedTieBonus * 0.65 : 0);
+                : (relationClass === 'ally'
+                    ? trustedTieBonus * 0.65
+                    : (familiarTie ? trustedTieBonus * 0.35 : 0));
             const anchorBonus = anchored ? trustedTieBonus * (0.35 + (socialAnchorBias * 0.65)) : 0;
-            const distancePenalty = dist * (anchored || relationClass === 'ally' || relationClass === 'bonded' ? 6.5 : 9);
+            const distancePenalty = dist * (anchored || relationClass === 'ally' || relationClass === 'bonded' || familiarTie ? 6.2 : 9);
             const score = affinity + sameGroupBonus + trustBonus + anchorBonus - distancePenalty + (Math.random() * 1.5);
             if (score > bestScore) {
                 bestScore = score;
@@ -2222,6 +2226,7 @@ class Character {
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
         const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
+        const { acquaintance } = this.getRelationshipThresholds();
         const searchRange = Math.max(2, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : (nearbyRadius * 2));
         let best = null;
         let bestScore = -Infinity;
@@ -2235,8 +2240,9 @@ class Character {
             const relationClass = this.getRelationshipClass(char.id);
             const sameGroup = !!this.groupId && !!char.groupId && this.groupId === char.groupId;
             const strongTie = relationClass === 'ally' || relationClass === 'bonded';
-            const anchored = String(this._socialAnchorId || '') === String(char.id);
-            if (!sameGroup && !strongTie && !anchored) continue;
+            const familiarTie = affinity >= acquaintance;
+            const anchored = String(this._socialAnchorId || '') === String(char.id) && familiarTie;
+            if (!sameGroup && !strongTie && !familiarTie && !anchored) continue;
 
             const tieStrength = Math.max(0, Math.min(1,
                 (affinity / 100) +
@@ -2245,7 +2251,8 @@ class Character {
                 (anchored ? allyPresenceBonus : 0)
             ));
             const normalizedDistance = dist / Math.max(1, searchRange);
-            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : 0) + (anchored ? socialAnchorBias : 0) - normalizedDistance + (Math.random() * 0.05);
+            const familiarBonus = familiarTie ? ((trustedTieBonus * 0.45) / 100) : 0;
+            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : familiarBonus) + (anchored ? socialAnchorBias : 0) - normalizedDistance + (Math.random() * 0.05);
             if (score > bestScore) {
                 const adjacent = this.findAdjacentSpot(char.gridPos);
                 bestScore = score;
@@ -2254,7 +2261,7 @@ class Character {
                     targetPos: adjacent || char.gridPos,
                     pullStrength: tieStrength,
                     distance: dist,
-                    relationClass
+                    relationClass: strongTie ? relationClass : (familiarTie ? 'familiar' : relationClass)
                 };
             }
         }
@@ -3157,7 +3164,7 @@ class Character {
             const partner = this.action?.target;
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
             const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
-            const { bonded: socializeCompletionAffinity } = this.getRelationshipThresholds();
+            const { ally: socialAnchorAffinity, bonded: socializeCompletionAffinity } = this.getRelationshipThresholds();
             const { nearbyRadius } = this.getSupportModelParams();
 
             if (partner && partner.state === 'socializing') {
@@ -3191,8 +3198,12 @@ class Character {
                 const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
                 const allyPresenceBonus = Math.max(0, Math.min(1, Number((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.22)));
                 const anxietyCohesionBonus = Math.max(0, Math.min(0.4, Number((typeof window !== 'undefined' && window.reproductionAnxietyCohesionBonus !== undefined) ? window.reproductionAnxietyCohesionBonus : 0.08)));
-                const bondGainMultiplier = 1 + Math.min(0.6, (sharedNeed * allyPresenceBonus) + (moderateThreatCohesion * anxietyCohesionBonus));
                 let affinity = this.relationships.get(partner.id) || 0;
+                const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
+                const familiarMomentum = affinity >= socialAnchorAffinity ? Math.min(0.24, (trustedTieBonus / 100) * 0.3) : 0;
+                const anchoredTie = (String(this._socialAnchorId || '') === String(partner.id) || String(partner._socialAnchorId || '') === String(this.id)) && affinity >= socialAnchorAffinity;
+                const anchorMomentum = anchoredTie ? (socialAnchorBias * 0.35) : 0;
+                const bondGainMultiplier = 1 + Math.min(0.9, (sharedNeed * allyPresenceBonus) + (moderateThreatCohesion * anxietyCohesionBonus) + familiarMomentum + anchorMomentum);
                 affinity += deltaTime * affinityRate * bondGainMultiplier;
                 // clamp affinity: personality trait distance lowers the ceiling
                 const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
@@ -3241,7 +3252,7 @@ class Character {
                     }
                 }
 
-                if (dist <= Math.max(1, nearbyRadius) && affinity >= socializeCompletionAffinity) {
+                if (dist <= Math.max(1, nearbyRadius) && affinity >= socialAnchorAffinity) {
                     this._socialAnchorId = partner.id;
                     partner._socialAnchorId = this.id;
                 }
