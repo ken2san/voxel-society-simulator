@@ -5028,7 +5028,7 @@ class Character {
                     partner.relationships.set(child.id, _kclamp(Math.max(partner.relationships.get(child.id) || 0, _kinshipBonus)));
                     // Seed social anchor: child and parents seek each other preferentially
                     child._socialAnchorId = this.id;
-                    if (!this._socialAnchorId) this._socialAnchorId = child.id;
+                    this._socialAnchorId = child.id;
                     if (!partner._socialAnchorId) partner._socialAnchorId = child.id;
                     // Sibling <-> Child (existing children of either parent)
                     const _sibBonus = _kclamp(Math.round(_kinshipBonus * 0.75));

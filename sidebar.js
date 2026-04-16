@@ -274,7 +274,7 @@ function renderCharacterDetail() {
         recentDigCooldownMs:                10000,
         digActionCooldown:                  2200,
         worldReservationTTL:                5000,
-        reproduceAffinityThreshold:         42,
+        reproduceAffinityThreshold:         35,
         reproductionReadinessThreshold:     0.52,
         reproductionAnxietyCohesionBonus:   0.08,
         reproductionPressurePenalty:        0.18,
