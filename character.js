@@ -4926,7 +4926,8 @@ class Character {
         }
 
         const readinessCtx = this.getReproductionReadiness(partner);
-        if (!(readinessCtx.readiness >= 0.52 || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45))) {
+        const _reproThreshold = (typeof window !== 'undefined' && window.reproductionReadinessThreshold !== undefined) ? Number(window.reproductionReadinessThreshold) : 0.52;
+        if (!(readinessCtx.readiness >= _reproThreshold || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45))) {
             try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)})`); } catch(e){}
             return;
         }

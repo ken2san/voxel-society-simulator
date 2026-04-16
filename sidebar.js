@@ -254,7 +254,7 @@ function renderCharacterDetail() {
         opportunityPopulationWeight:        0.10,
         opportunityFoodWeight:              0.06,
         perceptionRange:                    4,
-        pairReproductionCooldownSeconds:    72,
+        pairReproductionCooldownSeconds:    36,
         maxAffinity:                        100,
         reproductionCooldownSeconds:        10,
         fruitRegenIntervalSeconds:          60,
