@@ -198,6 +198,8 @@ function renderCharacterDetail() {
         hungerEmergencyThreshold:           5,
         energyEmergencyThreshold:           32,
         hungerDecayRate:                    0.7,
+        foodSeekHungerThreshold:           35,
+        foodTargetRetrySeconds:            25,
         activeEnergyDrainRate:              2.0,
         unsafeNightSafetyDecayRate:         5.0,
         daytimeSafetyRecoveryRate:          16.0,
@@ -814,6 +816,8 @@ function renderCharacterDetail() {
     needsDynamicsLabel.style.width = '140px';
     needsDynamicsRow.appendChild(needsDynamicsLabel);
     appendCompactSliderInput(needsDynamicsRow, 'Hun', 'hungerDecayRate', { min: 0, max: 2, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FoodAt', 'foodSeekHungerThreshold', { min: 10, max: 80, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FoodRt', 'foodTargetRetrySeconds', { min: 5, max: 90, step: 1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'MoveE', 'activeEnergyDrainRate', { min: 0, max: 5, step: 0.1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'NightS', 'unsafeNightSafetyDecayRate', { min: 0, max: 10, step: 0.1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'DayS', 'daytimeSafetyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });

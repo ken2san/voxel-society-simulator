@@ -1054,9 +1054,7 @@ class Character {
     }
 
 // Duplicate class declaration removed
-    // --- 失敗ターゲット記憶用: 食料採集失敗時に同じ座標を避ける (TTL 90s) ---
-    static failedFoodTargets = new Map(); // key → timestamp; auto-expires after 90s
-    // --- 汎用失敗ターゲットカウント: 失敗回数をカウントして一時的にブラックリスト化 ---
+
     static failedTargetCounts = new Map();
 
     // --- Failed target counter with TTL/decay ---
@@ -2010,6 +2008,7 @@ class Character {
         };
         this._learningTick = 0;
         this._knownFoodSpots = new Map(); // "x,y,z" → timestamp; experienced chars remember food locations (TTL 60s)
+        this._failedFoodTargets = new Map(); // local food-path failures should not globally hide fruit from the whole society
         this.appearanceProfile = { ...this.personality };
         this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
@@ -2278,18 +2277,21 @@ class Character {
             }
         }
 
+        const foodRetryMs = Math.max(5000, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25) * 1000);
         let minScore = Infinity, closest = null;
         for (const [key, id] of worldData.entries()) {
-            // Skip positions that recently failed BFS — but auto-expire after 90s (fruit respawn window)
-            const _failTs = Character.failedFoodTargets.get(key);
+            // Skip positions that this character recently failed to reach, but only briefly.
+            const _failTs = this._failedFoodTargets?.get(key);
             if (_failTs !== undefined) {
-                if (Date.now() - _failTs < 90000) continue;
-                Character.failedFoodTargets.delete(key); // expired, worth retrying
+                if (Date.now() - _failTs < foodRetryMs) continue;
+                this._failedFoodTargets.delete(key);
             }
             const rawBlockVal = typeof id === 'object' && id !== null && id.id !== undefined ? id.id : id;
             const type = Object.values(BLOCK_TYPES).find(t => t.id === rawBlockVal);
             if (type && type.isEdible) {
                 const [x, y, z] = key.split(',').map(Number);
+                const adjacentSpot = this.findAdjacentSpot({ x, y, z });
+                if (!adjacentSpot) continue;
                 const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
                 // Known food spawn locations get a 50% scoring bonus — experienced characters head there first
                 const score = this._knownFoodSpots?.has(key) ? dist * 0.5 : dist;
@@ -4031,11 +4033,13 @@ class Character {
                     }
                 }
 
-                // --- 追加: COLLECT_FOOD時はターゲットを失敗リストに追加 ---
+                // --- COLLECT_FOOD failure should only affect this character briefly ---
                 if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target) {
                     const {x, y, z} = this.action.target;
-                    Character.failedFoodTargets.set(`${x},${y},${z}`, Date.now());
-                    this.log('Added unreachable food target to failedFoodTargets (TTL 90s)', {x, y, z});
+                    if (!this._failedFoodTargets) this._failedFoodTargets = new Map();
+                    this._failedFoodTargets.set(`${x},${y},${z}`, Date.now());
+                    const retrySeconds = Math.max(5, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25));
+                    this.log('Added unreachable food target to local retry memory', {x, y, z, retrySeconds});
                 }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
                 this.log('BFS failed, incrementing bfsFailCount', this.bfsFailCount);
@@ -5065,8 +5069,11 @@ class Character {
             this.log('🚨 EMERGENCY: Critical hunger, forcing immediate food collection');
             const food = this.findClosestFood();
             if (food) {
-                this.setNextAction('COLLECT_FOOD', food, food);
-                return;
+                const adjacentSpot = this.findAdjacentSpot && this.findAdjacentSpot(food);
+                if (adjacentSpot) {
+                    this.setNextAction('COLLECT_FOOD', food, adjacentSpot);
+                    return;
+                }
             }
             this.setNextAction('WANDER'); // Search for food
             return;
@@ -5114,8 +5121,9 @@ class Character {
         } else if (this.homePosition || this.inventory.includes('WOOD_LOG')) {
             // 家があるか木材を持っている場合はカウンターリセット
             this._wanderCount = 0;
-        }        // === DELEGATE TO AI SYSTEMS ===
+        }
 
+        // === DELEGATE TO AI SYSTEMS ===
         if (typeof window !== 'undefined' && window.aiMode === 'utility') {
             decideNextAction_utility(this, isNight);
         } else {
@@ -5131,20 +5139,24 @@ class Character {
                 // Prefer collecting nearby food first, then chopping wood, before defaulting to WANDER
                 const food = this.findClosestFood ? this.findClosestFood() : null;
                 if (food) {
-                    this.log('Fallback: found nearby food, switching to COLLECT_FOOD');
-                    this.setNextAction('COLLECT_FOOD', food, food);
+                    const adjacentSpot = this.findAdjacentSpot && this.findAdjacentSpot(food);
+                    if (adjacentSpot) {
+                        this.log('Fallback: found nearby food, switching to COLLECT_FOOD');
+                        this.setNextAction('COLLECT_FOOD', food, adjacentSpot);
+                        this._lastFallbackTime = now;
+                        return;
+                    }
+                }
+
+                const wood = this.findClosestWood ? this.findClosestWood() : null;
+                if (wood) {
+                    this.log('Fallback: found nearby wood, switching to CHOP_WOOD');
+                    this.setNextAction('CHOP_WOOD', wood, wood);
                     this._lastFallbackTime = now;
                 } else {
-                    const wood = this.findClosestWood ? this.findClosestWood() : null;
-                    if (wood) {
-                        this.log('Fallback: found nearby wood, switching to CHOP_WOOD');
-                        this.setNextAction('CHOP_WOOD', wood, wood);
-                        this._lastFallbackTime = now;
-                    } else {
-                        this.log('⚠️ No action chosen by AI, falling back to WANDER');
-                        this.setNextAction('WANDER');
-                        this._lastFallbackTime = now;
-                    }
+                    this.log('⚠️ No action chosen by AI, falling back to WANDER');
+                    this.setNextAction('WANDER');
+                    this._lastFallbackTime = now;
                 }
             } else {
                 // small idle cooldown to prevent tight loop

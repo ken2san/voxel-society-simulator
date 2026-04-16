@@ -23,6 +23,7 @@ export function decideNextAction_rulebase(character, isNight) {
     const socialThreshold = (typeof window !== 'undefined' && window.socialThreshold !== undefined) ? window.socialThreshold : 30;
     const homeReturnHungerLevel = (typeof window !== 'undefined' && window.homeReturnHungerLevel !== undefined) ? window.homeReturnHungerLevel : 90;
     const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 32;
+    const foodSeekHungerThreshold = getTunableNumber('foodSeekHungerThreshold', 35, { min: 10, max: 80 });
     const explorationBaseRate = getTunableNumber('explorationBaseRate', 0.05, { min: 0, max: 0.4 });
     const explorationMinRate = getTunableNumber('explorationMinRate', 0.02, { min: 0, max: 0.2 });
     const explorationMaxRate = getTunableNumber('explorationMaxRate', 0.12, { min: 0, max: 0.5 });
@@ -86,6 +87,19 @@ export function decideNextAction_rulebase(character, isNight) {
         character.log(`Action: WANDER (hunger crisis, no food in range hunger=${character.needs.hunger.toFixed(1)})`);
         character.setNextAction('WANDER');
         return;
+    }
+
+    // If food is available, start foraging before reaching crisis so the hunger bar behaves more naturally.
+    if (character.needs.hunger <= foodSeekHungerThreshold) {
+        const foodPos = character.findClosestFood && character.findClosestFood();
+        if (foodPos) {
+            const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(foodPos);
+            if (adjacentSpot) {
+                character.log(`Action: COLLECT_FOOD (early forage threshold=${foodSeekHungerThreshold}, hunger=${character.needs.hunger.toFixed(1)})`);
+                character.setNextAction('COLLECT_FOOD', foodPos, adjacentSpot);
+                return;
+            }
+        }
     }
 
     // === PRIORITY 0.75: SEEK TRUSTED SUPPORT WHEN ANXIOUS OR LONELY ===

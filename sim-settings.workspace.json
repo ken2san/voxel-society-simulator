@@ -10,6 +10,8 @@
       "hungerEmergencyThreshold": 10,
       "energyEmergencyThreshold": 32,
       "hungerDecayRate": 0.7,
+      "foodSeekHungerThreshold": 35,
+      "foodTargetRetrySeconds": 25,
       "activeEnergyDrainRate": 2,
       "unsafeNightSafetyDecayRate": 5,
       "daytimeSafetyRecoveryRate": 16,
