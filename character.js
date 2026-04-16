@@ -3158,9 +3158,21 @@ class Character {
                 const socialRecoveryMul = (typeof window !== 'undefined' && window.socialNeedRecovery !== undefined) ? Number(window.socialNeedRecovery) : 1.0;
                 this.needs.social = Math.min(100, this.needs.social + deltaTime * 8 * socialRecoveryMul);
                 // affinity上昇速度をパラメータ化（sidebar.jsで調整可能）
-                const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? window.affinityIncreaseRate : 10;
+                const affinityRate = (typeof window !== 'undefined' && window.affinityIncreaseRate !== undefined) ? Number(window.affinityIncreaseRate) : 10;
+                const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+                const mySupportScore = clamp01(this.getRelationshipSnapshot(4)?.supportScore ?? 0);
+                const partnerSupportScore = clamp01(partner.getRelationshipSnapshot(4)?.supportScore ?? 0);
+                const avgSocialSaturation = clamp01(((Number(this.needs?.social || 0) / 100) + (Number(partner.needs?.social || 0) / 100)) / 2);
+                const avgSafetySaturation = clamp01(((Number(this.needs?.safety || 0) / 100) + (Number(partner.needs?.safety || 0) / 100)) / 2);
+                const supportGap = clamp01(1 - ((mySupportScore + partnerSupportScore) / 2));
+                const sharedNeed = clamp01(((1 - avgSocialSaturation) * 0.45) + ((1 - avgSafetySaturation) * 0.30) + (supportGap * 0.25));
+                const socialPressure = clamp01(this.getDistrictSocialContext()?.socialPressure ?? 0);
+                const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
+                const allyPresenceBonus = Math.max(0, Math.min(1, Number((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.22)));
+                const anxietyCohesionBonus = Math.max(0, Math.min(0.4, Number((typeof window !== 'undefined' && window.reproductionAnxietyCohesionBonus !== undefined) ? window.reproductionAnxietyCohesionBonus : 0.08)));
+                const bondGainMultiplier = 1 + Math.min(0.6, (sharedNeed * allyPresenceBonus) + (moderateThreatCohesion * anxietyCohesionBonus));
                 let affinity = this.relationships.get(partner.id) || 0;
-                affinity += deltaTime * affinityRate;
+                affinity += deltaTime * affinityRate * bondGainMultiplier;
                 // clamp affinity: personality trait distance lowers the ceiling
                 const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
                 const capReduction = (typeof window !== 'undefined' && window.traitAffinityCapReduction !== undefined) ? window.traitAffinityCapReduction : 0.6;

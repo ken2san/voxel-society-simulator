@@ -271,7 +271,7 @@ function renderCharacterDetail() {
         reproductionReadinessThreshold:     0.52,
         reproductionAnxietyCohesionBonus:   0.08,
         reproductionPressurePenalty:        0.18,
-        affinityResetAfterReproduce:        42,
+        affinityResetAfterReproduce:        68,
         mutationRate:                       0.05,
         starvationDeathDelaySeconds:        10,
         districtMode:                       1,
