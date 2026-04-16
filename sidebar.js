@@ -234,7 +234,7 @@ function renderCharacterDetail() {
         bondPersistence:                    1.25,
         acquaintanceAffinityThreshold:      30,
         allyAffinityThreshold:              60,
-        bondedAffinityThreshold:            78,
+        bondedAffinityThreshold:            62,
         nearbySupportRadius:                4,
         supportGroupBonus:                  0.26,
         supportAllyPresenceBonus:           0.22,
