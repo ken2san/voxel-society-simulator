@@ -1,6 +1,6 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-04-15_
+_Last updated: 2026-04-16_
 
 ---
 
@@ -30,6 +30,24 @@ Implications for all development decisions:
 - **Natural emergence over scripted cycles.** Births, deaths, and group
   formation should arise from individual character decisions, not from
   demographic targets or cooldown tuning.
+
+### Layered Fertility / Cohesion Model
+
+When iterating on reproduction and long-run population retention, treat the
+cause structure as nested layers rather than a single fertility knob:
+
+1. **Pair bond** — whether two characters have a durable high-affinity tie.
+2. **Local support** — whether nearby allies/group support make child-rearing plausible.
+3. **Livelihood viability** — whether food, shelter, energy, and safety are stable enough.
+4. **Future expectation** — whether current conditions feel survivable over time.
+
+Implementation rule:
+
+- Do **not** tune births directly toward a demographic target.
+- Shared threat may strengthen cohesion and support at moderate levels.
+- Chronic high pressure should still reduce viability and fertility.
+- Model anxiety, crisis, and disaster effects through these intermediate layers,
+  not as a single direct “stress raises births” switch.
 
 ### Pseudo-Evolution Guardrails (Anlife-like, Observation-First)
 
