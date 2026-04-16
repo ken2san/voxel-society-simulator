@@ -223,6 +223,7 @@ function renderCharacterDetail() {
         socialAnchorBias:                   0.18,
         initialAffinityMin:                 10,
         initialAffinityMax:                 35,
+        kinshipAffinityBonus:               40,
         affinityIncreaseRate:               8,
         affinityDecayRate:                  0.01,
         socialNeedRecovery:                 1.0,
@@ -2228,6 +2229,7 @@ function renderCharacterDetail() {
                         window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
                         window.initialAffinityMin = sidebarParams.initialAffinityMin;
                         window.initialAffinityMax = sidebarParams.initialAffinityMax;
+                        window.kinshipAffinityBonus = sidebarParams.kinshipAffinityBonus;
                         window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
                         window.socialThreshold = socialTh;
                         window.perceptionRange = sidebarParams.perceptionRange;

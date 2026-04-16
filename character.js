@@ -5016,6 +5016,31 @@ class Character {
                 child.parentIds = [this.id, partner.id];
                 // generation counter: max of parents + 1
                 child.generation = Math.max(this.generation || 0, partner.generation || 0) + 1;
+                // --- Kinship affinity: seed relationships from birth ---
+                try {
+                    const _kinshipBonus = (typeof window !== 'undefined' && window.kinshipAffinityBonus !== undefined) ? Number(window.kinshipAffinityBonus) : 40;
+                    const _maxAff = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? Number(window.maxAffinity) : 100;
+                    const _kclamp = (v) => Math.min(_maxAff, Math.max(0, v));
+                    // Parent <-> Child (bidirectional)
+                    child.relationships.set(this.id, _kclamp(_kinshipBonus));
+                    child.relationships.set(partner.id, _kclamp(_kinshipBonus));
+                    this.relationships.set(child.id, _kclamp(Math.max(this.relationships.get(child.id) || 0, _kinshipBonus)));
+                    partner.relationships.set(child.id, _kclamp(Math.max(partner.relationships.get(child.id) || 0, _kinshipBonus)));
+                    // Sibling <-> Child (existing children of either parent)
+                    const _sibBonus = _kclamp(Math.round(_kinshipBonus * 0.75));
+                    const _kchars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+                    const _sibIds = new Set([
+                        ...(Array.isArray(this.children) ? this.children : []),
+                        ...(Array.isArray(partner.children) ? partner.children : [])
+                    ].filter(sid => sid !== child.id));
+                    for (const sid of _sibIds) {
+                        const sib = _kchars.find(c => c && c.id === sid);
+                        if (sib && sib.relationships) {
+                            sib.relationships.set(child.id, _kclamp(Math.max(sib.relationships.get(child.id) || 0, _sibBonus)));
+                            child.relationships.set(sid, _kclamp(Math.max(child.relationships.get(sid) || 0, _sibBonus)));
+                        }
+                    }
+                } catch (_ke) { /* kinship affinity setup error — non-fatal */ }
                 // prevent immediate group/role assignment - keep child as a neutral worker until maturity
                 child.groupId = null;
                 child.role = 'worker';

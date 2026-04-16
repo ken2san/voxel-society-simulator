@@ -35,6 +35,7 @@
       "socialAnchorBias": 0.18,
       "initialAffinityMin": 10,
       "initialAffinityMax": 35,
+      "kinshipAffinityBonus": 40,
       "affinityIncreaseRate": 8,
       "affinityDecayRate": 0.01,
       "socialNeedRecovery": 1,
