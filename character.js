@@ -3205,7 +3205,9 @@ class Character {
             const partner = this.action?.target;
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
             const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
-            const { ally: socialAnchorAffinity, bonded: socializeCompletionAffinity } = this.getRelationshipThresholds();
+            // Begin repeat-contact persistence once a tie is at least familiar,
+            // otherwise the model produces too many shallow contacts that never deepen.
+            const { acquaintance: socialAnchorAffinity, bonded: socializeCompletionAffinity } = this.getRelationshipThresholds();
             const { nearbyRadius } = this.getSupportModelParams();
 
             if (partner && partner.state === 'socializing') {
