@@ -46,7 +46,7 @@ let _idleDistrictProportions = null; // float[] per district, or null if not yet
 let _idleDistrictResampleKey = null;
 
 async function resampleIdleDistrictCounts() {
-    if (window.simulationRunning || window.__simHasUserStarted) return;
+    if (window.simulationRunning) return;
     const mode = Math.max(1, Number(window.sidebarParams?.districtMode || 1));
     const sampleKey = `${mode}:${Math.random()}`;
     _idleDistrictResampleKey = sampleKey;
@@ -1565,7 +1565,7 @@ function renderCharacterDetail() {
         sidebarParams.charNum = parseInt(charNumInput.value);
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
         // Update district button counts in-place (avoids re-rendering the slider mid-drag)
-        if (!window.simulationRunning && !window.__simHasUserStarted) {
+        if (!window.simulationRunning) {
             const mode = Number(sidebarParams.districtMode) || 1;
             const counts = getIdleDistrictCounts(sidebarParams.charNum, mode);
             rightSidebar?.querySelectorAll('[data-district-index]').forEach(btn => {
@@ -1582,7 +1582,7 @@ function renderCharacterDetail() {
         charNumVal.value = safeValue;
         sidebarParams.charNum = safeValue;
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
-        if (!window.simulationRunning && !window.__simHasUserStarted) {
+        if (!window.simulationRunning) {
             const mode = Number(sidebarParams.districtMode) || 1;
             const counts = getIdleDistrictCounts(safeValue, mode);
             rightSidebar?.querySelectorAll('[data-district-index]').forEach(btn => {
@@ -1598,8 +1598,8 @@ function renderCharacterDetail() {
     syncPopulationCapacityUI(initialDistrictMode);
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
-    // Seed idle distribution proportions on first render
-    if (!window.simulationRunning && !window.__simHasUserStarted && !_idleDistrictProportions) {
+    // Seed idle distribution proportions on first render or after Finish
+    if (!window.simulationRunning && !_idleDistrictProportions) {
         resampleIdleDistrictCounts();
     }
 
@@ -2281,6 +2281,9 @@ function renderCharacterDetail() {
         window.__simHasUserStarted = true;
         window.__simFinishedAt = Date.now();
         updateToggleBtn();
+        // Re-seed district proportions so slider stays reactive for the next run
+        _idleDistrictProportions = null;
+        resampleIdleDistrictCounts();
         window.renderCharacterList && window.renderCharacterList();
         renderCharacterDetail();
     }
@@ -3667,8 +3670,8 @@ function renderCharacterList() {
             `</div>` +
             `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:6px;">` +
                 `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
-                    `<div style="color:#5a6a80;font-size:0.85em;">${idlePreviewMode ? 'Start' : 'Alive'}</div>` +
-                    `<div style="font-weight:700;font-size:1.1em;color:#1d4ed8;line-height:1.2;">${idlePreviewMode ? configuredPopulation : alive.length}</div>` +
+                    `<div style="color:#5a6a80;font-size:0.85em;">${window.simulationRunning ? 'Alive' : (hasUserStarted ? 'Next' : 'Start')}</div>` +
+                    `<div style="font-weight:700;font-size:1.1em;color:#1d4ed8;line-height:1.2;">${window.simulationRunning ? alive.length : configuredPopulation}</div>` +
                 `</div>` +
                 `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
                     `<div style="color:#5a6a80;font-size:0.85em;">Net/min</div>` +
