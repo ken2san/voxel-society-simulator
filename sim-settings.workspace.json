@@ -4,7 +4,7 @@
   "description": "Workspace preset loaded before simulation start.",
   "settings": {
     "sidebarParams": {
-      "charNum": 10,
+      "charNum": 20,
       "socialTh": 75,
       "groupAffinityTh": 60,
       "hungerEmergencyThreshold": 10,
