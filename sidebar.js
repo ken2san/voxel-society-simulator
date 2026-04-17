@@ -3237,7 +3237,6 @@ function renderCharacterList() {
     // スタート前は常に現在の設定プレビューを表示し、右ペイン操作に即追従させる
     if (idlePreviewMode) {
         leftSidebar.innerHTML = '';
-        const focusLabel = districtMode > 1 ? `D${activeDistrictIndex + 1}` : 'All';
 
         const previewHeader = document.createElement('div');
         previewHeader.className = 'character-list-header';
@@ -3245,31 +3244,10 @@ function renderCharacterList() {
             `<div>` +
                 `<div class="character-list-kicker">Observation</div>` +
                 `<h3 class="character-list-title">Society Overview</h3>` +
-                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Setup preview · updates as you change the right pane</div>` +
+                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Ready to start</div>` +
             `</div>`;
         leftSidebar.appendChild(previewHeader);
 
-        const previewStats = document.createElement('div');
-        previewStats.className = 'population-overview-card';
-        previewStats.innerHTML =
-            `<div class="population-card-section-title">Setup Preview</div>` +
-            `<div class="population-pulse-grid">` +
-                `<div class="population-pulse-item"><span class="label">Start</span><strong>${configuredPopulation}</strong></div>` +
-                `<div class="population-pulse-item"><span class="label">Districts</span><strong>${districtMode}</strong></div>` +
-                `<div class="population-pulse-item"><span class="label">Focus</span><strong>${focusLabel}</strong></div>` +
-                `<div class="population-pulse-item"><span class="label">State</span><strong>Ready</strong></div>` +
-            `</div>` +
-            `<div style="margin-top:10px;font-size:0.85em;color:#64748b;line-height:1.45;">Press Start to launch this setup. During the run, setup controls lock and only district focus stays available.</div>`;
-        leftSidebar.appendChild(previewStats);
-
-        const previewTableHint = document.createElement('div');
-        previewTableHint.className = 'character-table-shell';
-        previewTableHint.style.padding = '10px 12px';
-        previewTableHint.style.marginTop = '8px';
-        previewTableHint.style.color = '#64748b';
-        previewTableHint.style.fontSize = '0.9em';
-        previewTableHint.textContent = 'No live characters yet. This panel is showing the next-run configuration.';
-        leftSidebar.appendChild(previewTableHint);
         return;
     }
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
