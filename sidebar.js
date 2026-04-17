@@ -2107,14 +2107,32 @@ function renderCharacterDetail() {
     districtSummary.style.alignContent = 'start';
     districtSummary.style.rowGap = '4px';
     const idleDistrictPreview = !window.simulationRunning && !window.__simHasUserStarted;
-    const idleEstPerDistrict = idleDistrictPreview
-        ? Math.round(Number(sidebarParams.charNum || 10) / Math.max(1, districtMode))
-        : 0;
-    const districtData = (!idleDistrictPreview && typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
+    // Always read actual observation data (pre-spawned chars give real terrain distribution)
+    const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
+    // In idle mode, scale actual spawn distribution proportionally to configuredPopulation
+    const idleScaledCounts = (() => {
+        if (!idleDistrictPreview) return null;
+        const charNum = Number(sidebarParams.charNum || 10);
+        const actualTotal = districtData.reduce((s, d) => s + (d.population || 0), 0);
+        if (actualTotal <= 0) {
+            // No pre-spawned chars in districts yet — fall back to uniform
+            const base = Math.floor(charNum / Math.max(1, districtMode));
+            return Array.from({ length: districtMode }, (_, i) => base + (i < charNum % districtMode ? 1 : 0));
+        }
+        // Scale proportionally, fix rounding to exactly sum to charNum
+        const raw = districtData.map(d => (d.population || 0) / actualTotal * charNum);
+        const floored = raw.map(Math.floor);
+        let remainder = charNum - floored.reduce((a, b) => a + b, 0);
+        const diffs = raw.map((v, i) => v - floored[i]);
+        const order = diffs.map((d, i) => i).sort((a, b) => diffs[b] - diffs[a]);
+        order.forEach(i => { if (remainder-- > 0) floored[i]++; });
+        return floored;
+    })();
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
     const activeMigrationNet = Number(activeDistrictData?.migrationFlow?.net || 0);
     const activeFlowColor = activeMigrationNet > 0 ? '#15803d' : (activeMigrationNet < 0 ? '#b91c1c' : '#64748b');
     const activeFlowText = activeMigrationNet > 0 ? `+${activeMigrationNet}` : String(activeMigrationNet);
+    const activeIdleCount = idleScaledCounts ? idleScaledCounts[sidebarParams.activeDistrictIndex || 0] : 0;
     districtSummary.innerHTML = (!idleDistrictPreview && activeDistrictData)
         ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population} · <span style="color:${activeFlowColor};">flow ${activeFlowText}</span></div>` +
           `<div style="color:#475569;line-height:1.25;font-size:0.95em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px;row-gap:2px;">` +
@@ -2125,7 +2143,7 @@ function renderCharacterDetail() {
             `<span style="grid-column:1 / -1;">move ${Number(activeDistrictData.migrationFlow?.in || 0)} in / ${Number(activeDistrictData.migrationFlow?.out || 0)} out</span>` +
           `</div>`
         : idleDistrictPreview
-            ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;">D${(sidebarParams.activeDistrictIndex || 0) + 1} selected · ~${idleEstPerDistrict} chars each · press Start</div><div></div>`
+            ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;">D${(sidebarParams.activeDistrictIndex || 0) + 1} · est. ~${activeIdleCount} · terrain-weighted · press Start</div><div></div>`
             : '<div style="font-weight:700;color:#0f172a;line-height:1.2;">Watching the full baseline district</div><div></div>';
     districtPanel.appendChild(districtSummary);
 
@@ -2138,7 +2156,8 @@ function renderCharacterDetail() {
     for (let i = 0; i < districtMode; i++) {
         const btn = document.createElement('button');
         const summary = districtData[i];
-        btn.textContent = (!idleDistrictPreview && summary) ? `D${i + 1} · ${summary.population}` : `D${i + 1} · ~${idleEstPerDistrict}`;
+        const idleCount = idleScaledCounts ? idleScaledCounts[i] : 0;
+        btn.textContent = !idleDistrictPreview && summary ? `D${i + 1} · ${summary.population}` : `D${i + 1} · ~${idleCount}`;
         btn.style.padding = '6px 4px';
         btn.style.borderRadius = '8px';
         btn.style.fontWeight = '700';
