@@ -2178,12 +2178,13 @@ function renderCharacterDetail() {
     }
 
     function updateResetBtn() {
-        const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
-        resetBtn.textContent = 'Reset';
+        const hasStartedRun = !!window.__simHasUserStarted;
+        resetBtn.textContent = 'Restart';
         resetBtn.style.background = 'linear-gradient(90deg,#f8fafc 10%,#e2e8f0 100%)';
-        resetBtn.style.color = hasCharacters ? '#1f2937' : '#94a3b8';
-        resetBtn.style.cursor = hasCharacters && !window.__simStarting ? 'pointer' : 'default';
-        resetBtn.disabled = !!window.__simStarting || !hasCharacters;
+        resetBtn.style.color = hasStartedRun ? '#1f2937' : '#94a3b8';
+        resetBtn.style.cursor = hasStartedRun && !window.__simStarting ? 'pointer' : 'default';
+        resetBtn.style.display = hasStartedRun ? 'inline-flex' : 'none';
+        resetBtn.disabled = !!window.__simStarting || !hasStartedRun;
     }
 
     function startFreshSimulation() {
@@ -2283,7 +2284,7 @@ function renderCharacterDetail() {
         btn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
     });
     toggleBtn.style.cursor = 'pointer';
-    resetBtn.title = 'Restart from scratch with current settings';
+    resetBtn.title = 'Start over from scratch with the current settings';
 
     updateToggleBtn();
     updateResetBtn();
