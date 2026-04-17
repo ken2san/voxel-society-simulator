@@ -2090,6 +2090,74 @@ function renderCharacterDetail() {
     starvRow.dataset.label = 'Starvation Death Delay seconds';
     tabPanels[2].appendChild(starvRow);
 
+    // ─── Re-order tab panels into logical sections ─────────────────────────
+    // appendChild on an existing node moves it; section headers are fresh divs.
+    {
+        const _h = (text) => {
+            const h = document.createElement('div');
+            h.textContent = text;
+            h.style.cssText = 'font-size:0.72em;font-weight:700;color:#94a3b8;letter-spacing:0.07em;text-transform:uppercase;padding:6px 0 3px;margin-top:6px;border-bottom:1px solid #e8eef6;';
+            return h;
+        };
+
+        // ── Social Tab ──────────────────────────────────────────────────────
+        tabPanels[1].appendChild(_h('🤝 Affinity Core'));
+        tabPanels[1].appendChild(groupThRow);
+        tabPanels[1].appendChild(perceptionRow);
+        tabPanels[1].appendChild(affinityInitRow);
+        tabPanels[1].appendChild(affinityRateRow);
+        tabPanels[1].appendChild(affinityDecayRow);
+        tabPanels[1].appendChild(maxAffinityRow);
+        tabPanels[1].appendChild(affinityFloorRow);
+        tabPanels[1].appendChild(traitCapRow);
+
+        tabPanels[1].appendChild(_h('🔗 Bonds & Ties'));
+        tabPanels[1].appendChild(relationThresholdRow);
+        tabPanels[1].appendChild(bondPersistenceRow);
+        tabPanels[1].appendChild(affinityResetRow);
+
+        tabPanels[1].appendChild(_h('🫂 Support System'));
+        tabPanels[1].appendChild(socialRecoveryRow);
+        tabPanels[1].appendChild(supportModelRow);
+        tabPanels[1].appendChild(supportDynamicsRow);
+        tabPanels[1].appendChild(supportWeightsRow);
+
+        tabPanels[1].appendChild(_h('🧭 Decision Making'));
+        tabPanels[1].appendChild(socialDecisionRow);
+        tabPanels[1].appendChild(socialAdaptRow);
+
+        tabPanels[1].appendChild(_h('👶 Reproduction & Genetics'));
+        tabPanels[1].appendChild(reproductionModelRow);
+        tabPanels[1].appendChild(minAgeRow);
+        tabPanels[1].appendChild(reproAffinRow);
+        tabPanels[1].appendChild(pairCooldownRow);
+        tabPanels[1].appendChild(parentCooldownRow);
+        tabPanels[1].appendChild(mutRateRow);
+
+        // ── Behavior Tab ────────────────────────────────────────────────────
+        tabPanels[2].appendChild(_h('🍎 Needs & Survival'));
+        tabPanels[2].appendChild(needsDynamicsRow);
+        tabPanels[2].appendChild(hungerEmergencyRow);
+        tabPanels[2].appendChild(energyEmergencyRow);
+        tabPanels[2].appendChild(starvRow);
+
+        tabPanels[2].appendChild(_h('🏃 Agent Behavior'));
+        tabPanels[2].appendChild(autoRecoverRow);
+        tabPanels[2].appendChild(isolationRow);
+        tabPanels[2].appendChild(homeReturnRow);
+        tabPanels[2].appendChild(homeBuildRow);
+
+        tabPanels[2].appendChild(_h('🌍 World & Ecology'));
+        tabPanels[2].appendChild(lifespanRow);
+        tabPanels[2].appendChild(fruitRegenRow);
+        tabPanels[2].appendChild(seasonCycleRow);
+        tabPanels[2].appendChild(seasonAmpRow);
+
+        tabPanels[2].appendChild(_h('🗺️ District / Migration'));
+        tabPanels[2].appendChild(districtPressureRow);
+        tabPanels[2].appendChild(districtOpportunityRow);
+    }
+
     // ランダム生成トグル
     const randomRow = document.createElement('div');
     randomRow.style.display = 'flex';
