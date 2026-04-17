@@ -1484,22 +1484,20 @@ function renderCharacterDetail() {
         const runningCharacterCount = Array.isArray(window.characters)
             ? window.characters.filter(c => c && c.state !== 'dead').length
             : 0;
-        const isLockedToActiveRun = runningCharacterCount > 0;
+        const isSimulationActive = !!window.simulationRunning && runningCharacterCount > 0;
 
         let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
-        if (isLockedToActiveRun) {
-            nextVal = Math.max(5, Math.min(spec.max, runningCharacterCount));
-        } else if (autoTune && nextVal <= prevSpec.recommended) {
+        if (autoTune && nextVal <= prevSpec.recommended) {
             nextVal = spec.recommended;
         }
 
         sidebarParams.charNum = nextVal;
         charNumInput.value = nextVal;
         charNumVal.value = nextVal;
-        charNumInput.disabled = isLockedToActiveRun;
-        charNumVal.disabled = isLockedToActiveRun;
-        populationHint.textContent = isLockedToActiveRun
-            ? `Current run: ${runningCharacterCount} characters · recommended ${spec.recommended} for the next ${mode}-district start · max ${spec.max}`
+        charNumInput.disabled = isSimulationActive;
+        charNumVal.disabled = isSimulationActive;
+        populationHint.textContent = runningCharacterCount > 0
+            ? `Alive now: ${runningCharacterCount} · next start: ${nextVal} · recommended ${spec.recommended} for ${mode}-district mode · max ${spec.max}`
             : `Recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
     };
 
