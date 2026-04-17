@@ -2148,7 +2148,6 @@ function renderCharacterDetail() {
 
     // Start/Pause toggle button (pinned at top)
     if (window.simulationRunning === undefined) window.simulationRunning = false;
-    if (window.__simWasPaused === undefined) window.__simWasPaused = false;
     const toggleBtn = document.createElement('button');
     function updateToggleBtn() {
         const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
@@ -2156,21 +2155,15 @@ function renderCharacterDetail() {
             toggleBtn.textContent = 'Starting…';
             toggleBtn.style.background = 'linear-gradient(90deg,#dbeafe 10%,#fde68a 100%)';
             toggleBtn.disabled = true;
-        } else if (!hasCharacters) {
-            toggleBtn.textContent = 'Start';
-            toggleBtn.style.background = 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
-            toggleBtn.disabled = false;
         } else if (window.simulationRunning) {
             toggleBtn.textContent = 'Pause';
             toggleBtn.style.background = 'linear-gradient(90deg,#ffe8a3 10%,#ffd5b3 100%)';
             toggleBtn.disabled = false;
-        } else if (window.__simWasPaused) {
-            toggleBtn.textContent = 'Resume';
-            toggleBtn.style.background = 'linear-gradient(90deg,#bfffb2 10%,#dcffe0 100%)';
-            toggleBtn.disabled = false;
         } else {
             toggleBtn.textContent = 'Start';
-            toggleBtn.style.background = 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
+            toggleBtn.style.background = hasCharacters
+                ? 'linear-gradient(90deg,#bfffb2 10%,#dcffe0 100%)'
+                : 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
             toggleBtn.disabled = false;
         }
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
@@ -2190,7 +2183,6 @@ function renderCharacterDetail() {
         if (!window.simulationRunning) {
             if (hasCharacters) {
                 window.simulationRunning = true;
-                window.__simWasPaused = false;
                 updateToggleBtn();
                 window.renderCharacterList && window.renderCharacterList();
                 renderCharacterDetail();
@@ -2202,7 +2194,6 @@ function renderCharacterDetail() {
             const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
             const useRandom = !!sidebarParams.useRandom;
             window.__simStarting = true;
-            window.__simWasPaused = false;
             updateToggleBtn();
             // Reset existing characters and IDs
             window.characters = [];
@@ -2271,7 +2262,6 @@ function renderCharacterDetail() {
                         }
                         window.simulationRunning = true;
                         window.__simStarting = false;
-                        window.__simWasPaused = false;
                         updateToggleBtn();
                         window.renderCharacterList && window.renderCharacterList();
                         renderCharacterDetail();
@@ -2286,7 +2276,6 @@ function renderCharacterDetail() {
             });
         } else {
             window.simulationRunning = false;
-            window.__simWasPaused = true;
             updateToggleBtn();
             window.renderCharacterList && window.renderCharacterList();
             renderCharacterDetail();
