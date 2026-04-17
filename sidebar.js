@@ -1478,9 +1478,8 @@ function renderCharacterDetail() {
     populationHint.style.marginTop = '-4px';
     populationHint.style.marginLeft = '140px';
 
-    const syncPopulationCapacityUI = (mode, { autoTune = false, previousMode = mode } = {}) => {
+    const syncPopulationCapacityUI = (mode) => {
         const spec = getPopulationCapacityByDistrictMode(mode);
-        const prevSpec = getPopulationCapacityByDistrictMode(previousMode);
         charNumInput.max = spec.max;
         charNumVal.max = spec.max;
 
@@ -1491,9 +1490,6 @@ function renderCharacterDetail() {
         const hasFinishedSnapshot = !window.simulationRunning && !!window.__simHasUserStarted && runningCharacterCount > 0;
 
         let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
-        if (autoTune && nextVal <= prevSpec.recommended) {
-            nextVal = spec.recommended;
-        }
 
         sidebarParams.charNum = nextVal;
         charNumInput.value = nextVal;
@@ -2071,12 +2067,11 @@ function renderCharacterDetail() {
         btn.disabled = paramDisabled;
         btn.onclick = () => {
             if (paramDisabled) return;
-            const previousMode = sidebarParams.districtMode || 1;
             sidebarParams.districtMode = mode;
             if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;
             window.districtMode = mode;
             window.activeDistrictIndex = sidebarParams.activeDistrictIndex;
-            syncPopulationCapacityUI(mode, { autoTune: true, previousMode });
+            syncPopulationCapacityUI(mode);
             import('./world.js').then(worldMod => {
                 worldMod.setDistrictMode?.(mode);
                 worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
