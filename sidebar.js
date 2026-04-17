@@ -38,6 +38,38 @@ function recordCharacterHistory() {
 if (window.__characterHistoryInterval) clearInterval(window.__characterHistoryInterval);
 window.__characterHistoryInterval = setInterval(recordCharacterHistory, 1000);
 
+// --- Idle district distribution cache ---
+// Stores per-district estimated char counts based on random terrain sampling.
+// Replaced on every slider change or district mode change (idle mode only).
+let _idleDistrictCounts = null;
+let _idleDistrictResampleKey = null; // "charNum:districtMode" — skip if unchanged
+
+async function resampleIdleDistrictCounts() {
+    if (window.simulationRunning || window.__simHasUserStarted) return;
+    const charNum = Math.max(1, Number(window.sidebarParams?.charNum || 10));
+    const mode = Math.max(1, Number(window.sidebarParams?.districtMode || 1));
+    const key = `${charNum}:${mode}:${Math.random()}`; // always unique so slider re-rolls
+    _idleDistrictResampleKey = key;
+    try {
+        const worldMod = await import('./world.js');
+        const counts = new Array(mode).fill(0);
+        for (let i = 0; i < charNum; i++) {
+            const pos = worldMod.findValidSpawn();
+            if (pos) {
+                const idx = worldMod.getDistrictIndexForPosition(pos, mode);
+                const safeIdx = Math.max(0, Math.min(mode - 1, Number(idx) || 0));
+                counts[safeIdx]++;
+            }
+        }
+        if (_idleDistrictResampleKey === key) {
+            _idleDistrictCounts = counts;
+            window.renderCharacterList && window.renderCharacterList();
+        }
+    } catch (_) {
+        _idleDistrictCounts = null;
+    }
+}
+
 function getMoodDisplay(mood) {
     switch (mood) {
         case 'happy': return { icon: '😄', className: 'mood-happy', text: 'happy' };
@@ -1515,7 +1547,11 @@ function renderCharacterDetail() {
         charNumVal.value = charNumInput.value;
         sidebarParams.charNum = parseInt(charNumInput.value);
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
-        window.renderCharacterList && window.renderCharacterList();
+        if (!window.simulationRunning && !window.__simHasUserStarted) {
+            resampleIdleDistrictCounts();
+        } else {
+            window.renderCharacterList && window.renderCharacterList();
+        }
     };
     charNumVal.oninput = () => {
         const maxAllowed = Number(charNumVal.max || charCapacity.max);
@@ -1524,7 +1560,11 @@ function renderCharacterDetail() {
         charNumVal.value = safeValue;
         sidebarParams.charNum = safeValue;
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
-        window.renderCharacterList && window.renderCharacterList();
+        if (!window.simulationRunning && !window.__simHasUserStarted) {
+            resampleIdleDistrictCounts();
+        } else {
+            window.renderCharacterList && window.renderCharacterList();
+        }
     };
     charNumRow.dataset.label = 'Number of Characters';
     tabPanels[0].appendChild(charNumRow);
@@ -1532,6 +1572,10 @@ function renderCharacterDetail() {
     syncPopulationCapacityUI(initialDistrictMode);
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
+    // Seed idle distribution on first render if not yet computed
+    if (!window.simulationRunning && !window.__simHasUserStarted && !_idleDistrictCounts) {
+        resampleIdleDistrictCounts();
+    }
 
     // --- Initial Age Spread Slider ---
     if (sidebarParams.initialAgeMaxRatio === undefined) sidebarParams.initialAgeMaxRatio = 0.65;
@@ -2081,7 +2125,11 @@ function renderCharacterDetail() {
                 worldMod.setDistrictMode?.(mode);
                 worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
                 renderCharacterDetail();
-                window.renderCharacterList && window.renderCharacterList();
+                if (!window.simulationRunning && !window.__simHasUserStarted) {
+                    resampleIdleDistrictCounts();
+                } else {
+                    window.renderCharacterList && window.renderCharacterList();
+                }
             });
         };
         districtModeRow.appendChild(btn);
@@ -2107,27 +2155,9 @@ function renderCharacterDetail() {
     districtSummary.style.alignContent = 'start';
     districtSummary.style.rowGap = '4px';
     const idleDistrictPreview = !window.simulationRunning && !window.__simHasUserStarted;
-    // Always read actual observation data (pre-spawned chars give real terrain distribution)
-    const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
-    // In idle mode, scale actual spawn distribution proportionally to configuredPopulation
-    const idleScaledCounts = (() => {
-        if (!idleDistrictPreview) return null;
-        const charNum = Number(sidebarParams.charNum || 10);
-        const actualTotal = districtData.reduce((s, d) => s + (d.population || 0), 0);
-        if (actualTotal <= 0) {
-            // No pre-spawned chars in districts yet — fall back to uniform
-            const base = Math.floor(charNum / Math.max(1, districtMode));
-            return Array.from({ length: districtMode }, (_, i) => base + (i < charNum % districtMode ? 1 : 0));
-        }
-        // Scale proportionally, fix rounding to exactly sum to charNum
-        const raw = districtData.map(d => (d.population || 0) / actualTotal * charNum);
-        const floored = raw.map(Math.floor);
-        let remainder = charNum - floored.reduce((a, b) => a + b, 0);
-        const diffs = raw.map((v, i) => v - floored[i]);
-        const order = diffs.map((d, i) => i).sort((a, b) => diffs[b] - diffs[a]);
-        order.forEach(i => { if (remainder-- > 0) floored[i]++; });
-        return floored;
-    })();
+    const districtData = (!idleDistrictPreview && typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
+    // Use cached random-terrain counts in idle mode; null means resample in progress
+    const idleScaledCounts = idleDistrictPreview ? (_idleDistrictCounts || []) : null;
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
     const activeMigrationNet = Number(activeDistrictData?.migrationFlow?.net || 0);
     const activeFlowColor = activeMigrationNet > 0 ? '#15803d' : (activeMigrationNet < 0 ? '#b91c1c' : '#64748b');
@@ -2294,6 +2324,7 @@ function renderCharacterDetail() {
                     window.simulationRunning = true;
                     window.__simStarting = false;
                     window.__simHasUserStarted = true;
+                    _idleDistrictCounts = null; // clear idle preview cache
                     updateToggleBtn();
                     window.renderCharacterList && window.renderCharacterList();
                     renderCharacterDetail();
