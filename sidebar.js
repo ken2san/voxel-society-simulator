@@ -39,35 +39,52 @@ if (window.__characterHistoryInterval) clearInterval(window.__characterHistoryIn
 window.__characterHistoryInterval = setInterval(recordCharacterHistory, 1000);
 
 // --- Idle district distribution cache ---
-// Stores per-district estimated char counts based on random terrain sampling.
-// Replaced on every slider change or district mode change (idle mode only).
-let _idleDistrictCounts = null;
-let _idleDistrictResampleKey = null; // "charNum:districtMode" — skip if unchanged
+// Stores per-district spawn proportions (fractions summing to ~1) from terrain sampling.
+// charNum-independent: resampled only on district mode change or page load.
+// At render time, multiply by current charNum for instant slider reactivity.
+let _idleDistrictProportions = null; // float[] per district, or null if not yet sampled
+let _idleDistrictResampleKey = null;
 
 async function resampleIdleDistrictCounts() {
     if (window.simulationRunning || window.__simHasUserStarted) return;
-    const charNum = Math.max(1, Number(window.sidebarParams?.charNum || 10));
     const mode = Math.max(1, Number(window.sidebarParams?.districtMode || 1));
-    const key = `${charNum}:${mode}:${Math.random()}`; // always unique so slider re-rolls
-    _idleDistrictResampleKey = key;
+    const sampleKey = `${mode}:${Math.random()}`;
+    _idleDistrictResampleKey = sampleKey;
     try {
         const worldMod = await import('./world.js');
-        const counts = new Array(mode).fill(0);
-        for (let i = 0; i < charNum; i++) {
+        const SAMPLE = 300;
+        const hits = new Array(mode).fill(0);
+        for (let i = 0; i < SAMPLE; i++) {
             const pos = worldMod.findValidSpawn();
             if (pos) {
-                const idx = worldMod.getDistrictIndexForPosition(pos, mode);
-                const safeIdx = Math.max(0, Math.min(mode - 1, Number(idx) || 0));
-                counts[safeIdx]++;
+                const idx = Math.max(0, Math.min(mode - 1, Number(worldMod.getDistrictIndexForPosition(pos, mode)) || 0));
+                hits[idx]++;
             }
         }
-        if (_idleDistrictResampleKey === key) {
-            _idleDistrictCounts = counts;
+        const total = hits.reduce((a, b) => a + b, 0);
+        if (_idleDistrictResampleKey === sampleKey) {
+            _idleDistrictProportions = total > 0 ? hits.map(h => h / total) : null;
             window.renderCharacterList && window.renderCharacterList();
         }
     } catch (_) {
-        _idleDistrictCounts = null;
+        _idleDistrictProportions = null;
     }
+}
+
+// Compute per-district estimated counts from cached proportions × current charNum.
+// Always returns an array of length `mode`. Runs synchronously at render time.
+function getIdleDistrictCounts(charNum, mode) {
+    const props = _idleDistrictProportions;
+    if (!props || props.length !== mode) {
+        // Uniform fallback while resample is in progress
+        const base = Math.floor(charNum / mode);
+        return Array.from({ length: mode }, (_, i) => base + (i < charNum % mode ? 1 : 0));
+    }
+    const floored = props.map(p => Math.floor(p * charNum));
+    let remainder = charNum - floored.reduce((a, b) => a + b, 0);
+    const diffs = props.map((p, i) => p * charNum - floored[i]);
+    diffs.map((d, i) => i).sort((a, b) => diffs[b] - diffs[a]).forEach(i => { if (remainder-- > 0) floored[i]++; });
+    return floored;
 }
 
 function getMoodDisplay(mood) {
@@ -1547,11 +1564,7 @@ function renderCharacterDetail() {
         charNumVal.value = charNumInput.value;
         sidebarParams.charNum = parseInt(charNumInput.value);
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
-        if (!window.simulationRunning && !window.__simHasUserStarted) {
-            resampleIdleDistrictCounts();
-        } else {
-            window.renderCharacterList && window.renderCharacterList();
-        }
+        window.renderCharacterList && window.renderCharacterList();
     };
     charNumVal.oninput = () => {
         const maxAllowed = Number(charNumVal.max || charCapacity.max);
@@ -1560,11 +1573,7 @@ function renderCharacterDetail() {
         charNumVal.value = safeValue;
         sidebarParams.charNum = safeValue;
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
-        if (!window.simulationRunning && !window.__simHasUserStarted) {
-            resampleIdleDistrictCounts();
-        } else {
-            window.renderCharacterList && window.renderCharacterList();
-        }
+        window.renderCharacterList && window.renderCharacterList();
     };
     charNumRow.dataset.label = 'Number of Characters';
     tabPanels[0].appendChild(charNumRow);
@@ -1572,8 +1581,8 @@ function renderCharacterDetail() {
     syncPopulationCapacityUI(initialDistrictMode);
     charNumInput.disabled = paramDisabled;
     charNumVal.disabled = paramDisabled;
-    // Seed idle distribution on first render if not yet computed
-    if (!window.simulationRunning && !window.__simHasUserStarted && !_idleDistrictCounts) {
+    // Seed idle distribution proportions on first render
+    if (!window.simulationRunning && !window.__simHasUserStarted && !_idleDistrictProportions) {
         resampleIdleDistrictCounts();
     }
 
@@ -2125,7 +2134,11 @@ function renderCharacterDetail() {
                 worldMod.setDistrictMode?.(mode);
                 worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
                 renderCharacterDetail();
+                // Resample terrain proportions for new district layout; renderCharacterList
+                // will show uniform fallback immediately then update when resample completes.
                 if (!window.simulationRunning && !window.__simHasUserStarted) {
+                    _idleDistrictProportions = null;
+                    window.renderCharacterList && window.renderCharacterList();
                     resampleIdleDistrictCounts();
                 } else {
                     window.renderCharacterList && window.renderCharacterList();
@@ -2156,8 +2169,9 @@ function renderCharacterDetail() {
     districtSummary.style.rowGap = '4px';
     const idleDistrictPreview = !window.simulationRunning && !window.__simHasUserStarted;
     const districtData = (!idleDistrictPreview && typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
-    // Use cached random-terrain counts in idle mode; null means resample in progress
-    const idleScaledCounts = idleDistrictPreview ? (_idleDistrictCounts || []) : null;
+    const idleScaledCounts = idleDistrictPreview
+        ? getIdleDistrictCounts(Number(sidebarParams.charNum || 10), districtMode)
+        : null;
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
     const activeMigrationNet = Number(activeDistrictData?.migrationFlow?.net || 0);
     const activeFlowColor = activeMigrationNet > 0 ? '#15803d' : (activeMigrationNet < 0 ? '#b91c1c' : '#64748b');
@@ -2173,7 +2187,7 @@ function renderCharacterDetail() {
             `<span style="grid-column:1 / -1;">move ${Number(activeDistrictData.migrationFlow?.in || 0)} in / ${Number(activeDistrictData.migrationFlow?.out || 0)} out</span>` +
           `</div>`
         : idleDistrictPreview
-            ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;">D${(sidebarParams.activeDistrictIndex || 0) + 1} · est. ~${activeIdleCount} · terrain-weighted · press Start</div><div></div>`
+            ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;">D${(sidebarParams.activeDistrictIndex || 0) + 1} · ~${activeIdleCount} chars · drag slider to re-roll</div><div></div>`
             : '<div style="font-weight:700;color:#0f172a;line-height:1.2;">Watching the full baseline district</div><div></div>';
     districtPanel.appendChild(districtSummary);
 
@@ -2324,7 +2338,7 @@ function renderCharacterDetail() {
                     window.simulationRunning = true;
                     window.__simStarting = false;
                     window.__simHasUserStarted = true;
-                    _idleDistrictCounts = null; // clear idle preview cache
+                    _idleDistrictProportions = null; // clear idle preview cache
                     updateToggleBtn();
                     window.renderCharacterList && window.renderCharacterList();
                     renderCharacterDetail();
