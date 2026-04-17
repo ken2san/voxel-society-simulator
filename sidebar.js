@@ -3219,9 +3219,25 @@ function renderCharacterList() {
         Number(popStats.births || 0) > 0 ||
         Number(popStats.deaths || 0) > 0
     ));
-    // キャラ未生成かつ観測履歴も無い時だけ空表示にする
+    // キャラ未生成かつ観測履歴も無い時は、真っ白にせず待機状態を表示する
     if ((!Array.isArray(window.characters) || (!window.simulationRunning && chars.length === 0)) && !hasPopulationHistory) {
         leftSidebar.innerHTML = '';
+        const idleHeader = document.createElement('div');
+        idleHeader.className = 'character-list-header';
+        idleHeader.innerHTML =
+            `<div>` +
+                `<div class="character-list-kicker">Observation</div>` +
+                `<h3 class="character-list-title">Society Overview</h3>` +
+                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">No active run · configure settings on the right and press Start</div>` +
+            `</div>`;
+        leftSidebar.appendChild(idleHeader);
+
+        const idleCard = document.createElement('div');
+        idleCard.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:0.86em;color:#334155;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
+        idleCard.innerHTML =
+            `<div style="font-weight:700;font-size:1.02em;color:#1e3a8a;margin-bottom:6px;">Ready to observe</div>` +
+            `<div style="line-height:1.5;">Press <b>Start</b> to begin a fresh simulation with the current district and character settings.</div>`;
+        leftSidebar.appendChild(idleCard);
         return;
     }
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
