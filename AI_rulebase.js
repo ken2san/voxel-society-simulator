@@ -52,7 +52,10 @@ export function decideNextAction_rulebase(character, isNight) {
     // === PRIORITY 0: EMERGENCY ENERGY — force REST before any other decision ===
     // Home-building and wandering both consume energy; a depleted character must rest
     // regardless of other priorities or it enters a drain spiral it cannot recover from.
-    if (character.needs.energy <= effectiveEnergyEmergency) {
+    // Exception: if hunger is also critical (≤ hungerEmergency+5), hunger takes precedence
+    // to prevent characters with high effectiveEnergyEmergency from resting until they starve.
+    const hungerCrisisLevel = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) + 5 : 15;
+    if (character.needs.energy <= effectiveEnergyEmergency && character.needs.hunger > hungerCrisisLevel) {
         if (character.isSafe(isNight)) {
             character.log(`Action: REST (energy emergency=${character.needs.energy.toFixed(1)})`);
             character.setNextAction('REST');
