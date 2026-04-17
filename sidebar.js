@@ -2089,9 +2089,9 @@ function renderCharacterDetail() {
             [...panel.children].forEach(row => {
                 const first = row.firstElementChild;
                 if (first && first.tagName === 'SPAN' && !first.style.fontSize) {
-                    first.style.fontSize = '0.85em';
+                    first.style.fontSize = '0.82em';
                     first.style.fontWeight = '500';
-                    first.style.color = '#374151';
+                    first.style.color = '#475569';
                 }
             });
         });
