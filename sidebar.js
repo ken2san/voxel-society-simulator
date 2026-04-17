@@ -775,11 +775,13 @@ function renderCharacterDetail() {
     tabPanels[1].appendChild(bondPersistenceRow);
 
     function appendCompactSliderInput(row, labelText, key, { min = 0, max = 100, step = 1, width = '56px', sliderWidth = '88px' } = {}) {
+        const pair = document.createElement('div');
+        pair.style.cssText = 'display:inline-flex;align-items:center;gap:3px;white-space:nowrap;';
         const miniLabel = document.createElement('span');
         miniLabel.textContent = labelText;
         miniLabel.style.fontSize = '0.82em';
         miniLabel.style.color = '#475569';
-        row.appendChild(miniLabel);
+        pair.appendChild(miniLabel);
 
         const input = document.createElement('input');
         input.type = 'number';
@@ -798,7 +800,8 @@ function renderCharacterDetail() {
             input.value = String(next);
         };
         input.addEventListener('input', e => syncValue(e.target.value));
-        row.appendChild(input);
+        pair.appendChild(input);
+        row.appendChild(pair);
     }
 
     const relationThresholdRow = document.createElement('div');
@@ -808,7 +811,7 @@ function renderCharacterDetail() {
     relationThresholdRow.style.gap = '8px';
     const relationThresholdLabel = document.createElement('span');
     relationThresholdLabel.textContent = 'Tie Thresholds:';
-    relationThresholdLabel.style.width = '140px';
+    relationThresholdLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     relationThresholdRow.appendChild(relationThresholdLabel);
     appendCompactSliderInput(relationThresholdRow, 'Acq', 'acquaintanceAffinityThreshold', { min: 0, max: 100, step: 1, width: '54px', sliderWidth: '72px' });
     appendCompactSliderInput(relationThresholdRow, 'Ally', 'allyAffinityThreshold', { min: 0, max: 100, step: 1, width: '54px', sliderWidth: '72px' });
@@ -823,7 +826,7 @@ function renderCharacterDetail() {
     supportModelRow.style.gap = '8px';
     const supportModelLabel = document.createElement('span');
     supportModelLabel.textContent = 'Support Inputs:';
-    supportModelLabel.style.width = '140px';
+    supportModelLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     supportModelRow.appendChild(supportModelLabel);
     appendCompactSliderInput(supportModelRow, 'Radius', 'nearbySupportRadius', { min: 1, max: 10, step: 1, width: '54px', sliderWidth: '72px' });
     appendCompactSliderInput(supportModelRow, 'Group+', 'supportGroupBonus', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
@@ -839,7 +842,7 @@ function renderCharacterDetail() {
     supportDynamicsRow.style.gap = '8px';
     const supportDynamicsLabel = document.createElement('span');
     supportDynamicsLabel.textContent = 'Support Dynamics:';
-    supportDynamicsLabel.style.width = '140px';
+    supportDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     supportDynamicsRow.appendChild(supportDynamicsLabel);
     appendCompactSliderInput(supportDynamicsRow, 'Decay', 'socialNeedDecayRate', { min: 0, max: 4, step: 0.1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(supportDynamicsRow, 'Group×', 'supportGroupComfortScale', { min: 0, max: 2, step: 0.05, width: '64px', sliderWidth: '72px' });
@@ -855,7 +858,7 @@ function renderCharacterDetail() {
     needsDynamicsRow.style.gap = '8px';
     const needsDynamicsLabel = document.createElement('span');
     needsDynamicsLabel.textContent = 'Needs Dynamics:';
-    needsDynamicsLabel.style.width = '140px';
+    needsDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     needsDynamicsRow.appendChild(needsDynamicsLabel);
     appendCompactSliderInput(needsDynamicsRow, 'Hun', 'hungerDecayRate', { min: 0, max: 2, step: 0.05, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'FoodAt', 'foodSeekHungerThreshold', { min: 10, max: 80, step: 1, width: '64px', sliderWidth: '72px' });
@@ -875,7 +878,7 @@ function renderCharacterDetail() {
     supportWeightsRow.style.gap = '8px';
     const supportWeightsLabel = document.createElement('span');
     supportWeightsLabel.textContent = 'Support Weights:';
-    supportWeightsLabel.style.width = '140px';
+    supportWeightsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     supportWeightsRow.appendChild(supportWeightsLabel);
     appendCompactSliderInput(supportWeightsRow, 'Bond', 'supportBondedWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(supportWeightsRow, 'Ally', 'supportAllyWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
@@ -891,7 +894,7 @@ function renderCharacterDetail() {
     socialDecisionRow.style.gap = '8px';
     const socialDecisionLabel = document.createElement('span');
     socialDecisionLabel.textContent = 'Decision Biases:';
-    socialDecisionLabel.style.width = '140px';
+    socialDecisionLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     socialDecisionRow.appendChild(socialDecisionLabel);
     appendCompactSliderInput(socialDecisionRow, 'Exp', 'explorationBaseRate', { min: 0, max: 0.4, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(socialDecisionRow, 'ExpMin', 'explorationMinRate', { min: 0, max: 0.2, step: 0.01, width: '64px', sliderWidth: '72px' });
@@ -910,7 +913,7 @@ function renderCharacterDetail() {
     socialAdaptRow.style.gap = '8px';
     const socialAdaptLabel = document.createElement('span');
     socialAdaptLabel.textContent = 'Adapt Weights:';
-    socialAdaptLabel.style.width = '140px';
+    socialAdaptLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     socialAdaptRow.appendChild(socialAdaptLabel);
     appendCompactSliderInput(socialAdaptRow, 'Exp+', 'explorationAdaptBoost', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(socialAdaptRow, 'ExpFor-', 'explorationForagePenalty', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
@@ -928,7 +931,7 @@ function renderCharacterDetail() {
     reproductionModelRow.style.gap = '8px';
     const reproductionModelLabel = document.createElement('span');
     reproductionModelLabel.textContent = 'Birth Layers:';
-    reproductionModelLabel.style.width = '140px';
+    reproductionModelLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     reproductionModelRow.appendChild(reproductionModelLabel);
     appendCompactSliderInput(reproductionModelRow, 'Gate', 'reproductionReadinessThreshold', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(reproductionModelRow, 'Threat+', 'reproductionAnxietyCohesionBonus', { min: 0, max: 0.4, step: 0.01, width: '64px', sliderWidth: '72px' });
@@ -943,7 +946,7 @@ function renderCharacterDetail() {
     districtPressureRow.style.gap = '8px';
     const districtPressureLabel = document.createElement('span');
     districtPressureLabel.textContent = 'District Pressure:';
-    districtPressureLabel.style.width = '140px';
+    districtPressureLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     districtPressureRow.appendChild(districtPressureLabel);
     appendCompactSliderInput(districtPressureRow, 'Food', 'socialPressureFoodWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(districtPressureRow, 'House', 'socialPressureHousingWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
@@ -960,7 +963,7 @@ function renderCharacterDetail() {
     districtOpportunityRow.style.gap = '8px';
     const districtOpportunityLabel = document.createElement('span');
     districtOpportunityLabel.textContent = 'District Opportunity:';
-    districtOpportunityLabel.style.width = '140px';
+    districtOpportunityLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
     districtOpportunityRow.appendChild(districtOpportunityLabel);
     appendCompactSliderInput(districtOpportunityRow, 'Press', 'opportunityPressureWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(districtOpportunityRow, 'Support', 'opportunitySupportWeight', { min: 0, max: 1, step: 0.01, width: '64px', sliderWidth: '72px' });
