@@ -1505,6 +1505,8 @@ function renderCharacterDetail() {
     charNumInput.oninput = () => {
         charNumVal.value = charNumInput.value;
         sidebarParams.charNum = parseInt(charNumInput.value);
+        syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
+        window.renderCharacterList && window.renderCharacterList();
     };
     charNumVal.oninput = () => {
         const maxAllowed = Number(charNumVal.max || charCapacity.max);
@@ -1512,6 +1514,8 @@ function renderCharacterDetail() {
         charNumInput.value = safeValue;
         charNumVal.value = safeValue;
         sidebarParams.charNum = safeValue;
+        syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
+        window.renderCharacterList && window.renderCharacterList();
     };
     charNumRow.dataset.label = 'Number of Characters';
     tabPanels[0].appendChild(charNumRow);
@@ -3219,24 +3223,51 @@ function renderCharacterList() {
         Number(popStats.births || 0) > 0 ||
         Number(popStats.deaths || 0) > 0
     ));
-    // キャラ未生成かつ観測履歴も無い時は、真っ白にせず待機状態を表示する
-    if ((!Array.isArray(window.characters) || (!window.simulationRunning && chars.length === 0)) && !hasPopulationHistory) {
+    const hasUserStarted = !!window.__simHasUserStarted;
+    const districtSpec = districtMode >= 16
+        ? { recommended: 80, max: 120 }
+        : districtMode >= 4
+            ? { recommended: 48, max: 80 }
+            : { recommended: 20, max: 50 };
+    const configuredPopulation = Math.max(
+        5,
+        Math.min(districtSpec.max, Number(window.sidebarParams?.charNum) || districtSpec.recommended)
+    );
+    const idlePreviewMode = !window.simulationRunning && !hasPopulationHistory && !hasUserStarted;
+    // 待機中はプレビュー用の仮キャラ数ではなく、右ペインで設定した開始条件をそのまま表示する
+    if (idlePreviewMode) {
         leftSidebar.innerHTML = '';
+        const focusLabel = districtMode > 1 ? `D${activeDistrictIndex + 1}` : 'All';
+
         const idleHeader = document.createElement('div');
         idleHeader.className = 'character-list-header';
         idleHeader.innerHTML =
             `<div>` +
                 `<div class="character-list-kicker">Observation</div>` +
                 `<h3 class="character-list-title">Society Overview</h3>` +
-                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Idle · set options on the right, then press Start</div>` +
+                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Idle · preview follows the current settings</div>` +
             `</div>`;
         leftSidebar.appendChild(idleHeader);
 
         const idleCard = document.createElement('div');
         idleCard.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:0.86em;color:#334155;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
         idleCard.innerHTML =
-            `<div style="font-weight:700;font-size:1.02em;color:#1e3a8a;margin-bottom:6px;">Ready</div>` +
-            `<div style="line-height:1.5;">Press Start to begin a new run.</div>`;
+            `<div style="font-weight:700;font-size:1.02em;color:#1e3a8a;margin-bottom:8px;">Ready</div>` +
+            `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;">` +
+                `<div style="background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;padding:8px;">` +
+                    `<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Start pop</div>` +
+                    `<div style="font-size:1.15em;color:#0f172a;font-weight:800;">${configuredPopulation}</div>` +
+                `</div>` +
+                `<div style="background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;padding:8px;">` +
+                    `<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Districts</div>` +
+                    `<div style="font-size:1.15em;color:#0f172a;font-weight:800;">${districtMode}</div>` +
+                `</div>` +
+                `<div style="background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;padding:8px;">` +
+                    `<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Focus</div>` +
+                    `<div style="font-size:1.15em;color:#0f172a;font-weight:800;">${focusLabel}</div>` +
+                `</div>` +
+            `</div>` +
+            `<div style="line-height:1.5;">Press Start to launch this setup.</div>`;
         leftSidebar.appendChild(idleCard);
         return;
     }
