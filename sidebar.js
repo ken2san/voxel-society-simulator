@@ -1478,8 +1478,9 @@ function renderCharacterDetail() {
     populationHint.style.marginTop = '-4px';
     populationHint.style.marginLeft = '140px';
 
-    const syncPopulationCapacityUI = (mode) => {
+    const syncPopulationCapacityUI = (mode, { autoTune = false, previousMode = mode } = {}) => {
         const spec = getPopulationCapacityByDistrictMode(mode);
+        const prevSpec = getPopulationCapacityByDistrictMode(previousMode);
         charNumInput.max = spec.max;
         charNumVal.max = spec.max;
 
@@ -1490,6 +1491,9 @@ function renderCharacterDetail() {
         const hasFinishedSnapshot = !window.simulationRunning && !!window.__simHasUserStarted && runningCharacterCount > 0;
 
         let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
+        if (autoTune && nextVal <= prevSpec.recommended) {
+            nextVal = spec.recommended;
+        }
 
         sidebarParams.charNum = nextVal;
         charNumInput.value = nextVal;
@@ -2067,11 +2071,12 @@ function renderCharacterDetail() {
         btn.disabled = paramDisabled;
         btn.onclick = () => {
             if (paramDisabled) return;
+            const previousMode = sidebarParams.districtMode || 1;
             sidebarParams.districtMode = mode;
             if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;
             window.districtMode = mode;
             window.activeDistrictIndex = sidebarParams.activeDistrictIndex;
-            syncPopulationCapacityUI(mode);
+            syncPopulationCapacityUI(mode, { autoTune: true, previousMode });
             import('./world.js').then(worldMod => {
                 worldMod.setDistrictMode?.(mode);
                 worldMod.setActiveDistrict?.(sidebarParams.activeDistrictIndex || 0);
@@ -2102,6 +2107,9 @@ function renderCharacterDetail() {
     districtSummary.style.alignContent = 'start';
     districtSummary.style.rowGap = '4px';
     const idleDistrictPreview = !window.simulationRunning && !window.__simHasUserStarted;
+    const idleEstPerDistrict = idleDistrictPreview
+        ? Math.round(Number(sidebarParams.charNum || 10) / Math.max(1, districtMode))
+        : 0;
     const districtData = (!idleDistrictPreview && typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
     const activeMigrationNet = Number(activeDistrictData?.migrationFlow?.net || 0);
@@ -2116,7 +2124,9 @@ function renderCharacterDetail() {
             `<span>stability ${Math.round((activeDistrictData.relationshipStability || 0) * 100)}%</span>` +
             `<span style="grid-column:1 / -1;">move ${Number(activeDistrictData.migrationFlow?.in || 0)} in / ${Number(activeDistrictData.migrationFlow?.out || 0)} out</span>` +
           `</div>`
-        : `<div style="font-weight:700;color:#0f172a;line-height:1.2;">${idleDistrictPreview ? `D${(sidebarParams.activeDistrictIndex || 0) + 1} selected · press Start to populate` : 'Watching the full baseline district'}</div><div></div>`;
+        : idleDistrictPreview
+            ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;">D${(sidebarParams.activeDistrictIndex || 0) + 1} selected · ~${idleEstPerDistrict} chars each · press Start</div><div></div>`
+            : '<div style="font-weight:700;color:#0f172a;line-height:1.2;">Watching the full baseline district</div><div></div>';
     districtPanel.appendChild(districtSummary);
 
     const districtGrid = document.createElement('div');
@@ -2128,7 +2138,7 @@ function renderCharacterDetail() {
     for (let i = 0; i < districtMode; i++) {
         const btn = document.createElement('button');
         const summary = districtData[i];
-        btn.textContent = (!idleDistrictPreview && summary) ? `D${i + 1} · ${summary.population}` : `D${i + 1}`;
+        btn.textContent = (!idleDistrictPreview && summary) ? `D${i + 1} · ${summary.population}` : `D${i + 1} · ~${idleEstPerDistrict}`;
         btn.style.padding = '6px 4px';
         btn.style.borderRadius = '8px';
         btn.style.fontWeight = '700';
