@@ -336,16 +336,17 @@ _Concrete exit criteria for the reproduction/ecology tuning loop. Once all are m
 
 ### ✅ Metrics to track — done when all pass
 
-| Metric | Target | Rationale |
-|---|---|---|
-| Benchmark | PASS 5/5 every valid run | Baseline integrity |
-| starvation deaths | ≤ 10% of total deaths | Survival must be plausible, not zero |
-| old_age deaths | ≥ 60% of total deaths | Natural mortality is the dominant cause |
-| Gen2+ births | Appears in ≥ 1 run per 3 full runs (> 300 s) | Multi-generational chain is reproducible |
-| wanderRatio avg | < 72% | Behavioral diversity beyond wandering exists |
-| socializeRatio avg | > 3% | Social layer is active, not vestigial |
+| Metric             | Target                                       | Rationale                                    |
+| ------------------ | -------------------------------------------- | -------------------------------------------- |
+| Benchmark          | PASS 5/5 every valid run                     | Baseline integrity                           |
+| starvation deaths  | ≤ 10% of total deaths                        | Survival must be plausible, not zero         |
+| old_age deaths     | ≥ 60% of total deaths                        | Natural mortality is the dominant cause      |
+| Gen2+ births       | Appears in ≥ 1 run per 3 full runs (> 300 s) | Multi-generational chain is reproducible     |
+| wanderRatio avg    | < 72%                                        | Behavioral diversity beyond wandering exists |
+| socializeRatio avg | > 3%                                         | Social layer is active, not vestigial        |
 
 **Current status (2026-04-17, commit `9e4df32`):**
+
 - Benchmark: ✅ PASS 5/5
 - starvation: ✅ 3/22 = 13.6% → borderline (one more run will confirm)
 - old_age: ✅ 19/22 = 86%
@@ -357,12 +358,12 @@ _Concrete exit criteria for the reproduction/ecology tuning loop. Once all are m
 
 ### ❌ Metrics NOT to chase
 
-| Metric | Why to ignore |
-|---|---|
+| Metric                  | Why to ignore                                                                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `birthDeathRatio ≥ 1.0` | Requires 5.5× more births; forcing it causes starvation regression. A founding-cohort wave dying out is realistic and observable — not a failure state |
-| Exact generation depth | Stochastic by design; gen3 appearing at all is sufficient signal |
-| Zero starvation | Some starvation under severe conditions is authentic behavior |
-| Population equilibrium | Collapse and recovery cycles are the observation content, not bugs |
+| Exact generation depth  | Stochastic by design; gen3 appearing at all is sufficient signal                                                                                       |
+| Zero starvation         | Some starvation under severe conditions is authentic behavior                                                                                          |
+| Population equilibrium  | Collapse and recovery cycles are the observation content, not bugs                                                                                     |
 
 ---
 
