@@ -2101,12 +2101,13 @@ function renderCharacterDetail() {
     districtSummary.style.gridTemplateRows = 'auto auto';
     districtSummary.style.alignContent = 'start';
     districtSummary.style.rowGap = '4px';
-    const districtData = (typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
+    const idleDistrictPreview = !window.simulationRunning && !window.__simHasUserStarted;
+    const districtData = (!idleDistrictPreview && typeof window.getDistrictObservationSummary === 'function') ? window.getDistrictObservationSummary() : [];
     const activeDistrictData = districtData[sidebarParams.activeDistrictIndex] || null;
     const activeMigrationNet = Number(activeDistrictData?.migrationFlow?.net || 0);
     const activeFlowColor = activeMigrationNet > 0 ? '#15803d' : (activeMigrationNet < 0 ? '#b91c1c' : '#64748b');
     const activeFlowText = activeMigrationNet > 0 ? `+${activeMigrationNet}` : String(activeMigrationNet);
-    districtSummary.innerHTML = activeDistrictData
+    districtSummary.innerHTML = (!idleDistrictPreview && activeDistrictData)
         ? `<div style="font-weight:700;color:#0f172a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Watching D${activeDistrictData.index + 1} · pop ${activeDistrictData.population} · <span style="color:${activeFlowColor};">flow ${activeFlowText}</span></div>` +
           `<div style="color:#475569;line-height:1.25;font-size:0.95em;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px;row-gap:2px;">` +
             `<span>pressure ${Math.round((activeDistrictData.socialPressure || 0) * 100)}%</span>` +
@@ -2115,7 +2116,7 @@ function renderCharacterDetail() {
             `<span>stability ${Math.round((activeDistrictData.relationshipStability || 0) * 100)}%</span>` +
             `<span style="grid-column:1 / -1;">move ${Number(activeDistrictData.migrationFlow?.in || 0)} in / ${Number(activeDistrictData.migrationFlow?.out || 0)} out</span>` +
           `</div>`
-        : '<div style="font-weight:700;color:#0f172a;line-height:1.2;">Watching the full baseline district</div><div></div>';
+        : `<div style="font-weight:700;color:#0f172a;line-height:1.2;">${idleDistrictPreview ? `D${(sidebarParams.activeDistrictIndex || 0) + 1} selected · press Start to populate` : 'Watching the full baseline district'}</div><div></div>`;
     districtPanel.appendChild(districtSummary);
 
     const districtGrid = document.createElement('div');
@@ -2127,7 +2128,7 @@ function renderCharacterDetail() {
     for (let i = 0; i < districtMode; i++) {
         const btn = document.createElement('button');
         const summary = districtData[i];
-        btn.textContent = summary ? `D${i + 1} · ${summary.population}` : `D${i + 1}`;
+        btn.textContent = (!idleDistrictPreview && summary) ? `D${i + 1} · ${summary.population}` : `D${i + 1}`;
         btn.style.padding = '6px 4px';
         btn.style.borderRadius = '8px';
         btn.style.fontWeight = '700';
