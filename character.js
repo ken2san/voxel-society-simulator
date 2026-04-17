@@ -2325,21 +2325,28 @@ class Character {
         candidates.sort((a, b) => a.score - b.score);
 
         let closest = null;
-        const pathCheckLimit = Math.min(6, candidates.length);
+        let bestReachableScore = Infinity;
+        const pathCheckLimit = Math.min(12, candidates.length);
         for (let i = 0; i < pathCheckLimit; i++) {
             const candidate = candidates[i];
+            const distToAdjacent = Math.abs(this.gridPos.x - candidate.adjacentSpot.x)
+                + Math.abs(this.gridPos.y - candidate.adjacentSpot.y)
+                + Math.abs(this.gridPos.z - candidate.adjacentSpot.z);
             const path = this.findPath ? this.findPath(this.gridPos, candidate.adjacentSpot) : null;
-            if (path && path.length > 0) {
+            const isReachableNow = distToAdjacent === 0 || (path && path.length > 0);
+            if (!isReachableNow) continue;
+
+            const pathLen = distToAdjacent === 0 ? 0 : path.length;
+            const reachableScore = candidate.score + (pathLen * 0.35);
+            if (reachableScore < bestReachableScore) {
+                bestReachableScore = reachableScore;
                 closest = { x: candidate.x, y: candidate.y, z: candidate.z };
-                break;
             }
         }
 
-        // Fall back to the nearest visible fruit if the local reachability probe found none.
-        if (!closest && candidates.length > 0) {
-            const fallback = candidates[0];
-            closest = { x: fallback.x, y: fallback.y, z: fallback.z };
-        }
+        // Do not fall back to unreachable fruit blocks here.
+        // Chasing visually-near but path-blocked food can trap hungry characters
+        // in long WANDER loops even when other reachable fruit exists nearby.
 
         // On-miss invalidation: purge remembered spots that no longer have food
         if (this._knownFoodSpots) {
