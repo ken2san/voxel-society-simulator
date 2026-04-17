@@ -331,6 +331,7 @@ function renderCharacterDetail() {
     }
     updateAiToggleBtn();
     aiToggleBtn.onclick = () => {
+        if (paramDisabled) return;
         window.aiMode = (window.aiMode === 'rule') ? 'utility' : 'rule';
         updateAiToggleBtn();
     };
@@ -339,7 +340,9 @@ function renderCharacterDetail() {
     aiToggleBtn.style.borderRadius = '8px';
     aiToggleBtn.style.border = '1.5px solid #b0c8e0';
     aiToggleBtn.style.color = '#333';
-    aiToggleBtn.style.cursor = 'pointer';
+    aiToggleBtn.style.cursor = paramDisabled ? 'not-allowed' : 'pointer';
+    aiToggleBtn.style.opacity = paramDisabled ? '0.55' : '1';
+    aiToggleBtn.disabled = paramDisabled;
     aiToggleRow.appendChild(aiToggleBtn);
     aiToggleRow.dataset.label = 'AI Mode';
     tabPanels[0].appendChild(aiToggleRow);
@@ -2063,8 +2066,11 @@ function renderCharacterDetail() {
         btn.style.border = mode === districtMode ? '2px solid #2563eb' : '1px solid #cbd5e1';
         btn.style.background = mode === districtMode ? '#dbeafe' : '#f8fafc';
         btn.style.fontWeight = '700';
-        btn.style.cursor = 'pointer';
+        btn.style.cursor = paramDisabled ? 'not-allowed' : 'pointer';
+        btn.style.opacity = paramDisabled ? '0.55' : '1';
+        btn.disabled = paramDisabled;
         btn.onclick = () => {
+            if (paramDisabled) return;
             const previousMode = sidebarParams.districtMode || 1;
             sidebarParams.districtMode = mode;
             if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;
@@ -3195,9 +3201,9 @@ function renderCharacterList() {
     // and steal focus from the input.
     try {
         const active = document.activeElement;
-        if (active && rightSidebar && rightSidebar.contains(active) &&
+        if (window.simulationRunning && active && rightSidebar && rightSidebar.contains(active) &&
             (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) {
-            return; // keep user's typing uninterrupted
+            return; // avoid stealing focus only while the sim is actively running
         }
     } catch (e) {}
     const chars = Array.isArray(window.characters) ? window.characters : [];
@@ -3233,36 +3239,37 @@ function renderCharacterList() {
         leftSidebar.innerHTML = '';
         const focusLabel = districtMode > 1 ? `D${activeDistrictIndex + 1}` : 'All';
 
-        const idleHeader = document.createElement('div');
-        idleHeader.className = 'character-list-header';
-        idleHeader.innerHTML =
+        const previewHeader = document.createElement('div');
+        previewHeader.className = 'character-list-header';
+        previewHeader.innerHTML =
             `<div>` +
                 `<div class="character-list-kicker">Observation</div>` +
                 `<h3 class="character-list-title">Society Overview</h3>` +
-                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Idle · preview follows the current settings</div>` +
+                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Setup preview · updates as you change the right pane</div>` +
             `</div>`;
-        leftSidebar.appendChild(idleHeader);
+        leftSidebar.appendChild(previewHeader);
 
-        const idleCard = document.createElement('div');
-        idleCard.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:0.86em;color:#334155;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
-        idleCard.innerHTML =
-            `<div style="font-weight:700;font-size:1.02em;color:#1e3a8a;margin-bottom:8px;">Ready</div>` +
-            `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px;">` +
-                `<div style="background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;padding:8px;">` +
-                    `<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Start pop</div>` +
-                    `<div style="font-size:1.15em;color:#0f172a;font-weight:800;">${configuredPopulation}</div>` +
-                `</div>` +
-                `<div style="background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;padding:8px;">` +
-                    `<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Districts</div>` +
-                    `<div style="font-size:1.15em;color:#0f172a;font-weight:800;">${districtMode}</div>` +
-                `</div>` +
-                `<div style="background:#f8fafc;border:1px solid #dbe4f0;border-radius:8px;padding:8px;">` +
-                    `<div style="font-size:0.72em;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Focus</div>` +
-                    `<div style="font-size:1.15em;color:#0f172a;font-weight:800;">${focusLabel}</div>` +
-                `</div>` +
+        const previewStats = document.createElement('div');
+        previewStats.className = 'population-overview-card';
+        previewStats.innerHTML =
+            `<div class="population-card-section-title">Setup Preview</div>` +
+            `<div class="population-pulse-grid">` +
+                `<div class="population-pulse-item"><span class="label">Start</span><strong>${configuredPopulation}</strong></div>` +
+                `<div class="population-pulse-item"><span class="label">Districts</span><strong>${districtMode}</strong></div>` +
+                `<div class="population-pulse-item"><span class="label">Focus</span><strong>${focusLabel}</strong></div>` +
+                `<div class="population-pulse-item"><span class="label">State</span><strong>Ready</strong></div>` +
             `</div>` +
-            `<div style="line-height:1.5;">Press Start to launch this setup.</div>`;
-        leftSidebar.appendChild(idleCard);
+            `<div style="margin-top:10px;font-size:0.85em;color:#64748b;line-height:1.45;">Press Start to launch this setup. During the run, setup controls lock and only district focus stays available.</div>`;
+        leftSidebar.appendChild(previewStats);
+
+        const previewTableHint = document.createElement('div');
+        previewTableHint.className = 'character-table-shell';
+        previewTableHint.style.padding = '10px 12px';
+        previewTableHint.style.marginTop = '8px';
+        previewTableHint.style.color = '#64748b';
+        previewTableHint.style.fontSize = '0.9em';
+        previewTableHint.textContent = 'No live characters yet. This panel is showing the next-run configuration.';
+        leftSidebar.appendChild(previewTableHint);
         return;
     }
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
@@ -3273,8 +3280,8 @@ function renderCharacterList() {
     const isFinishedSnapshot = !window.simulationRunning && hasUserStarted;
     const contextLabel = isFinishedSnapshot
         ? (isDistrictFiltered
-            ? `Final snapshot · D${activeDistrictIndex + 1} from the last run`
-            : 'Final snapshot · results from the last run')
+            ? `Final snapshot · D${activeDistrictIndex + 1} from the last run · next start ${configuredPopulation}`
+            : `Final snapshot · results from the last run · next start ${configuredPopulation}`)
         : (isDistrictFiltered
             ? `Showing D${activeDistrictIndex + 1} characters only · global metrics stay above`
             : 'Showing the whole society · baseline overview');
