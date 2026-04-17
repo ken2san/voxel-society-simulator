@@ -2146,45 +2146,53 @@ function renderCharacterDetail() {
     districtPanel.dataset.label = 'Observed District';
     tabPanels[0].appendChild(districtPanel);
 
-    // Start/Pause toggle button (pinned at top)
+    // Start/Finish button (pinned at top)
     if (window.simulationRunning === undefined) window.simulationRunning = false;
-    if (window.__simHasUserStarted === undefined) window.__simHasUserStarted = false;
     const controlGroup = document.createElement('div');
     controlGroup.style.display = 'flex';
     controlGroup.style.alignItems = 'center';
     controlGroup.style.gap = '8px';
 
     const toggleBtn = document.createElement('button');
-    const resetBtn = document.createElement('button');
 
     function updateToggleBtn() {
-        const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
         if (window.__simStarting) {
             toggleBtn.textContent = 'Starting…';
             toggleBtn.style.background = 'linear-gradient(90deg,#dbeafe 10%,#fde68a 100%)';
             toggleBtn.disabled = true;
         } else if (window.simulationRunning) {
-            toggleBtn.textContent = 'Pause';
-            toggleBtn.style.background = 'linear-gradient(90deg,#ffe8a3 10%,#ffd5b3 100%)';
+            toggleBtn.textContent = 'Finish';
+            toggleBtn.style.background = 'linear-gradient(90deg,#fecaca 10%,#fdba74 100%)';
             toggleBtn.disabled = false;
         } else {
             toggleBtn.textContent = 'Start';
-            toggleBtn.style.background = hasCharacters
-                ? 'linear-gradient(90deg,#bfffb2 10%,#dcffe0 100%)'
-                : 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
+            toggleBtn.style.background = 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
             toggleBtn.disabled = false;
         }
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
     }
 
-    function updateResetBtn() {
-        const hasStartedRun = !!window.__simHasUserStarted;
-        resetBtn.textContent = 'Restart';
-        resetBtn.style.background = 'linear-gradient(90deg,#f8fafc 10%,#e2e8f0 100%)';
-        resetBtn.style.color = hasStartedRun ? '#1f2937' : '#94a3b8';
-        resetBtn.style.cursor = hasStartedRun && !window.__simStarting ? 'pointer' : 'default';
-        resetBtn.style.display = hasStartedRun ? 'inline-flex' : 'none';
-        resetBtn.disabled = !!window.__simStarting || !hasStartedRun;
+    function finishSimulation() {
+        window.simulationRunning = false;
+        window.__simStarting = false;
+        window.__simHasUserStarted = false;
+        import('./world.js').then(worldMod => {
+            try {
+                if (typeof worldMod.removeAllCharacterObjects === 'function') {
+                    worldMod.removeAllCharacterObjects();
+                }
+                if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
+            } catch (err) {
+                console.error('[Simulation] finish failed', err);
+            }
+            window.characters = [];
+            if (typeof window.resetPopulationStats === 'function') {
+                window.resetPopulationStats(0);
+            }
+            updateToggleBtn();
+            window.renderCharacterList && window.renderCharacterList();
+            renderCharacterDetail();
+        });
     }
 
     function startFreshSimulation() {
@@ -2194,7 +2202,6 @@ function renderCharacterDetail() {
         const useRandom = !!sidebarParams.useRandom;
         window.__simStarting = true;
         updateToggleBtn();
-        updateResetBtn();
         window.characters = [];
         window.groupAffinityThreshold = groupAffinityTh;
 
@@ -2259,7 +2266,6 @@ function renderCharacterDetail() {
                     window.__simStarting = false;
                     window.__simHasUserStarted = true;
                     updateToggleBtn();
-                    updateResetBtn();
                     window.renderCharacterList && window.renderCharacterList();
                     renderCharacterDetail();
                 };
@@ -2268,58 +2274,32 @@ function renderCharacterDetail() {
                 console.error('[Simulation] start failed', err);
                 window.__simStarting = false;
                 updateToggleBtn();
-                updateResetBtn();
                 renderCharacterDetail();
             }
         });
     }
 
-    [toggleBtn, resetBtn].forEach(btn => {
-        btn.style.fontSize = '1.0em';
-        btn.style.fontWeight = 'bold';
-        btn.style.padding = '8px 18px';
-        btn.style.borderRadius = '999px';
-        btn.style.border = '1.5px solid #b7cbe6';
-        btn.style.color = '#1f2f46';
-        btn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
-    });
+    toggleBtn.style.fontSize = '1.0em';
+    toggleBtn.style.fontWeight = 'bold';
+    toggleBtn.style.padding = '8px 18px';
+    toggleBtn.style.borderRadius = '999px';
+    toggleBtn.style.border = '1.5px solid #b7cbe6';
+    toggleBtn.style.color = '#1f2f46';
+    toggleBtn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
     toggleBtn.style.cursor = 'pointer';
-    resetBtn.title = 'Start over from scratch with the current settings';
 
     updateToggleBtn();
-    updateResetBtn();
 
     toggleBtn.onclick = () => {
         if (window.__simStarting) return;
-        const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
-        const shouldResumeExistingRun = hasCharacters && !!window.__simHasUserStarted;
         if (!window.simulationRunning) {
-            if (shouldResumeExistingRun) {
-                window.simulationRunning = true;
-                updateToggleBtn();
-                updateResetBtn();
-                window.renderCharacterList && window.renderCharacterList();
-                renderCharacterDetail();
-                return;
-            }
             startFreshSimulation();
         } else {
-            window.simulationRunning = false;
-            updateToggleBtn();
-            updateResetBtn();
-            window.renderCharacterList && window.renderCharacterList();
-            renderCharacterDetail();
+            finishSimulation();
         }
     };
 
-    resetBtn.onclick = () => {
-        if (window.__simStarting || resetBtn.disabled) return;
-        window.simulationRunning = false;
-        startFreshSimulation();
-    };
-
     controlGroup.appendChild(toggleBtn);
-    controlGroup.appendChild(resetBtn);
     actionBar.appendChild(controlGroup);
     paramBox.insertBefore(actionBar, paramBox.firstChild);
 
