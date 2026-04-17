@@ -345,16 +345,18 @@ _Concrete exit criteria for the reproduction/ecology tuning loop. Once all are m
 | wanderRatio avg    | < 72%                                        | Behavioral diversity beyond wandering exists |
 | socializeRatio avg | > 3%                                         | Social layer is active, not vestigial        |
 
-**Current status (2026-04-17, commit `9e4df32`):**
+**Final status (2026-04-17, commit `9e4df32`, confirmed run `telemetry-2026-04-17T09-06-55`):**
 
 - Benchmark: ✅ PASS 5/5
-- starvation: ✅ 3/22 = 13.6% → borderline (one more run will confirm)
-- old_age: ✅ 19/22 = 86%
-- Gen2+: ✅ gen3 confirmed in latest run
-- wanderRatio: ✅ 65.1%
-- socializeRatio: ✅ 5.6%
+- starvation: ✅ 0/14 = 0%
+- old_age: ✅ 14/14 = 100%
+- Gen2+: ✅ gen2=2 confirmed
+- wanderRatio: ✅ 71.7% (< 72%)
+- socializeRatio: ✅ 3.6% (> 3%)
 
-**Verdict: ecology tuning is effectively complete. One confirmation run recommended.**
+**Verdict: ALL 6 criteria pass. Ecology tuning phase COMPLETE. Move to District-Scaled Architecture.**
+
+_Note: lowEnergyRatio=40.9% is elevated (chronic energy stress, not fatal). Watch if it resurfaces at district scale._
 
 ### ❌ Metrics NOT to chase
 
