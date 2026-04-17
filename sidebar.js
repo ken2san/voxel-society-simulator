@@ -3237,6 +3237,7 @@ function renderCharacterList() {
     // スタート前は常に現在の設定プレビューを表示し、右ペイン操作に即追従させる
     if (idlePreviewMode) {
         leftSidebar.innerHTML = '';
+        const focusLabel = isDistrictFiltered ? `D${activeDistrictIndex + 1}` : 'All';
 
         const previewHeader = document.createElement('div');
         previewHeader.className = 'character-list-header';
@@ -3244,10 +3245,29 @@ function renderCharacterList() {
             `<div>` +
                 `<div class="character-list-kicker">Observation</div>` +
                 `<h3 class="character-list-title">Society Overview</h3>` +
-                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Ready to start</div>` +
+                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Current setup preview</div>` +
             `</div>`;
         leftSidebar.appendChild(previewHeader);
 
+        const previewCard = document.createElement('div');
+        previewCard.className = 'population-overview-card';
+        previewCard.innerHTML =
+            `<div class="population-card-section-title">Ready</div>` +
+            `<div class="population-pulse-grid">` +
+                `<div class="population-pulse-item"><span class="label">Start</span><strong>${configuredPopulation}</strong></div>` +
+                `<div class="population-pulse-item"><span class="label">Districts</span><strong>${districtMode}</strong></div>` +
+                `<div class="population-pulse-item"><span class="label">Focus</span><strong>${focusLabel}</strong></div>` +
+            `</div>`;
+        leftSidebar.appendChild(previewCard);
+
+        const emptyState = document.createElement('div');
+        emptyState.className = 'character-table-shell';
+        emptyState.style.padding = '10px 12px';
+        emptyState.style.marginTop = '8px';
+        emptyState.style.color = '#64748b';
+        emptyState.style.fontSize = '0.9em';
+        emptyState.textContent = 'Characters will appear here after Start.';
+        leftSidebar.appendChild(emptyState);
         return;
     }
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
