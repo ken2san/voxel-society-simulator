@@ -1485,6 +1485,7 @@ function renderCharacterDetail() {
             ? window.characters.filter(c => c && c.state !== 'dead').length
             : 0;
         const isSimulationActive = !!window.simulationRunning && runningCharacterCount > 0;
+        const hasFinishedSnapshot = !window.simulationRunning && !!window.__simHasUserStarted && runningCharacterCount > 0;
 
         let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
         if (autoTune && nextVal <= prevSpec.recommended) {
@@ -1496,9 +1497,14 @@ function renderCharacterDetail() {
         charNumVal.value = nextVal;
         charNumInput.disabled = isSimulationActive;
         charNumVal.disabled = isSimulationActive;
-        populationHint.textContent = runningCharacterCount > 0
-            ? `Alive now: ${runningCharacterCount} · next start: ${nextVal} · recommended ${spec.recommended} for ${mode}-district mode · max ${spec.max}`
-            : `Recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
+
+        if (isSimulationActive) {
+            populationHint.textContent = `Alive now: ${runningCharacterCount} · next start: ${nextVal} · recommended ${spec.recommended} for ${mode}-district mode · max ${spec.max}`;
+        } else if (hasFinishedSnapshot) {
+            populationHint.textContent = `Final alive: ${runningCharacterCount} · next start: ${nextVal} · recommended ${spec.recommended} for ${mode}-district mode · max ${spec.max}`;
+        } else {
+            populationHint.textContent = `Start with ${nextVal} · recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
+        }
     };
 
     // 双方向同期＋sidebarParams更新
@@ -2179,24 +2185,11 @@ function renderCharacterDetail() {
     function finishSimulation() {
         window.simulationRunning = false;
         window.__simStarting = false;
-        window.__simHasUserStarted = false;
-        import('./world.js').then(worldMod => {
-            try {
-                if (typeof worldMod.removeAllCharacterObjects === 'function') {
-                    worldMod.removeAllCharacterObjects();
-                }
-                if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
-            } catch (err) {
-                console.error('[Simulation] finish failed', err);
-            }
-            window.characters = [];
-            if (typeof window.resetPopulationStats === 'function') {
-                window.resetPopulationStats(0);
-            }
-            updateToggleBtn();
-            window.renderCharacterList && window.renderCharacterList();
-            renderCharacterDetail();
-        });
+        window.__simHasUserStarted = true;
+        window.__simFinishedAt = Date.now();
+        updateToggleBtn();
+        window.renderCharacterList && window.renderCharacterList();
+        renderCharacterDetail();
     }
 
     function startFreshSimulation() {
@@ -2205,6 +2198,7 @@ function renderCharacterDetail() {
         const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
         const useRandom = !!sidebarParams.useRandom;
         window.__simStarting = true;
+        window.__simFinishedAt = null;
         updateToggleBtn();
         window.characters = [];
         window.groupAffinityThreshold = groupAffinityTh;
@@ -3233,8 +3227,8 @@ function renderCharacterList() {
         5,
         Math.min(districtSpec.max, Number(window.sidebarParams?.charNum) || districtSpec.recommended)
     );
-    const idlePreviewMode = !window.simulationRunning && !hasPopulationHistory && !hasUserStarted;
-    // 待機中はプレビュー用の仮キャラ数ではなく、右ペインで設定した開始条件をそのまま表示する
+    const idlePreviewMode = !window.simulationRunning && !hasUserStarted;
+    // スタート前は常に現在の設定プレビューを表示し、右ペイン操作に即追従させる
     if (idlePreviewMode) {
         leftSidebar.innerHTML = '';
         const focusLabel = districtMode > 1 ? `D${activeDistrictIndex + 1}` : 'All';
@@ -3276,9 +3270,14 @@ function renderCharacterList() {
     // タイトルを追加
     const listHeader = document.createElement('div');
     listHeader.className = 'character-list-header';
-    const contextLabel = isDistrictFiltered
-        ? `Showing D${activeDistrictIndex + 1} characters only · global metrics stay above`
-        : 'Showing the whole society · baseline overview';
+    const isFinishedSnapshot = !window.simulationRunning && hasUserStarted;
+    const contextLabel = isFinishedSnapshot
+        ? (isDistrictFiltered
+            ? `Final snapshot · D${activeDistrictIndex + 1} from the last run`
+            : 'Final snapshot · results from the last run')
+        : (isDistrictFiltered
+            ? `Showing D${activeDistrictIndex + 1} characters only · global metrics stay above`
+            : 'Showing the whole society · baseline overview');
     listHeader.innerHTML =
         `<div>` +
             `<div class="character-list-kicker">Observation</div>` +
