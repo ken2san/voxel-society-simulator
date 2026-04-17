@@ -3234,55 +3234,21 @@ function renderCharacterList() {
         Math.min(districtSpec.max, Number(window.sidebarParams?.charNum) || districtSpec.recommended)
     );
     const idlePreviewMode = !window.simulationRunning && !hasUserStarted;
-    // スタート前は常に現在の設定プレビューを表示し、右ペイン操作に即追従させる
-    if (idlePreviewMode) {
-        leftSidebar.innerHTML = '';
-        const focusLabel = isDistrictFiltered ? `D${activeDistrictIndex + 1}` : 'All';
-
-        const previewHeader = document.createElement('div');
-        previewHeader.className = 'character-list-header';
-        previewHeader.innerHTML =
-            `<div>` +
-                `<div class="character-list-kicker">Observation</div>` +
-                `<h3 class="character-list-title">Society Overview</h3>` +
-                `<div style="margin-top:2px;font-size:0.8em;color:#64748b;font-weight:600;">Current setup preview</div>` +
-            `</div>`;
-        leftSidebar.appendChild(previewHeader);
-
-        const previewCard = document.createElement('div');
-        previewCard.className = 'population-overview-card';
-        previewCard.innerHTML =
-            `<div class="population-card-section-title">Ready</div>` +
-            `<div class="population-pulse-grid">` +
-                `<div class="population-pulse-item"><span class="label">Start</span><strong>${configuredPopulation}</strong></div>` +
-                `<div class="population-pulse-item"><span class="label">Districts</span><strong>${districtMode}</strong></div>` +
-                `<div class="population-pulse-item"><span class="label">Focus</span><strong>${focusLabel}</strong></div>` +
-            `</div>`;
-        leftSidebar.appendChild(previewCard);
-
-        const emptyState = document.createElement('div');
-        emptyState.className = 'character-table-shell';
-        emptyState.style.padding = '10px 12px';
-        emptyState.style.marginTop = '8px';
-        emptyState.style.color = '#64748b';
-        emptyState.style.fontSize = '0.9em';
-        emptyState.textContent = 'Characters will appear here after Start.';
-        leftSidebar.appendChild(emptyState);
-        return;
-    }
     // 詳細カードが残っている場合は消去し、タイトルのみ表示
     leftSidebar.innerHTML = '';
     // タイトルを追加
     const listHeader = document.createElement('div');
     listHeader.className = 'character-list-header';
     const isFinishedSnapshot = !window.simulationRunning && hasUserStarted;
-    const contextLabel = isFinishedSnapshot
-        ? (isDistrictFiltered
-            ? `Final snapshot · D${activeDistrictIndex + 1} from the last run · next start ${configuredPopulation}`
-            : `Final snapshot · results from the last run · next start ${configuredPopulation}`)
-        : (isDistrictFiltered
-            ? `Showing D${activeDistrictIndex + 1} characters only · global metrics stay above`
-            : 'Showing the whole society · baseline overview');
+    const contextLabel = idlePreviewMode
+        ? `Configure on the right · press Start · pop ${configuredPopulation} · D${districtMode}`
+        : isFinishedSnapshot
+            ? (isDistrictFiltered
+                ? `Final snapshot · D${activeDistrictIndex + 1} from the last run · next start ${configuredPopulation}`
+                : `Final snapshot · results from the last run · next start ${configuredPopulation}`)
+            : (isDistrictFiltered
+                ? `Showing D${activeDistrictIndex + 1} characters only · global metrics stay above`
+                : 'Showing the whole society · baseline overview');
     listHeader.innerHTML =
         `<div>` +
             `<div class="character-list-kicker">Observation</div>` +
@@ -3292,7 +3258,7 @@ function renderCharacterList() {
     leftSidebar.appendChild(listHeader);
 
     // --- 母集団統計パネル ---
-    if (chars.length > 0 || hasPopulationHistory) {
+    if (chars.length > 0 || hasPopulationHistory || idlePreviewMode) {
         const alive = chars.filter(c => c.state !== 'dead');
         const dead = popStats ? Number(popStats.deaths || 0) : (chars.length - alive.length);
         const totalBorn = popStats
@@ -3326,14 +3292,14 @@ function renderCharacterList() {
         const criticalEnergyCount = alive.filter(c => Number(c.needs?.energy || 0) < 20).length;
         const criticalHungerCount = alive.filter(c => Number(c.needs?.hunger || 0) < 20).length;
 
-        pushPopulationPulseSnapshot({
+        if (!idlePreviewMode) pushPopulationPulseSnapshot({
             t: Date.now(),
             alive: alive.length,
             totalBorn,
             deaths: dead,
             avgEnergy: Number(avgEng) || 0
         });
-        pushPopulationMetricSnapshot({
+        if (!idlePreviewMode) pushPopulationMetricSnapshot({
             t: Date.now(),
             alive: alive.length,
             totalBorn,
@@ -3512,7 +3478,7 @@ function renderCharacterList() {
 
         const statsDiv = document.createElement('div');
         statsDiv.style.cssText = 'background:linear-gradient(140deg,#ffffff 0%,#eef5ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:0.82em;color:#2b3340;box-shadow:0 2px 8px rgba(0,0,0,0.06);';
-        const extinctionNotice = alive.length === 0
+        const extinctionNotice = alive.length === 0 && !idlePreviewMode
             ? `<div style="margin:6px 0 8px 0;padding:6px 8px;border-radius:8px;background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;font-weight:600;">Population extinct — metrics preserved for inspection.</div>`
             : '';
 
@@ -3559,8 +3525,8 @@ function renderCharacterList() {
             `</div>` +
             `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:6px;">` +
                 `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
-                    `<div style="color:#5a6a80;font-size:0.85em;">Alive</div>` +
-                    `<div style="font-weight:700;font-size:1.1em;color:#1d4ed8;line-height:1.2;">${alive.length}</div>` +
+                    `<div style="color:#5a6a80;font-size:0.85em;">${idlePreviewMode ? 'Start' : 'Alive'}</div>` +
+                    `<div style="font-weight:700;font-size:1.1em;color:#1d4ed8;line-height:1.2;">${idlePreviewMode ? configuredPopulation : alive.length}</div>` +
                 `</div>` +
                 `<div style="background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:5px 6px;">` +
                     `<div style="color:#5a6a80;font-size:0.85em;">Net/min</div>` +
