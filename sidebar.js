@@ -368,7 +368,7 @@ function renderCharacterDetail() {
     aiToggleRow.style.alignItems = 'center';
     aiToggleRow.style.gap = '10px';
     const aiToggleLabel = document.createElement('span');
-    aiToggleLabel.textContent = 'AI Mode:';
+    aiToggleLabel.textContent = '🤖 AI Mode:';
     aiToggleLabel.style.width = '140px';
     aiToggleRow.appendChild(aiToggleLabel);
     const aiToggleBtn = document.createElement('button');
@@ -520,7 +520,7 @@ function renderCharacterDetail() {
     groupThRow.style.alignItems = 'center';
     groupThRow.style.gap = '10px';
     const groupThLabel = document.createElement('span');
-    groupThLabel.textContent = 'Group Affinity Threshold:';
+    groupThLabel.textContent = '🤝 Group Affinity Threshold:';
     groupThLabel.style.width = '140px';
     groupThRow.appendChild(groupThLabel);
     const groupThInput = document.createElement('input');
@@ -564,7 +564,7 @@ function renderCharacterDetail() {
     affinityInitRow.style.alignItems = 'center';
     affinityInitRow.style.gap = '10px';
     const affinityInitLabel = document.createElement('span');
-    affinityInitLabel.textContent = 'Initial Affinity:';
+    affinityInitLabel.textContent = '✨ Initial Affinity:';
     affinityInitLabel.style.width = '140px';
     affinityInitRow.appendChild(affinityInitLabel);
     // min
@@ -610,7 +610,7 @@ function renderCharacterDetail() {
     affinityRateRow.style.alignItems = 'center';
     affinityRateRow.style.gap = '10px';
     const affinityRateLabel = document.createElement('span');
-    affinityRateLabel.textContent = 'Affinity Increase Rate:';
+    affinityRateLabel.textContent = '📈 Affinity Increase Rate:';
     affinityRateLabel.style.width = '140px';
     affinityRateRow.appendChild(affinityRateLabel);
     const affinityRateInput = document.createElement('input');
@@ -652,7 +652,7 @@ function renderCharacterDetail() {
     affinityDecayRow.style.alignItems = 'center';
     affinityDecayRow.style.gap = '10px';
     const affinityDecayLabel = document.createElement('span');
-    affinityDecayLabel.textContent = 'Affinity Decay (/s):';
+    affinityDecayLabel.textContent = '📉 Affinity Decay (/s):';
     affinityDecayLabel.style.width = '140px';
     affinityDecayRow.appendChild(affinityDecayLabel);
     const affinityDecayInput = document.createElement('input');
@@ -696,7 +696,7 @@ function renderCharacterDetail() {
     socialRecoveryRow.style.alignItems = 'center';
     socialRecoveryRow.style.gap = '10px';
     const socialRecoveryLabel = document.createElement('span');
-    socialRecoveryLabel.textContent = 'Social Need Recovery:';
+    socialRecoveryLabel.textContent = '💗 Social Need Recovery:';
     socialRecoveryLabel.style.width = '140px';
     socialRecoveryRow.appendChild(socialRecoveryLabel);
     const socialRecoveryInput = document.createElement('input');
@@ -738,7 +738,7 @@ function renderCharacterDetail() {
     bondPersistenceRow.style.alignItems = 'center';
     bondPersistenceRow.style.gap = '10px';
     const bondPersistenceLabel = document.createElement('span');
-    bondPersistenceLabel.textContent = 'Bond Persistence:';
+    bondPersistenceLabel.textContent = '🔗 Bond Persistence:';
     bondPersistenceLabel.style.width = '140px';
     bondPersistenceRow.appendChild(bondPersistenceLabel);
     const bondPersistenceInput = document.createElement('input');
@@ -980,7 +980,7 @@ function renderCharacterDetail() {
     digRow.style.alignItems = 'center';
     digRow.style.gap = '10px';
     const digLabel = document.createElement('span');
-    digLabel.textContent = 'Recent Dig Cooldown (ms):';
+    digLabel.textContent = '⛏️ Recent Dig Cooldown (ms):';
     digLabel.style.width = '140px';
     digRow.appendChild(digLabel);
     const digInput = document.createElement('input');
@@ -996,7 +996,7 @@ function renderCharacterDetail() {
     });
     digRow.appendChild(digInput);
     const digActionLabel = document.createElement('span');
-    digActionLabel.textContent = ' Dig Action Cooldown (ms):';
+    digActionLabel.textContent = '⛏️ Dig Action Cooldown (ms):';
     digActionLabel.style.width = '160px';
     digRow.appendChild(digActionLabel);
     const digActionInput = document.createElement('input');
@@ -1020,7 +1020,7 @@ function renderCharacterDetail() {
     reservationRow.style.alignItems = 'center';
     reservationRow.style.gap = '10px';
     const reservationLabel = document.createElement('span');
-    reservationLabel.textContent = 'Reservation TTL (ms):';
+    reservationLabel.textContent = '🔒 Reservation TTL (ms):';
     reservationLabel.style.width = '140px';
     reservationRow.appendChild(reservationLabel);
     // use an input element for numeric TTL
@@ -1047,7 +1047,7 @@ function renderCharacterDetail() {
     perceptionRow.style.alignItems = 'center';
     perceptionRow.style.gap = '10px';
     const perceptionLabel = document.createElement('span');
-    perceptionLabel.textContent = 'Perception Range:';
+    perceptionLabel.textContent = '👁️ Perception Range:';
     perceptionLabel.style.width = '140px';
     perceptionRow.appendChild(perceptionLabel);
     const perceptionInput = document.createElement('input');
@@ -1090,7 +1090,7 @@ function renderCharacterDetail() {
     affinityResetRow.style.alignItems = 'center';
     affinityResetRow.style.gap = '10px';
     const affinityResetLabel = document.createElement('span');
-    affinityResetLabel.textContent = 'Affinity After Reproduce:';
+    affinityResetLabel.textContent = '🔄 Affinity After Reproduce:';
     affinityResetLabel.style.width = '140px';
     affinityResetRow.appendChild(affinityResetLabel);
     const affinityResetInput = document.createElement('input');
@@ -1134,7 +1134,7 @@ function renderCharacterDetail() {
     pairCooldownRow.style.alignItems = 'center';
     pairCooldownRow.style.gap = '10px';
     const pairCooldownLabel = document.createElement('span');
-    pairCooldownLabel.textContent = 'Pair Cooldown (s):';
+    pairCooldownLabel.textContent = '⏳ Pair Cooldown (s):';
     pairCooldownLabel.style.width = '140px';
     pairCooldownRow.appendChild(pairCooldownLabel);
     const pairCooldownInput = document.createElement('input');
@@ -1174,7 +1174,7 @@ function renderCharacterDetail() {
     maxAffinityRow.style.alignItems = 'center';
     maxAffinityRow.style.gap = '10px';
     const maxAffinityLabel = document.createElement('span');
-    maxAffinityLabel.textContent = 'Max Affinity:';
+    maxAffinityLabel.textContent = '⭐ Max Affinity:';
     maxAffinityLabel.style.width = '140px';
     maxAffinityRow.appendChild(maxAffinityLabel);
     const maxAffinityInput = document.createElement('input');
@@ -1214,7 +1214,7 @@ function renderCharacterDetail() {
     parentCooldownRow.style.alignItems = 'center';
     parentCooldownRow.style.gap = '10px';
     const parentCooldownLabel = document.createElement('span');
-    parentCooldownLabel.textContent = 'Parent Cooldown (s):';
+    parentCooldownLabel.textContent = '🧑‍🍼 Parent Cooldown (s):';
     parentCooldownLabel.style.width = '140px';
     parentCooldownRow.appendChild(parentCooldownLabel);
     const parentCooldownInput = document.createElement('input');
@@ -1381,7 +1381,7 @@ function renderCharacterDetail() {
     autoRecoverRow.style.alignItems = 'center';
     autoRecoverRow.style.gap = '10px';
     const autoRecoverLabel = document.createElement('span');
-    autoRecoverLabel.textContent = 'Auto Recover Stall:';
+    autoRecoverLabel.textContent = '🔁 Auto Recover Stall:';
     autoRecoverLabel.style.width = '140px';
     autoRecoverRow.appendChild(autoRecoverLabel);
     const autoRecoverCheckbox = document.createElement('input');
@@ -1415,7 +1415,7 @@ function renderCharacterDetail() {
     movementStabilityRow.style.alignItems = 'center';
     movementStabilityRow.style.gap = '10px';
     const movementStabilityLabel = document.createElement('span');
-    movementStabilityLabel.textContent = 'Move Replan Stall (ms):';
+    movementStabilityLabel.textContent = '🚶 Move Replan Stall (ms):';
     movementStabilityLabel.style.width = '140px';
     movementStabilityRow.appendChild(movementStabilityLabel);
     const movementStabilityInput = document.createElement('input');
@@ -1433,7 +1433,7 @@ function renderCharacterDetail() {
     movementStabilityRow.appendChild(movementStabilityInput);
 
     const occupancyLabel = document.createElement('span');
-    occupancyLabel.textContent = ' Occupancy Lookahead:';
+    occupancyLabel.textContent = '🔭 Occupancy Lookahead:';
     occupancyLabel.style.width = '150px';
     movementStabilityRow.appendChild(occupancyLabel);
     const occupancyInput = document.createElement('input');
@@ -1457,7 +1457,7 @@ function renderCharacterDetail() {
     cooldownCeilRow.style.alignItems = 'center';
     cooldownCeilRow.style.gap = '10px';
     const cooldownCeilLabel = document.createElement('span');
-    cooldownCeilLabel.textContent = 'Max Action Cooldown (s):';
+    cooldownCeilLabel.textContent = '⏱️ Max Action Cooldown (s):';
     cooldownCeilLabel.style.width = '140px';
     cooldownCeilRow.appendChild(cooldownCeilLabel);
     const cooldownCeilInput = document.createElement('input');
@@ -1489,7 +1489,7 @@ function renderCharacterDetail() {
     charNumRow.style.alignItems = 'center';
     charNumRow.style.gap = '10px';
     const charNumLabel = document.createElement('span');
-    charNumLabel.textContent = 'Number of Characters:';
+    charNumLabel.textContent = '👥 Number of Characters:';
     charNumLabel.style.width = '140px';
     charNumRow.appendChild(charNumLabel);
     const charCapacity = getPopulationCapacityByDistrictMode(initialDistrictMode);
@@ -1646,7 +1646,7 @@ function renderCharacterDetail() {
     socialRow.style.alignItems = 'center';
     socialRow.style.gap = '10px';
     const socialLabel = document.createElement('span');
-    socialLabel.textContent = 'Social Threshold:';
+    socialLabel.textContent = '💬 Social Threshold:';
     socialLabel.style.width = '140px';
     socialRow.appendChild(socialLabel);
     const socialInput = document.createElement('input');
@@ -1691,7 +1691,7 @@ function renderCharacterDetail() {
     hungerEmergencyRow.style.alignItems = 'center';
     hungerEmergencyRow.style.gap = '10px';
     const hungerEmergencyLabel = document.createElement('span');
-    hungerEmergencyLabel.textContent = 'Hunger Emergency Threshold:';
+    hungerEmergencyLabel.textContent = '🍖 Hunger Emergency Threshold:';
     hungerEmergencyLabel.style.flex = '1';
     const hungerEmergencyInput = document.createElement('input');
     hungerEmergencyInput.type = 'range';
@@ -1737,7 +1737,7 @@ function renderCharacterDetail() {
     energyEmergencyRow.style.alignItems = 'center';
     energyEmergencyRow.style.gap = '10px';
     const energyEmergencyLabel = document.createElement('span');
-    energyEmergencyLabel.textContent = 'Energy Emergency Threshold:';
+    energyEmergencyLabel.textContent = '⚡ Energy Emergency Threshold:';
     energyEmergencyLabel.style.flex = '1';
     const energyEmergencyInput = document.createElement('input');
     energyEmergencyInput.type = 'range';
@@ -1783,7 +1783,7 @@ function renderCharacterDetail() {
     lifespanRow.style.alignItems = 'center';
     lifespanRow.style.gap = '10px';
     const lifespanLabel = document.createElement('span');
-    lifespanLabel.textContent = 'Character Lifespan (s):';
+    lifespanLabel.textContent = '⌛ Character Lifespan (s):';
     lifespanLabel.style.flex = '1';
     const lifespanInput = document.createElement('input');
     lifespanInput.type = 'range';
@@ -1976,7 +1976,7 @@ function renderCharacterDetail() {
     homeReturnRow.style.alignItems = 'center';
     homeReturnRow.style.gap = '10px';
     const homeReturnLabel = document.createElement('span');
-    homeReturnLabel.textContent = 'Home Return Hunger Level:';
+    homeReturnLabel.textContent = '🏡 Home Return Hunger Level:';
     homeReturnLabel.style.flex = '1';
     const homeReturnInput = document.createElement('input');
     homeReturnInput.type = 'range';
@@ -2084,6 +2084,18 @@ function renderCharacterDetail() {
     // ─── Re-order tab panels into logical sections ─────────────────────────
     // appendChild on an existing node moves it; section headers are fresh divs.
     {
+        // Normalize standalone row label font/color before re-ordering
+        tabPanels.forEach(panel => {
+            [...panel.children].forEach(row => {
+                const first = row.firstElementChild;
+                if (first && first.tagName === 'SPAN' && !first.style.fontSize) {
+                    first.style.fontSize = '0.85em';
+                    first.style.fontWeight = '500';
+                    first.style.color = '#374151';
+                }
+            });
+        });
+
         const _h = (text) => {
             const h = document.createElement('div');
             h.textContent = text;
@@ -2155,7 +2167,7 @@ function renderCharacterDetail() {
     randomRow.style.alignItems = 'center';
     randomRow.style.gap = '10px';
     const randomLabel = document.createElement('span');
-    randomLabel.textContent = 'Randomize Thresholds:';
+    randomLabel.textContent = '🎲 Randomize Thresholds:';
     randomLabel.style.width = '140px';
     randomRow.appendChild(randomLabel);
     const randomCheck = document.createElement('input');
@@ -2184,7 +2196,7 @@ function renderCharacterDetail() {
     districtModeRow.style.gap = '10px';
     districtModeRow.style.flexWrap = 'wrap';
     const districtModeLabel = document.createElement('span');
-    districtModeLabel.textContent = 'District Mode:';
+    districtModeLabel.textContent = '🗺️ District Mode:';
     districtModeLabel.style.width = '140px';
     districtModeRow.appendChild(districtModeLabel);
     [1, 4, 16].forEach(mode => {
