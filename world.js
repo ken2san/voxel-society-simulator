@@ -176,7 +176,7 @@ export function getDistrictRuntimeForPosition(pos) {
         activeDistrictIndex,
         isActive,
         shouldRender: isActive || districtMode === 1,
-        updateInterval: isActive ? 0 : (districtMode >= 16 ? 0.9 : 0.45),
+        updateInterval: isActive ? 0 : (districtMode >= 16 ? 0.9 : 0.2),
         bounds: getDistrictBounds(index, districtMode)
     };
 }
