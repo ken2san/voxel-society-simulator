@@ -1484,11 +1484,11 @@ function renderCharacterDetail() {
         const runningCharacterCount = Array.isArray(window.characters)
             ? window.characters.filter(c => c && c.state !== 'dead').length
             : 0;
-        const isLockedToActiveRun = !!paramDisabled && runningCharacterCount > 0;
+        const isLockedToActiveRun = runningCharacterCount > 0;
 
         let nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || spec.recommended));
         if (isLockedToActiveRun) {
-            nextVal = Math.max(5, Math.min(spec.max, Number(sidebarParams.charNum) || runningCharacterCount));
+            nextVal = Math.max(5, Math.min(spec.max, runningCharacterCount));
         } else if (autoTune && nextVal <= prevSpec.recommended) {
             nextVal = spec.recommended;
         }
@@ -1496,6 +1496,8 @@ function renderCharacterDetail() {
         sidebarParams.charNum = nextVal;
         charNumInput.value = nextVal;
         charNumVal.value = nextVal;
+        charNumInput.disabled = isLockedToActiveRun;
+        charNumVal.disabled = isLockedToActiveRun;
         populationHint.textContent = isLockedToActiveRun
             ? `Current run: ${runningCharacterCount} characters · recommended ${spec.recommended} for the next ${mode}-district start · max ${spec.max}`
             : `Recommended ${spec.recommended} for ${mode}-district ${spec.label} mode · max ${spec.max}`;
@@ -2150,11 +2152,12 @@ function renderCharacterDetail() {
     if (window.simulationRunning === undefined) window.simulationRunning = false;
     const toggleBtn = document.createElement('button');
     function updateToggleBtn() {
+        const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
         if (window.__simStarting) {
             toggleBtn.textContent = 'Starting…';
             toggleBtn.style.background = 'linear-gradient(90deg,#dbeafe 10%,#fde68a 100%)';
             toggleBtn.disabled = true;
-        } else if (!window.characters || window.characters.length === 0) {
+        } else if (!hasCharacters) {
             toggleBtn.textContent = 'Start';
             toggleBtn.style.background = 'linear-gradient(90deg,#dff4ff 10%,#e9f7f1 100%)';
             toggleBtn.disabled = false;
@@ -2163,10 +2166,11 @@ function renderCharacterDetail() {
             toggleBtn.style.background = 'linear-gradient(90deg,#ffe8a3 10%,#ffd5b3 100%)';
             toggleBtn.disabled = false;
         } else {
-            toggleBtn.textContent = 'Start';
+            toggleBtn.textContent = 'Resume';
             toggleBtn.style.background = 'linear-gradient(90deg,#bfffb2 10%,#dcffe0 100%)';
             toggleBtn.disabled = false;
         }
+        syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
     }
     toggleBtn.style.fontSize = '1.0em';
     toggleBtn.style.fontWeight = 'bold';
@@ -2179,7 +2183,15 @@ function renderCharacterDetail() {
     updateToggleBtn();
     toggleBtn.onclick = () => {
         if (window.__simStarting) return;
+        const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
         if (!window.simulationRunning) {
+            if (hasCharacters) {
+                window.simulationRunning = true;
+                updateToggleBtn();
+                window.renderCharacterList && window.renderCharacterList();
+                renderCharacterDetail();
+                return;
+            }
             // Start: regenerate character array from sidebar params (reset)
             const num = parseInt(sidebarParams.charNum);
             const socialTh = parseInt(sidebarParams.socialTh);
@@ -2268,6 +2280,8 @@ function renderCharacterDetail() {
             });
         } else {
             window.simulationRunning = false;
+            updateToggleBtn();
+            window.renderCharacterList && window.renderCharacterList();
             renderCharacterDetail();
         }
     };
@@ -3011,8 +3025,11 @@ function syncLifecycleEventsFromStats() {
         const gen = lb.generation !== undefined ? ` (G${lb.generation})` : '';
         const pText = (lb.parentIds && lb.parentIds.length >= 2)
             ? ` — #${lb.parentIds[0]} × #${lb.parentIds[1]}` : '';
-        window.__eventLog.unshift({ t: lb.t, icon: '👶', text: `Born ${id}${gen}${pText}`, kind: 'birth' });
-        if (window.__eventLog.length > 60) window.__eventLog.pop();
+        const alreadyLogged = window.__eventLog.some(ev => ev && ev.kind === 'birth' && ev.t === lb.t);
+        if (!alreadyLogged) {
+            window.__eventLog.unshift({ t: lb.t, icon: '👶', text: `Born ${id}${gen}${pText}`, kind: 'birth' });
+            if (window.__eventLog.length > 60) window.__eventLog.pop();
+        }
     }
     const ld = stats.latestDeath;
     if (ld && ld.t && ld.t > _lastSeenDeathT) {
@@ -3021,8 +3038,11 @@ function syncLifecycleEventsFromStats() {
         const gen = ld.generation !== undefined ? ` G${ld.generation}` : '';
         const age = ld.age !== undefined ? `, ${Math.round(ld.age)}s` : '';
         const cause = ld.cause ? ` — ${ld.cause.replace(/_/g, ' ')}` : '';
-        window.__eventLog.unshift({ t: ld.t, icon: '💀', text: `Died ${id}${gen}${age}${cause}`, kind: 'death' });
-        if (window.__eventLog.length > 60) window.__eventLog.pop();
+        const alreadyLogged = window.__eventLog.some(ev => ev && ev.kind === 'death' && ev.t === ld.t);
+        if (!alreadyLogged) {
+            window.__eventLog.unshift({ t: ld.t, icon: '💀', text: `Died ${id}${gen}${age}${cause}`, kind: 'death' });
+            if (window.__eventLog.length > 60) window.__eventLog.pop();
+        }
     }
 }
 

@@ -758,12 +758,18 @@ window.getPopulationStats = function getPopulationStats() {
 
 // --- Unified Event Log ---
 // Single store for all timeline events (society narrative + birth/death).
-// Max 60 entries; newest-first (unshift). Replacing __societyChronicle + __lifecycleEventLog.
-if (!window.__eventLog) window.__eventLog = [];
+// Max 60 entries; newest-first (unshift). Keep the legacy __societyChronicle
+// alias in sync so the left sidebar chronicle and the bottom timeline read
+// the same source of truth.
+if (!window.__eventLog) {
+    window.__eventLog = Array.isArray(window.__societyChronicle) ? window.__societyChronicle : [];
+}
+window.__societyChronicle = window.__eventLog;
 window.logChronicleEvent = function logChronicleEvent(icon, text, kind) {
     const entry = { t: Date.now(), icon, text, kind: kind || 'event' };
     window.__eventLog.unshift(entry);
     if (window.__eventLog.length > 60) window.__eventLog.pop();
+    window.__societyChronicle = window.__eventLog;
     return entry;
 };
 
@@ -825,6 +831,13 @@ window.recordPopulationDeath = function recordPopulationDeath(payload = {}) {
         ...payload,
         cause
     };
+    if (typeof window.logChronicleEvent === 'function') {
+        const id = payload.id !== undefined ? `#${payload.id}` : '';
+        const gen = payload.generation !== undefined ? ` G${payload.generation}` : '';
+        const age = payload.age !== undefined ? `, ${Math.round(Number(payload.age) || 0)}s` : '';
+        const causeLabel = cause.replace(/_/g, ' ');
+        window.logChronicleEvent('💀', `Died ${id}${gen}${age} — ${causeLabel}`, 'death');
+    }
     return stats;
 };
 
