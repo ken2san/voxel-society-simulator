@@ -2148,7 +2148,14 @@ function renderCharacterDetail() {
 
     // Start/Pause toggle button (pinned at top)
     if (window.simulationRunning === undefined) window.simulationRunning = false;
+    const controlGroup = document.createElement('div');
+    controlGroup.style.display = 'flex';
+    controlGroup.style.alignItems = 'center';
+    controlGroup.style.gap = '8px';
+
     const toggleBtn = document.createElement('button');
+    const resetBtn = document.createElement('button');
+
     function updateToggleBtn() {
         const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
         if (window.__simStarting) {
@@ -2168,15 +2175,117 @@ function renderCharacterDetail() {
         }
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
     }
-    toggleBtn.style.fontSize = '1.0em';
-    toggleBtn.style.fontWeight = 'bold';
-    toggleBtn.style.padding = '8px 18px';
-    toggleBtn.style.borderRadius = '999px';
-    toggleBtn.style.border = '1.5px solid #b7cbe6';
-    toggleBtn.style.color = '#1f2f46';
+
+    function updateResetBtn() {
+        const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
+        resetBtn.textContent = 'Reset';
+        resetBtn.style.background = 'linear-gradient(90deg,#f8fafc 10%,#e2e8f0 100%)';
+        resetBtn.style.color = hasCharacters ? '#1f2937' : '#94a3b8';
+        resetBtn.style.cursor = hasCharacters && !window.__simStarting ? 'pointer' : 'default';
+        resetBtn.disabled = !!window.__simStarting || !hasCharacters;
+    }
+
+    function startFreshSimulation() {
+        const num = parseInt(sidebarParams.charNum);
+        const socialTh = parseInt(sidebarParams.socialTh);
+        const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
+        const useRandom = !!sidebarParams.useRandom;
+        window.__simStarting = true;
+        updateToggleBtn();
+        updateResetBtn();
+        window.characters = [];
+        window.groupAffinityThreshold = groupAffinityTh;
+
+        import('./world.js').then(async (worldMod) => {
+            try {
+                if (typeof worldMod.removeAllCharacterObjects === 'function') {
+                    worldMod.removeAllCharacterObjects();
+                }
+                if (typeof worldMod.setDistrictMode === 'function') {
+                    worldMod.setDistrictMode(Number(sidebarParams.districtMode) || 1);
+                    worldMod.setActiveDistrict(Number(sidebarParams.activeDistrictIndex) || 0);
+                }
+                if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();
+                if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
+                const spawnBatchSize = Math.max(4, Math.min(12, Math.ceil(num / 5)));
+                const spawnAll = async () => {
+                    for (let i = 0; i < num; i++) {
+                        const pos = worldMod.findValidSpawn();
+                        if (pos) {
+                            const char = worldMod.spawnCharacter(pos);
+                            if (char) {
+                                char.socialThreshold = useRandom ? Math.floor(Math.random() * 101) : socialTh;
+                                char.needs = {
+                                    hunger: 100,
+                                    energy: 100,
+                                    safety: 100,
+                                    social: socialTh
+                                };
+                            }
+                        }
+                        if ((i + 1) % spawnBatchSize === 0) {
+                            await new Promise(resolve => window.requestAnimationFrame(resolve));
+                        }
+                    }
+                    window.characters = worldMod.characters;
+                    window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
+                    window.initialAffinityMin = sidebarParams.initialAffinityMin;
+                    window.initialAffinityMax = sidebarParams.initialAffinityMax;
+                    window.kinshipAffinityBonus = sidebarParams.kinshipAffinityBonus;
+                    window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
+                    window.socialThreshold = socialTh;
+                    window.perceptionRange = sidebarParams.perceptionRange;
+                    window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
+                    window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
+                    window.characterLifespan = sidebarParams.characterLifespan;
+                    window.initialAgeMaxRatio = sidebarParams.initialAgeMaxRatio;
+                    window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
+                    if (typeof window.applyInitialAgeSpread === 'function') {
+                        window.applyInitialAgeSpread(window.characters);
+                    }
+                    if (typeof window.resetPopulationStats === 'function') {
+                        window.resetPopulationStats(window.characters.length);
+                    }
+                    const charMod = await import('./character.js');
+                    if (typeof charMod.Character?.initializeAllRelationships === 'function') {
+                        charMod.Character.initializeAllRelationships(window.characters);
+                    }
+                    if (typeof charMod.Character?.detectGroupsAndElectLeaders === 'function') {
+                        charMod.Character.detectGroupsAndElectLeaders(window.characters);
+                    }
+                    window.simulationRunning = true;
+                    window.__simStarting = false;
+                    updateToggleBtn();
+                    updateResetBtn();
+                    window.renderCharacterList && window.renderCharacterList();
+                    renderCharacterDetail();
+                };
+                await spawnAll();
+            } catch (err) {
+                console.error('[Simulation] start failed', err);
+                window.__simStarting = false;
+                updateToggleBtn();
+                updateResetBtn();
+                renderCharacterDetail();
+            }
+        });
+    }
+
+    [toggleBtn, resetBtn].forEach(btn => {
+        btn.style.fontSize = '1.0em';
+        btn.style.fontWeight = 'bold';
+        btn.style.padding = '8px 18px';
+        btn.style.borderRadius = '999px';
+        btn.style.border = '1.5px solid #b7cbe6';
+        btn.style.color = '#1f2f46';
+        btn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
+    });
     toggleBtn.style.cursor = 'pointer';
-    toggleBtn.style.boxShadow = '0 2px 10px rgba(31,47,70,0.12)';
+    resetBtn.title = 'Restart from scratch with current settings';
+
     updateToggleBtn();
+    updateResetBtn();
+
     toggleBtn.onclick = () => {
         if (window.__simStarting) return;
         const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
@@ -2184,104 +2293,30 @@ function renderCharacterDetail() {
             if (hasCharacters) {
                 window.simulationRunning = true;
                 updateToggleBtn();
+                updateResetBtn();
                 window.renderCharacterList && window.renderCharacterList();
                 renderCharacterDetail();
                 return;
             }
-            // Start: regenerate character array from sidebar params (reset)
-            const num = parseInt(sidebarParams.charNum);
-            const socialTh = parseInt(sidebarParams.socialTh);
-            const groupAffinityTh = parseInt(sidebarParams.groupAffinityTh);
-            const useRandom = !!sidebarParams.useRandom;
-            window.__simStarting = true;
-            updateToggleBtn();
-            // Reset existing characters and IDs
-            window.characters = [];
-            // Reflect group threshold globally
-            window.groupAffinityThreshold = groupAffinityTh;
-            // Call removeAllCharacterObjects from world.js
-            import('./world.js').then(async (worldMod) => {
-                try {
-                    if (typeof worldMod.removeAllCharacterObjects === 'function') {
-                        worldMod.removeAllCharacterObjects();
-                    }
-                    if (typeof worldMod.setDistrictMode === 'function') {
-                        worldMod.setDistrictMode(Number(sidebarParams.districtMode) || 1);
-                        worldMod.setActiveDistrict(Number(sidebarParams.activeDistrictIndex) || 0);
-                    }
-                    // Reset module-level ID counter via exported function
-                    if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();
-                    if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
-                    const spawnBatchSize = Math.max(4, Math.min(12, Math.ceil(num / 5)));
-                    const spawnAll = async () => {
-                        for (let i = 0; i < num; i++) {
-                            const pos = worldMod.findValidSpawn();
-                            if (pos) {
-                                const char = worldMod.spawnCharacter(pos);
-                                if (char) {
-                                    char.socialThreshold = useRandom ? Math.floor(Math.random()*101) : socialTh;
-                                    char.needs = {
-                                        hunger: 100,
-                                        energy: 100,
-                                        safety: 100,
-                                        social: socialTh
-                                    };
-                                }
-                            }
-                            if ((i + 1) % spawnBatchSize === 0) {
-                                await new Promise(resolve => window.requestAnimationFrame(resolve));
-                            }
-                        }
-                        window.characters = worldMod.characters;
-                        // --- Reflect parameters to window before group initialization ---
-                        window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
-                        window.initialAffinityMin = sidebarParams.initialAffinityMin;
-                        window.initialAffinityMax = sidebarParams.initialAffinityMax;
-                        window.kinshipAffinityBonus = sidebarParams.kinshipAffinityBonus;
-                        window.affinityIncreaseRate = sidebarParams.affinityIncreaseRate;
-                        window.socialThreshold = socialTh;
-                        window.perceptionRange = sidebarParams.perceptionRange;
-                        window.hungerEmergencyThreshold = sidebarParams.hungerEmergencyThreshold;
-                        window.energyEmergencyThreshold = sidebarParams.energyEmergencyThreshold;
-                        window.characterLifespan = sidebarParams.characterLifespan;
-                        window.initialAgeMaxRatio = sidebarParams.initialAgeMaxRatio;
-                        window.homeReturnHungerLevel = sidebarParams.homeReturnHungerLevel;
-                        if (typeof window.applyInitialAgeSpread === 'function') {
-                            window.applyInitialAgeSpread(window.characters);
-                        }
-                        if (typeof window.resetPopulationStats === 'function') {
-                            window.resetPopulationStats(window.characters.length);
-                        }
-                        // --- Initialize groups here ---
-                        const charMod = await import('./character.js');
-                        if (typeof charMod.Character?.initializeAllRelationships === 'function') {
-                            charMod.Character.initializeAllRelationships(window.characters);
-                        }
-                        if (typeof charMod.Character?.detectGroupsAndElectLeaders === 'function') {
-                            charMod.Character.detectGroupsAndElectLeaders(window.characters);
-                        }
-                        window.simulationRunning = true;
-                        window.__simStarting = false;
-                        updateToggleBtn();
-                        window.renderCharacterList && window.renderCharacterList();
-                        renderCharacterDetail();
-                    };
-                    await spawnAll();
-                } catch (err) {
-                    console.error('[Simulation] start failed', err);
-                    window.__simStarting = false;
-                    updateToggleBtn();
-                    renderCharacterDetail();
-                }
-            });
+            startFreshSimulation();
         } else {
             window.simulationRunning = false;
             updateToggleBtn();
+            updateResetBtn();
             window.renderCharacterList && window.renderCharacterList();
             renderCharacterDetail();
         }
     };
-    actionBar.appendChild(toggleBtn);
+
+    resetBtn.onclick = () => {
+        if (window.__simStarting || resetBtn.disabled) return;
+        window.simulationRunning = false;
+        startFreshSimulation();
+    };
+
+    controlGroup.appendChild(toggleBtn);
+    controlGroup.appendChild(resetBtn);
+    actionBar.appendChild(controlGroup);
     paramBox.insertBefore(actionBar, paramBox.firstChild);
 
     rightSidebar.appendChild(paramBox);
