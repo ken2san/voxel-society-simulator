@@ -2148,6 +2148,7 @@ function renderCharacterDetail() {
 
     // Start/Pause toggle button (pinned at top)
     if (window.simulationRunning === undefined) window.simulationRunning = false;
+    if (window.__simHasUserStarted === undefined) window.__simHasUserStarted = false;
     const controlGroup = document.createElement('div');
     controlGroup.style.display = 'flex';
     controlGroup.style.alignItems = 'center';
@@ -2255,6 +2256,7 @@ function renderCharacterDetail() {
                     }
                     window.simulationRunning = true;
                     window.__simStarting = false;
+                    window.__simHasUserStarted = true;
                     updateToggleBtn();
                     updateResetBtn();
                     window.renderCharacterList && window.renderCharacterList();
@@ -2289,8 +2291,9 @@ function renderCharacterDetail() {
     toggleBtn.onclick = () => {
         if (window.__simStarting) return;
         const hasCharacters = Array.isArray(window.characters) && window.characters.length > 0;
+        const shouldResumeExistingRun = hasCharacters && !!window.__simHasUserStarted;
         if (!window.simulationRunning) {
-            if (hasCharacters) {
+            if (shouldResumeExistingRun) {
                 window.simulationRunning = true;
                 updateToggleBtn();
                 updateResetBtn();
