@@ -2308,23 +2308,77 @@ function renderCharacterDetail() {
                 if (typeof worldMod.resetNextCharacterId === 'function') worldMod.resetNextCharacterId();
                 if (Array.isArray(worldMod.characters)) worldMod.characters.length = 0;
                 const spawnBatchSize = Math.max(4, Math.min(12, Math.ceil(num / 5)));
-                const spawnAll = async () => {
-                    for (let i = 0; i < num; i++) {
-                        const pos = worldMod.findValidSpawn();
-                        if (pos) {
-                            const char = worldMod.spawnCharacter(pos);
-                            if (char) {
-                                char.socialThreshold = useRandom ? Math.floor(Math.random() * 101) : socialTh;
-                                char.needs = {
-                                    hunger: 100,
-                                    energy: 100,
-                                    safety: 100,
-                                    social: socialTh
-                                };
+
+                // District-bounded spawn: respect the previewed distribution if available.
+                const mode = Number(sidebarParams.districtMode) || 1;
+                const targetCounts = (mode > 1 && _idleDistrictProportions && _idleDistrictProportions.length === mode)
+                    ? getIdleDistrictCounts(num, mode)
+                    : null;
+
+                // Attempt to spawn `count` characters within the given district bounds.
+                // Returns the number successfully spawned.
+                const spawnInDistrict = async (districtIndex, count, soFar) => {
+                    const bounds = worldMod.getDistrictBounds(districtIndex, mode);
+                    let spawned = 0;
+                    let attempts = 0;
+                    const maxAttempts = count * 40;
+                    while (spawned < count && attempts < maxAttempts) {
+                        attempts++;
+                        const x = Math.floor(bounds.minX + Math.random() * (bounds.maxX - bounds.minX + 1));
+                        const z = Math.floor(bounds.minZ + Math.random() * (bounds.maxZ - bounds.minZ + 1));
+                        const y = worldMod.findGroundY(x, z);
+                        if (y === -1) continue;
+                        const belowId = worldMod.worldData.get(`${x},${y},${z}`);
+                        if (belowId !== 1 && belowId !== 2) continue; // GRASS=1, DIRT=2
+                        const pos = { x, y: y + 1, z };
+                        const char = worldMod.spawnCharacter(pos);
+                        if (char) {
+                            char.socialThreshold = useRandom ? Math.floor(Math.random() * 101) : socialTh;
+                            char.needs = { hunger: 100, energy: 100, safety: 100, social: socialTh };
+                            spawned++;
+                            if ((soFar + spawned) % spawnBatchSize === 0) {
+                                await new Promise(resolve => window.requestAnimationFrame(resolve));
                             }
                         }
-                        if ((i + 1) % spawnBatchSize === 0) {
-                            await new Promise(resolve => window.requestAnimationFrame(resolve));
+                    }
+                    return spawned;
+                };
+
+                const spawnAll = async () => {
+                    let totalSpawned = 0;
+                    if (targetCounts) {
+                        // Spawn per-district according to preview proportions
+                        for (let d = 0; d < mode; d++) {
+                            totalSpawned += await spawnInDistrict(d, targetCounts[d], totalSpawned);
+                        }
+                        // Fallback: fill any shortfall with global random spawn
+                        for (let i = totalSpawned; i < num; i++) {
+                            const pos = worldMod.findValidSpawn();
+                            if (pos) {
+                                const char = worldMod.spawnCharacter(pos);
+                                if (char) {
+                                    char.socialThreshold = useRandom ? Math.floor(Math.random() * 101) : socialTh;
+                                    char.needs = { hunger: 100, energy: 100, safety: 100, social: socialTh };
+                                }
+                            }
+                            if ((i + 1) % spawnBatchSize === 0) {
+                                await new Promise(resolve => window.requestAnimationFrame(resolve));
+                            }
+                        }
+                    } else {
+                        // D1 or no preview: global random spawn
+                        for (let i = 0; i < num; i++) {
+                            const pos = worldMod.findValidSpawn();
+                            if (pos) {
+                                const char = worldMod.spawnCharacter(pos);
+                                if (char) {
+                                    char.socialThreshold = useRandom ? Math.floor(Math.random() * 101) : socialTh;
+                                    char.needs = { hunger: 100, energy: 100, safety: 100, social: socialTh };
+                                }
+                            }
+                            if ((i + 1) % spawnBatchSize === 0) {
+                                await new Promise(resolve => window.requestAnimationFrame(resolve));
+                            }
                         }
                     }
                     window.characters = worldMod.characters;
