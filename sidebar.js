@@ -781,16 +781,6 @@ function renderCharacterDetail() {
         miniLabel.style.color = '#475569';
         row.appendChild(miniLabel);
 
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = String(min);
-        slider.max = String(max);
-        slider.step = String(step);
-        slider.value = String(sidebarParams[key]);
-        slider.style.width = sliderWidth;
-        slider.disabled = paramDisabled;
-        row.appendChild(slider);
-
         const input = document.createElement('input');
         input.type = 'number';
         input.min = String(min);
@@ -805,10 +795,8 @@ function renderCharacterDetail() {
             const next = Number.isFinite(raw) ? Math.max(min, Math.min(max, raw)) : Number(sidebarParams[key]);
             sidebarParams[key] = next;
             window[key] = next;
-            slider.value = String(next);
             input.value = String(next);
         };
-        slider.addEventListener('input', e => syncValue(e.target.value));
         input.addEventListener('input', e => syncValue(e.target.value));
         row.appendChild(input);
     }
