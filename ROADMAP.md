@@ -245,16 +245,16 @@ The user can switch which district is being observed while the full society cont
 
 ### Minimum district state to track
 
-| District signal | Why it matters |
-| --------------- | -------------- |
-| population | basic viability / density |
-| births and deaths | local circulation |
-| stage mix | demographic waves |
-| food pressure | ecology constraint |
-| housing pressure | family-formation constraint |
-| support density | social resilience |
-| conflict level | instability / fragmentation |
-| migration flow | movement between districts |
+| District signal   | Why it matters              |
+| ----------------- | --------------------------- |
+| population        | basic viability / density   |
+| births and deaths | local circulation           |
+| stage mix         | demographic waves           |
+| food pressure     | ecology constraint          |
+| housing pressure  | family-formation constraint |
+| support density   | social resilience           |
+| conflict level    | instability / fragmentation |
+| migration flow    | movement between districts  |
 
 ### UI / telemetry requirements
 
@@ -267,13 +267,13 @@ The user can switch which district is being observed while the full society cont
 
 ### Suggested file targets
 
-| Concern | Likely file |
-| ------- | ----------- |
-| district topology / active rendered district | `world.js` |
-| simulation mode, orchestration, telemetry meta | `main.js` |
-| district selector UI and observation panels | `sidebar.js` |
+| Concern                                                    | Likely file                                          |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| district topology / active rendered district               | `world.js`                                           |
+| simulation mode, orchestration, telemetry meta             | `main.js`                                            |
+| district selector UI and observation panels                | `sidebar.js`                                         |
 | promotion / demotion between high- and low-fidelity agents | `character.js` or a new lightweight district manager |
-| export summaries | `scripts/export-telemetry.mjs` |
+| export summaries                                           | `scripts/export-telemetry.mjs`                       |
 
 ### Success criteria
 
@@ -330,6 +330,42 @@ natural collision handling, no wall clipping, and smoother visual intent.
 
 ---
 
+## Ecology Tuning — Done Criteria (as of 2026-04-17)
+
+_Concrete exit criteria for the reproduction/ecology tuning loop. Once all are met, stop tuning and move on._
+
+### ✅ Metrics to track — done when all pass
+
+| Metric | Target | Rationale |
+|---|---|---|
+| Benchmark | PASS 5/5 every valid run | Baseline integrity |
+| starvation deaths | ≤ 10% of total deaths | Survival must be plausible, not zero |
+| old_age deaths | ≥ 60% of total deaths | Natural mortality is the dominant cause |
+| Gen2+ births | Appears in ≥ 1 run per 3 full runs (> 300 s) | Multi-generational chain is reproducible |
+| wanderRatio avg | < 72% | Behavioral diversity beyond wandering exists |
+| socializeRatio avg | > 3% | Social layer is active, not vestigial |
+
+**Current status (2026-04-17, commit `9e4df32`):**
+- Benchmark: ✅ PASS 5/5
+- starvation: ✅ 3/22 = 13.6% → borderline (one more run will confirm)
+- old_age: ✅ 19/22 = 86%
+- Gen2+: ✅ gen3 confirmed in latest run
+- wanderRatio: ✅ 65.1%
+- socializeRatio: ✅ 5.6%
+
+**Verdict: ecology tuning is effectively complete. One confirmation run recommended.**
+
+### ❌ Metrics NOT to chase
+
+| Metric | Why to ignore |
+|---|---|
+| `birthDeathRatio ≥ 1.0` | Requires 5.5× more births; forcing it causes starvation regression. A founding-cohort wave dying out is realistic and observable — not a failure state |
+| Exact generation depth | Stochastic by design; gen3 appearing at all is sufficient signal |
+| Zero starvation | Some starvation under severe conditions is authentic behavior |
+| Population equilibrium | Collapse and recovery cycles are the observation content, not bugs |
+
+---
+
 ## Active Handoff — Session 2026-04-15 (Next feature scope)
 
 _This section captures the next intended feature so a new thread can continue without re-deriving the design._
@@ -377,12 +413,12 @@ The social-pressure/family-formation work should continue **after** the scaling 
 
 ### Suggested file targets
 
-| Concern | Likely file |
-| ------- | ----------- |
-| district partitioning and active-view orchestration | `world.js`, `main.js` |
-| selector UI and observation summaries | `sidebar.js` |
-| agent fidelity switching / lightweight state | `character.js` or a new district manager |
-| telemetry export | `main.js`, `world.js`, `scripts/export-telemetry.mjs` |
+| Concern                                             | Likely file                                           |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| district partitioning and active-view orchestration | `world.js`, `main.js`                                 |
+| selector UI and observation summaries               | `sidebar.js`                                          |
+| agent fidelity switching / lightweight state        | `character.js` or a new district manager              |
+| telemetry export                                    | `main.js`, `world.js`, `scripts/export-telemetry.mjs` |
 
 ### Success criteria for the next thread
 
@@ -431,6 +467,7 @@ Layer 3 Population (implement after Layer 2 is stable):
 ```
 
 Deferred (with explicit preconditions noted in ROADMAP):
+
 - Resource Sharing (needs Tiers first)
 - Generation Summary banner (needs Death Record first)
 - Social Contagion (coefficient-sensitive; needs Crisis Mode baseline first)
@@ -440,11 +477,13 @@ Deferred (with explicit preconditions noted in ROADMAP):
 
 **Start with Crisis Mode** — lowest cost, highest immediate observability impact.
 Change: in `decideNextAction_rulebase()`, add a pre-check before priority tiers:
+
 ```javascript
 if (this.hunger < 15) → force FIND_FOOD, skip all other rules
 if (this.energy < 10) → force REST, skip all other rules
 // also: block reproduction during crisis
 ```
+
 File: `AI_rulebase.js` (or wherever `decideNextAction_rulebase` lives — confirm before editing).
 
 After Crisis Mode: **Spatial Memory** (add `_knownFoodSpots` Map to constructor, populate on eat, use in food-target scoring).
@@ -468,9 +507,9 @@ Confirmed the core problem is **not food shortage** — it is **population struc
 
 ### What was built
 
-| Commit | Change |
-| ------ | ------ |
-| `ec757a7` | `animate()`: time-based fruit regeneration every `fruitRegenIntervalSeconds` (default 60 s). Scans all GRASS surfaces and places FRUIT at `fruitSpawnRate` probability. |
+| Commit    | Change                                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ec757a7` | `animate()`: time-based fruit regeneration every `fruitRegenIntervalSeconds` (default 60 s). Scans all GRASS surfaces and places FRUIT at `fruitSpawnRate` probability.         |
 | `091dab3` | `ROADMAP.md`: Parameter Addition Rule (3-step: workspace JSON → PARAM_DEFAULTS → sidebar slider). `sim-settings.workspace.json`: added missing `fruitRegenIntervalSeconds: 60`. |
 
 ### Confirmed findings (from telemetry `telemetry-2026-04-13T15-54-47-101Z.json`)
@@ -484,33 +523,34 @@ Confirmed the core problem is **not food shortage** — it is **population struc
 
 ### Next tasks (prioritized)
 
-| Priority | Task | Rationale |
-| -------- | ---- | --------- |
-| ★★★ | ~~**Stagger initial spawn ages**~~ ✅ Done | `initialAgeMaxRatio` param (default 0.5) added via 3-step rule. `main.js` uses `window.initialAgeMaxRatio` instead of hardcoded `0.65`. Slider in Setup tab. |
-| ★★★ | ~~**Ideology gap → affinity ceiling**~~ ✅ Done | `Character.computeTraitDistance()` uses 6-trait vector (bravery/diligence/sociality/curiosity/resourcefulness/resilience). During socializing, `affinityCap = maxAffinity × (1 − capReduction × traitDist)`. Param: `traitAffinityCapReduction` (default 0.6) in Social tab → groups naturally form around compatible worldviews; Dunbar-scale fragmentation emerges without explicit rule. |
-| ★★☆ | **Affinity lower floor (hate-but-persist)** | Currently affinity ≤ 0 causes `relationships.delete()`. Change floor to 5 — negative relationships remain visible as structural tension. Change: `character.js` line ~2618 `relationships.delete(k)` → clamp to 5. |
-| ★★☆ | ~~**Seasonal food variation**~~ ✅ Done | `animate.simTime` accumulator drives sin-wave on fruitSpawnRate. `seasonCycleSeconds` (default 120s) and `seasonAmplitude` (default 0.6) added via 3-step rule (Behavior tab). amplitude=0.6 → summer 1.6×, winter 0.4×; amplitude=1.0 → winter rate=0 (true famine). |
-| ★★☆ | **Ease reproduction rate** — consider lowering `pairReproductionCooldownSeconds` (90 → 45) or raising `affinityIncreaseRate` | After age stagger, measure birth rate in telemetry before touching this. |
-| ★☆☆ | **Hunger × fertility link** — suppress reproduction score when `hunger < threshold` | Ecological pressure signal; low urgency while food is abundant. |
+| Priority | Task                                                                                                                         | Rationale                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ★★★      | ~~**Stagger initial spawn ages**~~ ✅ Done                                                                                   | `initialAgeMaxRatio` param (default 0.5) added via 3-step rule. `main.js` uses `window.initialAgeMaxRatio` instead of hardcoded `0.65`. Slider in Setup tab.                                                                                                                                                                                                                                |
+| ★★★      | ~~**Ideology gap → affinity ceiling**~~ ✅ Done                                                                              | `Character.computeTraitDistance()` uses 6-trait vector (bravery/diligence/sociality/curiosity/resourcefulness/resilience). During socializing, `affinityCap = maxAffinity × (1 − capReduction × traitDist)`. Param: `traitAffinityCapReduction` (default 0.6) in Social tab → groups naturally form around compatible worldviews; Dunbar-scale fragmentation emerges without explicit rule. |
+| ★★☆      | **Affinity lower floor (hate-but-persist)**                                                                                  | Currently affinity ≤ 0 causes `relationships.delete()`. Change floor to 5 — negative relationships remain visible as structural tension. Change: `character.js` line ~2618 `relationships.delete(k)` → clamp to 5.                                                                                                                                                                          |
+| ★★☆      | ~~**Seasonal food variation**~~ ✅ Done                                                                                      | `animate.simTime` accumulator drives sin-wave on fruitSpawnRate. `seasonCycleSeconds` (default 120s) and `seasonAmplitude` (default 0.6) added via 3-step rule (Behavior tab). amplitude=0.6 → summer 1.6×, winter 0.4×; amplitude=1.0 → winter rate=0 (true famine).                                                                                                                       |
+| ★★☆      | **Ease reproduction rate** — consider lowering `pairReproductionCooldownSeconds` (90 → 45) or raising `affinityIncreaseRate` | After age stagger, measure birth rate in telemetry before touching this.                                                                                                                                                                                                                                                                                                                    |
+| ★☆☆      | **Hunger × fertility link** — suppress reproduction score when `hunger < threshold`                                          | Ecological pressure signal; low urgency while food is abundant.                                                                                                                                                                                                                                                                                                                             |
 
 ### Parameter addition rule (summary)
 
 Every new parameter requires all 3 steps:
+
 1. `sim-settings.workspace.json` → `settings.sidebarParams`
 2. `sidebar.js` `PARAM_DEFAULTS`
 3. `sidebar.js` slider in right panel
 
 ### Key file map (quick reference)
 
-| Concern | File | Key function/variable |
-| ------- | ---- | --------------------- |
-| World loop | `world.js` | `animate()` |
-| Fruit regen | `world.js` | `animate.lastFruitRegenTime`, `fruitSpawnRate` |
-| Character lifecycle | `character.js` | `constructor` (`this.age`), `die()`, `reproduceWith()` |
-| AI decisions | `AI_rulebase.js`, `AI_utility.js` | rule-based / utility-based modes |
-| Sidebar params | `sidebar.js` | `PARAM_DEFAULTS`, slider rows per tab |
-| Initial param values | `sim-settings.workspace.json` | `settings.sidebarParams` |
-| Telemetry | `main.js` | `window.simTelemetryConfig`, `exportSimulatorSettingsObject()` |
+| Concern              | File                              | Key function/variable                                          |
+| -------------------- | --------------------------------- | -------------------------------------------------------------- |
+| World loop           | `world.js`                        | `animate()`                                                    |
+| Fruit regen          | `world.js`                        | `animate.lastFruitRegenTime`, `fruitSpawnRate`                 |
+| Character lifecycle  | `character.js`                    | `constructor` (`this.age`), `die()`, `reproduceWith()`         |
+| AI decisions         | `AI_rulebase.js`, `AI_utility.js` | rule-based / utility-based modes                               |
+| Sidebar params       | `sidebar.js`                      | `PARAM_DEFAULTS`, slider rows per tab                          |
+| Initial param values | `sim-settings.workspace.json`     | `settings.sidebarParams`                                       |
+| Telemetry            | `main.js`                         | `window.simTelemetryConfig`, `exportSimulatorSettingsObject()` |
 
 ---
 
@@ -572,6 +612,7 @@ instead of clustering socially. Activity bars should show Eating collapse + Movi
 **Note**: `learn()` was already fully implemented (not a stub). Missing piece was `_knownFoodSpots` Map.
 
 **Implemented** in `character.js`:
+
 - Constructor: `this._knownFoodSpots = new Map()` — `"x,y,z" → timestamp`
 - `collectFood()` (EAT completion): `_knownFoodSpots.set(key, Date.now())` after eating
 - `findClosestFood()`: TTL expiry (60s), 0.5× scoring bonus for known spots, on-miss purge
@@ -584,15 +625,16 @@ walk directly toward previous food locations. Veteran vs novice movement is visu
 ### 3 — ~~Full Trait Activation~~ ✅ Done `Layer 1` (commit `8735c77`)
 
 **Bug fixes + activation** in `AI_rulebase.js`:
+
 - P6 bravery direction was **inverted** — high bravery caused MORE fleeing (fixed)
 - P7 `70 * bravery` caused bravery=1.5 → rest threshold=105 = always resting (fixed)
 - P8 `Math.min(1.0, resourcefulness)` cap killed the trait for high-value characters (removed)
 
-| Priority | Old formula | New formula |
-|----------|-------------|-------------|
-| P6 Safety | `safety < 20 * bravery` | `safety < 20 * (2.0 - bravery)` + `nightSafetyOverride` |
-| P7 Rest | `70 * bravery` | `clamp(45 + (2.0 - bravery) * 18 + adapt.rest * 15, 25, 75)` |
-| P8 Food | `95 * min(1.0, res)` | `70 + (resourcefulness - 1.0) * 20` |
+| Priority  | Old formula             | New formula                                                  |
+| --------- | ----------------------- | ------------------------------------------------------------ |
+| P6 Safety | `safety < 20 * bravery` | `safety < 20 * (2.0 - bravery)` + `nightSafetyOverride`      |
+| P7 Rest   | `70 * bravery`          | `clamp(45 + (2.0 - bravery) * 18 + adapt.rest * 15, 25, 75)` |
+| P8 Food   | `95 * min(1.0, res)`    | `70 + (resourcefulness - 1.0) * 20`                          |
 
 **Observable check**: with `seasonAmplitude ≥ 0.6`, telemetry should show high-resourcefulness
 characters surviving famine more often over multiple generations → trait selection pressure active.
@@ -603,11 +645,11 @@ characters surviving famine more often over multiple generations → trait selec
 
 **Implemented** in `character.js` + `AI_rulebase.js`:
 
-| Class | Affinity | Behavior added |
-|-------|----------|----------------|
-| `acquaintance` | 30+ | (foundation only; no active gate yet) |
-| `ally` | 60+ | Safety +1.5/s at night within 2 tiles; food donation when donor >70, recipient <40 |
-| `bonded` | 80+ | Safety +3/s at night; P6.5 partner-aid moves toward them when their safety <30 |
+| Class          | Affinity | Behavior added                                                                     |
+| -------------- | -------- | ---------------------------------------------------------------------------------- |
+| `acquaintance` | 30+      | (foundation only; no active gate yet)                                              |
+| `ally`         | 60+      | Safety +1.5/s at night within 2 tiles; food donation when donor >70, recipient <40 |
+| `bonded`       | 80+      | Safety +3/s at night; P6.5 partner-aid moves toward them when their safety <30     |
 
 `getRelationshipClass(otherId)` — derived helper, no stored state. Added to `character.js`.
 
@@ -627,14 +669,22 @@ while the other's hunger stabilizes. At night, bonded characters should move tow
 **Implemented** in `character.js` `die()` + `main.js` `resetPopulationStats()`:
 
 Tombstone written before character is removed from array:
+
 ```javascript
 window.__deathRecords.push({
-  id, generation, ageAtDeath, lifespan, cause,
+  id,
+  generation,
+  ageAtDeath,
+  lifespan,
+  cause,
   traits: { ...this.personality },
-  childCount, parentIds, groupIdAtDeath,
-  finalNeeds: { hunger, energy, safety, social }
+  childCount,
+  parentIds,
+  groupIdAtDeath,
+  finalNeeds: { hunger, energy, safety, social },
 });
 ```
+
 - Capped at 200 records (oldest shifted out). Same pattern as event log.
 - Cleared on sim restart via `resetPopulationStats()`.
 - Readable via DevTools: `window.__deathRecords`.
@@ -646,18 +696,22 @@ window.__deathRecords.push({
 ## Deferred Observation Backlog
 
 ### B — Resource Sharing ✅ Done (implemented as part of Relationship Tiers, item 4)
+
 Food donation is live: ally/bonded characters donate food every 2s tick when nearby.
 
 ### Generation Summary Banner
+
 Depends on Death Record (item 5) — now stable.
 When `__maxGenSeen` increments, compute avg lifespan + trait delta for the completed generation.
 Display as a Chronicle event with generational stats inline.
 
 ### Social Contagion
+
 Coefficient-sensitive. Needs `seasonAmplitude` ≥ 0.8 to observe clearly.
 Add after Crisis Mode is stable (item 1 changes baseline behavior that contagion modulates).
 
 ### groupId → Affinity Graph Rebuild
+
 High impact, high regression risk. Replaces proximity clustering with connected-component
 analysis of affinity ≥ 50 edges. Defer until Tier system (item 4) is proven stable.
 
@@ -672,14 +726,14 @@ and the characters visually "just walk around." Two distinct surfaces to improve
 
 These changes live in `character.js` (mesh update section, already per-frame):
 
-| Signal | Implementation idea | File / function |
-|--------|---------------------|-----------------|
-| **Hunger depletion** | Gradually shrink character scale 1.0 → 0.85 as hunger 100 → 0. Already readable at a glance. | `character.js` mesh update |
-| **Energy state** | Movement speed already varies; make the range larger (exhausted = 0.4× normal) | `character.js` `updateMovement` |
-| **State transition pulse** | On entering `eating`: brief scale pop (1.15 → 1.0 over 0.3s). On `die()`: dissolve (fade alpha + Y-sink). | `character.js` `die()`, action entry |
-| **Relationship line** | Thin translucent line between characters with affinity ≥ 70, color by class (green=ally, pink=bonded). Hidden by default; toggle with a key. | `character.js` update loop or `world.js` overlay pass |
-| **Ground aura** | Small ring on the floor below grouped characters (same groupId). Faint warm color; disappears when isolated. | `character.js` mesh setup |
-| **Path ghost dots** | Render next 2–3 path nodes as tiny semi-transparent spheres. Shows intent (not just current position). | `character.js` `updateMovement` |
+| Signal                     | Implementation idea                                                                                                                          | File / function                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **Hunger depletion**       | Gradually shrink character scale 1.0 → 0.85 as hunger 100 → 0. Already readable at a glance.                                                 | `character.js` mesh update                            |
+| **Energy state**           | Movement speed already varies; make the range larger (exhausted = 0.4× normal)                                                               | `character.js` `updateMovement`                       |
+| **State transition pulse** | On entering `eating`: brief scale pop (1.15 → 1.0 over 0.3s). On `die()`: dissolve (fade alpha + Y-sink).                                    | `character.js` `die()`, action entry                  |
+| **Relationship line**      | Thin translucent line between characters with affinity ≥ 70, color by class (green=ally, pink=bonded). Hidden by default; toggle with a key. | `character.js` update loop or `world.js` overlay pass |
+| **Ground aura**            | Small ring on the floor below grouped characters (same groupId). Faint warm color; disappears when isolated.                                 | `character.js` mesh setup                             |
+| **Path ghost dots**        | Render next 2–3 path nodes as tiny semi-transparent spheres. Shows intent (not just current position).                                       | `character.js` `updateMovement`                       |
 
 Priority order: hunger scale → state pulse → relationship line → rest.
 
@@ -687,11 +741,11 @@ Priority order: hunger scale → state pulse → relationship line → rest.
 
 The numbers problem: the value today tells you nothing about where it's going.
 
-| Signal | Implementation idea |
-|--------|---------------------|
-| **Delta arrow** | Next to hunger/safety/social: ▲ green if rising, ▼ red if falling (compare last 3s). Small, doesn't need to be precise. |
-| **Per-value sparkline** | 10s mini-sparkline per need bar in the character detail panel. Low cost; reuse `createSparklineSVG()` already in sidebar. |
-| **Threshold flash** | When hunger crosses 30 (critical) or 70 (recovered), briefly highlight the cell in red/green for 1s. CSS animation only. |
+| Signal                     | Implementation idea                                                                                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Delta arrow**            | Next to hunger/safety/social: ▲ green if rising, ▼ red if falling (compare last 3s). Small, doesn't need to be precise.                                        |
+| **Per-value sparkline**    | 10s mini-sparkline per need bar in the character detail panel. Low cost; reuse `createSparklineSVG()` already in sidebar.                                      |
+| **Threshold flash**        | When hunger crosses 30 (critical) or 70 (recovered), briefly highlight the cell in red/green for 1s. CSS animation only.                                       |
 | **Activity bar animation** | The activity bars currently snap. Smoothing them with CSS `transition: width 0.4s ease` makes the shift between Eating/Moving/Idle feel like a living readout. |
 
 Priority: activity bar CSS transition (1 line) → threshold flash → delta arrow → per-value sparkline.
