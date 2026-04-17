@@ -1564,6 +1564,15 @@ function renderCharacterDetail() {
         charNumVal.value = charNumInput.value;
         sidebarParams.charNum = parseInt(charNumInput.value);
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
+        // Update district button counts in-place (avoids re-rendering the slider mid-drag)
+        if (!window.simulationRunning && !window.__simHasUserStarted) {
+            const mode = Number(sidebarParams.districtMode) || 1;
+            const counts = getIdleDistrictCounts(sidebarParams.charNum, mode);
+            rightSidebar?.querySelectorAll('[data-district-index]').forEach(btn => {
+                const i = Number(btn.dataset.districtIndex);
+                btn.textContent = `D${i + 1} · ~${counts[i] ?? 0}`;
+            });
+        }
         window.renderCharacterList && window.renderCharacterList();
     };
     charNumVal.oninput = () => {
@@ -1573,6 +1582,14 @@ function renderCharacterDetail() {
         charNumVal.value = safeValue;
         sidebarParams.charNum = safeValue;
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
+        if (!window.simulationRunning && !window.__simHasUserStarted) {
+            const mode = Number(sidebarParams.districtMode) || 1;
+            const counts = getIdleDistrictCounts(safeValue, mode);
+            rightSidebar?.querySelectorAll('[data-district-index]').forEach(btn => {
+                const i = Number(btn.dataset.districtIndex);
+                btn.textContent = `D${i + 1} · ~${counts[i] ?? 0}`;
+            });
+        }
         window.renderCharacterList && window.renderCharacterList();
     };
     charNumRow.dataset.label = 'Number of Characters';
@@ -2202,6 +2219,7 @@ function renderCharacterDetail() {
         const summary = districtData[i];
         const idleCount = idleScaledCounts ? idleScaledCounts[i] : 0;
         btn.textContent = !idleDistrictPreview && summary ? `D${i + 1} · ${summary.population}` : `D${i + 1} · ~${idleCount}`;
+        btn.dataset.districtIndex = i;
         btn.style.padding = '6px 4px';
         btn.style.borderRadius = '8px';
         btn.style.fontWeight = '700';
