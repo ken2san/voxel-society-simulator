@@ -1436,7 +1436,7 @@ function renderCharacterDetail() {
     const initialDistrictMode = [1, 4, 16].includes(Number(sidebarParams.districtMode)) ? Number(sidebarParams.districtMode) : 1;
     const getPopulationCapacityByDistrictMode = (mode) => {
         if (mode >= 16) return { recommended: 48, max: 120, label: 'high density' };
-        if (mode >= 4) return { recommended: 24, max: 80, label: 'district scaling' };
+        if (mode >= 4) return { recommended: 36, max: 80, label: 'district scaling' };
         return { recommended: 10, max: 50, label: 'baseline' };
     };
 
