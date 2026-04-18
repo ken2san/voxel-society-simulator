@@ -112,6 +112,14 @@ Use `ROADMAP.md` as the scope boundary for development work.
 - Do not implement later-phase items unless explicitly requested.
 - Before major changes, check roadmap phase alignment first.
 
+## Simulation model reference
+
+For the current reproduction / household-cohesion thinking and future academically inspired model directions, see:
+
+- `docs/modeling-reference.md`
+
+Use that document as the reference note when adjusting social, fertility, support, or child-rearing behavior.
+
 ## Notes
 
 - Project currently uses CDN importmap for some ESM libs in `index.html`. Installing dependencies via npm (e.g. `three`) allows Vite to prebundle and manage them.
