@@ -374,6 +374,7 @@ const {
     setActiveDistrict,
     getDistrictSummaries,
     getDistrictIndexForPosition,
+    tickFruitRegen,
 } = worldModule;
 
 const { Character } = characterModule;
@@ -432,6 +433,9 @@ for (let tick = 0; tick < options.ticks; tick++) {
 
     simulatedNow += options.dt * 1000;
     simTime += options.dt;
+
+    // Fruit regeneration (mirrors the animate() loop in the browser)
+    if (typeof tickFruitRegen === 'function') tickFruitRegen(options.dt);
 
     if (simulatedNow >= nextWorldSampleMs) {
         const alive = characters.filter(char => char && char.state !== 'dead');

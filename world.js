@@ -749,6 +749,29 @@ export function removeBlock(x, y, z, updateMinimap = true) {
 export function findGroundY(x, z) {
     for (let y = maxHeight - 1; y >= 0; y--) { if (worldData.has(`${x},${y},${z}`)) return y; } return -1;
 }
+
+// Headless-safe fruit regeneration tick. Called by run-sim.mjs each tick since
+// the browser animate() loop (which normally handles this) is never called headless.
+let _fruitRegenAccum = 0;
+export function tickFruitRegen(deltaTime) {
+    _fruitRegenAccum += deltaTime;
+    const fruitRegenInterval = (typeof globalThis.window !== 'undefined' && globalThis.window.fruitRegenIntervalSeconds > 0)
+        ? globalThis.window.fruitRegenIntervalSeconds : 60;
+    if (_fruitRegenAccum < fruitRegenInterval) return;
+    _fruitRegenAccum = 0;
+    const rate = fruitSpawnRate;
+    for (let x = 0; x < gridSize; x++) {
+        for (let z = 0; z < gridSize; z++) {
+            if (Math.random() >= rate) continue;
+            const y = findGroundY(x, z);
+            if (y < 0) continue;
+            if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
+            if (worldData.has(`${x},${y + 1},${z}`)) continue;
+            addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
+        }
+    }
+}
+
 export function findValidSpawn() {
     for (let i = 0; i < 100; i++) {
         const x = Math.floor(Math.random() * gridSize);
