@@ -168,6 +168,14 @@ const deathByCause = deathEvents.reduce((acc, e) => {
   acc[c] = (acc[c] || 0) + 1;
   return acc;
 }, {});
+const uniqueDeathIds = new Set(deathEvents.map(e => e.id)).size;
+const duplicateDeathEvents = deathEvents.length - uniqueDeathIds;
+const metaDeaths = Number(meta.population?.deaths || 0);
+const metaStarvation = Number(meta.population?.deathsByCause?.starvation || 0);
+const starvationEventCount = Number(deathByCause.starvation || 0);
+const expectedDeathsFromPopulation = Number(meta.population?.initialPopulation || 0)
+  + Number(meta.population?.births || 0)
+  - Number(meta.population?.current?.alive || 0);
 const actionPairs = actionTransitions.reduce((acc, e) => {
   const from = e && e.from ? e.from : 'null';
   const to = e && e.to ? e.to : 'null';
@@ -190,6 +198,15 @@ if (birthEvents > 0 || deathEvents.length > 0 || actionTransitions.length > 0) {
   console.log(`  - deathEvents: ${deathEvents.length}`);
   for (const [cause, count] of Object.entries(deathByCause)) {
     console.log(`  - deathEvents.${cause}: ${count}`);
+  }
+  console.log('Telemetry consistency:');
+  console.log(`  - uniqueDeadIds: ${uniqueDeathIds}`);
+  console.log(`  - duplicateDeathEvents: ${duplicateDeathEvents}`);
+  console.log(`  - metaDeathsVsEvents: ${metaDeaths} vs ${deathEvents.length}`);
+  console.log(`  - metaStarvationVsEvents: ${metaStarvation} vs ${starvationEventCount}`);
+  console.log(`  - expectedDeathsFromPopulation: ${expectedDeathsFromPopulation}`);
+  if (metaDeaths !== deathEvents.length || metaDeaths !== expectedDeathsFromPopulation || metaStarvation !== starvationEventCount || duplicateDeathEvents > 0) {
+    console.log('  - warning: death counts are inconsistent; inspect runtime death recording.');
   }
   console.log(`  - actionTransitions: ${actionTransitions.length}`);
   const topActionPairs = Object.entries(actionPairs)

@@ -4096,6 +4096,10 @@ class Character {
     }
 
     die(cause = 'unknown') {
+        if (this._deathHandled || this.state === 'dead') return;
+        this._deathHandled = true;
+        this.state = 'dead';
+
         try {
             if (typeof window !== 'undefined' && typeof window.recordPopulationDeath === 'function') {
                 window.recordPopulationDeath({
@@ -4189,7 +4193,6 @@ class Character {
             // --- Group/leader re-detection after death ---
             Character.handleLeaderDeath(this, characters);
         }
-        this.state = 'dead';
         this.log('Character died and removed', { id: this.id, cause });
     }
 
