@@ -1,38 +1,18 @@
 // --- 落下先が安全か（抜け出せるか）判定 ---
 
-import * as THREE from 'three';
 import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter } from './world.js';
-import { decideNextAction_rulebase } from './AI_rulebase.js';
-import { decideNextAction_utility } from './AI_utility.js';
+import { decideNextAction_rulebase } from './sim-core/AI_rulebase.js';
+import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
+import { getSimulationIO, gridToWorldPosition } from './sim-core/interfaces.js';
 
-// --- Helper: 3Dオブジェクトのワールド座標をスクリーン座標に変換 ---
+function simIO() {
+    return getSimulationIO();
+}
+
+// --- Helper: world object position to screen position ---
 function toScreenPosition(obj, camera, canvas = null) {
-    if (!obj || !camera || obj.visible === false) return null;
-    // obj: THREE.Object3D, camera: THREE.Camera, canvas: HTMLCanvasElement
-    const vector = new THREE.Vector3();
-    obj.updateMatrixWorld();
-    vector.setFromMatrixPosition(obj.matrixWorld);
-    vector.project(camera);
-
-    // Outside the camera frustum or behind the camera: do not show DOM overlays.
-    if (!Number.isFinite(vector.x) || !Number.isFinite(vector.y) || !Number.isFinite(vector.z)) return null;
-    if (vector.z < -1 || vector.z > 1) return null;
-
-    let rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-    if (!canvas) {
-        canvas = document.getElementById('gameCanvas');
-    }
-    if (canvas && typeof canvas.getBoundingClientRect === 'function') {
-        rect = canvas.getBoundingClientRect();
-    }
-    const x = (vector.x + 1) / 2 * rect.width + rect.left;
-    const y = (1 - vector.y) / 2 * rect.height + rect.top;
-    const margin = 24;
-    if (x < rect.left - margin || x > rect.left + rect.width + margin || y < rect.top - margin || y > rect.top + rect.height + margin) {
-        return null;
-    }
-    return { x, y };
+    return simIO().toScreenPosition(obj, camera, canvas);
 }
 // charactersはグローバル参照のまま（循環参照回避のため）
 
@@ -453,27 +433,26 @@ class Character {
     updateCarriedItemAppearance(itemType) {
         if (!this.carriedItemMesh) return;
 
-        let material;
+        let color = 0x8B4513;
         switch (itemType) {
             case 'FRUIT_ITEM':
-                material = new THREE.MeshLambertMaterial({ color: 0xFF6B35 }); // オレンジ色（果実）
+                color = 0xFF6B35;
                 break;
             case 'WOOD_LOG':
-                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // 茶色（木材）
+                color = 0x8B4513;
                 break;
             case 'STONE_TOOL':
-                material = new THREE.MeshLambertMaterial({ color: 0x696969 }); // グレー（石）
+                color = 0x696969;
                 break;
             default:
-                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // デフォルト茶色
+                color = 0x8B4513;
                 break;
         }
 
-        // 古いマテリアルを破棄して新しいマテリアルを設定
-        if (this.carriedItemMesh.material) {
+        if (this.carriedItemMesh.material?.dispose) {
             this.carriedItemMesh.material.dispose();
         }
-        this.carriedItemMesh.material = material;
+        this.carriedItemMesh.material = simIO().createMaterial({ color });
     }
 
     collectFood() {
@@ -1429,7 +1408,7 @@ class Character {
     static electLeader() {}
     // --- Visualize owned land: tint ground block under owned tiles ---
     visualizeOwnedLand() {
-        // Only tint if three.js mesh exists and worldData/blockMaterials is available
+        // Only tint if a live mesh exists and worldData/blockMaterials is available
         if (!this.ownedLand || !blockMaterials) return;
         for (const key of this.ownedLand) {
             const [x, y, z] = key.split(',').map(Number);
@@ -1955,8 +1934,7 @@ class Character {
             this.carriedItemMesh.position.set(0, m.carriedItemY, m.carriedItemZ);
         }
         if (this.shadowMesh) {
-            if (this.shadowMesh.geometry) this.shadowMesh.geometry.dispose();
-            this.shadowMesh.geometry = new THREE.CircleGeometry(m.shadowRadius, 32);
+            simIO().updateShadowGeometry(this.shadowMesh, m.shadowRadius);
         }
     }
 
@@ -1965,9 +1943,6 @@ class Character {
         this.log('Character constructed', { id, startPos, genes });
         this.id = id;
         this.scene = scene;
-        this.mesh = new THREE.Group();
-        this.mesh.name = 'Character_' + id;
-        this.scene.add(this.mesh);
 
         // --- 行動カウント系 ---
         this.childCount = 0;
@@ -2041,55 +2016,22 @@ class Character {
         this.relationships = new Map();
         this.bfsFailCount = 0;
 
-        // Visuals (haniwa style)
-        // Clay-like color
-        this.bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 }); // haniwa clay color
-        this.bodyMaterial.gradientMap = null;
-        // Tall cylindrical body (haniwa)
-        this.body = new THREE.Mesh(new THREE.CylinderGeometry(this.morphology.bodyTopRadius, this.morphology.bodyBottomRadius, this.morphology.bodyHeight, 32), this.bodyMaterial);
-        this.body.castShadow = true;
-        this.body.receiveShadow = true;
-        this.mesh.add(this.body);
-        // Simple head (slightly smaller cylinder)
-        this.head = new THREE.Mesh(new THREE.CylinderGeometry(this.morphology.headRadiusTop, this.morphology.headRadiusBottom, this.morphology.headHeight, 24), this.bodyMaterial);
-        this.head.castShadow = true;
-        this.head.receiveShadow = true;
-        this.mesh.add(this.head);
-        // Icon anchor (above head)
-        this.iconAnchor = new THREE.Object3D();
-        this.head.add(this.iconAnchor);
-        // Simple face: two holes (black circles) for eyes
-        this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
-        const eyeGeometry = new THREE.CylinderGeometry(this.morphology.eyeRadius, this.morphology.eyeRadius, 0.01, 12);
-        this.leftEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.leftEye.rotation.x = Math.PI/2; this.head.add(this.leftEye);
-        this.rightEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.rightEye.rotation.x = Math.PI/2; this.head.add(this.rightEye);
-        this.eyeMeshes = [this.leftEye, this.rightEye];
-        // Simple mouth: small horizontal hole
-        const mouthGeometry = new THREE.CylinderGeometry(this.morphology.mouthRadius, this.morphology.mouthRadius, 0.01, 12);
-        this.mouth = new THREE.Mesh(mouthGeometry, this.eyeMaterial);
-        this.mouth.rotation.x = Math.PI/2;
-        this.head.add(this.mouth);
-        // Arm loops (torus)
-        const armMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
-        const armGeometry = new THREE.TorusGeometry(this.morphology.armLoopRadius, this.morphology.armThickness, 10, 24, Math.PI*1.2);
-        this.leftArm = new THREE.Mesh(armGeometry, armMaterial); this.leftArm.rotation.z = Math.PI/2.2; this.body.add(this.leftArm);
-        this.rightArm = new THREE.Mesh(armGeometry, armMaterial); this.rightArm.rotation.z = -Math.PI/2.2; this.body.add(this.rightArm);
-        // Carried item
-        const carriedItemMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown color
-        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(this.morphology.carriedItemSize, this.morphology.carriedItemSize, this.morphology.carriedItemSize), carriedItemMaterial); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
-        // Shadow
-        const shadowGeometry = new THREE.CircleGeometry(this.morphology.shadowRadius, 32);
-        const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
-        this.shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
-        this.shadowMesh.position.set(0, 0.01, 0);
-        this.shadowMesh.rotation.x = -Math.PI / 2;
-        this.mesh.add(this.shadowMesh);
-        // Thought bubble
-        this.thoughtBubble = document.createElement('div');
-        this.thoughtBubble.className = 'thought-bubble';
-        this.thoughtBubble.setAttribute('data-aos', 'zoom-in');
-        this.thoughtBubble.setAttribute('data-aos-duration', '300');
-        document.body.appendChild(this.thoughtBubble);
+        const visuals = simIO().createCharacterVisuals(this, this.scene) || {};
+        this.mesh = visuals.mesh;
+        this.bodyMaterial = visuals.bodyMaterial;
+        this.body = visuals.body;
+        this.head = visuals.head;
+        this.iconAnchor = visuals.iconAnchor;
+        this.eyeMaterial = visuals.eyeMaterial;
+        this.leftEye = visuals.leftEye;
+        this.rightEye = visuals.rightEye;
+        this.eyeMeshes = visuals.eyeMeshes || [this.leftEye, this.rightEye].filter(Boolean);
+        this.mouth = visuals.mouth;
+        this.leftArm = visuals.leftArm;
+        this.rightArm = visuals.rightArm;
+        this.carriedItemMesh = visuals.carriedItemMesh;
+        this.shadowMesh = visuals.shadowMesh;
+        this.thoughtBubble = visuals.thoughtBubble;
 
         this.applyMorphologyToMeshes();
         this.updateColorFromPersonality();
@@ -2114,15 +2056,7 @@ class Character {
     this._lastMoveProgressTime = Date.now();
 
         // --- Action icon (for action effect) ---
-        this.actionIconDiv = document.createElement('div');
-        this.actionIconDiv.className = 'action-icon';
-        this.actionIconDiv.style.position = 'fixed';
-        this.actionIconDiv.style.zIndex = 1000;
-        this.actionIconDiv.style.fontSize = '2em';
-        this.actionIconDiv.style.pointerEvents = 'none';
-        this.actionIconDiv.style.transition = 'opacity 0.3s, transform 0.3s';
-        this.actionIconDiv.style.opacity = 0;
-        document.body.appendChild(this.actionIconDiv);
+        this.actionIconDiv = visuals.actionIconDiv;
 
         // Ensure a global lightweight reservation map exists to avoid duplicate targets
         if (typeof window !== 'undefined') {
@@ -4341,7 +4275,7 @@ class Character {
             }
         }
         const prevGridPos = { ...this.gridPos };
-        const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y + 0.5, next.z + 0.5);
+        const targetWorldPos = gridToWorldPosition(next);
         const direction = targetWorldPos.clone().sub(this.mesh.position);
         // 顔の向き（body/headのrotation.y）を移動方向に合わせる
         if (direction.lengthSq() > 0.0001) {
@@ -4582,9 +4516,12 @@ class Character {
         // Smoothly lerp head rotation toward look target if present
         if (this._lookTargetPos && this.head) {
             // compute desired angle on Y axis
-            const worldTarget = new THREE.Vector3(this._lookTargetPos.x + 0.5, (this._lookTargetPos.y || this.gridPos.y) + 0.5, this._lookTargetPos.z + 0.5);
-            const headWorldPos = new THREE.Vector3();
-            this.head.getWorldPosition(headWorldPos);
+            const worldTarget = gridToWorldPosition({
+                x: this._lookTargetPos.x,
+                y: this._lookTargetPos.y || this.gridPos.y,
+                z: this._lookTargetPos.z
+            });
+            const headWorldPos = simIO().getWorldPosition(this.head);
             const dir = worldTarget.clone().sub(headWorldPos);
             if (dir.lengthSq() > 0.0001) {
                 let desired = Math.atan2(dir.x, dir.z);
