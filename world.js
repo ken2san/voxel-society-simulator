@@ -107,6 +107,10 @@ function clamp01(value) {
     return Math.max(0, Math.min(1, Number(value) || 0));
 }
 
+function isTelemetryFidelityMode() {
+    return typeof window !== 'undefined' && !!window.simTestMode;
+}
+
 export function getDistrictMode() {
     return districtMode;
 }
@@ -172,7 +176,9 @@ function setObjectDistrictVisibility(obj, pos) {
 export function getDistrictRuntimeForPosition(pos) {
     const index = getDistrictIndexForPosition(pos, districtMode);
     const isActive = districtMode === 1 || index === activeDistrictIndex;
-    const hiddenUpdateInterval = districtMode >= 16 ? 1.1 : districtMode >= 4 ? 0.45 : 0.2;
+    const hiddenUpdateInterval = isTelemetryFidelityMode()
+        ? 0.2
+        : (districtMode >= 16 ? 1.1 : districtMode >= 4 ? 0.45 : 0.2);
     return {
         mode: districtMode,
         sideLength: getDistrictGridSide(districtMode),
@@ -900,7 +906,9 @@ export function animate() {
     // --- グループ再判定は人口が増えたら間引く ---
     if (!animate.lastGroupDetectTime) animate.lastGroupDetectTime = 0;
     animate.lastGroupDetectTime += deltaTime;
-    const groupRefreshInterval = characters.length > 96 ? 3.0 : characters.length > 64 ? 2.2 : 1.2;
+    const groupRefreshInterval = isTelemetryFidelityMode()
+        ? 1.0
+        : (characters.length > 96 ? 3.0 : characters.length > 64 ? 2.2 : 1.2);
     if (animate.lastGroupDetectTime >= groupRefreshInterval) {
         if (typeof window !== 'undefined' && window.characters && window.characters.length > 0) {
             Character.detectGroupsAndElectLeaders(window.characters);
