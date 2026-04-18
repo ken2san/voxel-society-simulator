@@ -974,15 +974,20 @@ class Character {
         if (target && target.x !== undefined && target.y !== undefined && target.z !== undefined) {
             const tkey = `${target.x},${target.y},${target.z}`;
             const isFoodAction = type === 'COLLECT_FOOD' || type === 'EAT';
+            const rememberBusyFood = (ttlMs = null) => {
+                if (!isFoodAction || typeof this.rememberBusyFoodTarget !== 'function') return;
+                this.rememberBusyFoodTarget(target, ttlMs);
+            };
             const retargetFood = () => {
                 if (!isFoodAction) return false;
+                rememberBusyFood(1800);
                 if (!this._failedFoodTargets) this._failedFoodTargets = new Map();
                 this._failedFoodTargets.set(tkey, Date.now());
                 const altFood = this.findClosestFood ? this.findClosestFood() : null;
                 if (!altFood) return false;
                 const altKey = `${altFood.x},${altFood.y},${altFood.z}`;
                 if (altKey === tkey) return false;
-                const altSpot = this.findAdjacentSpot ? this.findAdjacentSpot(altFood) : null;
+                const altSpot = altFood.approachSpot || (this.findAdjacentSpot ? this.findAdjacentSpot(altFood) : null);
                 if (!altSpot) return false;
                 this.log('Food target busy, retargeting to alternate fruit', { from: tkey, to: altKey });
                 this.setNextAction(type, altFood, altSpot, item);
@@ -990,11 +995,12 @@ class Character {
             };
             const deferFoodRetry = () => {
                 if (!isFoodAction) return false;
+                rememberBusyFood(1200);
                 this.log('Food target temporarily unavailable, retrying shortly', { target: tkey });
                 this.clearNavigationState();
                 this.action = null;
                 this.state = 'idle';
-                this.actionCooldown = 0.2 + Math.random() * 0.25;
+                this.actionCooldown = 0.15 + Math.random() * 0.2;
                 return true;
             };
 
@@ -2086,6 +2092,7 @@ class Character {
         this._learningTick = 0;
         this._knownFoodSpots = new Map(); // "x,y,z" → timestamp; experienced chars remember food locations (TTL 60s)
         this._failedFoodTargets = new Map(); // local food-path failures should not globally hide fruit from the whole society
+        this._busyFoodTargets = new Map(); // short-lived contention memory keeps hungry chars from dog-piling the same fruit
         this.appearanceProfile = { ...this.personality };
         this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
@@ -2383,6 +2390,13 @@ class Character {
             }
         }
 
+        if (this._busyFoodTargets && this._busyFoodTargets.size > 0) {
+            const now = Date.now();
+            for (const [k, until] of this._busyFoodTargets) {
+                if (now >= until) this._busyFoodTargets.delete(k);
+            }
+        }
+
         const foodRetryMs = Math.max(5000, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25) * 1000);
         const candidates = [];
         for (const [key, id] of worldData.entries()) {
@@ -2394,6 +2408,7 @@ class Character {
             }
             const reservation = Character.getReservation(key);
             if (reservation && reservation.owner !== this.id) continue;
+            if (this._busyFoodTargets?.has(key)) continue;
             if (Character.isBlacklisted(key)) continue;
 
             const rawBlockVal = typeof id === 'object' && id !== null && id.id !== undefined ? id.id : id;
@@ -2404,10 +2419,11 @@ class Character {
                 if (!adjacentSpots || adjacentSpots.length === 0) continue;
                 const baseDist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
                 const knownMultiplier = this._knownFoodSpots?.has(key) ? 0.5 : 1;
-                adjacentSpots.slice(0, 3).forEach((adjacentSpot, spotIndex) => {
+                const approachCandidates = adjacentSpots.slice(0, 4).map(spot => ({ x: spot.x, y: spot.y, z: spot.z }));
+                approachCandidates.forEach((adjacentSpot, spotIndex) => {
                     const occupiedPenalty = this.isOccupiedByOther(adjacentSpot.x, adjacentSpot.y, adjacentSpot.z) ? 3 : 0;
                     const score = (baseDist * knownMultiplier) + (spotIndex * 0.4) + occupiedPenalty;
-                    candidates.push({ x, y, z, key, adjacentSpot, score });
+                    candidates.push({ x, y, z, key, adjacentSpot, approachCandidates, score });
                 });
             }
         }
@@ -2436,7 +2452,15 @@ class Character {
                 const reachableScore = candidate.score + (pathLen * 0.35);
                 if (reachableScore < bestReachableScore) {
                     bestReachableScore = reachableScore;
-                    closest = { x: candidate.x, y: candidate.y, z: candidate.z };
+                    closest = {
+                        x: candidate.x,
+                        y: candidate.y,
+                        z: candidate.z,
+                        approachSpot: { ...candidate.adjacentSpot },
+                        approachCandidates: Array.isArray(candidate.approachCandidates)
+                            ? candidate.approachCandidates.map(spot => ({ ...spot }))
+                            : [{ ...candidate.adjacentSpot }]
+                    };
                 }
             }
             if (closest) break;
@@ -2530,6 +2554,31 @@ class Character {
 
     findAdjacentSpots(target, { preferUnoccupied = true } = {}) {
         if (!target) return [];
+
+        const rankSpots = (spots = []) => {
+            const deduped = [];
+            const seen = new Set();
+            for (const spot of spots) {
+                if (!spot || spot.x === undefined || spot.y === undefined || spot.z === undefined) continue;
+                const spotKey = `${spot.x},${spot.y},${spot.z}`;
+                if (seen.has(spotKey)) continue;
+                seen.add(spotKey);
+                const occupied = this.isOccupiedByOther(spot.x, spot.y, spot.z);
+                const distanceFromSelf = Math.abs(this.gridPos.x - spot.x) + Math.abs(this.gridPos.y - spot.y) + Math.abs(this.gridPos.z - spot.z);
+                const occupancyPenalty = (preferUnoccupied && occupied) ? 4 : 0;
+                const verticalPenalty = Math.abs(this.gridPos.y - spot.y) * 0.25;
+                deduped.push({ x: spot.x, y: spot.y, z: spot.z, _score: distanceFromSelf + occupancyPenalty + verticalPenalty });
+            }
+            deduped.sort((a, b) => a._score - b._score);
+            return deduped.map(({ _score, ...spot }) => spot);
+        };
+
+        const precomputed = [];
+        if (target.approachSpot) precomputed.push(target.approachSpot);
+        if (Array.isArray(target.approachCandidates)) precomputed.push(...target.approachCandidates);
+        const rankedPrecomputed = rankSpots(precomputed);
+        if (rankedPrecomputed.length > 0) return rankedPrecomputed;
+
         // Y座標も考慮し、段差・落下・ジャンプ可能な隣接スポットを返す（bak_game.jsロジック準拠）
         const directions = [
             {dx:1, dy:0, dz:0}, {dx:-1, dy:0, dz:0}, {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1},
@@ -2561,6 +2610,55 @@ class Character {
     findAdjacentSpot(target) {
         const candidates = this.findAdjacentSpots(target);
         return candidates.length > 0 ? candidates[0] : null;
+    }
+
+    rememberBusyFoodTarget(target, ttlMs = null) {
+        if (!target || target.x === undefined || target.y === undefined || target.z === undefined) return;
+        if (!this._busyFoodTargets) this._busyFoodTargets = new Map();
+        const configuredMs = (typeof window !== 'undefined' && window.foodBusyRetryMs !== undefined)
+            ? Number(window.foodBusyRetryMs)
+            : 2200;
+        const hungerBonus = Number(this.needs?.hunger || 100) <= 15 ? -900 : 0;
+        const ttl = Math.max(600, Number(ttlMs ?? configuredMs) + hungerBonus + Math.floor(Math.random() * 250));
+        this._busyFoodTargets.set(`${target.x},${target.y},${target.z}`, Date.now() + ttl);
+    }
+
+    tryRetargetFoodApproach() {
+        if (!this.action || !['COLLECT_FOOD', 'EAT'].includes(this.action.type) || !this.action.target) return false;
+        const target = this.action.target;
+        const currentMoveKey = this.targetPos ? `${this.targetPos.x},${this.targetPos.y},${this.targetPos.z}` : null;
+        const candidates = this.findAdjacentSpots(target, { preferUnoccupied: true });
+        for (const spot of candidates) {
+            const spotKey = `${spot.x},${spot.y},${spot.z}`;
+            if (spotKey === currentMoveKey) continue;
+            if (this.isOccupiedByOther(spot.x, spot.y, spot.z)) continue;
+            const path = this.findPath ? this.findPath(this.gridPos, spot, { ignoreOccupied: true }) : null;
+            const alreadyThere = this.gridPos.x === spot.x && this.gridPos.y === spot.y && this.gridPos.z === spot.z;
+            if (alreadyThere || (path && path.length > 0)) {
+                this.log('Retargeting food approach to alternate adjacent spot', { from: currentMoveKey, to: spotKey });
+                this.setNavigationTarget(spot);
+                this.clearNavigationState({ clearTarget: false, resetBlockedRetry: true });
+                this.state = 'moving';
+                return true;
+            }
+        }
+
+        this.rememberBusyFoodTarget(target);
+        const altFood = this.findClosestFood ? this.findClosestFood() : null;
+        if (altFood) {
+            const altKey = `${altFood.x},${altFood.y},${altFood.z}`;
+            const currentKey = `${target.x},${target.y},${target.z}`;
+            if (altKey !== currentKey) {
+                const altSpot = altFood.approachSpot || (this.findAdjacentSpot ? this.findAdjacentSpot(altFood) : null);
+                if (altSpot) {
+                    this.log('Switching to alternate fruit after local contention', { from: currentKey, to: altKey });
+                    this.setNextAction(this.action.type, altFood, altSpot);
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     canDigDown() {
@@ -4433,6 +4531,10 @@ class Character {
                     }
                 }
 
+                if (ignoreDynamicOccupancy && this.tryRetargetFoodApproach && this.tryRetargetFoodApproach()) {
+                    this.bfsFailCount = 0;
+                    return;
+                }
                 // --- COLLECT_FOOD failure should only affect this character briefly ---
                 if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target && (this.bfsFailCount || 0) >= 1) {
                     const {x, y, z} = this.action.target;
@@ -4639,7 +4741,10 @@ class Character {
                 if (this._blockedRetryCount < blockedRetryLimit) {
                     return;
                 }
-                // Prolonged block: then force a recompute.
+                // Prolonged block: try an alternate food approach before giving up.
+                if (ignoreDynamicOccupancy && this.tryRetargetFoodApproach && this.tryRetargetFoodApproach()) {
+                    return;
+                }
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.clearNavigationState({ clearTarget: false, resetBlockedRetry: true });
                 this.state = 'idle';
@@ -4723,6 +4828,9 @@ class Character {
                 this._blockedRetryCount += 1;
                 this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.1 + Math.random() * 0.2);
                 if (this._blockedRetryCount >= 4) {
+                    if (ignoreDynamicOccupancy && this.tryRetargetFoodApproach && this.tryRetargetFoodApproach()) {
+                        return;
+                    }
                     this.clearNavigationState({ clearTarget: false, resetBlockedRetry: true });
                     this.state = 'idle';
                     this.actionCooldown = 0.5 + Math.random() * 0.3;
