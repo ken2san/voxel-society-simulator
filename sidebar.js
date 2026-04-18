@@ -3050,6 +3050,11 @@ function createPopulationNeedRow(label, value, color) {
 
 function computeSocietySocialMetrics(alive = []) {
     const living = Array.isArray(alive) ? alive.filter(c => c && c.state !== 'dead') : [];
+    const now = Date.now();
+    const cache = window.__societySocialMetricsCache;
+    if (window.simulationRunning && cache && cache.count === living.length && (now - cache.t) < 600) {
+        return cache.value;
+    }
     if (!living.length) {
         return {
             avgSupportPct: 0,
@@ -3089,7 +3094,7 @@ function computeSocietySocialMetrics(alive = []) {
     const allyChars = snapshots.filter(snapshot => Number(snapshot.allyCount || 0) > 0).length;
     const nearbySupportChars = snapshots.filter(snapshot => Number(snapshot.nearbySupport || 0) > 0).length;
 
-    return {
+    const result = {
         avgSupportPct: Number(avgSupportPct.toFixed(1)),
         bondedChars,
         bondedRatePct: Number(((bondedChars / count) * 100).toFixed(1)),
@@ -3098,6 +3103,8 @@ function computeSocietySocialMetrics(alive = []) {
         nearbySupportChars,
         nearbyRatePct: Number(((nearbySupportChars / count) * 100).toFixed(1))
     };
+    window.__societySocialMetricsCache = { t: now, count: living.length, value: result };
+    return result;
 }
 
 function createPopulationDetailsHTML(metrics) {
@@ -3412,6 +3419,14 @@ window.selectCharacterById = function selectCharacterById(id, options = {}) {
 function renderCharacterList() {
     // console.log('[sidebar.js] window.characters:', window.characters); // ←デバッグ用ログを一時停止
     if (!leftSidebar) return;
+    if (window.simulationRunning) {
+        const now = Date.now();
+        const minRenderMs = 250;
+        if (window.__lastCharacterListRenderAt && (now - window.__lastCharacterListRenderAt) < minRenderMs) {
+            return;
+        }
+        window.__lastCharacterListRenderAt = now;
+    }
     // If the user is currently editing an input inside the right sidebar,
     // avoid re-rendering the character list which may toggle detail panels
     // and steal focus from the input.

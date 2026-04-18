@@ -988,12 +988,22 @@ class Character {
                 this.setNextAction(type, altFood, altSpot, item);
                 return true;
             };
+            const deferFoodRetry = () => {
+                if (!isFoodAction) return false;
+                this.log('Food target temporarily unavailable, retrying shortly', { target: tkey });
+                this.clearNavigationState();
+                this.action = null;
+                this.state = 'idle';
+                this.actionCooldown = 0.2 + Math.random() * 0.25;
+                return true;
+            };
 
             // If this target is known to have repeated failures, skip it
             // Check temporary blacklist first
             if (Character.isBlacklisted(tkey)) {
                 this.log('Skipping blacklisted target:', tkey);
                 if (retargetFood()) return;
+                if (deferFoodRetry()) return;
                 this.setNextAction('WANDER');
                 return;
             }
@@ -1001,6 +1011,7 @@ class Character {
             if (failCount >= 3) {
                 this.log('Skipping frequently failing target:', tkey, 'failCount=', failCount);
                 if (retargetFood()) return;
+                if (deferFoodRetry()) return;
                 // Fallback to wander
                 this.setNextAction('WANDER');
                 return;
@@ -1011,6 +1022,7 @@ class Character {
             if (existing && existing.owner !== this.id) {
                 this.log('Target reserved by another:', tkey);
                 if (retargetFood()) return;
+                if (deferFoodRetry()) return;
                 this.setNextAction('WANDER');
                 return;
             }
@@ -1020,6 +1032,7 @@ class Character {
             if (!reserved) {
                 this.log('Failed to reserve target (race):', tkey);
                 if (retargetFood()) return;
+                if (deferFoodRetry()) return;
                 this.setNextAction('WANDER');
                 return;
             }
@@ -1309,13 +1322,16 @@ class Character {
         // 1. Build affinity graph (affinity >= threshold)
         const affinityTh = (typeof window !== 'undefined' && window.groupAffinityThreshold !== undefined)
             ? window.groupAffinityThreshold : 50;
+        const roster = characters.filter(Boolean);
+        const aliveRoster = roster.filter(char => char.state !== 'dead');
+        const byId = new Map(aliveRoster.map(char => [char.id, char]));
         const visited = new Set();
         let groupIdCounter = 1;
-        for (const char of characters) {
+        for (const char of roster) {
             char.groupId = null;
             char.role = 'worker';
         }
-        for (const char of characters) {
+        for (const char of aliveRoster) {
             if (char.groupId) continue;
             // BFS to find all connected by affinity >= threshold
             const queue = [char];
@@ -1324,7 +1340,7 @@ class Character {
             while (queue.length > 0) {
                 const current = queue.shift();
                 for (const [otherId, affinity] of current.relationships.entries()) {
-                    const other = characters.find(c => c.id === otherId);
+                    const other = byId.get(otherId);
                     if (!other) continue;
                     const householdTie = !!current.isHouseholdTie?.(other) || !!other.isHouseholdTie?.(current);
                     if (affinity < affinityTh && !householdTie) continue;
@@ -1746,16 +1762,21 @@ class Character {
         return null;
     }
 
+    shouldIgnoreDynamicOccupancy(actionType = this.action?.type) {
+        return actionType === 'COLLECT_FOOD' || actionType === 'EAT';
+    }
+
     // --- 統一された経路探索システム ---
     findPathTo(destination, options = {}) {
         const {
             maxSteps = 128,
             allowDiagonal = true,
             allowVertical = true,
-            directMoveThreshold = 3
+            directMoveThreshold = 3,
+            ignoreOccupied = false
         } = options;
 
-        return this.bfsPath(this.gridPos, destination, maxSteps, allowDiagonal, allowVertical, directMoveThreshold);
+        return this.bfsPath(this.gridPos, destination, maxSteps, allowDiagonal, allowVertical, directMoveThreshold, ignoreOccupied);
     }
 
     // --- Strict path check: returns path only if goal is actually reached (no partial paths) ---
@@ -1835,7 +1856,7 @@ class Character {
                 // avoid stepping into a cell occupied by other characters (skip for reachability tests)
                 if (!ignoreOccupied && this.isOccupiedByOther(nx, ny, nz)) continue;
                 // diagonal corner check
-                if (this._isDiagonalCornerMoveBlocked(cur, {x:nx,y:ny,z:nz})) continue;
+                if (this._isDiagonalCornerMoveBlocked(cur, {x:nx,y:ny,z:nz}, ignoreOccupied)) continue;
 
                 visited.add(nkey);
                 parent.set(nkey, cur);
@@ -2379,11 +2400,15 @@ class Character {
             const type = Object.values(BLOCK_TYPES).find(t => t.id === rawBlockVal);
             if (type && type.isEdible) {
                 const [x, y, z] = key.split(',').map(Number);
-                const adjacentSpot = this.findAdjacentSpot({ x, y, z });
-                if (!adjacentSpot) continue;
-                const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                const score = this._knownFoodSpots?.has(key) ? dist * 0.5 : dist;
-                candidates.push({ x, y, z, key, adjacentSpot, score });
+                const adjacentSpots = this.findAdjacentSpots ? this.findAdjacentSpots({ x, y, z }) : [];
+                if (!adjacentSpots || adjacentSpots.length === 0) continue;
+                const baseDist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+                const knownMultiplier = this._knownFoodSpots?.has(key) ? 0.5 : 1;
+                adjacentSpots.slice(0, 3).forEach((adjacentSpot, spotIndex) => {
+                    const occupiedPenalty = this.isOccupiedByOther(adjacentSpot.x, adjacentSpot.y, adjacentSpot.z) ? 3 : 0;
+                    const score = (baseDist * knownMultiplier) + (spotIndex * 0.4) + occupiedPenalty;
+                    candidates.push({ x, y, z, key, adjacentSpot, score });
+                });
             }
         }
 
@@ -2391,22 +2416,30 @@ class Character {
 
         let closest = null;
         let bestReachableScore = Infinity;
-        const pathCheckLimit = Math.min(12, candidates.length);
-        for (let i = 0; i < pathCheckLimit; i++) {
-            const candidate = candidates[i];
-            const distToAdjacent = Math.abs(this.gridPos.x - candidate.adjacentSpot.x)
-                + Math.abs(this.gridPos.y - candidate.adjacentSpot.y)
-                + Math.abs(this.gridPos.z - candidate.adjacentSpot.z);
-            const path = this.findPath ? this.findPath(this.gridPos, candidate.adjacentSpot, { ignoreOccupied: true }) : null;
-            const isReachableNow = distToAdjacent === 0 || (path && path.length > 0);
-            if (!isReachableNow) continue;
+        const maxPathChecks = this.needs.hunger <= 20 ? 48 : 24;
+        const searchWindows = [{ start: 0, end: Math.min(12, candidates.length) }];
+        if (candidates.length > 12) {
+            // Wider later passes help hungry chars escape locally contested fruit clusters.
+            searchWindows.push({ start: 12, end: Math.min(maxPathChecks, candidates.length) });
+        }
+        for (const window of searchWindows) {
+            for (let i = window.start; i < window.end; i++) {
+                const candidate = candidates[i];
+                const distToAdjacent = Math.abs(this.gridPos.x - candidate.adjacentSpot.x)
+                    + Math.abs(this.gridPos.y - candidate.adjacentSpot.y)
+                    + Math.abs(this.gridPos.z - candidate.adjacentSpot.z);
+                const path = this.findPath ? this.findPath(this.gridPos, candidate.adjacentSpot, { ignoreOccupied: true }) : null;
+                const isReachableNow = distToAdjacent === 0 || (path && path.length > 0);
+                if (!isReachableNow) continue;
 
-            const pathLen = distToAdjacent === 0 ? 0 : path.length;
-            const reachableScore = candidate.score + (pathLen * 0.35);
-            if (reachableScore < bestReachableScore) {
-                bestReachableScore = reachableScore;
-                closest = { x: candidate.x, y: candidate.y, z: candidate.z };
+                const pathLen = distToAdjacent === 0 ? 0 : path.length;
+                const reachableScore = candidate.score + (pathLen * 0.35);
+                if (reachableScore < bestReachableScore) {
+                    bestReachableScore = reachableScore;
+                    closest = { x: candidate.x, y: candidate.y, z: candidate.z };
+                }
             }
+            if (closest) break;
         }
 
         // Do not fall back to unreachable fruit blocks here.
@@ -2495,27 +2528,39 @@ class Character {
         return closest;
     }
 
-    findAdjacentSpot(target) {
+    findAdjacentSpots(target, { preferUnoccupied = true } = {}) {
+        if (!target) return [];
         // Y座標も考慮し、段差・落下・ジャンプ可能な隣接スポットを返す（bak_game.jsロジック準拠）
         const directions = [
             {dx:1, dy:0, dz:0}, {dx:-1, dy:0, dz:0}, {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1},
             {dx:0, dy:1, dz:0}, {dx:0, dy:-1, dz:0}
         ];
+        const candidates = [];
         for (const dir of directions) {
             const x = target.x + dir.dx;
             const y = target.y + dir.dy;
             const z = target.z + dir.dz;
             if (y < 0 || y > maxHeight) continue;
             const key = `${x},${y},${z}`;
-            // 足場チェック: 下にブロックがあり、今の高さに空間がある
             const below = `${x},${y-1},${z}`;
             if (!worldData.has(below)) continue;
             if (worldData.has(key)) continue;
-            // 段差・ジャンプ: 1段上までOK
             if (Math.abs(y - target.y) > 1) continue;
-            return {x, y, z};
+
+            const occupied = this.isOccupiedByOther(x, y, z);
+            const distanceFromSelf = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+            const occupancyPenalty = (preferUnoccupied && occupied) ? 4 : 0;
+            const verticalPenalty = Math.abs(this.gridPos.y - y) * 0.25;
+            candidates.push({ x, y, z, _score: distanceFromSelf + occupancyPenalty + verticalPenalty });
         }
-        return null;
+
+        candidates.sort((a, b) => a._score - b._score);
+        return candidates.map(({ _score, ...spot }) => spot);
+    }
+
+    findAdjacentSpot(target) {
+        const candidates = this.findAdjacentSpots(target);
+        return candidates.length > 0 ? candidates[0] : null;
     }
 
     canDigDown() {
@@ -4210,8 +4255,9 @@ class Character {
     }
 
     // Validate a computed path step-by-step for current passability and corner-cutting
-    validatePath(path) {
+    validatePath(path, options = {}) {
         if (!path || path.length === 0) return false;
+        const ignoreOccupied = options.ignoreOccupied ?? this.shouldIgnoreDynamicOccupancy();
         // configurable lookahead: only validate the first N steps strictly
         const lookahead = (typeof window !== 'undefined' && window.pathValidateLookahead !== undefined) ? Number(window.pathValidateLookahead) : 8;
         const occupancyLookahead = (typeof window !== 'undefined' && window.pathOccupancyLookahead !== undefined) ? Number(window.pathOccupancyLookahead) : 2;
@@ -4233,7 +4279,7 @@ class Character {
             // Avoid stepping into a cell occupied by another character/entity
             // Treat dynamic character occupancy as a near-term constraint only.
             // Checking too far ahead causes repath jitter when others are moving.
-            if (i < occupancyLookahead && this.isOccupiedByOther(step.x, step.y, step.z)) {
+            if (!ignoreOccupied && i < occupancyLookahead && this.isOccupiedByOther(step.x, step.y, step.z)) {
                 try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.occupied++; } } catch(e){}
                 return false;
             }
@@ -4246,7 +4292,7 @@ class Character {
             }
 
             // diagonal corner cutting: prevent moving diagonally between two blocked orthogonals
-            if (this._isDiagonalCornerMoveBlocked(from, step)) {
+            if (this._isDiagonalCornerMoveBlocked(from, step, ignoreOccupied)) {
                 try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.cornerBlocked++; } } catch(e){}
                 return false;
             }
@@ -4259,7 +4305,7 @@ class Character {
     }
 
     // Detect diagonal corner moves that would cut through solid corners
-    _isDiagonalCornerMoveBlocked(from, to) {
+    _isDiagonalCornerMoveBlocked(from, to, ignoreOccupied = false) {
         const dx = to.x - from.x;
         const dz = to.z - from.z;
         // only consider pure horizontal diagonal (no vertical)
@@ -4269,8 +4315,8 @@ class Character {
             const key2 = `${from.x},${from.y},${from.z + dz}`;
             const b1Raw = worldData.get(key1);
             const b2Raw = worldData.get(key2);
-            const blocked1 = (!this.isBlockPassable(b1Raw)) || this.isOccupiedByOther(from.x + dx, from.y, from.z);
-            const blocked2 = (!this.isBlockPassable(b2Raw)) || this.isOccupiedByOther(from.x, from.y, from.z + dz);
+            const blocked1 = (!this.isBlockPassable(b1Raw)) || (!ignoreOccupied && this.isOccupiedByOther(from.x + dx, from.y, from.z));
+            const blocked2 = (!this.isBlockPassable(b2Raw)) || (!ignoreOccupied && this.isOccupiedByOther(from.x, from.y, from.z + dz));
             // if both orthogonals blocked, diagonal should be blocked
             if (blocked1 && blocked2) return true;
         }
@@ -4281,6 +4327,7 @@ class Character {
         // this.log('updateMovement', { targetPos: this.targetPos, gridPos: this.gridPos }); // コメントアウト
         if (!this.targetPos) { this.state = 'idle'; return; }
         if (!this._blockedRetryCount) this._blockedRetryCount = 0;
+        const ignoreDynamicOccupancy = this.shouldIgnoreDynamicOccupancy();
         // --- small "alive" movement tweaks ---
         // variable speed (updated intermittently), micro-pauses (hesitation), and short arrival delay
         if (!this._speedTicker) {
@@ -4320,7 +4367,8 @@ class Character {
                 maxSteps: 128,
                 allowDiagonal: true,
                 allowVertical: true,
-                directMoveThreshold: 3
+                directMoveThreshold: 3,
+                ignoreOccupied: ignoreDynamicOccupancy
             });
 
             // stamp the world state when we computed this path to avoid needless recompute
@@ -4328,7 +4376,7 @@ class Character {
 
             this.lastTargetPos = { ...this.targetPos };
             // Validate path immediately after computation to avoid outdated/blocked routes
-            if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
+            if (!this.path || this.path.length === 0 || !this.validatePath(this.path, { ignoreOccupied: ignoreDynamicOccupancy })) {
                 // try fallback to bfsPath (older but sometimes more permissive)
                 if (this._bfsRetryUntil && Date.now() < this._bfsRetryUntil) {
                     this.log('Delaying BFS fallback due to recent failures', {until: this._bfsRetryUntil});
@@ -4338,17 +4386,17 @@ class Character {
                         this.log('Delaying corner-break BFS due to recent failures', {until: this._bfsRetryUntil});
                         this.path = null;
                     } else {
-                        this.path = this.bfsPath(this.gridPos, this.targetPos);
+                        this.path = this.bfsPath(this.gridPos, this.targetPos, 128, true, true, 3, ignoreDynamicOccupancy);
                     }
                 }
             }
 
             // If we obtained a valid path, reset invalidation counter
-            if (this.path && this.path.length > 0 && this.validatePath(this.path)) {
+            if (this.path && this.path.length > 0 && this.validatePath(this.path, { ignoreOccupied: ignoreDynamicOccupancy })) {
                 this._pathInvalidationCount = 0;
             }
 
-            if (!this.path || this.path.length === 0 || !this.validatePath(this.path)) {
+            if (!this.path || this.path.length === 0 || !this.validatePath(this.path, { ignoreOccupied: ignoreDynamicOccupancy })) {
                 // --- CHOP_WOOD特化: 木材収集失敗時の積極的対処 ---
                 if (this.action && this.action.type === 'CHOP_WOOD') {
                     this.log('CHOP_WOOD pathfinding failed, trying alternative approach');
@@ -4383,12 +4431,12 @@ class Character {
                 }
 
                 // --- COLLECT_FOOD failure should only affect this character briefly ---
-                if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target) {
+                if (this.action && this.action.type === 'COLLECT_FOOD' && this.action.target && (this.bfsFailCount || 0) >= 1) {
                     const {x, y, z} = this.action.target;
                     if (!this._failedFoodTargets) this._failedFoodTargets = new Map();
                     this._failedFoodTargets.set(`${x},${y},${z}`, Date.now());
                     const retrySeconds = Math.max(5, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25));
-                    this.log('Added unreachable food target to local retry memory', {x, y, z, retrySeconds});
+                    this.log('Added unreachable food target to local retry memory after repeated path failures', {x, y, z, retrySeconds});
                 }
                 this.bfsFailCount = (this.bfsFailCount || 0) + 1;
                 this.log('BFS failed, incrementing bfsFailCount', this.bfsFailCount);
@@ -4584,7 +4632,8 @@ class Character {
                 // Temporary congestion: wait briefly before giving up to avoid stop-jitter.
                 this._blockedRetryCount += 1;
                 this._microPauseTimer = Math.max(this._microPauseTimer || 0, 0.12 + Math.random() * 0.18);
-                if (this._blockedRetryCount < 6) {
+                const blockedRetryLimit = ignoreDynamicOccupancy ? 12 : 6;
+                if (this._blockedRetryCount < blockedRetryLimit) {
                     return;
                 }
                 // Prolonged block: then force a recompute.
@@ -4599,7 +4648,7 @@ class Character {
         // Check if world changed since we computed the path; if not, proceed to validate.
         const currentWorldStamp = (typeof window !== 'undefined') ? (window.worldChangeCounter || 0) : 0;
         if (this._pathWorldStamp !== undefined && this._pathWorldStamp === currentWorldStamp) {
-            if (!this.validatePath(this.path)) {
+            if (!this.validatePath(this.path, { ignoreOccupied: ignoreDynamicOccupancy })) {
                 this.log('Path invalidated mid-move, clearing and will recompute');
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.clearNavigationState({ clearTarget: false });
@@ -4608,7 +4657,7 @@ class Character {
             }
         } else {
             // world changed since path was computed -> be conservative: revalidate fully
-            if (!this.validatePath(this.path)) {
+            if (!this.validatePath(this.path, { ignoreOccupied: ignoreDynamicOccupancy })) {
                 this.log('World changed since path computed; path invalid, clearing');
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.clearNavigationState({ clearTarget: false });

@@ -172,6 +172,7 @@ function setObjectDistrictVisibility(obj, pos) {
 export function getDistrictRuntimeForPosition(pos) {
     const index = getDistrictIndexForPosition(pos, districtMode);
     const isActive = districtMode === 1 || index === activeDistrictIndex;
+    const hiddenUpdateInterval = districtMode >= 16 ? 1.1 : districtMode >= 4 ? 0.45 : 0.2;
     return {
         mode: districtMode,
         sideLength: getDistrictGridSide(districtMode),
@@ -179,7 +180,7 @@ export function getDistrictRuntimeForPosition(pos) {
         activeDistrictIndex,
         isActive,
         shouldRender: isActive || districtMode === 1,
-        updateInterval: isActive ? 0 : (districtMode >= 16 ? 0.9 : 0.2),
+        updateInterval: isActive ? 0 : hiddenUpdateInterval,
         bounds: getDistrictBounds(index, districtMode)
     };
 }
@@ -502,7 +503,9 @@ export function getDistrictSocialContextForPosition(pos, sourceChars = character
 
 export function refreshDistrictSummaryCache(sourceChars = characters, { force = false } = {}) {
     const now = Date.now();
-    if (!force && districtSummaryCache.length > 0 && (now - districtSummaryCacheUpdatedAt) < 250) {
+    const popSize = Array.isArray(sourceChars) ? sourceChars.length : 0;
+    const minRefreshMs = districtMode >= 16 ? 1000 : districtMode >= 4 ? (popSize > 64 ? 750 : 500) : 250;
+    if (!force && districtSummaryCache.length > 0 && (now - districtSummaryCacheUpdatedAt) < minRefreshMs) {
         return districtSummaryCache;
     }
     districtSummaryCache = getDistrictSummaries(sourceChars);
@@ -894,10 +897,11 @@ export function animate() {
     if (controls) controls.update();
     for (const char of characters) char.update(deltaTime, isNight, camera);
 
-    // --- グループ再判定を1秒ごとに実行 ---
+    // --- グループ再判定は人口が増えたら間引く ---
     if (!animate.lastGroupDetectTime) animate.lastGroupDetectTime = 0;
     animate.lastGroupDetectTime += deltaTime;
-    if (animate.lastGroupDetectTime >= 1.0) {
+    const groupRefreshInterval = characters.length > 96 ? 3.0 : characters.length > 64 ? 2.2 : 1.2;
+    if (animate.lastGroupDetectTime >= groupRefreshInterval) {
         if (typeof window !== 'undefined' && window.characters && window.characters.length > 0) {
             Character.detectGroupsAndElectLeaders(window.characters);
         }
