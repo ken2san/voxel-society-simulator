@@ -3508,14 +3508,14 @@ function renderCharacterList() {
         const criticalEnergyCount = alive.filter(c => Number(c.needs?.energy || 0) < 20).length;
         const criticalHungerCount = alive.filter(c => Number(c.needs?.hunger || 0) < 20).length;
 
-        if (!idlePreviewMode) pushPopulationPulseSnapshot({
+        if (!idlePreviewMode && window.simulationRunning) pushPopulationPulseSnapshot({
             t: Date.now(),
             alive: alive.length,
             totalBorn,
             deaths: dead,
             avgEnergy: Number(avgEng) || 0
         });
-        if (!idlePreviewMode) pushPopulationMetricSnapshot({
+        if (!idlePreviewMode && window.simulationRunning) pushPopulationMetricSnapshot({
             t: Date.now(),
             alive: alive.length,
             totalBorn,
