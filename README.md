@@ -83,6 +83,13 @@ For a quick prototype deploy to Google Cloud Run:
 make all
 ```
 
+By default, the `Makefile` now uses the active `gcloud` project, so the image push target and the Cloud Run deploy target stay aligned.
+If you want to deploy to a specific project explicitly, run:
+
+```bash
+make all PROJECT_ID=trustflow-project
+```
+
 This target builds the container image for `linux/amd64`, pushes it to `gcr.io`, and deploys the service defined in the `Makefile`.
 Make sure `gcloud` is authenticated and the target project is selected before running it.
 
