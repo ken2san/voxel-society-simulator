@@ -1331,8 +1331,7 @@ class Character {
                     const other = characters.find(c => c.id === otherId);
                     if (!other) continue;
                     const householdTie = !!current.isHouseholdTie?.(other) || !!other.isHouseholdTie?.(current);
-                    const anchoredTie = String(current._socialAnchorId || '') === String(other.id) || String(other._socialAnchorId || '') === String(current.id);
-                    if (affinity < affinityTh && !householdTie && !anchoredTie) continue;
+                    if (affinity < affinityTh && !householdTie) continue;
                     if (!other.groupId) {
                         other.groupId = groupIdCounter;
                         queue.push(other);
@@ -1368,7 +1367,7 @@ class Character {
                 // 近距離かつ友好度高い場合
                 const dist = Math.abs(a.gridPos.x - b.gridPos.x) + Math.abs(a.gridPos.y - b.gridPos.y) + Math.abs(a.gridPos.z - b.gridPos.z);
                 const affinity = a.relationships.get(b.id) || 0;
-                if (dist <= 3 && affinity >= 70 && a.groupId !== b.groupId) {
+                if (dist <= 2 && affinity >= 85 && a.groupId !== b.groupId) {
                     // 小さいgroupIdに統一
                     const minId = Math.min(a.groupId, b.groupId);
                     const maxId = Math.max(a.groupId, b.groupId);
