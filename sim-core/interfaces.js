@@ -125,6 +125,19 @@ function createScale(x = 1, y = 1, z = 1) {
             this.y = Number(ny) || 0;
             this.z = Number(nz) || 0;
             return this;
+        },
+        copy(other) {
+            return this.set(other?.x ?? this.x, other?.y ?? this.y, other?.z ?? this.z);
+        },
+        clone() {
+            return createScale(this.x, this.y, this.z);
+        },
+        multiplyScalar(scalar = 1) {
+            const n = Number(scalar) || 0;
+            this.x *= n;
+            this.y *= n;
+            this.z *= n;
+            return this;
         }
     };
 }
