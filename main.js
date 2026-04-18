@@ -681,16 +681,34 @@ window.loadSimulatorSettingsWorkspace = async function loadSimulatorSettingsWork
         : window.__simSettingsWorkspaceFile;
     const bust = Date.now();
     const normalized = filePath.startsWith('/') ? filePath : `/${filePath}`;
-    const res = await fetch(`${normalized}?v=${bust}`, { cache: 'no-store' });
-    if (!res.ok) {
+
+    try {
+        const res = await fetch(`${normalized}?v=${bust}`, { cache: 'no-store' });
+        if (!res.ok) {
+            if (!opts.silent) {
+                throw new Error(`Workspace settings not found: ${filePath} (HTTP ${res.status})`);
+            }
+            return false;
+        }
+
+        const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+        const text = await res.text();
+        if (contentType.includes('text/html') || /^\s*</.test(text)) {
+            if (!opts.silent) {
+                console.warn(`[Settings] workspace preset at ${filePath} returned HTML instead of JSON; skipping.`);
+            }
+            return false;
+        }
+
+        const parsed = JSON.parse(text);
+        window.applySimulatorSettingsObject(parsed, { persist: opts.persist !== false });
+        return true;
+    } catch (err) {
         if (!opts.silent) {
-            throw new Error(`Workspace settings not found: ${filePath} (HTTP ${res.status})`);
+            console.error('[Settings] workspace load failed', err);
         }
         return false;
     }
-    const parsed = await res.json();
-    window.applySimulatorSettingsObject(parsed, { persist: opts.persist !== false });
-    return true;
 };
 
 window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
