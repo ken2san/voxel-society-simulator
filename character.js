@@ -2418,6 +2418,10 @@ class Character {
             }
         }
 
+        // Track food-seek outcome for telemetry diagnostics
+        this._lastFoodSeekFailed = (closest === null);
+        this._lastFoodSeekHadCandidates = candidates.length > 0;
+
         return closest;
     }
 
@@ -3948,6 +3952,8 @@ class Character {
                         blockedRetry: Number(this._blockedRetryCount || 0),
                         bfsFailCount: Number(this.bfsFailCount || 0),
                         moveDistance: Number(this.moveDistance || 0),
+                        foodSeekFailed: this._lastFoodSeekFailed === true,
+                        foodSeekBlocked: this._lastFoodSeekFailed === true && this._lastFoodSeekHadCandidates === true,
                         needs: {
                             hunger: Number(this.needs?.hunger || 0),
                             energy: Number(this.needs?.energy || 0),

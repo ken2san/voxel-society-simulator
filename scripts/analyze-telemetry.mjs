@@ -64,6 +64,8 @@ function summarizeChar(id, arr) {
   let lowSafetyCount = 0;
   let highMicroPauseCount = 0;
   let noMoveWindows = 0;
+  let foodSeekFailCount = 0;
+  let foodSeekBlockedCount = 0;
   let moveDistancePrev = arr[0]?.moveDistance || 0;
   let longNoMoveStart = null;
 
@@ -74,6 +76,8 @@ function summarizeChar(id, arr) {
     if ((s.needs?.energy || 0) <= 10) lowEnergyCount++;
     if ((s.needs?.safety || 0) <= 10) lowSafetyCount++;
     if ((s.microPause || 0) > 1.2) highMicroPauseCount++;
+    if (s.foodSeekFailed) foodSeekFailCount++;
+    if (s.foodSeekBlocked) foodSeekBlockedCount++;
 
     const moved = (s.moveDistance || 0) > moveDistancePrev;
     if (!moved) {
@@ -102,7 +106,9 @@ function summarizeChar(id, arr) {
     highMicroPauseRatio: highMicroPauseCount / n,
     noMoveWindows,
     stallEvents,
-    recoveredEvents
+    recoveredEvents,
+    foodSeekFailRatio: foodSeekFailCount / n,
+    foodSeekBlockedRatio: foodSeekBlockedCount / n
   };
 }
 
@@ -204,6 +210,8 @@ for (const s of summaries.slice(0, 10)) {
       `stuckLike=${pct(s.stuckLikeRatio)}`,
       `lowEnergy=${pct(s.lowEnergyRatio)}`,
       `lowSafety=${pct(s.lowSafetyRatio)}`,
+      `foodFail=${pct(s.foodSeekFailRatio)}`,
+      `foodBlocked=${pct(s.foodSeekBlockedRatio)}`,
       `microPause>${1.2}s=${pct(s.highMicroPauseRatio)}`,
       `noMoveWindows=${s.noMoveWindows}`,
       `stall=${s.stallEvents}/${s.recoveredEvents}`
@@ -219,9 +227,11 @@ const global = summaries.reduce(
     acc.lowSafety += s.lowSafetyRatio;
     acc.stall += s.stallEvents;
     acc.recovered += s.recoveredEvents;
+    acc.foodFail += s.foodSeekFailRatio;
+    acc.foodBlocked += s.foodSeekBlockedRatio;
     return acc;
   },
-  { wander: 0, stuck: 0, lowEnergy: 0, lowSafety: 0, stall: 0, recovered: 0 }
+  { wander: 0, stuck: 0, lowEnergy: 0, lowSafety: 0, stall: 0, recovered: 0, foodFail: 0, foodBlocked: 0 }
 );
 
 const m = Math.max(1, summaries.length);
@@ -230,6 +240,8 @@ console.log(`avgWanderRatio: ${pct(global.wander / m)}`);
 console.log(`avgStuckLikeRatio: ${pct(global.stuck / m)}`);
 console.log(`avgLowEnergyRatio: ${pct(global.lowEnergy / m)}`);
 console.log(`avgLowSafetyRatio: ${pct(global.lowSafety / m)}`);
+console.log(`avgFoodSeekFailRatio: ${pct(global.foodFail / m)}`);
+console.log(`avgFoodSeekBlockedRatio: ${pct(global.foodBlocked / m)}`);
 console.log(`stallDetected: ${global.stall}, stallRecovered: ${global.recovered}`);
 
 console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high together, raise energy emergency threshold and reduce wander fallback pressure.');

@@ -911,7 +911,9 @@ window.__simTelemetry = {
                 lowHunger: !!sample.decisionPressure.lowHunger,
                 lowEnergy: !!sample.decisionPressure.lowEnergy,
                 stallLike: !!sample.decisionPressure.stallLike
-            } : undefined
+            } : undefined,
+            foodSeekFailed: !!sample.foodSeekFailed,
+            foodSeekBlocked: !!sample.foodSeekBlocked,
         };
         if (!this._profiledIds.has(compact.id) && sample.personality) {
             compact.personality = {
