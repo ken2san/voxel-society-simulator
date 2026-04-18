@@ -188,9 +188,13 @@ async function init() {
         if (typeof window.loadSimulatorSettingsLocal === 'function') {
             window.loadSimulatorSettingsLocal({ persist: false, silent: true });
         }
-        // Workspace preset overrides local preset when available
+        // Workspace preset overrides local preset when available.
+        // If the file is missing, keep booting with defaults and emit one clear warning.
         if (typeof window.loadSimulatorSettingsWorkspace === 'function') {
-            await window.loadSimulatorSettingsWorkspace({ persist: false, silent: true });
+            const workspaceLoaded = await window.loadSimulatorSettingsWorkspace({ persist: false, silent: true });
+            if (!workspaceLoaded) {
+                console.warn('[Settings] Workspace preset file was not loaded; continuing with built-in/default settings.');
+            }
         }
         // Re-apply after settings load so the active slider/workspace value actually takes effect.
         applyInitialAgeSpread(characters);

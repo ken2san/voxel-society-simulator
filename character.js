@@ -2189,16 +2189,19 @@ class Character {
             const affinity = Number(this.relationships.get(char.id) || 0);
             const relationClass = this.getRelationshipClass(char.id);
             const familiarTie = affinity >= acquaintance;
-            const anchored = String(this._socialAnchorId || '') === String(char.id) && familiarTie;
+            const householdTie = this.isHouseholdTie(char);
+            const anchored = String(this._socialAnchorId || '') === String(char.id) && (familiarTie || householdTie);
             const sameGroupBonus = (this.groupId && char.groupId && this.groupId === char.groupId) ? 8 : 0;
-            const trustBonus = relationClass === 'bonded'
-                ? trustedTieBonus
-                : (relationClass === 'ally'
-                    ? trustedTieBonus * 0.65
-                    : (familiarTie ? trustedTieBonus * 0.35 : 0));
+            const trustBonus = householdTie
+                ? trustedTieBonus * 1.2
+                : (relationClass === 'bonded'
+                    ? trustedTieBonus
+                    : (relationClass === 'ally'
+                        ? trustedTieBonus * 0.65
+                        : (familiarTie ? trustedTieBonus * 0.35 : 0)));
             const anchorBonus = anchored ? trustedTieBonus * (0.35 + (socialAnchorBias * 0.65)) : 0;
-            const distancePenalty = dist * (anchored || relationClass === 'ally' || relationClass === 'bonded' || familiarTie ? 6.2 : 9);
-            const score = affinity + sameGroupBonus + trustBonus + anchorBonus - distancePenalty + (Math.random() * 1.5);
+            const distancePenalty = dist * (anchored || householdTie || relationClass === 'ally' || relationClass === 'bonded' || familiarTie ? 5.4 : 9);
+            const score = affinity + sameGroupBonus + trustBonus + anchorBonus + (householdTie ? 10 : 0) - distancePenalty + (Math.random() * 1.5);
             if (score > bestScore) {
                 bestScore = score;
                 best = char;
@@ -2226,18 +2229,20 @@ class Character {
             const sameGroup = !!this.groupId && !!char.groupId && this.groupId === char.groupId;
             const strongTie = relationClass === 'ally' || relationClass === 'bonded';
             const familiarTie = affinity >= acquaintance;
-            const anchored = String(this._socialAnchorId || '') === String(char.id) && familiarTie;
-            if (!sameGroup && !strongTie && !familiarTie && !anchored) continue;
+            const householdTie = this.isHouseholdTie(char);
+            const anchored = String(this._socialAnchorId || '') === String(char.id) && (familiarTie || householdTie);
+            if (!sameGroup && !strongTie && !familiarTie && !anchored && !householdTie) continue;
 
             const tieStrength = Math.max(0, Math.min(1,
                 (affinity / 100) +
                 (sameGroup ? groupBonus : 0) +
                 (strongTie ? allyPresenceBonus : 0) +
-                (anchored ? allyPresenceBonus : 0)
+                (anchored ? allyPresenceBonus : 0) +
+                (householdTie ? allyPresenceBonus * 1.1 : 0)
             ));
             const normalizedDistance = dist / Math.max(1, searchRange);
             const familiarBonus = familiarTie ? ((trustedTieBonus * 0.45) / 100) : 0;
-            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : familiarBonus) + (anchored ? socialAnchorBias : 0) - normalizedDistance + (Math.random() * 0.05);
+            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : familiarBonus) + (anchored ? socialAnchorBias : 0) + (householdTie ? (trustedTieBonus / 85) : 0) - normalizedDistance + (Math.random() * 0.05);
             if (score > bestScore) {
                 const adjacent = this.findAdjacentSpot(char.gridPos);
                 bestScore = score;
@@ -2246,12 +2251,45 @@ class Character {
                     targetPos: adjacent || char.gridPos,
                     pullStrength: tieStrength,
                     distance: dist,
-                    relationClass: strongTie ? relationClass : (familiarTie ? 'familiar' : relationClass)
+                    relationClass: householdTie ? 'household' : (strongTie ? relationClass : (familiarTie ? 'familiar' : relationClass))
                 };
             }
         }
 
         return best;
+    }
+
+    isHouseholdTie(other) {
+        const otherId = typeof other === 'object' ? other?.id : other;
+        if (otherId === undefined || otherId === null) return false;
+        if (this._lovePartnerId === otherId) return true;
+        if (Array.isArray(this.parentIds) && this.parentIds.includes(otherId)) return true;
+        if (Array.isArray(this.children) && this.children.includes(otherId)) return true;
+        return false;
+    }
+
+    getNearbyHouseholdSupport(maxDistance = null) {
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { nearbyRadius } = this.getSupportModelParams();
+        const searchRange = Math.max(1, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : (nearbyRadius + 1));
+        let nearbyCount = 0;
+        let strongestAffinity = 0;
+
+        for (const char of chars) {
+            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
+            if (!this.isHouseholdTie(char)) continue;
+            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+            if (dist <= searchRange) {
+                nearbyCount++;
+                strongestAffinity = Math.max(strongestAffinity, Number(this.relationships.get(char.id) || 0));
+            }
+        }
+
+        return {
+            hasNearby: nearbyCount > 0,
+            nearbyCount,
+            strongestAffinity
+        };
     }
 
     findClosestFood() {
@@ -3033,6 +3071,7 @@ class Character {
             const _supportChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
             const { ally, bonded } = this.getRelationshipThresholds();
             const { nearbyRadius, groupBonus, allyPresenceBonus, comfortRecoveryRate, groupComfortScale, nightSafetyAllyBonus, nightSafetyBondedBonus } = this.getSupportModelParams();
+            const householdSupport = this.getNearbyHouseholdSupport(nearbyRadius + 1);
             let hasNearbyTrustedTie = false;
             for (const [otherId, aff] of this.relationships.entries()) {
                 if (aff < ally) continue;
@@ -3049,8 +3088,14 @@ class Character {
                     break;
                 }
             }
-            if (hasNearbyTrustedTie || this.groupId) {
-                const passiveSupport = (hasNearbyTrustedTie ? allyPresenceBonus : 0) + (this.groupId ? (groupBonus * groupComfortScale) : 0);
+            if (!hasNearbyTrustedTie && householdSupport.hasNearby && isNight) {
+                this.needs.safety = Math.min(100, this.needs.safety + deltaTime * (nightSafetyAllyBonus * 0.8));
+            }
+            if (hasNearbyTrustedTie || householdSupport.hasNearby || this.groupId) {
+                const passiveSupport =
+                    (hasNearbyTrustedTie ? allyPresenceBonus : 0) +
+                    (householdSupport.hasNearby ? Math.min(allyPresenceBonus, 0.18 + (householdSupport.nearbyCount * 0.04)) : 0) +
+                    (this.groupId ? (groupBonus * groupComfortScale) : 0);
                 if (passiveSupport > 0) {
                     this.needs.social = Math.min(100, this.needs.social + (deltaTime * comfortRecoveryRate * passiveSupport));
                 }
@@ -3078,7 +3123,8 @@ class Character {
         // isolationPenalty=0 → 無効。isolationPenalty=1 → 夜の屋外と同程度の追加圧力。
         {
             const penalty = (typeof window !== 'undefined' && window.isolationPenalty !== undefined) ? Number(window.isolationPenalty) : 0.4;
-            if (penalty > 0 && !this.groupId) {
+            const nearbyHouseholdSupport = this.getNearbyHouseholdSupport(3);
+            if (penalty > 0 && !this.groupId && !nearbyHouseholdSupport.hasNearby) {
                 this.needs.safety = Math.max(0, this.needs.safety - deltaTime * 5 * penalty);
             }
         }
