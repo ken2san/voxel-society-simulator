@@ -2775,6 +2775,12 @@ class Character {
 
     getReproductionReadiness(partner) {
         const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+        // Broad bell-shaped fertility timing keeps births concentrated in a plausible
+        // young-adult window without turning reproduction into a hard scripted phase.
+        const bell01 = (value, center = 0.38, width = 0.18) => {
+            const z = (Number(value || 0) - center) / Math.max(0.01, width);
+            return clamp01(Math.exp(-0.5 * z * z));
+        };
         const ctx = this.getDistrictSocialContext();
         const params = this.getReproductionModelParams();
         const affinity = Number(this.relationships.get(partner?.id) || 0);
@@ -2833,42 +2839,75 @@ class Character {
             if (stage === 'child' || stage === 'young') dependentChildCount++;
         }
 
-        const careLoad = clamp01(Math.max(0, (dependentChildCount * 0.24) - (localSupport * 0.30) - (support * 0.12)));
+        const selfLifeRatio = this.getLifeRatio ? this.getLifeRatio() : 0;
+        const partnerLifeRatio = partner?.getLifeRatio ? partner.getLifeRatio() : selfLifeRatio;
+        const reproductiveTiming = clamp01((bell01(selfLifeRatio) + bell01(partnerLifeRatio)) / 2);
+
+        let workingAdultCount = 0;
+        let elderCount = 0;
+        for (const char of chars) {
+            if (!char || char.state === 'dead') continue;
+            const sameHousehold = this.isHouseholdTie?.(char) || partner?.isHouseholdTie?.(char);
+            const sameGroup = (!!this.groupId && char.groupId === this.groupId) || (!!partner?.groupId && char.groupId === partner.groupId);
+            if (!sameHousehold && !sameGroup) continue;
+            const stage = char.getLifeStage ? char.getLifeStage() : (char.isChild ? 'child' : 'adult');
+            if (stage === 'young' || stage === 'adult') workingAdultCount++;
+            if (stage === 'elder') elderCount++;
+        }
+
+        const elderLoad = clamp01((elderCount * 0.22) / Math.max(1, workingAdultCount || 1));
+        const careLoad = clamp01(Math.max(0, (dependentChildCount * 0.24) + (elderLoad * 0.18) - (localSupport * 0.30) - (support * 0.12)));
 
         const livelihoodViability = clamp01(
-            ((1 - foodPressure) * 0.24) +
-            ((1 - housingPressure) * 0.22) +
-            ((1 - timeStress) * 0.16) +
+            ((1 - foodPressure) * 0.23) +
+            ((1 - housingPressure) * 0.20) +
+            ((1 - timeStress) * 0.15) +
             (selfNeedMargin * 0.15) +
             (partnerNeedMargin * 0.15) +
-            ((1 - careLoad) * 0.08)
+            ((1 - careLoad) * 0.07) +
+            (reproductiveTiming * 0.05)
+        );
+
+        const settlementMomentum = clamp01(
+            (localSupport * 0.42) +
+            (stability * 0.18) +
+            (pairBond * 0.20) +
+            (reproductiveTiming * 0.20) -
+            (elderLoad * 0.16)
         );
 
         const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
         const futureExpectation = clamp01(
-            (livelihoodViability * 0.52) +
-            (localSupport * 0.22) +
-            (pairBond * 0.14) +
+            (livelihoodViability * 0.44) +
+            (localSupport * 0.18) +
+            (pairBond * 0.12) +
+            (settlementMomentum * 0.14) +
             (moderateThreatCohesion * params.anxietyCohesionBonus) -
             (socialPressure * params.pressurePenalty) -
-            (careLoad * 0.10)
+            (careLoad * 0.10) -
+            (elderLoad * 0.06)
         );
 
         const readiness = clamp01(
-            (pairBond * 0.30) +
-            (localSupport * 0.25) +
-            (livelihoodViability * 0.25) +
-            (futureExpectation * 0.20) -
+            (pairBond * 0.28) +
+            (localSupport * 0.23) +
+            (livelihoodViability * 0.22) +
+            (futureExpectation * 0.17) +
+            (reproductiveTiming * 0.06) +
+            (settlementMomentum * 0.08) -
             (careLoad * 0.08)
         );
 
         const reproductionHazard = clamp01(
-            0.04 +
-            (Math.max(-0.12, readiness - params.readinessThreshold) * 1.35) +
-            (pairBond * 0.22) +
-            (localSupport * 0.10) +
-            (futureExpectation * 0.08) -
+            0.03 +
+            (Math.max(-0.12, readiness - params.readinessThreshold) * 1.30) +
+            (pairBond * 0.20) +
+            (localSupport * 0.08) +
+            (futureExpectation * 0.08) +
+            (reproductiveTiming * 0.12) +
+            (settlementMomentum * 0.08) -
             (careLoad * 0.16) -
+            (elderLoad * 0.10) -
             (socialPressure * 0.06)
         );
 
@@ -2880,6 +2919,9 @@ class Character {
             livelihoodViability: Math.round(livelihoodViability * 100) / 100,
             futureExpectation: Math.round(futureExpectation * 100) / 100,
             moderateThreatCohesion: Math.round(moderateThreatCohesion * 100) / 100,
+            reproductiveTiming: Math.round(reproductiveTiming * 100) / 100,
+            settlementMomentum: Math.round(settlementMomentum * 100) / 100,
+            elderLoad: Math.round(elderLoad * 100) / 100,
             careLoad: Math.round(careLoad * 100) / 100,
             dependentChildCount,
             reproductionHazard: Math.round(reproductionHazard * 100) / 100,
