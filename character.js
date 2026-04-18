@@ -1761,9 +1761,11 @@ class Character {
     // --- Strict path check: returns path only if goal is actually reached (no partial paths) ---
     // Used by findClosestFood and AI_rulebase reachability checks.
     // bfsPath returns partial paths when goal is unreachable; this method treats those as null.
+    // ignoreOccupied: skip isOccupiedByOther check (use for reachability tests, not actual movement)
     findPath(from, to, options = {}) {
-        const maxSteps = options.maxSteps || 64;
-        const path = this.bfsPath(from, to, maxSteps);
+        const maxSteps = options.maxSteps || 192;
+        const ignoreOccupied = options.ignoreOccupied || false;
+        const path = this.bfsPath(from, to, maxSteps, true, true, 3, ignoreOccupied);
         if (!path || path.length === 0) return null;
         const last = path[path.length - 1];
         if (last.x !== to.x || last.y !== to.y || last.z !== to.z) return null;
@@ -1771,7 +1773,7 @@ class Character {
     }
 
     // --- BFS経路探索（統合版） ---
-    bfsPath(start, goal, maxStep = 128, allowDiagonal = true, allowVertical = true, directMoveThreshold = 3) {
+    bfsPath(start, goal, maxStep = 128, allowDiagonal = true, allowVertical = true, directMoveThreshold = 3, ignoreOccupied = false) {
         // Greedy best-first search using heuristic (Manhattan). This is a small, low-risk change
         // that focuses exploration toward the goal and generally yields shorter, more natural paths
         // without full A* bookkeeping.
@@ -1830,8 +1832,8 @@ class Character {
                 const aboveBlockId = worldData.get(`${nx},${ny+1},${nz}`);
                 if (!this.isBlockPassable(aboveBlockId)) continue;
                 if (d.dy > 0 && Math.abs(ny - cur.y) > 2) continue;
-                // avoid stepping into a cell occupied by other characters
-                if (this.isOccupiedByOther(nx, ny, nz)) continue;
+                // avoid stepping into a cell occupied by other characters (skip for reachability tests)
+                if (!ignoreOccupied && this.isOccupiedByOther(nx, ny, nz)) continue;
                 // diagonal corner check
                 if (this._isDiagonalCornerMoveBlocked(cur, {x:nx,y:ny,z:nz})) continue;
 
@@ -2395,7 +2397,7 @@ class Character {
             const distToAdjacent = Math.abs(this.gridPos.x - candidate.adjacentSpot.x)
                 + Math.abs(this.gridPos.y - candidate.adjacentSpot.y)
                 + Math.abs(this.gridPos.z - candidate.adjacentSpot.z);
-            const path = this.findPath ? this.findPath(this.gridPos, candidate.adjacentSpot) : null;
+            const path = this.findPath ? this.findPath(this.gridPos, candidate.adjacentSpot, { ignoreOccupied: true }) : null;
             const isReachableNow = distToAdjacent === 0 || (path && path.length > 0);
             if (!isReachableNow) continue;
 
