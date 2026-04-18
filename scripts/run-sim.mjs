@@ -414,6 +414,7 @@ for (let i = 0; i < options.population; i++) {
 }
 
 Character.initializeAllRelationships(characters);
+Character.applyInitialAgeSpread(characters);
 
 let simTime = 0;
 let nextWorldSampleMs = simulatedNow;

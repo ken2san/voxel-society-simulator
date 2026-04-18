@@ -2064,6 +2064,38 @@ class Character {
         }
     }
 
+    static applyInitialAgeSpread(targetChars = []) {
+        const ratioRaw = (typeof window !== 'undefined' && window.initialAgeMaxRatio !== undefined)
+            ? Number(window.initialAgeMaxRatio) : 0.5;
+        const ratio = Math.max(0, Math.min(1, Number.isFinite(ratioRaw) ? ratioRaw : 0.5));
+        const maturityAge = (typeof window !== 'undefined' && window.childMaturitySeconds !== undefined)
+            ? Number(window.childMaturitySeconds) : 60;
+
+        targetChars.forEach(c => {
+            if (!c) return;
+            const lifespan = (typeof c.getEffectiveLifespan === 'function') ? c.getEffectiveLifespan() : ((typeof window !== 'undefined' && window.characterLifespan) || 240);
+            const spreadUnit = Math.random();
+            c.age = spreadUnit * lifespan * ratio;
+            c.maturityAge = maturityAge;
+            c.isChild = c.age < maturityAge;
+
+            if (typeof c.movementSpeed === 'number' && typeof c._preChildMovementSpeed !== 'number') {
+                c._preChildMovementSpeed = c.movementSpeed;
+            }
+            if (c.isChild) {
+                if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed * 0.88;
+                if (c.mesh?.scale?.set) c.mesh.scale.set(0.72, 0.72, 0.72);
+                if (c.body?.scale?.set) c.body.scale.set(0.72, 0.72, 0.72);
+                if (c.head?.scale?.set) c.head.scale.set(0.72, 0.72, 0.72);
+            } else {
+                if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed;
+                if (c.mesh?.scale?.set) c.mesh.scale.set(1, 1, 1);
+                if (c.body?.scale?.set) c.body.scale.set(1, 1, 1);
+                if (c.head?.scale?.set) c.head.scale.set(1, 1, 1);
+            }
+        });
+    }
+
     // --- 全キャラクターのrelationshipsを一括初期化 ---
     static initializeAllRelationships(characters) {
         if (!characters || characters.length === 0) return;

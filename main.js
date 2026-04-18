@@ -12,39 +12,7 @@ setSimulationIO(createThreeSimulationIO());
 refreshRenderResources();
 
 function applyInitialAgeSpread(targetChars = characters) {
-    const ratioRaw = (typeof window !== 'undefined' && window.initialAgeMaxRatio !== undefined)
-        ? Number(window.initialAgeMaxRatio) : 0.5;
-    const ratio = Math.max(0, Math.min(1, Number.isFinite(ratioRaw) ? ratioRaw : 0.5));
-    const maturityAge = (typeof window !== 'undefined' && window.childMaturitySeconds !== undefined)
-        ? Number(window.childMaturitySeconds) : 60;
-
-    targetChars.forEach(c => {
-        if (!c) return;
-        const lifespan = (typeof c.getEffectiveLifespan === 'function') ? c.getEffectiveLifespan() : (window.characterLifespan || 240);
-        // Uniform spread produces genuine demographic variety (young/adult/middle-aged at start)
-        // which breaks the cohort wave where all characters age out simultaneously.
-        const spreadUnit = Math.random();
-        c.age = spreadUnit * lifespan * ratio;
-        c.maturityAge = maturityAge;
-        // Important: age spread must also reconcile the child/adult flag immediately.
-        c.isChild = c.age < maturityAge;
-
-        // Keep visuals and movement in sync with the demographic state.
-        if (typeof c.movementSpeed === 'number' && typeof c._preChildMovementSpeed !== 'number') {
-            c._preChildMovementSpeed = c.movementSpeed;
-        }
-        if (c.isChild) {
-            if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed * 0.88;
-            if (c.mesh?.scale) c.mesh.scale.set(0.72, 0.72, 0.72);
-            if (c.body?.scale) c.body.scale.set(0.72, 0.72, 0.72);
-            if (c.head?.scale) c.head.scale.set(0.72, 0.72, 0.72);
-        } else {
-            if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed;
-            if (c.mesh?.scale) c.mesh.scale.set(1, 1, 1);
-            if (c.body?.scale) c.body.scale.set(1, 1, 1);
-            if (c.head?.scale) c.head.scale.set(1, 1, 1);
-        }
-    });
+    Character.applyInitialAgeSpread(targetChars);
 }
 
 if (typeof window !== 'undefined') {

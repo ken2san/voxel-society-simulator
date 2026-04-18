@@ -30,6 +30,62 @@ npm run build
 npm run preview
 ```
 
+## Headless simulation / telemetry
+
+Use the CLI runner when you want to validate population behavior without opening the browser.
+
+### Basic runs
+
+```bash
+npm run sim -- --minutes=1
+npm run sim -- --minutes=2 --districtMode=4 --population=48
+```
+
+### Save telemetry to a file
+
+```bash
+npm run sim -- --minutes=2 --districtMode=4 --population=48 --out=telemetry/d4-p48.json
+```
+
+### Override runtime parameters for an experiment
+
+```bash
+npm run sim -- --minutes=2 --districtMode=4 --population=48 \
+  --set=socialTh=82 \
+  --set=bondPersistence=1.5 \
+  --set=initialAgeMaxRatio=0.38
+```
+
+### Analyze or tune a run
+
+```bash
+npm run analyze:telemetry -- telemetry/d4-p48.json
+npm run sim:tune -- --minutes=1 --districtMode=4 --population=48
+```
+
+### Common flags
+
+- `--minutes=<n>` / `--seconds=<n>` / `--ticks=<n>`: choose run length
+- `--population=<n>`: initial character count
+- `--districtMode=<1|4|16>`: district scaling mode
+- `--activeDistrictIndex=<n>`: district to observe in detail
+- `--out=<path>`: write telemetry JSON to a file
+- `--config=<path>`: load settings from a config file
+- `--set=key=value`: override one parameter for the current run
+
+The runner uses the workspace simulation defaults from `sim-settings.workspace.json`, so CLI experiments and browser experiments stay aligned.
+
+## Cloud Run deployment
+
+For a quick prototype deploy to Google Cloud Run:
+
+```bash
+make all
+```
+
+This target builds the container image for `linux/amd64`, pushes it to `gcr.io`, and deploys the service defined in the `Makefile`.
+Make sure `gcloud` is authenticated and the target project is selected before running it.
+
 ## Agent Workspace Rules
 
 This workspace includes Copilot agent configuration files.
