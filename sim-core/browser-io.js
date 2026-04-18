@@ -9,8 +9,12 @@ export function createThreeSimulationIO() {
 
         if (type.isBed) {
             geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
+        } else if (type.isStoneWall) {
+            geometry = new THREE.BoxGeometry(blockSize * 0.65, blockSize * 1.15, blockSize * 0.65);
         } else if (type.isHouseWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize, blockSize * 0.9);
+            geometry = new THREE.BoxGeometry(blockSize * 0.85, blockSize, blockSize * 0.85);
+        } else if (type.isDarkRoof) {
+            geometry = new THREE.BoxGeometry(blockSize * 1.4, blockSize * 0.22, blockSize * 1.4);
         } else if (type.isHouseRoof) {
             geometry = new THREE.ConeGeometry(blockSize * 0.7, blockSize * 0.8, 4);
         }
@@ -18,6 +22,7 @@ export function createThreeSimulationIO() {
         const block = new THREE.Mesh(geometry, material);
         let yOffset = 0.5;
         if (type.isBed) yOffset = 0.2;
+        else if (type.isDarkRoof) yOffset = blockSize * 0.11;
         else if (type.isHouseRoof) yOffset = 0.4;
 
         block.position.set(x + 0.5, y + yOffset, z + 0.5);

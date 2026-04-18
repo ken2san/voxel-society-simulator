@@ -23,15 +23,17 @@ const HOME_TYPES = {
         bed: 'BED',
         wall: 'HOUSE_WALL',
         roof: 'HOUSE_ROOF',
-        wallPositions: [], // compact hut: keep adjacent tiles open
+        // Two side posts give the hut a recognisable silhouette without blocking paths.
+        wallPositions: [{dx:-1,dy:0,dz:0},{dx:1,dy:0,dz:0}],
         roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     stone: {
         bed: 'BED',
-        wall: 'HOUSE_WALL',
-        roof: 'HOUSE_ROOF',
-        wallArea: 0, // compact footprint
-        roofArea: 0
+        wall: 'STONE_WALL',
+        roof: 'DARK_ROOF',
+        // Four corner posts + flat slab roof — visually distinct from wood hut.
+        wallPositions: [{dx:-1,dy:0,dz:-1},{dx:1,dy:0,dz:-1},{dx:-1,dy:0,dz:1},{dx:1,dy:0,dz:1}],
+        roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     underground: {
         bed: 'BED',
@@ -56,17 +58,17 @@ class Character {
         }
         // 壁・屋根設置
         if (wallBlock) {
-            if (type === 'wood') {
-                // 設定駆動で壁設置
+            if (type === 'wood' || type === 'stone') {
+                // wallPositions 駆動で壁ポスト設置（wood: 側面2本, stone: 四隅4本）
                 for (const rel of config.wallPositions) {
-                    const wx = pos.x + rel.dx, wy = pos.y + rel.dy, wz = pos.z + rel.dz;
+                    const wx = pos.x + rel.dx, wy = pos.y + (rel.dy || 0), wz = pos.z + rel.dz;
                     const key = `${wx},${wy},${wz}`;
                     if (!worldData.has(key)) {
                         addBlock(wx, wy, wz, wallBlock, true);
                         this.log('Placed wall block at', { x: wx, y: wy, z: wz });
                     }
                 }
-                // 設定駆動で屋根設置
+                // roofPosition 駆動で屋根設置
                 if (config.roofPosition && roofBlock) {
                     const rx = pos.x + config.roofPosition.dx, ry = pos.y + config.roofPosition.dy, rz = pos.z + config.roofPosition.dz;
                     const roofKey = `${rx},${ry},${rz}`;
@@ -75,34 +77,8 @@ class Character {
                         this.log('Placed roof block at', { x: rx, y: ry, z: rz });
                     }
                 }
-            } else if (type === 'stone') {
-                // 設定駆動で壁設置
-                const area = config.wallArea || 1;
-                for (let dx = -area; dx <= area; dx++) {
-                    for (let dz = -area; dz <= area; dz++) {
-                        if (dx === 0 && dz === 0) continue;
-                        const wx = pos.x + dx, wy = pos.y, wz = pos.z + dz;
-                        const wallKey = `${wx},${wy},${wz}`;
-                        if (!worldData.has(wallKey)) {
-                            addBlock(wx, wy, wz, wallBlock, true);
-                        }
-                    }
-                }
-                // 設定駆動で屋根設置
-                const roofArea = config.roofArea || 1;
-                if (roofBlock) {
-                    for (let dx = -roofArea; dx <= roofArea; dx++) {
-                        for (let dz = -roofArea; dz <= roofArea; dz++) {
-                            const rx = pos.x + dx, ry = pos.y + 1, rz = pos.z + dz;
-                            const roofKey = `${rx},${ry},${rz}`;
-                            if (!worldData.has(roofKey)) {
-                                addBlock(rx, ry, rz, roofBlock, true);
-                            }
-                        }
-                    }
-                }
             } else if (type === 'underground') {
-                // 設定駆動で壁設置（地下シェルターは上に1マス壁）
+                // 地下シェルターは上に1マス壁
                 addBlock(pos.x, pos.y + 1, pos.z, wallBlock, true);
             }
         }
@@ -1674,6 +1650,7 @@ class Character {
         const passableBlocks = ['Air', 'Leaf', 'Fruit'];
         return passableBlocks.includes(blockType.name) ||
                blockType.isBed ||
+               blockType.isHouseWall || // decorative posts — characters can pass through
                blockId === BLOCK_TYPES.AIR?.id;
     }
 
