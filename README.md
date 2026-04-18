@@ -83,8 +83,8 @@ For a quick prototype deploy to Google Cloud Run:
 make all
 ```
 
-By default, the `Makefile` now uses the active `gcloud` project, so the image push target and the Cloud Run deploy target stay aligned.
-If you want to deploy to a specific project explicitly, run:
+By default, the `Makefile` deploys to the intended `voxel-society-simulator` Google Cloud project for this repo.
+If you want to deploy to a different project explicitly, run:
 
 ```bash
 make all PROJECT_ID=trustflow-project

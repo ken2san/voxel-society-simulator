@@ -1,4 +1,4 @@
-PROJECT_ID ?= $(shell gcloud config get-value project 2>/dev/null)
+PROJECT_ID ?= voxel-society-simulator
 SERVICE_NAME ?= voxel-society-simulator
 IMAGE = gcr.io/$(PROJECT_ID)/$(SERVICE_NAME)
 REGION ?= us-central1
