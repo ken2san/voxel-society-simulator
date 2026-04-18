@@ -23,20 +23,15 @@ const HOME_TYPES = {
         bed: 'BED',
         wall: 'HOUSE_WALL',
         roof: 'HOUSE_ROOF',
-        wallPositions: [
-            {dx: -1, dy: 0, dz: 0}, {dx: 1, dy: 0, dz: 0},
-            {dx: 0, dy: 0, dz: -1}, {dx: 0, dy: 0, dz: 1},
-            {dx: -1, dy: 1, dz: 0}, {dx: 1, dy: 1, dz: 0},
-            {dx: 0, dy: 1, dz: -1}, {dx: 0, dy: 1, dz: 1}
-        ],
+        wallPositions: [], // compact hut: keep adjacent tiles open
         roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     stone: {
         bed: 'BED',
         wall: 'HOUSE_WALL',
         roof: 'HOUSE_ROOF',
-        wallArea: 1, // 周囲1マス
-        roofArea: 1
+        wallArea: 0, // compact footprint
+        roofArea: 0
     },
     underground: {
         bed: 'BED',
@@ -878,10 +873,10 @@ class Character {
 
                 // ベッドを設置したら1マス隣に移動（壁を避ける）
                 const directions = [
-                    {dx: 2, dz: 0}, {dx: -2, dz: 0},
-                    {dx: 0, dz: 2}, {dx: 0, dz: -2},
                     {dx: 1, dz: 0}, {dx: -1, dz: 0},
-                    {dx: 0, dz: 1}, {dx: 0, dz: -1}
+                    {dx: 0, dz: 1}, {dx: 0, dz: -1},
+                    {dx: 2, dz: 0}, {dx: -2, dz: 0},
+                    {dx: 0, dz: 2}, {dx: 0, dz: -2}
                 ];
                 for (const dir of directions) {
                     const newX = this.gridPos.x + dir.dx;
