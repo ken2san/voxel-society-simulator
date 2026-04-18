@@ -3421,7 +3421,8 @@ function renderCharacterList() {
     if (!leftSidebar) return;
     if (window.simulationRunning) {
         const now = Date.now();
-        const minRenderMs = 250;
+        const populationSize = Array.isArray(window.characters) ? window.characters.length : 0;
+        const minRenderMs = populationSize > 96 ? 650 : (populationSize > 64 ? 420 : 250);
         if (window.__lastCharacterListRenderAt && (now - window.__lastCharacterListRenderAt) < minRenderMs) {
             return;
         }

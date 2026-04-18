@@ -2230,6 +2230,36 @@ class Character {
         }
     }
 
+    static getLiveCharacterRuntime(chars = null, { force = false } = {}) {
+        const sourceChars = Array.isArray(chars)
+            ? chars
+            : ((typeof window !== 'undefined' && Array.isArray(window.characters))
+                ? window.characters
+                : ((typeof characters !== 'undefined' && Array.isArray(characters)) ? characters : []));
+        const now = Date.now();
+        const bucket = Math.floor(now / 120);
+        const cached = Character._liveRuntimeCache;
+        if (!force && cached && cached.bucket === bucket && cached.size === sourceChars.length) {
+            return cached;
+        }
+
+        const alive = [];
+        const aliveById = new Map();
+        const groupCounts = new Map();
+        for (const char of sourceChars) {
+            if (!char || char.state === 'dead') continue;
+            alive.push(char);
+            aliveById.set(String(char.id), char);
+            if (char.groupId) {
+                groupCounts.set(char.groupId, (groupCounts.get(char.groupId) || 0) + 1);
+            }
+        }
+
+        const runtime = { bucket, size: sourceChars.length, alive, aliveById, groupCounts };
+        Character._liveRuntimeCache = runtime;
+        return runtime;
+    }
+
     // --- キャラ削除時のクリーンアップ ---
     dispose() {
         // 頭上アイコン・吹き出しをDOMから除去
@@ -2285,7 +2315,7 @@ class Character {
     findClosestPartner() {
         let best = null;
         let bestScore = -Infinity;
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { alive: chars } = Character.getLiveCharacterRuntime();
         const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 3;
         const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
         const { nearbyRadius } = this.getSupportModelParams();
@@ -2325,7 +2355,7 @@ class Character {
     }
 
     getPreferredSupportTarget(maxDistance = null) {
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { alive: chars } = Character.getLiveCharacterRuntime();
         const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
         const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
         const { acquaintance } = this.getRelationshipThresholds();
@@ -2383,26 +2413,39 @@ class Character {
     }
 
     getNearbyHouseholdSupport(maxDistance = null) {
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { aliveById } = Character.getLiveCharacterRuntime();
         const { nearbyRadius } = this.getSupportModelParams();
         const searchRange = Math.max(1, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : (nearbyRadius + 1));
         let nearbyCount = 0;
         let strongestAffinity = 0;
+        let target = null;
+        let nearestDistance = Infinity;
 
-        for (const char of chars) {
-            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
-            if (!this.isHouseholdTie(char)) continue;
+        const householdIds = new Set([
+            this._lovePartnerId,
+            ...(Array.isArray(this.parentIds) ? this.parentIds : []),
+            ...(Array.isArray(this.children) ? this.children : [])
+        ].filter(id => id !== undefined && id !== null && String(id) !== String(this.id)));
+
+        for (const otherId of householdIds) {
+            const char = aliveById.get(String(otherId));
+            if (!char?.gridPos) continue;
             const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
             if (dist <= searchRange) {
                 nearbyCount++;
                 strongestAffinity = Math.max(strongestAffinity, Number(this.relationships.get(char.id) || 0));
+                if (dist < nearestDistance) {
+                    nearestDistance = dist;
+                    target = char;
+                }
             }
         }
 
         return {
             hasNearby: nearbyCount > 0,
             nearbyCount,
-            strongestAffinity
+            strongestAffinity,
+            target
         };
     }
 
@@ -2797,13 +2840,11 @@ class Character {
     }
 
     getRelationshipSnapshot(limit = 5) {
-        const chars = (typeof window !== 'undefined' && Array.isArray(window.characters))
-            ? window.characters
-            : ((typeof characters !== 'undefined' && Array.isArray(characters)) ? characters : []);
+        const { aliveById } = Character.getLiveCharacterRuntime();
         const ties = this.relationships instanceof Map
             ? Array.from(this.relationships.entries())
                 .map(([otherId, rawAffinity]) => {
-                    const other = chars.find(c => String(c?.id) === String(otherId) && c?.state !== 'dead');
+                    const other = aliveById.get(String(otherId));
                     if (!other?.gridPos) return null;
                     const affinity = Number(rawAffinity || 0);
                     const relationshipClass = this.getRelationshipClass(otherId);
@@ -3250,6 +3291,9 @@ class Character {
         const activeChars = (typeof window !== 'undefined' && window.characters)
             ? window.characters
             : (typeof characters !== 'undefined' ? characters : []);
+        const liveRuntime = Character.getLiveCharacterRuntime(activeChars, {
+            force: !!(activeChars?.[0] && activeChars[0].id === this.id)
+        });
         if (activeChars?.[0] && activeChars[0].id === this.id) {
             Character.maybeRefreshGroups(activeChars);
         }
@@ -3486,7 +3530,7 @@ class Character {
 
         // --- Support comfort: nearby trusted ties reduce social depletion and improve night safety ---
         if (this.relationships && this.relationships.size > 0) {
-            const _supportChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+            const _supportCharsById = liveRuntime?.aliveById instanceof Map ? liveRuntime.aliveById : new Map();
             const { ally, bonded } = this.getRelationshipThresholds();
             const { nearbyRadius, groupBonus, allyPresenceBonus, comfortRecoveryRate, groupComfortScale, nightSafetyAllyBonus, nightSafetyBondedBonus } = this.getSupportModelParams();
             const householdSupport = this.getNearbyHouseholdSupport(nearbyRadius + 1);
@@ -3494,7 +3538,7 @@ class Character {
             let hasNearbyTrustedTie = false;
             for (const [otherId, aff] of this.relationships.entries()) {
                 if (aff < ally) continue;
-                const other = _supportChars.find(c => c.id === otherId && c.state !== 'dead');
+                const other = _supportCharsById.get(String(otherId));
                 if (!other?.gridPos) continue;
                 const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
                 if (d <= nearbyRadius) {
