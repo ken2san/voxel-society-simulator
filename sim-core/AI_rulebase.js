@@ -133,7 +133,13 @@ export function decideNextAction_rulebase(character, isNight) {
                 return;
             }
         }
-        // No food in range — wander to search
+        // No food in range — but if energy is near floor, rest briefly first to avoid total collapse
+        if (character.needs.energy <= 10 && character.isSafe && character.isSafe(isNight)) {
+            character.log(`Action: REST (energy floor during hunger crisis, energy=${character.needs.energy.toFixed(1)})`);
+            character.setNextAction('REST');
+            return;
+        }
+        // Wander to search for food
         character.log(`Action: WANDER (hunger crisis, no food in range hunger=${character.needs.hunger.toFixed(1)})`);
         character.setNextAction('WANDER');
         return;

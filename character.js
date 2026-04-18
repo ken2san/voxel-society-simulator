@@ -3497,8 +3497,11 @@ class Character {
 
             if (partner && partner.state === 'socializing') {
                 // 双方の緊急ニーズをチェック（中断条件）
-                const myCritical = (this.needs.hunger <= hungerEmergency || this.needs.energy <= energyEmergency);
-                const partnerCritical = (partner.needs?.hunger <= hungerEmergency || partner.needs?.energy <= energyEmergency);
+                // Energy interrupt uses a tighter floor (10) so socializing isn't cut short
+                // every time energy dips below the rest-threshold (32). AI still routes to
+                // REST after socializing ends via the normal PRIORITY 0 energy emergency check.
+                const myCritical = (this.needs.hunger <= hungerEmergency || this.needs.energy <= 10);
+                const partnerCritical = (partner.needs?.hunger <= hungerEmergency || partner.needs?.energy <= 10);
 
                 if (myCritical || partnerCritical) {
                     this.state = 'idle';
