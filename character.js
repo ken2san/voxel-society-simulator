@@ -1286,6 +1286,27 @@ class Character {
     }
 
     // --- Group detection and per-group leader election ---
+    static markGroupsDirty(characters) {
+        Character._groupRefreshPending = true;
+        if (Array.isArray(characters) && characters.length > 0) {
+            Character._groupRefreshCharacters = characters;
+        }
+    }
+
+    static maybeRefreshGroups(characters, force = false) {
+        const roster = Array.isArray(characters) && characters.length > 0
+            ? characters
+            : (Array.isArray(Character._groupRefreshCharacters) ? Character._groupRefreshCharacters : []);
+        if (roster.length === 0) return;
+        const now = Date.now();
+        const last = Number(Character._lastGroupRefreshAt || 0);
+        if (!force && !Character._groupRefreshPending) return;
+        if (!force && (now - last) < 2000) return;
+        Character._lastGroupRefreshAt = now;
+        Character._groupRefreshPending = false;
+        Character.detectGroupsAndElectLeaders(roster);
+    }
+
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
         if (!characters || characters.length === 0) return;
@@ -1307,9 +1328,12 @@ class Character {
             while (queue.length > 0) {
                 const current = queue.shift();
                 for (const [otherId, affinity] of current.relationships.entries()) {
-                    if (affinity < affinityTh) continue;
                     const other = characters.find(c => c.id === otherId);
-                    if (other && !other.groupId) {
+                    if (!other) continue;
+                    const householdTie = !!current.isHouseholdTie?.(other) || !!other.isHouseholdTie?.(current);
+                    const anchoredTie = String(current._socialAnchorId || '') === String(other.id) || String(other._socialAnchorId || '') === String(current.id);
+                    if (affinity < affinityTh && !householdTie && !anchoredTie) continue;
+                    if (!other.groupId) {
                         other.groupId = groupIdCounter;
                         queue.push(other);
                         groupMembers.push(other);
@@ -2769,6 +2793,7 @@ class Character {
         const timeStress = clamp01(ctx.timeStress ?? 0);
         const socialPressure = clamp01(ctx.socialPressure ?? 0);
         const nearbySupport = clamp01(networkSnapshot?.supportScore ?? 0);
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
 
         const pairBond = clamp01(
             (bondStrength * 0.68) +
@@ -2796,28 +2821,55 @@ class Character {
             (Number(partner?.needs?.safety || 0) / 100) * 0.30
         );
 
+        const uniqueDependentChildren = new Set([
+            ...(Array.isArray(this.children) ? this.children : []),
+            ...(Array.isArray(partner?.children) ? partner.children : [])
+        ]);
+        let dependentChildCount = 0;
+        for (const childId of uniqueDependentChildren) {
+            const child = chars.find(c => c && c.id === childId && c.state !== 'dead');
+            if (!child) continue;
+            const stage = child.getLifeStage ? child.getLifeStage() : (child.isChild ? 'child' : 'adult');
+            if (stage === 'child' || stage === 'young') dependentChildCount++;
+        }
+
+        const careLoad = clamp01(Math.max(0, (dependentChildCount * 0.24) - (localSupport * 0.30) - (support * 0.12)));
+
         const livelihoodViability = clamp01(
-            ((1 - foodPressure) * 0.26) +
-            ((1 - housingPressure) * 0.24) +
-            ((1 - timeStress) * 0.18) +
-            (selfNeedMargin * 0.16) +
-            (partnerNeedMargin * 0.16)
+            ((1 - foodPressure) * 0.24) +
+            ((1 - housingPressure) * 0.22) +
+            ((1 - timeStress) * 0.16) +
+            (selfNeedMargin * 0.15) +
+            (partnerNeedMargin * 0.15) +
+            ((1 - careLoad) * 0.08)
         );
 
         const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
         const futureExpectation = clamp01(
-            (livelihoodViability * 0.55) +
-            (localSupport * 0.20) +
-            (pairBond * 0.15) +
+            (livelihoodViability * 0.52) +
+            (localSupport * 0.22) +
+            (pairBond * 0.14) +
             (moderateThreatCohesion * params.anxietyCohesionBonus) -
-            (socialPressure * params.pressurePenalty)
+            (socialPressure * params.pressurePenalty) -
+            (careLoad * 0.10)
         );
 
         const readiness = clamp01(
             (pairBond * 0.30) +
-            (localSupport * 0.24) +
-            (livelihoodViability * 0.26) +
-            (futureExpectation * 0.20)
+            (localSupport * 0.25) +
+            (livelihoodViability * 0.25) +
+            (futureExpectation * 0.20) -
+            (careLoad * 0.08)
+        );
+
+        const reproductionHazard = clamp01(
+            0.04 +
+            (Math.max(-0.12, readiness - params.readinessThreshold) * 1.35) +
+            (pairBond * 0.22) +
+            (localSupport * 0.10) +
+            (futureExpectation * 0.08) -
+            (careLoad * 0.16) -
+            (socialPressure * 0.06)
         );
 
         return {
@@ -2828,6 +2880,9 @@ class Character {
             livelihoodViability: Math.round(livelihoodViability * 100) / 100,
             futureExpectation: Math.round(futureExpectation * 100) / 100,
             moderateThreatCohesion: Math.round(moderateThreatCohesion * 100) / 100,
+            careLoad: Math.round(careLoad * 100) / 100,
+            dependentChildCount,
+            reproductionHazard: Math.round(reproductionHazard * 100) / 100,
             readiness: Math.round(readiness * 100) / 100
         };
     }
@@ -2836,10 +2891,20 @@ class Character {
         const ctx = this.getReproductionReadiness(partner);
         this._lastReproductionBlockInfo = ctx;
         const threshold = this.getReproductionModelParams().readinessThreshold;
-        return ctx.readiness >= threshold || (ctx.pairBond >= 0.78 && ctx.futureExpectation >= Math.max(0.45, threshold - 0.04));
+        if (ctx.readiness >= threshold) return true;
+        const viableBond = ctx.pairBond >= 0.58 && ctx.futureExpectation >= Math.max(0.34, threshold - 0.12);
+        if (!viableBond) return false;
+        return Math.random() < Math.max(0.08, ctx.reproductionHazard || 0);
     }
 
     update(deltaTime, isNight, camera) {
+        const activeChars = (typeof window !== 'undefined' && window.characters)
+            ? window.characters
+            : (typeof characters !== 'undefined' ? characters : []);
+        if (activeChars?.[0] && activeChars[0].id === this.id) {
+            Character.maybeRefreshGroups(activeChars);
+        }
+
         const districtRuntime = (typeof window !== 'undefined' && typeof window.getDistrictRuntime === 'function')
             ? window.getDistrictRuntime(this.gridPos)
             : { index: 0, isActive: true, shouldRender: true, updateInterval: 0 };
@@ -3267,6 +3332,7 @@ class Character {
                 const anchorMomentum = anchoredTie ? (socialAnchorBias * 0.35) : 0;
                 const bondGainMultiplier = 1 + Math.min(0.9, (sharedNeed * allyPresenceBonus) + (moderateThreatCohesion * anxietyCohesionBonus) + familiarMomentum + anchorMomentum);
                 affinity += deltaTime * affinityRate * bondGainMultiplier;
+                Character.markGroupsDirty(activeChars);
                 // clamp affinity: personality trait distance lowers the ceiling
                 const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
                 const capReduction = (typeof window !== 'undefined' && window.traitAffinityCapReduction !== undefined) ? window.traitAffinityCapReduction : 0.6;
@@ -3317,6 +3383,7 @@ class Character {
                 if (dist <= Math.max(1, nearbyRadius) && affinity >= socialAnchorAffinity) {
                     this._socialAnchorId = partner.id;
                     partner._socialAnchorId = this.id;
+                    Character.markGroupsDirty(activeChars);
                 }
 
                 // Set or refresh heart display if in proximity and affinity high enough
@@ -3327,12 +3394,14 @@ class Character {
                         this.lovePhase = 'showing';
                         // persist partner id so expiry logic can find the partner even if action cleared
                         this._lovePartnerId = partner.id;
+                        Character.markGroupsDirty(activeChars);
                         try { console.log(`[LOVE] ${this.id} started loveTimer with partner ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                     }
                     if (partner.loveTimer <= 0 && partner.lovePhase !== 'showing') {
                         partner.loveTimer = 3.0;
                         partner.lovePhase = 'showing';
                         partner._lovePartnerId = this.id;
+                        Character.markGroupsDirty(activeChars);
                         try { console.log(`[LOVE] ${partner.id} started loveTimer with partner ${this.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                     }
                 }
@@ -4949,8 +5018,11 @@ class Character {
 
         const readinessCtx = this.getReproductionReadiness(partner);
         const _reproThreshold = (typeof window !== 'undefined' && window.reproductionReadinessThreshold !== undefined) ? Number(window.reproductionReadinessThreshold) : 0.52;
-        if (!(readinessCtx.readiness >= _reproThreshold || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45))) {
-            try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)})`); } catch(e){}
+        const hazardGateOpen = readinessCtx.readiness >= _reproThreshold
+            || (readinessCtx.pairBond >= 0.58 && readinessCtx.reproductionHazard >= 0.16)
+            || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45);
+        if (!hazardGateOpen) {
+            try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)} hazard=${(readinessCtx.reproductionHazard || 0).toFixed(2)})`); } catch(e){}
             return;
         }
 
@@ -5020,12 +5092,6 @@ class Character {
             };
             child.updateColorFromPersonality && child.updateColorFromPersonality();
             child.updateWorldPosFromGrid && child.updateWorldPosFromGrid();
-            // --- Group/leader re-detection after birth ---
-            if (typeof window !== 'undefined' && window.characters) {
-                Character.detectGroupsAndElectLeaders(window.characters);
-            } else if (typeof characters !== 'undefined') {
-                Character.detectGroupsAndElectLeaders(characters);
-            }
             // --- 子供カウント ---
             if (Array.isArray(this.children)) this.children.push(child.id);
             if (Array.isArray(partner.children)) partner.children.push(child.id);
@@ -5081,8 +5147,9 @@ class Character {
                         }
                     }
                 } catch (_ke) { /* kinship affinity setup error — non-fatal */ }
-                // prevent immediate group/role assignment - keep child as a neutral worker until maturity
-                child.groupId = null;
+                // household continuity: child inherits the nearest known home context and stays a worker role-wise
+                child.homePosition = this.homePosition || partner.homePosition || child.homePosition || null;
+                child.provisionalHome = this.provisionalHome || partner.provisionalHome || child.provisionalHome || child.homePosition || null;
                 child.role = 'worker';
                 // optional age fields for growth system
                 child.age = 0;
@@ -5098,6 +5165,12 @@ class Character {
                 // slightly slower movement/less bob for child feel
                 if (typeof child.movementSpeed === 'number') child.movementSpeed *= 0.88;
                 if (child._stepAmp) child._stepAmp *= 0.6;
+                // Recompute support groups only after kinship, home, and anchors have been seeded.
+                if (typeof window !== 'undefined' && window.characters) {
+                    Character.detectGroupsAndElectLeaders(window.characters);
+                } else if (typeof characters !== 'undefined') {
+                    Character.detectGroupsAndElectLeaders(characters);
+                }
                 // record last reproduction time for both parents
                 this._lastReproductionTime = Date.now();
                 partner._lastReproductionTime = Date.now();
