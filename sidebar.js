@@ -3238,14 +3238,54 @@ function createTimelineHandleHTML(ev) {
     return dot + `<span style="font-size:0.9em;">${ev.text}</span>`;
 }
 
+function _etlNeedsBar(label, value, warnBelow, color) {
+    const pct = Math.max(0, Math.min(100, Math.round(value)));
+    const isLow = pct < warnBelow;
+    const barColor = isLow ? '#f87171' : color;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:6px;">` +
+        `<span style="color:#94a3b8;font-size:0.76em;">${label}</span>` +
+        `<span style="display:inline-block;width:36px;height:5px;border-radius:3px;background:#1e293b;position:relative;">` +
+            `<span style="display:inline-block;width:${pct}%;height:100%;border-radius:3px;background:${barColor};"></span>` +
+        `</span>` +
+        `<span style="color:${isLow ? '#f87171' : '#94a3b8'};font-size:0.76em;">${pct}</span>` +
+    `</span>`;
+}
+
 function createTimelineEventHTML(ev) {
     const borderColor = _etlKindColor[ev.kind] || '#64748b';
     const timeStr = _etlFormatTime(ev.t);
+    let extraHTML = '';
+    if (ev.kind === 'death' && ev.deathDetail) {
+        const d = ev.deathDetail;
+        const actionLabel = d.lastAction
+            ? d.lastAction.replace(/_/g, ' ').toLowerCase()
+            : null;
+        const actionHTML = actionLabel
+            ? `<span style="color:#fbbf24;font-size:0.76em;margin-right:8px;">⚡ ${actionLabel}</span>`
+            : '';
+        const familyParts = [];
+        if (d.childCount > 0) familyParts.push(`${d.childCount} child${d.childCount > 1 ? 'ren' : ''}`);
+        if (d.parentIds && d.parentIds.length) familyParts.push(`parents #${d.parentIds.join(' #')}`);
+        const familyHTML = familyParts.length
+            ? `<span style="color:#a78bfa;font-size:0.76em;margin-right:8px;">👨‍👩‍👧 ${familyParts.join(', ')}</span>`
+            : '';
+        let barsHTML = '';
+        if (d.needs) {
+            barsHTML = _etlNeedsBar('H', d.needs.hunger, 20, '#86efac') +
+                       _etlNeedsBar('E', d.needs.energy, 20, '#60a5fa') +
+                       _etlNeedsBar('Sa', d.needs.safety, 20, '#fcd34d') +
+                       _etlNeedsBar('So', d.needs.social, 15, '#c084fc');
+        }
+        extraHTML = `<div style="margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:1px;">` +
+            actionHTML + familyHTML + barsHTML +
+        `</div>`;
+    }
     return `<div style="display:flex;align-items:flex-start;gap:7px;padding:4px 6px 4px 8px;` +
         `border-left:3px solid ${borderColor};background:rgba(255,255,255,0.04);border-radius:0 4px 4px 0;margin-bottom:2px;">` +
         `<span style="font-size:1.0em;line-height:1.6;flex-shrink:0;">${ev.icon}</span>` +
         `<div style="flex:1;min-width:0;">` +
             `<div style="color:#e2e8f0;font-size:0.88em;">${ev.text}</div>` +
+            extraHTML +
             `<div style="color:#64748b;font-size:0.76em;">${timeStr}</div>` +
         `</div>` +
     `</div>`;
@@ -3282,7 +3322,22 @@ function syncLifecycleEventsFromStats() {
         const cause = ld.cause ? ` — ${ld.cause.replace(/_/g, ' ')}` : '';
         const alreadyLogged = window.__eventLog.some(ev => ev && ev.kind === 'death' && ev.t === ld.t);
         if (!alreadyLogged) {
-            window.__eventLog.unshift({ t: ld.t, icon: '💀', text: `Died ${id}${gen}${age}${cause}`, kind: 'death' });
+            // Look up rich detail from __deathRecords (matched by id + recent timestamp)
+            const rec = Array.isArray(window.__deathRecords)
+                ? window.__deathRecords.find(r => r && r.id === ld.id && Math.abs((r.t || 0) - ld.t) < 5000)
+                : null;
+            window.__eventLog.unshift({
+                t: ld.t,
+                icon: '💀',
+                text: `Died ${id}${gen}${age}${cause}`,
+                kind: 'death',
+                deathDetail: rec ? {
+                    lastAction: rec.lastAction,
+                    needs: rec.finalNeeds,
+                    childCount: rec.childCount,
+                    parentIds: rec.parentIds
+                } : null
+            });
             if (window.__eventLog.length > 60) window.__eventLog.pop();
         }
     }

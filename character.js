@@ -4308,10 +4308,12 @@ class Character {
                 if (!window.__deathRecords) window.__deathRecords = [];
                 window.__deathRecords.push({
                     id: this.id,
+                    t: Date.now(),
                     generation: Number(this.generation || 0),
                     ageAtDeath: Number(this.age || 0),
                     lifespan: Number(this.getEffectiveLifespan ? this.getEffectiveLifespan() : 240),
                     cause,
+                    lastAction: this.action ? this.action.type : (this.state || null),
                     traits: this.personality ? { ...this.personality } : {},
                     childCount: Number(this.childCount || 0),
                     parentIds: this.parentIds ?? null,
