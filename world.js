@@ -203,6 +203,7 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         supportAccess: 0,
         relationshipStability: 0,
         conflictLevel: 0,
+        uncertaintyLevel: 0,
         socialPressure: 0,
         populationBalance: 0,
         opportunityScore: 0,
@@ -217,6 +218,7 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         noHome: 0,
         supported: 0,
         conflict: 0,
+        uncertainty: 0,
         timeStress: 0,
         relationshipStability: 0
     }));
@@ -263,6 +265,16 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
                 const avgAffinity = relationshipValues.reduce((acc, value) => acc + value, 0) / relationshipValues.length;
                 sum.relationshipStability += Math.max(0, Math.min(1, avgAffinity / 100));
             }
+            const uncertaintyShock = Number(c._uncertaintyShock || 0);
+            const localVolatility = Math.max(0, Math.min(1,
+                (Math.max(0, 45 - energy) / 45) * 0.12 +
+                (!c.homePosition ? 0.10 : 0) +
+                (!c.groupId ? 0.08 : 0) +
+                ((1 - clamp01(supportStrength)) * 0.12) +
+                (c._nearEnemy ? 0.16 : 0) +
+                (uncertaintyShock * 0.18)
+            ));
+            sum.uncertainty += localVolatility;
         }
 
         if (hasPrevState) {
@@ -296,17 +308,25 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
         const supportAccess = roundDistrictValue(sum.supported / n);
         const relationshipStability = roundDistrictValue(sum.relationshipStability / n);
         const conflictLevel = roundDistrictValue(sum.conflict / n);
-        const socialPressureFoodWeight = (typeof window !== 'undefined' && window.socialPressureFoodWeight !== undefined) ? Number(window.socialPressureFoodWeight) : 0.28;
-        const socialPressureHousingWeight = (typeof window !== 'undefined' && window.socialPressureHousingWeight !== undefined) ? Number(window.socialPressureHousingWeight) : 0.30;
-        const socialPressureTimeWeight = (typeof window !== 'undefined' && window.socialPressureTimeWeight !== undefined) ? Number(window.socialPressureTimeWeight) : 0.22;
+        const uncertaintyLevel = roundDistrictValue(Math.max(0, Math.min(1,
+            (sum.uncertainty / n) +
+            (Math.abs(bucket.migrationIn - bucket.migrationOut) / Math.max(1, n * 2)) * 0.18
+        )));
+        const socialPressureFoodWeight = (typeof window !== 'undefined' && window.socialPressureFoodWeight !== undefined) ? Number(window.socialPressureFoodWeight) : 0.24;
+        const socialPressureHousingWeight = (typeof window !== 'undefined' && window.socialPressureHousingWeight !== undefined) ? Number(window.socialPressureHousingWeight) : 0.26;
+        const socialPressureTimeWeight = (typeof window !== 'undefined' && window.socialPressureTimeWeight !== undefined) ? Number(window.socialPressureTimeWeight) : 0.18;
         const socialPressureSupportWeight = (typeof window !== 'undefined' && window.socialPressureSupportWeight !== undefined) ? Number(window.socialPressureSupportWeight) : 0.10;
-        const socialPressureStabilityWeight = (typeof window !== 'undefined' && window.socialPressureStabilityWeight !== undefined) ? Number(window.socialPressureStabilityWeight) : 0.10;
+        const socialPressureStabilityWeight = (typeof window !== 'undefined' && window.socialPressureStabilityWeight !== undefined) ? Number(window.socialPressureStabilityWeight) : 0.08;
+        const socialPressureConflictWeight = (typeof window !== 'undefined' && window.socialPressureConflictWeight !== undefined) ? Number(window.socialPressureConflictWeight) : 0.09;
+        const socialPressureUncertaintyWeight = (typeof window !== 'undefined' && window.socialPressureUncertaintyWeight !== undefined) ? Number(window.socialPressureUncertaintyWeight) : 0.05;
         const socialPressure = roundDistrictValue(Math.max(0, Math.min(1,
             (foodPressure * socialPressureFoodWeight) +
             (housingPressure * socialPressureHousingWeight) +
             (timeStress * socialPressureTimeWeight) +
             ((1 - supportAccess) * socialPressureSupportWeight) +
-            ((1 - relationshipStability) * socialPressureStabilityWeight)
+            ((1 - relationshipStability) * socialPressureStabilityWeight) +
+            (conflictLevel * socialPressureConflictWeight) +
+            (uncertaintyLevel * socialPressureUncertaintyWeight)
         )));
         const populationBalance = roundDistrictValue(Math.max(0, Math.min(1,
             1 - (Math.abs(bucket.population - targetPopulationPerDistrict) / Math.max(1, targetPopulationPerDistrict * 1.5))
@@ -323,7 +343,8 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             (relationshipStability * opportunityStabilityWeight) +
             ((1 - conflictLevel) * opportunityConflictWeight) +
             (populationBalance * opportunityPopulationWeight) +
-            ((1 - foodPressure) * opportunityFoodWeight)
+            ((1 - foodPressure) * opportunityFoodWeight) -
+            (uncertaintyLevel * 0.08)
         )));
         return {
             ...bucket,
@@ -334,6 +355,7 @@ export function getDistrictSummaries(sourceChars = characters, prevStateMap = nu
             supportAccess,
             relationshipStability,
             conflictLevel,
+            uncertaintyLevel,
             socialPressure,
             populationBalance,
             opportunityScore,
@@ -471,6 +493,8 @@ export function getDistrictSocialContextForPosition(pos, sourceChars = character
         timeStress: 0,
         supportAccess: 0,
         relationshipStability: 0,
+        conflictLevel: 0,
+        uncertaintyLevel: 0,
         socialPressure: 0,
         opportunityScore: 0.5
     };

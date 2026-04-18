@@ -1486,21 +1486,49 @@ class Character {
         return null;
     }
 
-    // --- Land contest: simple win/lose based on personality and needs ---
+    // --- Land contest: episodic, local rivalry instead of per-tick punishment ---
     contestLand(otherChar) {
-        // Simple: higher bravery + energy wins
-        const myScore = (this.personality.bravery * 0.7 + this.needs.energy * 0.3);
-        const otherScore = (otherChar.personality.bravery * 0.7 + otherChar.needs.energy * 0.3);
+        if (!otherChar || otherChar.state === 'dead' || otherChar.id === this.id) return;
+        if ((this.groupId && otherChar.groupId && this.groupId === otherChar.groupId) || this.isHouseholdTie(otherChar)) return;
+
+        const dist = Math.abs(this.gridPos.x - otherChar.gridPos.x) + Math.abs(this.gridPos.y - otherChar.gridPos.y) + Math.abs(this.gridPos.z - otherChar.gridPos.z);
+        if (dist > 4) {
+            this._uncertaintyShock = Math.max(Number(this._uncertaintyShock || 0), 0.12);
+            return;
+        }
+
+        const now = Date.now();
+        const cooldownMs = 7000;
+        const pairKey = this.id < otherChar.id ? `${this.id}:${otherChar.id}` : `${otherChar.id}:${this.id}`;
+        if (!Character._landContestCooldowns) Character._landContestCooldowns = new Map();
+        const nextAllowed = Number(Character._landContestCooldowns.get(pairKey) || 0);
+        if (now < nextAllowed) return;
+        Character._landContestCooldowns.set(pairKey, now + cooldownMs);
+
+        const mySupport = this.getNearbyHouseholdSupport ? this.getNearbyHouseholdSupport(3).nearbyCount : 0;
+        const otherSupport = otherChar.getNearbyHouseholdSupport ? otherChar.getNearbyHouseholdSupport(3).nearbyCount : 0;
+        const myScore = (this.personality.bravery * 0.55) + (this.needs.energy * 0.20) + (mySupport * 0.35);
+        const otherScore = (otherChar.personality.bravery * 0.55) + (otherChar.needs.energy * 0.20) + (otherSupport * 0.35);
+        const currentAff = Number(this.relationships.get(otherChar.id) || 0);
+        const otherAff = Number(otherChar.relationships.get(this.id) || 0);
+        const grievance = 2 + Math.random() * 3;
+        this.relationships.set(otherChar.id, Math.max(0, currentAff - grievance));
+        otherChar.relationships.set(this.id, Math.max(0, otherAff - grievance));
+        this._nearEnemy = true;
+        otherChar._nearEnemy = true;
+
         if (myScore > otherScore) {
-            // Take over land
             for (const key of otherChar.ownedLand) {
                 this.ownedLand.add(key);
             }
             otherChar.ownedLand.clear();
-            // this.log('Won land contest against', otherChar.id);
+            this.needs.safety = Math.max(0, this.needs.safety - 0.6);
+            otherChar.needs.safety = Math.max(0, otherChar.needs.safety - 1.4);
+            otherChar._uncertaintyShock = Math.max(Number(otherChar._uncertaintyShock || 0), 0.16);
         } else {
-            // Retreat (wander)
-            // this.log('Lost land contest against', otherChar.id);
+            this.needs.safety = Math.max(0, this.needs.safety - 1.2);
+            otherChar.needs.safety = Math.max(0, otherChar.needs.safety - 0.6);
+            this._uncertaintyShock = Math.max(Number(this._uncertaintyShock || 0), 0.16);
             this.setNextAction('WANDER');
         }
     }
@@ -2528,6 +2556,46 @@ class Character {
         };
     }
 
+    getConflictEnvironmentContext(maxDistance = 5) {
+        const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { floor, ally } = this.getRelationshipThresholds();
+        const searchRange = Math.max(2, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : 5);
+        let rivalCount = 0;
+        const hostileGroups = new Set();
+        let localThreat = 0;
+
+        for (const char of chars) {
+            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
+            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+            if (dist <= 0 || dist > searchRange) continue;
+            const affinity = Number(this.relationships.get(char.id) || 0);
+            const sameGroup = !!this.groupId && !!char.groupId && this.groupId === char.groupId;
+            const householdTie = this.isHouseholdTie(char);
+            const intergroupRival = !sameGroup && !householdTie && !!this.groupId && !!char.groupId && affinity < Math.max(floor + 8, ally - 10);
+            const closeRival = affinity <= floor + 4;
+            if (!intergroupRival && !closeRival) continue;
+            rivalCount++;
+            if (intergroupRival && char.groupId) hostileGroups.add(char.groupId);
+            const distanceWeight = 1 - (dist / Math.max(1, searchRange + 1));
+            localThreat += (intergroupRival ? 0.24 : 0.12) + Math.max(0.04, distanceWeight * 0.18);
+        }
+
+        const districtCtx = this.getDistrictSocialContext ? this.getDistrictSocialContext() : {};
+        const uncertaintyShock = clamp01(
+            ((typeof this._uncertaintyShock === 'number' ? this._uncertaintyShock : 0.16) * 0.65) +
+            (clamp01(districtCtx.uncertaintyLevel ?? 0) * 0.35)
+        );
+
+        return {
+            rivalCount,
+            hostileGroupCount: hostileGroups.size,
+            localThreat: Math.round(clamp01(localThreat) * 100) / 100,
+            uncertaintyShock: Math.round(uncertaintyShock * 100) / 100,
+            conflictBurden: Math.round(clamp01(localThreat + (uncertaintyShock * 0.35) + (clamp01(districtCtx.conflictLevel ?? 0) * 0.35)) * 100) / 100
+        };
+    }
+
     // Derived from affinity float — parameterized for experiments.
     getRelationshipClass(otherId) {
         const aff = this.relationships.get(otherId) ?? 0;
@@ -2745,6 +2813,8 @@ class Character {
             timeStress: 0,
             supportAccess: 0,
             relationshipStability: 0,
+            conflictLevel: 0,
+            uncertaintyLevel: 0,
             socialPressure: 0
         };
         try {
@@ -2798,8 +2868,12 @@ class Character {
         const housingPressure = clamp01(ctx.housingPressure ?? 0);
         const timeStress = clamp01(ctx.timeStress ?? 0);
         const socialPressure = clamp01(ctx.socialPressure ?? 0);
+        const conflictLevel = clamp01(ctx.conflictLevel ?? 0);
+        const uncertaintyLevel = clamp01(ctx.uncertaintyLevel ?? 0);
         const nearbySupport = clamp01(networkSnapshot?.supportScore ?? 0);
         const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const conflictCtx = this.getConflictEnvironmentContext ? this.getConflictEnvironmentContext(6) : { localThreat: 0, uncertaintyShock: 0, conflictBurden: 0 };
+        const conflictBurden = clamp01(((conflictLevel * 0.40) + (uncertaintyLevel * 0.20) + (clamp01(conflictCtx.conflictBurden ?? 0) * 0.40)));
 
         const pairBond = clamp01(
             (bondStrength * 0.68) +
@@ -2809,11 +2883,12 @@ class Character {
         );
 
         const localSupport = clamp01(
-            (support * 0.50) +
-            (nearbySupport * 0.25) +
-            (stability * 0.15) +
+            (support * 0.48) +
+            (nearbySupport * 0.24) +
+            (stability * 0.13) +
             (this.homePosition ? 0.05 : 0) +
-            (partner?.homePosition ? 0.05 : 0)
+            (partner?.homePosition ? 0.05 : 0) +
+            ((1 - conflictBurden) * 0.05)
         );
 
         const selfNeedMargin = clamp01(
@@ -2856,7 +2931,22 @@ class Character {
         }
 
         const elderLoad = clamp01((elderCount * 0.22) / Math.max(1, workingAdultCount || 1));
-        const careLoad = clamp01(Math.max(0, (dependentChildCount * 0.24) + (elderLoad * 0.18) - (localSupport * 0.30) - (support * 0.12)));
+        const clusterScale = clamp01(Math.max(0, workingAdultCount - 5) / 8);
+        const crowdingPressure = clamp01(Math.max(0, ((workingAdultCount + dependentChildCount) - 5) / 8));
+        const rivalryPressure = clamp01(
+            ((conflictCtx.rivalCount || 0) * 0.07) +
+            ((conflictCtx.hostileGroupCount || 0) * 0.10) +
+            (conflictLevel * 0.20)
+        );
+        const careLoad = clamp01(Math.max(0,
+            (dependentChildCount * 0.24) +
+            (elderLoad * 0.18) +
+            (crowdingPressure * 0.20) +
+            (clusterScale * 0.10) +
+            (rivalryPressure * 0.08) -
+            (localSupport * 0.30) -
+            (support * 0.12)
+        ));
 
         const livelihoodViability = clamp01(
             ((1 - foodPressure) * 0.23) +
@@ -2869,23 +2959,33 @@ class Character {
         );
 
         const settlementMomentum = clamp01(
-            (localSupport * 0.42) +
-            (stability * 0.18) +
-            (pairBond * 0.20) +
-            (reproductiveTiming * 0.20) -
-            (elderLoad * 0.16)
+            (localSupport * 0.40) +
+            (stability * 0.16) +
+            (pairBond * 0.18) +
+            (reproductiveTiming * 0.18) -
+            (elderLoad * 0.14) -
+            (clusterScale * 0.10) -
+            (crowdingPressure * 0.12) -
+            (rivalryPressure * 0.08) -
+            (conflictBurden * 0.08) -
+            (uncertaintyLevel * 0.04)
         );
 
         const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
         const futureExpectation = clamp01(
-            (livelihoodViability * 0.44) +
-            (localSupport * 0.18) +
+            (livelihoodViability * 0.42) +
+            (localSupport * 0.16) +
             (pairBond * 0.12) +
             (settlementMomentum * 0.14) +
             (moderateThreatCohesion * params.anxietyCohesionBonus) -
             (socialPressure * params.pressurePenalty) -
             (careLoad * 0.10) -
-            (elderLoad * 0.06)
+            (elderLoad * 0.06) -
+            (clusterScale * 0.08) -
+            (crowdingPressure * 0.08) -
+            (rivalryPressure * 0.05) -
+            (conflictBurden * 0.05) -
+            (uncertaintyLevel * 0.03)
         );
 
         const readiness = clamp01(
@@ -2895,19 +2995,26 @@ class Character {
             (futureExpectation * 0.17) +
             (reproductiveTiming * 0.06) +
             (settlementMomentum * 0.08) -
-            (careLoad * 0.08)
+            (careLoad * 0.08) -
+            (crowdingPressure * 0.06) -
+            (conflictBurden * 0.03)
         );
 
         const reproductionHazard = clamp01(
-            0.03 +
-            (Math.max(-0.12, readiness - params.readinessThreshold) * 1.30) +
-            (pairBond * 0.20) +
-            (localSupport * 0.08) +
-            (futureExpectation * 0.08) +
-            (reproductiveTiming * 0.12) +
-            (settlementMomentum * 0.08) -
-            (careLoad * 0.16) -
+            0.02 +
+            (Math.max(-0.12, readiness - params.readinessThreshold) * 0.95) +
+            (pairBond * 0.16) +
+            (localSupport * 0.07) +
+            (futureExpectation * 0.07) +
+            (reproductiveTiming * 0.10) +
+            (settlementMomentum * 0.06) -
+            (careLoad * 0.18) -
             (elderLoad * 0.10) -
+            (clusterScale * 0.12) -
+            (crowdingPressure * 0.16) -
+            (rivalryPressure * 0.10) -
+            (conflictBurden * 0.08) -
+            (uncertaintyLevel * 0.05) -
             (socialPressure * 0.06)
         );
 
@@ -2922,6 +3029,11 @@ class Character {
             reproductiveTiming: Math.round(reproductiveTiming * 100) / 100,
             settlementMomentum: Math.round(settlementMomentum * 100) / 100,
             elderLoad: Math.round(elderLoad * 100) / 100,
+            clusterScale: Math.round(clusterScale * 100) / 100,
+            crowdingPressure: Math.round(crowdingPressure * 100) / 100,
+            rivalryPressure: Math.round(rivalryPressure * 100) / 100,
+            conflictBurden: Math.round(conflictBurden * 100) / 100,
+            uncertaintyLevel: Math.round(uncertaintyLevel * 100) / 100,
             careLoad: Math.round(careLoad * 100) / 100,
             dependentChildCount,
             reproductionHazard: Math.round(reproductionHazard * 100) / 100,
@@ -2933,10 +3045,16 @@ class Character {
         const ctx = this.getReproductionReadiness(partner);
         this._lastReproductionBlockInfo = ctx;
         const threshold = this.getReproductionModelParams().readinessThreshold;
-        if (ctx.readiness >= threshold) return true;
         const viableBond = ctx.pairBond >= 0.58 && ctx.futureExpectation >= Math.max(0.34, threshold - 0.12);
-        if (!viableBond) return false;
-        return Math.random() < Math.max(0.08, ctx.reproductionHazard || 0);
+        if (ctx.readiness < threshold && !viableBond) return false;
+
+        const hazard = Math.max(0, Math.min(1, Number(ctx.reproductionHazard || 0)));
+        const readinessLift = Math.max(0, Number(ctx.readiness || 0) - threshold);
+        const attemptChance = Math.max(
+            ctx.readiness >= threshold ? 0.015 : 0.005,
+            Math.min(0.14, (hazard * (ctx.readiness >= threshold ? 0.18 : 0.10)) + (readinessLift * 0.08))
+        );
+        return Math.random() < attemptChance;
     }
 
     update(deltaTime, isNight, camera) {
@@ -3179,6 +3297,7 @@ class Character {
             const { ally, bonded } = this.getRelationshipThresholds();
             const { nearbyRadius, groupBonus, allyPresenceBonus, comfortRecoveryRate, groupComfortScale, nightSafetyAllyBonus, nightSafetyBondedBonus } = this.getSupportModelParams();
             const householdSupport = this.getNearbyHouseholdSupport(nearbyRadius + 1);
+            const crowdingBurden = Math.max(0, (householdSupport.nearbyCount || 0) - 4);
             let hasNearbyTrustedTie = false;
             for (const [otherId, aff] of this.relationships.entries()) {
                 if (aff < ally) continue;
@@ -3203,8 +3322,48 @@ class Character {
                     (hasNearbyTrustedTie ? allyPresenceBonus : 0) +
                     (householdSupport.hasNearby ? Math.min(allyPresenceBonus, 0.18 + (householdSupport.nearbyCount * 0.04)) : 0) +
                     (this.groupId ? (groupBonus * groupComfortScale) : 0);
+                const supportSaturation = Math.max(0.4, 1 - Math.min(0.45, crowdingBurden * 0.06));
                 if (passiveSupport > 0) {
-                    this.needs.social = Math.min(100, this.needs.social + (deltaTime * comfortRecoveryRate * passiveSupport));
+                    this.needs.social = Math.min(100, this.needs.social + (deltaTime * comfortRecoveryRate * passiveSupport * supportSaturation));
+                }
+                if (!isNight && crowdingBurden > 2) {
+                    this.needs.social = Math.max(0, this.needs.social - deltaTime * Math.min(0.18, crowdingBurden * 0.02));
+                }
+            }
+        }
+
+        {
+            const clamp01Local = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+            this._uncertaintyTick = (this._uncertaintyTick || 0) + deltaTime;
+            if (this._uncertaintyTick >= 6) {
+                this._uncertaintyTick = 0;
+                const districtCtx = this.getDistrictSocialContext ? this.getDistrictSocialContext() : {};
+                const baseShock = clamp01Local(
+                    (Number(districtCtx.conflictLevel || 0) * 0.30) +
+                    (Number(districtCtx.timeStress || 0) * 0.18) +
+                    (Number(districtCtx.housingPressure || 0) * 0.14) +
+                    (Math.random() * 0.18)
+                );
+                this._uncertaintyShock = clamp01Local(((Number(this._uncertaintyShock || 0.12)) * 0.70) + (baseShock * 0.30));
+            }
+            const conflictCtx = this.getConflictEnvironmentContext ? this.getConflictEnvironmentContext(5) : null;
+            const householdSupport = this.getNearbyHouseholdSupport(4);
+            const cohesionShield = clamp01Local(
+                (this.groupId ? 0.24 : 0) +
+                (this.homePosition ? 0.18 : 0) +
+                (householdSupport.hasNearby ? Math.min(0.24, householdSupport.nearbyCount * 0.05) : 0)
+            );
+            const rawTension = clamp01Local(conflictCtx?.conflictBurden ?? 0);
+            const tension = clamp01Local(Math.max(0, rawTension - (cohesionShield * 0.60)));
+            if (tension > 0.16) {
+                if (!this.isSafe(isNight) && !householdSupport.hasNearby) {
+                    this.needs.safety = Math.max(0, this.needs.safety - deltaTime * (0.08 * tension));
+                }
+                if (!this.groupId || (conflictCtx?.hostileGroupCount || 0) > 0) {
+                    this.needs.social = Math.max(0, this.needs.social - deltaTime * (0.05 * tension));
+                }
+                if (householdSupport.target && this.state === 'idle' && !isNight) {
+                    this._socialAnchorId = householdSupport.target.id;
                 }
             }
         }
@@ -3264,14 +3423,15 @@ class Character {
             if (this.relationships && this.relationships.size > 0) {
                 const _floor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
                 const _chars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+                const { ally } = this.getRelationshipThresholds();
                 for (const [otherId, aff] of this.relationships.entries()) {
-                    if (aff <= _floor + 3) {
-                        const other = _chars.find(c => c.id === otherId && c.state !== 'dead');
-                        if (other) {
-                            const dx = Math.abs(this.gridPos.x - other.gridPos.x);
-                            const dz = Math.abs(this.gridPos.z - other.gridPos.z);
-                            if (dx + dz <= 5) { this._nearEnemy = true; break; }
-                        }
+                    const other = _chars.find(c => c.id === otherId && c.state !== 'dead');
+                    if (!other) continue;
+                    const crossGroupThreat = !!this.groupId && !!other.groupId && this.groupId !== other.groupId && aff < Math.max(_floor + 8, ally - 10);
+                    if (aff <= _floor + 3 || crossGroupThreat) {
+                        const dx = Math.abs(this.gridPos.x - other.gridPos.x);
+                        const dz = Math.abs(this.gridPos.z - other.gridPos.z);
+                        if (dx + dz <= 5) { this._nearEnemy = true; break; }
                     }
                 }
 

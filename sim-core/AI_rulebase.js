@@ -48,6 +48,50 @@ export function decideNextAction_rulebase(character, isNight) {
         * (1 + (1 - (aging.mobilityMul || 1.0)) * 0.8);
     const effectiveRestThreshold = clamp(45 + (2.0 - (character.personality.bravery ?? 1.0)) * 18 + (adapt.rest * 15) + (aging.restThresholdBonus || 0), 25, 75);
     const readyToRoamThreshold = Math.max(effectiveEnergyEmergency + 16, effectiveRestThreshold + wanderReserveEnergy);
+    const supportSnapshot = (typeof character.getRelationshipSnapshot === 'function') ? character.getRelationshipSnapshot(6) : null;
+    const districtCtx = (typeof character.getDistrictSocialContext === 'function') ? character.getDistrictSocialContext() : {};
+    const supportScore = clamp(Number(supportSnapshot?.supportScore ?? 0), 0, 1);
+    const conflictPressure = clamp(Number(districtCtx?.conflictLevel ?? 0), 0, 1);
+    const uncertaintyPressure = clamp(Number(districtCtx?.uncertaintyLevel ?? character._uncertaintyShock ?? 0), 0, 1);
+    const groupScale = clamp(
+        ((character.groupId ? 1 : 0) * 0.55) + Math.min(0.45, (((supportSnapshot?.allyCount || 0) + (supportSnapshot?.bondedCount || 0)) * 0.06)),
+        0,
+        1
+    );
+    const supportCrowding = clamp(Math.max(0, ((supportSnapshot?.allyCount || 0) + (supportSnapshot?.bondedCount || 0) - 6) / 10), 0, 1);
+    const energyReserve = clamp((Number(character.needs.energy || 0) - effectiveEnergyEmergency) / Math.max(10, 100 - effectiveEnergyEmergency), 0, 1);
+    const safetyReserve = clamp(Number(character.needs.safety || 0) / 100, 0, 1);
+    const socialSaturation = clamp(Number(character.needs.social || 0) / 100, 0, 1);
+    const hungerPressure = clamp(Math.max(0, 45 - Number(character.needs.hunger || 0)) / 45, 0, 1);
+    // Settlement stability is a theory-backed internal state: characters with a home,
+    // support, and strong reserves should spend more time local and less time roaming.
+    const settlementStability = clamp(
+        (character.homePosition ? 0.24 : 0) +
+        (supportScore * 0.26) +
+        (groupScale * 0.18) +
+        (energyReserve * 0.12) +
+        (safetyReserve * 0.10) +
+        (socialSaturation * 0.10) -
+        (hungerPressure * 0.12) -
+        (supportCrowding * 0.10) -
+        (conflictPressure * 0.08) -
+        (uncertaintyPressure * 0.06),
+        0,
+        1
+    );
+    const explorationNeed = clamp(
+        ((character.personality.curiosity ?? 1.0) * 0.30) +
+        ((aging.exploreMul || 1.0) * 0.16) +
+        ((1 - supportScore) * 0.18) +
+        (character.homePosition ? 0 : 0.14) +
+        (!character.groupId ? 0.08 : 0) -
+        (settlementStability * 0.28) +
+        (supportCrowding * 0.08) -
+        (conflictPressure * 0.07) -
+        (uncertaintyPressure * 0.05),
+        0.04,
+        1.2
+    );
 
     // === PRIORITY 0: EMERGENCY ENERGY — force REST before any other decision ===
     // Home-building and wandering both consume energy; a depleted character must rest
@@ -131,10 +175,10 @@ export function decideNextAction_rulebase(character, isNight) {
         && character.needs.social > socialDriftThreshold;
     const explorationWeight = canExploreFreely
         ? clamp(
-            explorationBaseRate * (character.personality.curiosity ?? 1.0) * (aging.exploreMul || 1.0)
+            explorationBaseRate * explorationNeed * Math.max(0.18, 1 - (settlementStability * 0.72))
                 * (1 + (adapt.explore * explorationAdaptBoost) - (adapt.forage * explorationForagePenalty) - (adapt.rest * explorationRestPenalty)),
-            explorationMinRate,
-            explorationMaxRate
+            explorationMinRate * Math.max(0.35, 1 - settlementStability),
+            explorationMaxRate * Math.max(0.45, 1 - (settlementStability * 0.45))
         )
         : 0;
     if (Math.random() < explorationWeight) {
@@ -167,11 +211,17 @@ export function decideNextAction_rulebase(character, isNight) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos);
             return;
         }
-        if (character.needs.energy > readyToRoamThreshold && character.needs.hunger > 35) {
+        if (character.needs.energy > readyToRoamThreshold && character.needs.hunger > 35 && settlementStability < 0.48) {
             character.setNextAction('WANDER');
         } else {
-            character.setNextAction('REST');
-            character.log('Action: REST (social search paused to preserve energy)');
+            const localSupportTarget = character.getPreferredSupportTarget && character.getPreferredSupportTarget();
+            if (localSupportTarget?.char && settlementStability >= 0.35) {
+                character.setNextAction('SOCIALIZE', localSupportTarget.char, localSupportTarget.targetPos || localSupportTarget.char.gridPos);
+                character.log('Action: SOCIALIZE (stable support regroup)');
+            } else {
+                character.setNextAction('REST');
+                character.log('Action: REST (social search paused to preserve energy)');
+            }
         }
         return;
     }
@@ -839,6 +889,17 @@ export function decideNextAction_rulebase(character, isNight) {
     if (character.needs.energy < readyToRoamThreshold && character.needs.hunger > 20) {
         character.setNextAction('REST');
         character.log('Action: REST (preserve energy, skip default wander)');
+        return;
+    }
+    if (settlementStability >= 0.62) {
+        const localSupportTarget = character.getPreferredSupportTarget && character.getPreferredSupportTarget();
+        if (localSupportTarget?.char && Math.random() < 0.7) {
+            character.setNextAction('SOCIALIZE', localSupportTarget.char, localSupportTarget.targetPos || localSupportTarget.char.gridPos);
+            character.log('Action: SOCIALIZE (stable household routine)');
+        } else {
+            character.setNextAction('REST');
+            character.log('Action: REST (stable household routine)');
+        }
         return;
     }
 
