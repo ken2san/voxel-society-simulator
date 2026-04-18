@@ -484,27 +484,23 @@ class Character {
 
                 this.log('Successfully collected food', { x, y, z });
 
-                // 即座に食べる（美味しそうなアニメーション）
+                // Restore hunger synchronously so headless (no setTimeout) and browser both work.
+                this.inventory[0] = null;
+                this.carriedItemMesh.visible = false;
+                const inDanger = this.needs.hunger <= 15 || this.needs.energy <= 15;
+                this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
+                if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
+                this.eatCount = (this.eatCount || 0) + 1;
+                this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
+
+                // Visual-only animations (no-op in headless where setTimeout is disabled)
                 setTimeout(() => {
                     this.showActionIcon('😋', 1.5);
-                    this.inventory[0] = null;
-                    this.carriedItemMesh.visible = false;
-                    const inDanger = this.needs.hunger <= 15 || this.needs.energy <= 15;
-                    this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
-                    this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
-                    if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now()); // remember this food spawn location
-                    this.eatCount = (this.eatCount || 0) + 1;
-                    this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
-
-                    // 満腹感の表現
-                    setTimeout(() => {
-                        if (this.needs.hunger > 80) {
-                            this.showActionIcon('😊', 1.0);
-                        }
-                    }, 1000);
-
-                    this.log('Ate collected food, hunger restored to', this.needs.hunger);
-                }, 800);
+                    if (this.needs.hunger > 80) {
+                        setTimeout(() => this.showActionIcon('😊', 1.0), 1000);
+                    }
+                }, 200);
             } else {
                 this.log('COLLECT_FOOD: Target is not edible', { blockId, blockType });
             }
@@ -1760,6 +1756,18 @@ class Character {
         } = options;
 
         return this.bfsPath(this.gridPos, destination, maxSteps, allowDiagonal, allowVertical, directMoveThreshold);
+    }
+
+    // --- Strict path check: returns path only if goal is actually reached (no partial paths) ---
+    // Used by findClosestFood and AI_rulebase reachability checks.
+    // bfsPath returns partial paths when goal is unreachable; this method treats those as null.
+    findPath(from, to, options = {}) {
+        const maxSteps = options.maxSteps || 64;
+        const path = this.bfsPath(from, to, maxSteps);
+        if (!path || path.length === 0) return null;
+        const last = path[path.length - 1];
+        if (last.x !== to.x || last.y !== to.y || last.z !== to.z) return null;
+        return path;
     }
 
     // --- BFS経路探索（統合版） ---
