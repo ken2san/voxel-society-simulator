@@ -157,10 +157,23 @@ class Character {
         return false;
     }
 
+    releaseCurrentActionReservation() {
+        try {
+            const target = this.action?.target;
+            if (target && target.x !== undefined && target.y !== undefined && target.z !== undefined) {
+                Character.releaseReservation(`${target.x},${target.y},${target.z}`, this.id);
+            }
+        } catch (e) { /* ignore */ }
+    }
+
     // Consolidate repeated idle-transition logic used across action handlers.
     setIdleState({ clearAction = false, cooldown = null } = {}) {
         this.state = 'idle';
-        if (clearAction) this.action = null;
+        if (clearAction) {
+            this.releaseCurrentActionReservation();
+            Character.releaseReservationsByOwner(this.id, this._reservedSidestepKey ? [this._reservedSidestepKey] : []);
+            this.action = null;
+        }
         if (cooldown !== null) this.actionCooldown = cooldown;
     }
 
@@ -973,6 +986,7 @@ class Character {
         // Reservation and failed-target avoidance: if the target is a grid position, check reservations and failure counts
         if (target && target.x !== undefined && target.y !== undefined && target.z !== undefined) {
             const tkey = `${target.x},${target.y},${target.z}`;
+            Character.releaseReservationsByOwner(this.id, [tkey, this._reservedSidestepKey].filter(Boolean));
             const isFoodAction = type === 'COLLECT_FOOD' || type === 'EAT';
             const rememberBusyFood = (ttlMs = null) => {
                 if (!isFoodAction || typeof this.rememberBusyFoodTarget !== 'function') return;
@@ -1190,6 +1204,17 @@ class Character {
             }
         }
     }
+
+    static releaseReservationsByOwner(owner, exceptKeys = []) {
+        if (typeof window === 'undefined' || !window.worldReservations || !owner) return;
+        const keep = new Set((Array.isArray(exceptKeys) ? exceptKeys : [exceptKeys]).filter(Boolean));
+        for (const [key, value] of Array.from(window.worldReservations.entries())) {
+            if (value?.owner === owner && !keep.has(key)) {
+                window.worldReservations.delete(key);
+            }
+        }
+    }
+
     // Instance helper: release any sidestep reservation this character currently holds
     releaseReservedSidestep() {
         try {
@@ -4226,6 +4251,9 @@ class Character {
     die(cause = 'unknown') {
         if (this._deathHandled || this.state === 'dead') return;
         this._deathHandled = true;
+        this.releaseCurrentActionReservation();
+        Character.releaseReservationsByOwner(this.id);
+        this.releaseReservedSidestep();
         this.state = 'dead';
 
         try {
