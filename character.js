@@ -1,38 +1,18 @@
 // --- 落下先が安全か（抜け出せるか）判定 ---
 
-import * as THREE from 'three';
 import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter } from './world.js';
-import { decideNextAction_rulebase } from './AI_rulebase.js';
-import { decideNextAction_utility } from './AI_utility.js';
+import { decideNextAction_rulebase } from './sim-core/AI_rulebase.js';
+import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
+import { getSimulationIO, gridToWorldPosition } from './sim-core/interfaces.js';
 
-// --- Helper: 3Dオブジェクトのワールド座標をスクリーン座標に変換 ---
+function simIO() {
+    return getSimulationIO();
+}
+
+// --- Helper: world object position to screen position ---
 function toScreenPosition(obj, camera, canvas = null) {
-    if (!obj || !camera || obj.visible === false) return null;
-    // obj: THREE.Object3D, camera: THREE.Camera, canvas: HTMLCanvasElement
-    const vector = new THREE.Vector3();
-    obj.updateMatrixWorld();
-    vector.setFromMatrixPosition(obj.matrixWorld);
-    vector.project(camera);
-
-    // Outside the camera frustum or behind the camera: do not show DOM overlays.
-    if (!Number.isFinite(vector.x) || !Number.isFinite(vector.y) || !Number.isFinite(vector.z)) return null;
-    if (vector.z < -1 || vector.z > 1) return null;
-
-    let rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-    if (!canvas) {
-        canvas = document.getElementById('gameCanvas');
-    }
-    if (canvas && typeof canvas.getBoundingClientRect === 'function') {
-        rect = canvas.getBoundingClientRect();
-    }
-    const x = (vector.x + 1) / 2 * rect.width + rect.left;
-    const y = (1 - vector.y) / 2 * rect.height + rect.top;
-    const margin = 24;
-    if (x < rect.left - margin || x > rect.left + rect.width + margin || y < rect.top - margin || y > rect.top + rect.height + margin) {
-        return null;
-    }
-    return { x, y };
+    return simIO().toScreenPosition(obj, camera, canvas);
 }
 // charactersはグローバル参照のまま（循環参照回避のため）
 
@@ -453,27 +433,26 @@ class Character {
     updateCarriedItemAppearance(itemType) {
         if (!this.carriedItemMesh) return;
 
-        let material;
+        let color = 0x8B4513;
         switch (itemType) {
             case 'FRUIT_ITEM':
-                material = new THREE.MeshLambertMaterial({ color: 0xFF6B35 }); // オレンジ色（果実）
+                color = 0xFF6B35;
                 break;
             case 'WOOD_LOG':
-                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // 茶色（木材）
+                color = 0x8B4513;
                 break;
             case 'STONE_TOOL':
-                material = new THREE.MeshLambertMaterial({ color: 0x696969 }); // グレー（石）
+                color = 0x696969;
                 break;
             default:
-                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // デフォルト茶色
+                color = 0x8B4513;
                 break;
         }
 
-        // 古いマテリアルを破棄して新しいマテリアルを設定
-        if (this.carriedItemMesh.material) {
+        if (this.carriedItemMesh.material?.dispose) {
             this.carriedItemMesh.material.dispose();
         }
-        this.carriedItemMesh.material = material;
+        this.carriedItemMesh.material = simIO().createMaterial({ color });
     }
 
     collectFood() {
@@ -1307,6 +1286,27 @@ class Character {
     }
 
     // --- Group detection and per-group leader election ---
+    static markGroupsDirty(characters) {
+        Character._groupRefreshPending = true;
+        if (Array.isArray(characters) && characters.length > 0) {
+            Character._groupRefreshCharacters = characters;
+        }
+    }
+
+    static maybeRefreshGroups(characters, force = false) {
+        const roster = Array.isArray(characters) && characters.length > 0
+            ? characters
+            : (Array.isArray(Character._groupRefreshCharacters) ? Character._groupRefreshCharacters : []);
+        if (roster.length === 0) return;
+        const now = Date.now();
+        const last = Number(Character._lastGroupRefreshAt || 0);
+        if (!force && !Character._groupRefreshPending) return;
+        if (!force && (now - last) < 2000) return;
+        Character._lastGroupRefreshAt = now;
+        Character._groupRefreshPending = false;
+        Character.detectGroupsAndElectLeaders(roster);
+    }
+
     // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
     static detectGroupsAndElectLeaders(characters) {
         if (!characters || characters.length === 0) return;
@@ -1328,9 +1328,12 @@ class Character {
             while (queue.length > 0) {
                 const current = queue.shift();
                 for (const [otherId, affinity] of current.relationships.entries()) {
-                    if (affinity < affinityTh) continue;
                     const other = characters.find(c => c.id === otherId);
-                    if (other && !other.groupId) {
+                    if (!other) continue;
+                    const householdTie = !!current.isHouseholdTie?.(other) || !!other.isHouseholdTie?.(current);
+                    const anchoredTie = String(current._socialAnchorId || '') === String(other.id) || String(other._socialAnchorId || '') === String(current.id);
+                    if (affinity < affinityTh && !householdTie && !anchoredTie) continue;
+                    if (!other.groupId) {
                         other.groupId = groupIdCounter;
                         queue.push(other);
                         groupMembers.push(other);
@@ -1429,7 +1432,7 @@ class Character {
     static electLeader() {}
     // --- Visualize owned land: tint ground block under owned tiles ---
     visualizeOwnedLand() {
-        // Only tint if three.js mesh exists and worldData/blockMaterials is available
+        // Only tint if a live mesh exists and worldData/blockMaterials is available
         if (!this.ownedLand || !blockMaterials) return;
         for (const key of this.ownedLand) {
             const [x, y, z] = key.split(',').map(Number);
@@ -1955,8 +1958,7 @@ class Character {
             this.carriedItemMesh.position.set(0, m.carriedItemY, m.carriedItemZ);
         }
         if (this.shadowMesh) {
-            if (this.shadowMesh.geometry) this.shadowMesh.geometry.dispose();
-            this.shadowMesh.geometry = new THREE.CircleGeometry(m.shadowRadius, 32);
+            simIO().updateShadowGeometry(this.shadowMesh, m.shadowRadius);
         }
     }
 
@@ -1965,9 +1967,6 @@ class Character {
         this.log('Character constructed', { id, startPos, genes });
         this.id = id;
         this.scene = scene;
-        this.mesh = new THREE.Group();
-        this.mesh.name = 'Character_' + id;
-        this.scene.add(this.mesh);
 
         // --- 行動カウント系 ---
         this.childCount = 0;
@@ -2041,55 +2040,22 @@ class Character {
         this.relationships = new Map();
         this.bfsFailCount = 0;
 
-        // Visuals (haniwa style)
-        // Clay-like color
-        this.bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 }); // haniwa clay color
-        this.bodyMaterial.gradientMap = null;
-        // Tall cylindrical body (haniwa)
-        this.body = new THREE.Mesh(new THREE.CylinderGeometry(this.morphology.bodyTopRadius, this.morphology.bodyBottomRadius, this.morphology.bodyHeight, 32), this.bodyMaterial);
-        this.body.castShadow = true;
-        this.body.receiveShadow = true;
-        this.mesh.add(this.body);
-        // Simple head (slightly smaller cylinder)
-        this.head = new THREE.Mesh(new THREE.CylinderGeometry(this.morphology.headRadiusTop, this.morphology.headRadiusBottom, this.morphology.headHeight, 24), this.bodyMaterial);
-        this.head.castShadow = true;
-        this.head.receiveShadow = true;
-        this.mesh.add(this.head);
-        // Icon anchor (above head)
-        this.iconAnchor = new THREE.Object3D();
-        this.head.add(this.iconAnchor);
-        // Simple face: two holes (black circles) for eyes
-        this.eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
-        const eyeGeometry = new THREE.CylinderGeometry(this.morphology.eyeRadius, this.morphology.eyeRadius, 0.01, 12);
-        this.leftEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.leftEye.rotation.x = Math.PI/2; this.head.add(this.leftEye);
-        this.rightEye = new THREE.Mesh(eyeGeometry, this.eyeMaterial); this.rightEye.rotation.x = Math.PI/2; this.head.add(this.rightEye);
-        this.eyeMeshes = [this.leftEye, this.rightEye];
-        // Simple mouth: small horizontal hole
-        const mouthGeometry = new THREE.CylinderGeometry(this.morphology.mouthRadius, this.morphology.mouthRadius, 0.01, 12);
-        this.mouth = new THREE.Mesh(mouthGeometry, this.eyeMaterial);
-        this.mouth.rotation.x = Math.PI/2;
-        this.head.add(this.mouth);
-        // Arm loops (torus)
-        const armMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
-        const armGeometry = new THREE.TorusGeometry(this.morphology.armLoopRadius, this.morphology.armThickness, 10, 24, Math.PI*1.2);
-        this.leftArm = new THREE.Mesh(armGeometry, armMaterial); this.leftArm.rotation.z = Math.PI/2.2; this.body.add(this.leftArm);
-        this.rightArm = new THREE.Mesh(armGeometry, armMaterial); this.rightArm.rotation.z = -Math.PI/2.2; this.body.add(this.rightArm);
-        // Carried item
-        const carriedItemMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown color
-        this.carriedItemMesh = new THREE.Mesh(new THREE.BoxGeometry(this.morphology.carriedItemSize, this.morphology.carriedItemSize, this.morphology.carriedItemSize), carriedItemMaterial); this.carriedItemMesh.visible = false; this.mesh.add(this.carriedItemMesh);
-        // Shadow
-        const shadowGeometry = new THREE.CircleGeometry(this.morphology.shadowRadius, 32);
-        const shadowMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
-        this.shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
-        this.shadowMesh.position.set(0, 0.01, 0);
-        this.shadowMesh.rotation.x = -Math.PI / 2;
-        this.mesh.add(this.shadowMesh);
-        // Thought bubble
-        this.thoughtBubble = document.createElement('div');
-        this.thoughtBubble.className = 'thought-bubble';
-        this.thoughtBubble.setAttribute('data-aos', 'zoom-in');
-        this.thoughtBubble.setAttribute('data-aos-duration', '300');
-        document.body.appendChild(this.thoughtBubble);
+        const visuals = simIO().createCharacterVisuals(this, this.scene) || {};
+        this.mesh = visuals.mesh;
+        this.bodyMaterial = visuals.bodyMaterial;
+        this.body = visuals.body;
+        this.head = visuals.head;
+        this.iconAnchor = visuals.iconAnchor;
+        this.eyeMaterial = visuals.eyeMaterial;
+        this.leftEye = visuals.leftEye;
+        this.rightEye = visuals.rightEye;
+        this.eyeMeshes = visuals.eyeMeshes || [this.leftEye, this.rightEye].filter(Boolean);
+        this.mouth = visuals.mouth;
+        this.leftArm = visuals.leftArm;
+        this.rightArm = visuals.rightArm;
+        this.carriedItemMesh = visuals.carriedItemMesh;
+        this.shadowMesh = visuals.shadowMesh;
+        this.thoughtBubble = visuals.thoughtBubble;
 
         this.applyMorphologyToMeshes();
         this.updateColorFromPersonality();
@@ -2114,20 +2080,44 @@ class Character {
     this._lastMoveProgressTime = Date.now();
 
         // --- Action icon (for action effect) ---
-        this.actionIconDiv = document.createElement('div');
-        this.actionIconDiv.className = 'action-icon';
-        this.actionIconDiv.style.position = 'fixed';
-        this.actionIconDiv.style.zIndex = 1000;
-        this.actionIconDiv.style.fontSize = '2em';
-        this.actionIconDiv.style.pointerEvents = 'none';
-        this.actionIconDiv.style.transition = 'opacity 0.3s, transform 0.3s';
-        this.actionIconDiv.style.opacity = 0;
-        document.body.appendChild(this.actionIconDiv);
+        this.actionIconDiv = visuals.actionIconDiv;
 
         // Ensure a global lightweight reservation map exists to avoid duplicate targets
         if (typeof window !== 'undefined') {
             if (!window.worldReservations) window.worldReservations = new Map();
         }
+    }
+
+    static applyInitialAgeSpread(targetChars = []) {
+        const ratioRaw = (typeof window !== 'undefined' && window.initialAgeMaxRatio !== undefined)
+            ? Number(window.initialAgeMaxRatio) : 0.5;
+        const ratio = Math.max(0, Math.min(1, Number.isFinite(ratioRaw) ? ratioRaw : 0.5));
+        const maturityAge = (typeof window !== 'undefined' && window.childMaturitySeconds !== undefined)
+            ? Number(window.childMaturitySeconds) : 60;
+
+        targetChars.forEach(c => {
+            if (!c) return;
+            const lifespan = (typeof c.getEffectiveLifespan === 'function') ? c.getEffectiveLifespan() : ((typeof window !== 'undefined' && window.characterLifespan) || 240);
+            const spreadUnit = Math.random();
+            c.age = spreadUnit * lifespan * ratio;
+            c.maturityAge = maturityAge;
+            c.isChild = c.age < maturityAge;
+
+            if (typeof c.movementSpeed === 'number' && typeof c._preChildMovementSpeed !== 'number') {
+                c._preChildMovementSpeed = c.movementSpeed;
+            }
+            if (c.isChild) {
+                if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed * 0.88;
+                if (c.mesh?.scale?.set) c.mesh.scale.set(0.72, 0.72, 0.72);
+                if (c.body?.scale?.set) c.body.scale.set(0.72, 0.72, 0.72);
+                if (c.head?.scale?.set) c.head.scale.set(0.72, 0.72, 0.72);
+            } else {
+                if (typeof c._preChildMovementSpeed === 'number') c.movementSpeed = c._preChildMovementSpeed;
+                if (c.mesh?.scale?.set) c.mesh.scale.set(1, 1, 1);
+                if (c.body?.scale?.set) c.body.scale.set(1, 1, 1);
+                if (c.head?.scale?.set) c.head.scale.set(1, 1, 1);
+            }
+        });
     }
 
     // --- 全キャラクターのrelationshipsを一括初期化 ---
@@ -2223,16 +2213,19 @@ class Character {
             const affinity = Number(this.relationships.get(char.id) || 0);
             const relationClass = this.getRelationshipClass(char.id);
             const familiarTie = affinity >= acquaintance;
-            const anchored = String(this._socialAnchorId || '') === String(char.id) && familiarTie;
+            const householdTie = this.isHouseholdTie(char);
+            const anchored = String(this._socialAnchorId || '') === String(char.id) && (familiarTie || householdTie);
             const sameGroupBonus = (this.groupId && char.groupId && this.groupId === char.groupId) ? 8 : 0;
-            const trustBonus = relationClass === 'bonded'
-                ? trustedTieBonus
-                : (relationClass === 'ally'
-                    ? trustedTieBonus * 0.65
-                    : (familiarTie ? trustedTieBonus * 0.35 : 0));
+            const trustBonus = householdTie
+                ? trustedTieBonus * 1.2
+                : (relationClass === 'bonded'
+                    ? trustedTieBonus
+                    : (relationClass === 'ally'
+                        ? trustedTieBonus * 0.65
+                        : (familiarTie ? trustedTieBonus * 0.35 : 0)));
             const anchorBonus = anchored ? trustedTieBonus * (0.35 + (socialAnchorBias * 0.65)) : 0;
-            const distancePenalty = dist * (anchored || relationClass === 'ally' || relationClass === 'bonded' || familiarTie ? 6.2 : 9);
-            const score = affinity + sameGroupBonus + trustBonus + anchorBonus - distancePenalty + (Math.random() * 1.5);
+            const distancePenalty = dist * (anchored || householdTie || relationClass === 'ally' || relationClass === 'bonded' || familiarTie ? 5.4 : 9);
+            const score = affinity + sameGroupBonus + trustBonus + anchorBonus + (householdTie ? 10 : 0) - distancePenalty + (Math.random() * 1.5);
             if (score > bestScore) {
                 bestScore = score;
                 best = char;
@@ -2260,18 +2253,20 @@ class Character {
             const sameGroup = !!this.groupId && !!char.groupId && this.groupId === char.groupId;
             const strongTie = relationClass === 'ally' || relationClass === 'bonded';
             const familiarTie = affinity >= acquaintance;
-            const anchored = String(this._socialAnchorId || '') === String(char.id) && familiarTie;
-            if (!sameGroup && !strongTie && !familiarTie && !anchored) continue;
+            const householdTie = this.isHouseholdTie(char);
+            const anchored = String(this._socialAnchorId || '') === String(char.id) && (familiarTie || householdTie);
+            if (!sameGroup && !strongTie && !familiarTie && !anchored && !householdTie) continue;
 
             const tieStrength = Math.max(0, Math.min(1,
                 (affinity / 100) +
                 (sameGroup ? groupBonus : 0) +
                 (strongTie ? allyPresenceBonus : 0) +
-                (anchored ? allyPresenceBonus : 0)
+                (anchored ? allyPresenceBonus : 0) +
+                (householdTie ? allyPresenceBonus * 1.1 : 0)
             ));
             const normalizedDistance = dist / Math.max(1, searchRange);
             const familiarBonus = familiarTie ? ((trustedTieBonus * 0.45) / 100) : 0;
-            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : familiarBonus) + (anchored ? socialAnchorBias : 0) - normalizedDistance + (Math.random() * 0.05);
+            const score = tieStrength + (strongTie ? (trustedTieBonus / 100) : familiarBonus) + (anchored ? socialAnchorBias : 0) + (householdTie ? (trustedTieBonus / 85) : 0) - normalizedDistance + (Math.random() * 0.05);
             if (score > bestScore) {
                 const adjacent = this.findAdjacentSpot(char.gridPos);
                 bestScore = score;
@@ -2280,12 +2275,45 @@ class Character {
                     targetPos: adjacent || char.gridPos,
                     pullStrength: tieStrength,
                     distance: dist,
-                    relationClass: strongTie ? relationClass : (familiarTie ? 'familiar' : relationClass)
+                    relationClass: householdTie ? 'household' : (strongTie ? relationClass : (familiarTie ? 'familiar' : relationClass))
                 };
             }
         }
 
         return best;
+    }
+
+    isHouseholdTie(other) {
+        const otherId = typeof other === 'object' ? other?.id : other;
+        if (otherId === undefined || otherId === null) return false;
+        if (this._lovePartnerId === otherId) return true;
+        if (Array.isArray(this.parentIds) && this.parentIds.includes(otherId)) return true;
+        if (Array.isArray(this.children) && this.children.includes(otherId)) return true;
+        return false;
+    }
+
+    getNearbyHouseholdSupport(maxDistance = null) {
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const { nearbyRadius } = this.getSupportModelParams();
+        const searchRange = Math.max(1, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : (nearbyRadius + 1));
+        let nearbyCount = 0;
+        let strongestAffinity = 0;
+
+        for (const char of chars) {
+            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
+            if (!this.isHouseholdTie(char)) continue;
+            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
+            if (dist <= searchRange) {
+                nearbyCount++;
+                strongestAffinity = Math.max(strongestAffinity, Number(this.relationships.get(char.id) || 0));
+            }
+        }
+
+        return {
+            hasNearby: nearbyCount > 0,
+            nearbyCount,
+            strongestAffinity
+        };
     }
 
     findClosestFood() {
@@ -2765,6 +2793,7 @@ class Character {
         const timeStress = clamp01(ctx.timeStress ?? 0);
         const socialPressure = clamp01(ctx.socialPressure ?? 0);
         const nearbySupport = clamp01(networkSnapshot?.supportScore ?? 0);
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
 
         const pairBond = clamp01(
             (bondStrength * 0.68) +
@@ -2792,28 +2821,55 @@ class Character {
             (Number(partner?.needs?.safety || 0) / 100) * 0.30
         );
 
+        const uniqueDependentChildren = new Set([
+            ...(Array.isArray(this.children) ? this.children : []),
+            ...(Array.isArray(partner?.children) ? partner.children : [])
+        ]);
+        let dependentChildCount = 0;
+        for (const childId of uniqueDependentChildren) {
+            const child = chars.find(c => c && c.id === childId && c.state !== 'dead');
+            if (!child) continue;
+            const stage = child.getLifeStage ? child.getLifeStage() : (child.isChild ? 'child' : 'adult');
+            if (stage === 'child' || stage === 'young') dependentChildCount++;
+        }
+
+        const careLoad = clamp01(Math.max(0, (dependentChildCount * 0.24) - (localSupport * 0.30) - (support * 0.12)));
+
         const livelihoodViability = clamp01(
-            ((1 - foodPressure) * 0.26) +
-            ((1 - housingPressure) * 0.24) +
-            ((1 - timeStress) * 0.18) +
-            (selfNeedMargin * 0.16) +
-            (partnerNeedMargin * 0.16)
+            ((1 - foodPressure) * 0.24) +
+            ((1 - housingPressure) * 0.22) +
+            ((1 - timeStress) * 0.16) +
+            (selfNeedMargin * 0.15) +
+            (partnerNeedMargin * 0.15) +
+            ((1 - careLoad) * 0.08)
         );
 
         const moderateThreatCohesion = clamp01(1 - (Math.abs(socialPressure - 0.35) / 0.35));
         const futureExpectation = clamp01(
-            (livelihoodViability * 0.55) +
-            (localSupport * 0.20) +
-            (pairBond * 0.15) +
+            (livelihoodViability * 0.52) +
+            (localSupport * 0.22) +
+            (pairBond * 0.14) +
             (moderateThreatCohesion * params.anxietyCohesionBonus) -
-            (socialPressure * params.pressurePenalty)
+            (socialPressure * params.pressurePenalty) -
+            (careLoad * 0.10)
         );
 
         const readiness = clamp01(
             (pairBond * 0.30) +
-            (localSupport * 0.24) +
-            (livelihoodViability * 0.26) +
-            (futureExpectation * 0.20)
+            (localSupport * 0.25) +
+            (livelihoodViability * 0.25) +
+            (futureExpectation * 0.20) -
+            (careLoad * 0.08)
+        );
+
+        const reproductionHazard = clamp01(
+            0.04 +
+            (Math.max(-0.12, readiness - params.readinessThreshold) * 1.35) +
+            (pairBond * 0.22) +
+            (localSupport * 0.10) +
+            (futureExpectation * 0.08) -
+            (careLoad * 0.16) -
+            (socialPressure * 0.06)
         );
 
         return {
@@ -2824,6 +2880,9 @@ class Character {
             livelihoodViability: Math.round(livelihoodViability * 100) / 100,
             futureExpectation: Math.round(futureExpectation * 100) / 100,
             moderateThreatCohesion: Math.round(moderateThreatCohesion * 100) / 100,
+            careLoad: Math.round(careLoad * 100) / 100,
+            dependentChildCount,
+            reproductionHazard: Math.round(reproductionHazard * 100) / 100,
             readiness: Math.round(readiness * 100) / 100
         };
     }
@@ -2832,10 +2891,20 @@ class Character {
         const ctx = this.getReproductionReadiness(partner);
         this._lastReproductionBlockInfo = ctx;
         const threshold = this.getReproductionModelParams().readinessThreshold;
-        return ctx.readiness >= threshold || (ctx.pairBond >= 0.78 && ctx.futureExpectation >= Math.max(0.45, threshold - 0.04));
+        if (ctx.readiness >= threshold) return true;
+        const viableBond = ctx.pairBond >= 0.58 && ctx.futureExpectation >= Math.max(0.34, threshold - 0.12);
+        if (!viableBond) return false;
+        return Math.random() < Math.max(0.08, ctx.reproductionHazard || 0);
     }
 
     update(deltaTime, isNight, camera) {
+        const activeChars = (typeof window !== 'undefined' && window.characters)
+            ? window.characters
+            : (typeof characters !== 'undefined' ? characters : []);
+        if (activeChars?.[0] && activeChars[0].id === this.id) {
+            Character.maybeRefreshGroups(activeChars);
+        }
+
         const districtRuntime = (typeof window !== 'undefined' && typeof window.getDistrictRuntime === 'function')
             ? window.getDistrictRuntime(this.gridPos)
             : { index: 0, isActive: true, shouldRender: true, updateInterval: 0 };
@@ -3067,6 +3136,7 @@ class Character {
             const _supportChars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
             const { ally, bonded } = this.getRelationshipThresholds();
             const { nearbyRadius, groupBonus, allyPresenceBonus, comfortRecoveryRate, groupComfortScale, nightSafetyAllyBonus, nightSafetyBondedBonus } = this.getSupportModelParams();
+            const householdSupport = this.getNearbyHouseholdSupport(nearbyRadius + 1);
             let hasNearbyTrustedTie = false;
             for (const [otherId, aff] of this.relationships.entries()) {
                 if (aff < ally) continue;
@@ -3083,8 +3153,14 @@ class Character {
                     break;
                 }
             }
-            if (hasNearbyTrustedTie || this.groupId) {
-                const passiveSupport = (hasNearbyTrustedTie ? allyPresenceBonus : 0) + (this.groupId ? (groupBonus * groupComfortScale) : 0);
+            if (!hasNearbyTrustedTie && householdSupport.hasNearby && isNight) {
+                this.needs.safety = Math.min(100, this.needs.safety + deltaTime * (nightSafetyAllyBonus * 0.8));
+            }
+            if (hasNearbyTrustedTie || householdSupport.hasNearby || this.groupId) {
+                const passiveSupport =
+                    (hasNearbyTrustedTie ? allyPresenceBonus : 0) +
+                    (householdSupport.hasNearby ? Math.min(allyPresenceBonus, 0.18 + (householdSupport.nearbyCount * 0.04)) : 0) +
+                    (this.groupId ? (groupBonus * groupComfortScale) : 0);
                 if (passiveSupport > 0) {
                     this.needs.social = Math.min(100, this.needs.social + (deltaTime * comfortRecoveryRate * passiveSupport));
                 }
@@ -3112,7 +3188,8 @@ class Character {
         // isolationPenalty=0 → 無効。isolationPenalty=1 → 夜の屋外と同程度の追加圧力。
         {
             const penalty = (typeof window !== 'undefined' && window.isolationPenalty !== undefined) ? Number(window.isolationPenalty) : 0.4;
-            if (penalty > 0 && !this.groupId) {
+            const nearbyHouseholdSupport = this.getNearbyHouseholdSupport(3);
+            if (penalty > 0 && !this.groupId && !nearbyHouseholdSupport.hasNearby) {
                 this.needs.safety = Math.max(0, this.needs.safety - deltaTime * 5 * penalty);
             }
         }
@@ -3255,6 +3332,7 @@ class Character {
                 const anchorMomentum = anchoredTie ? (socialAnchorBias * 0.35) : 0;
                 const bondGainMultiplier = 1 + Math.min(0.9, (sharedNeed * allyPresenceBonus) + (moderateThreatCohesion * anxietyCohesionBonus) + familiarMomentum + anchorMomentum);
                 affinity += deltaTime * affinityRate * bondGainMultiplier;
+                Character.markGroupsDirty(activeChars);
                 // clamp affinity: personality trait distance lowers the ceiling
                 const maxAffinity = (typeof window !== 'undefined' && window.maxAffinity !== undefined) ? window.maxAffinity : 100;
                 const capReduction = (typeof window !== 'undefined' && window.traitAffinityCapReduction !== undefined) ? window.traitAffinityCapReduction : 0.6;
@@ -3305,6 +3383,7 @@ class Character {
                 if (dist <= Math.max(1, nearbyRadius) && affinity >= socialAnchorAffinity) {
                     this._socialAnchorId = partner.id;
                     partner._socialAnchorId = this.id;
+                    Character.markGroupsDirty(activeChars);
                 }
 
                 // Set or refresh heart display if in proximity and affinity high enough
@@ -3315,12 +3394,14 @@ class Character {
                         this.lovePhase = 'showing';
                         // persist partner id so expiry logic can find the partner even if action cleared
                         this._lovePartnerId = partner.id;
+                        Character.markGroupsDirty(activeChars);
                         try { console.log(`[LOVE] ${this.id} started loveTimer with partner ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                     }
                     if (partner.loveTimer <= 0 && partner.lovePhase !== 'showing') {
                         partner.loveTimer = 3.0;
                         partner.lovePhase = 'showing';
                         partner._lovePartnerId = this.id;
+                        Character.markGroupsDirty(activeChars);
                         try { console.log(`[LOVE] ${partner.id} started loveTimer with partner ${this.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
                     }
                 }
@@ -4341,7 +4422,7 @@ class Character {
             }
         }
         const prevGridPos = { ...this.gridPos };
-        const targetWorldPos = new THREE.Vector3(next.x + 0.5, next.y + 0.5, next.z + 0.5);
+        const targetWorldPos = gridToWorldPosition(next);
         const direction = targetWorldPos.clone().sub(this.mesh.position);
         // 顔の向き（body/headのrotation.y）を移動方向に合わせる
         if (direction.lengthSq() > 0.0001) {
@@ -4582,9 +4663,12 @@ class Character {
         // Smoothly lerp head rotation toward look target if present
         if (this._lookTargetPos && this.head) {
             // compute desired angle on Y axis
-            const worldTarget = new THREE.Vector3(this._lookTargetPos.x + 0.5, (this._lookTargetPos.y || this.gridPos.y) + 0.5, this._lookTargetPos.z + 0.5);
-            const headWorldPos = new THREE.Vector3();
-            this.head.getWorldPosition(headWorldPos);
+            const worldTarget = gridToWorldPosition({
+                x: this._lookTargetPos.x,
+                y: this._lookTargetPos.y || this.gridPos.y,
+                z: this._lookTargetPos.z
+            });
+            const headWorldPos = simIO().getWorldPosition(this.head);
             const dir = worldTarget.clone().sub(headWorldPos);
             if (dir.lengthSq() > 0.0001) {
                 let desired = Math.atan2(dir.x, dir.z);
@@ -4934,8 +5018,11 @@ class Character {
 
         const readinessCtx = this.getReproductionReadiness(partner);
         const _reproThreshold = (typeof window !== 'undefined' && window.reproductionReadinessThreshold !== undefined) ? Number(window.reproductionReadinessThreshold) : 0.52;
-        if (!(readinessCtx.readiness >= _reproThreshold || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45))) {
-            try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)})`); } catch(e){}
+        const hazardGateOpen = readinessCtx.readiness >= _reproThreshold
+            || (readinessCtx.pairBond >= 0.58 && readinessCtx.reproductionHazard >= 0.16)
+            || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45);
+        if (!hazardGateOpen) {
+            try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)} hazard=${(readinessCtx.reproductionHazard || 0).toFixed(2)})`); } catch(e){}
             return;
         }
 
@@ -5005,12 +5092,6 @@ class Character {
             };
             child.updateColorFromPersonality && child.updateColorFromPersonality();
             child.updateWorldPosFromGrid && child.updateWorldPosFromGrid();
-            // --- Group/leader re-detection after birth ---
-            if (typeof window !== 'undefined' && window.characters) {
-                Character.detectGroupsAndElectLeaders(window.characters);
-            } else if (typeof characters !== 'undefined') {
-                Character.detectGroupsAndElectLeaders(characters);
-            }
             // --- 子供カウント ---
             if (Array.isArray(this.children)) this.children.push(child.id);
             if (Array.isArray(partner.children)) partner.children.push(child.id);
@@ -5066,8 +5147,9 @@ class Character {
                         }
                     }
                 } catch (_ke) { /* kinship affinity setup error — non-fatal */ }
-                // prevent immediate group/role assignment - keep child as a neutral worker until maturity
-                child.groupId = null;
+                // household continuity: child inherits the nearest known home context and stays a worker role-wise
+                child.homePosition = this.homePosition || partner.homePosition || child.homePosition || null;
+                child.provisionalHome = this.provisionalHome || partner.provisionalHome || child.provisionalHome || child.homePosition || null;
                 child.role = 'worker';
                 // optional age fields for growth system
                 child.age = 0;
@@ -5083,6 +5165,12 @@ class Character {
                 // slightly slower movement/less bob for child feel
                 if (typeof child.movementSpeed === 'number') child.movementSpeed *= 0.88;
                 if (child._stepAmp) child._stepAmp *= 0.6;
+                // Recompute support groups only after kinship, home, and anchors have been seeded.
+                if (typeof window !== 'undefined' && window.characters) {
+                    Character.detectGroupsAndElectLeaders(window.characters);
+                } else if (typeof characters !== 'undefined') {
+                    Character.detectGroupsAndElectLeaders(characters);
+                }
                 // record last reproduction time for both parents
                 this._lastReproductionTime = Date.now();
                 partner._lastReproductionTime = Date.now();

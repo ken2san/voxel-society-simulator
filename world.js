@@ -1,7 +1,6 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
+import { getSimulationIO } from './sim-core/interfaces.js';
 
 // Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
@@ -34,6 +33,10 @@ let scene, camera, renderer, controls, ambientLight, directionalLight;
 let gameCanvas, minimapCanvas, minimapCtx;
 export { scene, camera, renderer, controls, ambientLight, directionalLight, gameCanvas, minimapCanvas, minimapCtx };
 
+function simIO() {
+    return getSimulationIO();
+}
+
 export function setWorldObjects(objs) {
     scene = objs.scene;
     camera = objs.camera;
@@ -50,7 +53,7 @@ export function setWorldObjects(objs) {
 export const blockSize = 1;
 export const gridSize = 16;
 export const maxHeight = 10;
-export const clock = new THREE.Clock();
+export const clock = simIO().createClock();
 export const characters = [];
 export let worldTime = 0;
 export const DAY_DURATION = 120;
@@ -572,13 +575,28 @@ export const BLOCK_TYPES = {
     HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x8b4513, isHouseRoof: true }
 };
 export const ITEM_TYPES = {
-    WOOD_LOG: { id: 100, name: 'Log', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.WOOD.color }) },
-    FRUIT_ITEM: { id: 101, name: 'Fruit Item', material: new THREE.MeshLambertMaterial({ color: BLOCK_TYPES.FRUIT.color }), isStorable: true },
-    STONE_TOOL: { id: 102, name: 'Stone Tool', material: new THREE.MeshLambertMaterial({ color: 0x888888 }), isTool: true }
+    WOOD_LOG: { id: 100, name: 'Log', material: null },
+    FRUIT_ITEM: { id: 101, name: 'Fruit Item', material: null, isStorable: true },
+    STONE_TOOL: { id: 102, name: 'Stone Tool', material: null, isTool: true }
 };
 export const blockMaterials = new Map();
-Object.values(BLOCK_TYPES).forEach(type => { if (type.color) { blockMaterials.set(type.id, new THREE.MeshLambertMaterial({ color: type.color })); } });
-export const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
+export let edgeMaterial = null;
+
+export function refreshRenderResources() {
+    const io = simIO();
+    ITEM_TYPES.WOOD_LOG.material = io.createMaterial({ color: BLOCK_TYPES.WOOD.color });
+    ITEM_TYPES.FRUIT_ITEM.material = io.createMaterial({ color: BLOCK_TYPES.FRUIT.color });
+    ITEM_TYPES.STONE_TOOL.material = io.createMaterial({ color: 0x888888 });
+    blockMaterials.clear();
+    Object.values(BLOCK_TYPES).forEach(type => {
+        if (type.color) {
+            blockMaterials.set(type.id, io.createMaterial({ color: type.color }));
+        }
+    });
+    edgeMaterial = io.createEdgeMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
+}
+
+refreshRenderResources();
 
 export function generateTerrain() {
     PerlinNoise.seed(Math.random);
@@ -640,37 +658,22 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     removeBlock(x,y,z, false);
     worldData.set(key, type.id);
     const material = blockMaterials.get(type.id);
-    let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+    const block = simIO().createBlockVisual({
+        x,
+        y,
+        z,
+        type,
+        blockSize,
+        material,
+        edgeMaterial,
+        isVisible: isGridPositionInActiveDistrict({ x, y, z })
+    });
 
-    // 特別な形状の設定
-    if (type.isBed) {
-        geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
-    } else if (type.isHouseWall) {
-        // 壁は少し厚みのある形状
-        geometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize, blockSize * 0.9);
-    } else if (type.isHouseRoof) {
-        // 屋根は三角屋根風
-        geometry = new THREE.ConeGeometry(blockSize * 0.7, blockSize * 0.8, 4);
+    if (block) {
+        setObjectDistrictVisibility(block, { x, y, z });
+        visualBlocks.set(key, block);
+        scene?.add?.(block);
     }
-
-    const block = new THREE.Mesh(geometry, material);
-
-    // 位置の調整
-    let yOffset = 0.5;
-    if (type.isBed) yOffset = 0.2;
-    else if (type.isHouseRoof) yOffset = 0.4;
-
-    block.position.set(x + 0.5, y + yOffset, z + 0.5);
-
-    // 屋根の向きを調整
-    if (type.isHouseRoof) {
-        block.rotation.y = Math.PI / 4; // 45度回転
-    }
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(block.geometry), edgeMaterial);
-    block.add(edges);
-    setObjectDistrictVisibility(block, { x, y, z });
-    visualBlocks.set(key, block);
-    scene.add(block);
     if(updateMinimap) drawMinimap();
     // signal world change
     try { worldChangeCounter++; if (typeof window !== 'undefined') window.worldChangeCounter = (window.worldChangeCounter || 0) + 1; } catch (e) {}
@@ -683,9 +686,7 @@ export function removeBlock(x, y, z, updateMinimap = true) {
         worldData.delete(key);
         const block = visualBlocks.get(key);
         if (block) {
-            scene.remove(block);
-            block.geometry.dispose();
-            if(block.children.length > 0) block.children[0].geometry.dispose();
+            simIO().removeVisual(scene, block);
             visualBlocks.delete(key);
         }
         if(updateMinimap) drawMinimap();
@@ -740,23 +741,23 @@ export function findValidSpawn() {
     return null;
 }
 export function toScreenPosition(obj, camera) {
-    const vector = new THREE.Vector3();
-    obj.getWorldPosition(vector);
-    vector.project(camera);
-    const rect = renderer.domElement.getBoundingClientRect();
-    const x = (vector.x + 1) * rect.width / 2 + rect.left;
-    const y = (1 - vector.y) * rect.height / 2 + rect.top;
-    return { x, y };
+    return simIO().toScreenPosition(obj, camera, renderer?.domElement);
 }
 export function updateWorldLighting() {
     const timeOfDay = (worldTime % DAY_DURATION) / DAY_DURATION;
     const dayIntensity = Math.sin(timeOfDay * Math.PI);
-    directionalLight.intensity = Math.max(0, dayIntensity) * 0.8;
-    ambientLight.intensity = 0.3 + Math.max(0, dayIntensity) * 0.6;
-    const nightColor = new THREE.Color(0x0a0a2a);
-    const dayColor = new THREE.Color(0x87CEEB);
-    if (scene.background) {
-        scene.background.lerpColors(nightColor, dayColor, Math.max(0, dayIntensity));
+    if (directionalLight) directionalLight.intensity = Math.max(0, dayIntensity) * 0.8;
+    if (ambientLight) ambientLight.intensity = 0.3 + Math.max(0, dayIntensity) * 0.6;
+    const io = simIO();
+    const nightColor = io.createColor(0x0a0a2a);
+    const dayColor = io.createColor(0x87CEEB);
+    if (scene) {
+        if (!scene.background) scene.background = io.createColor(0x87CEEB);
+        if (typeof scene.background?.lerpColors === 'function') {
+            scene.background.lerpColors(nightColor, dayColor, Math.max(0, dayIntensity));
+        } else {
+            scene.background = dayIntensity >= 0.5 ? dayColor.clone() : nightColor.clone();
+        }
     }
 }
 export function onWindowResize() {
@@ -791,7 +792,7 @@ export function drawMinimap() {
                 const blockId = worldData.get(`${x},${y},${z}`);
                 const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
                 if(blockType && blockType.color) {
-                   minimapCtx.fillStyle = '#' + new THREE.Color(blockType.color).getHexString();
+                   minimapCtx.fillStyle = simIO().colorToCssHex(blockType.color);
                    minimapCtx.fillRect(x * cellSize, z * cellSize, cellSize, cellSize);
                 }
             }

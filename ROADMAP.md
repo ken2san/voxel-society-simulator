@@ -1,6 +1,6 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-04-16_
+_Last updated: 2026-04-18_
 
 ---
 
@@ -159,8 +159,11 @@ When this roadmap is read by a new thread, use the sections in this order:
 
 If an older handoff says “implement next” but conflicts with the sections above, the older handoff is archival and should not override the current direction.
 
-### Verified progress as of 2026-04-15
+### Verified progress as of 2026-04-18
 
+- Sim-core separation is now live: the simulation runtime has been decoupled from the browser-facing Three.js layer so headless execution and browser execution can share the same behavior model
+- Headless CLI workflow is now live via `npm run sim`, with telemetry export, per-run parameter overrides, and district-mode population validation support
+- Automated generation-tuning support is now live via `npm run sim:tune`, allowing repeated telemetry comparison without the manual browser loop
 - Layer 1 complete: Crisis Mode, Spatial Memory, Full Trait Activation
 - Layer 2 complete: Relationship Tiers, ally food sharing, bonded night aid
 - Layer 3 complete: Death Record tombstones
