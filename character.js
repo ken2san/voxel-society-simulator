@@ -5198,7 +5198,7 @@ class Character {
 
     decideNextAction(isNight) {
         const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
-        const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 5;
+        const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
         // Child-specific behavior: simpler decision-making and no adult tasks
         if (this.isChild) {
             // If parents exist, attempt to stay near them or follow briefly
@@ -5263,6 +5263,19 @@ class Character {
         if (this.needs.energy <= energyEmergency) {
             this.log('🚨 EMERGENCY: Critical energy, forcing immediate rest');
             this.setNextAction('REST');
+            return;
+        }
+
+        const preferredSupport = this.getPreferredSupportTarget ? this.getPreferredSupportTarget(5) : null;
+        const moderateEnergy = this.needs.energy <= Math.min(55, energyEmergency + 14);
+        const moderateSafety = this.needs.safety <= 58;
+        const moderateSocial = this.needs.social <= 68;
+        if (this.homePosition && (moderateEnergy || (isNight && moderateSafety))) {
+            this.setNextAction('REST');
+            return;
+        }
+        if (preferredSupport?.char && (moderateSafety || moderateSocial || (isNight && !this.groupId))) {
+            this.setNextAction('SOCIALIZE', preferredSupport.char, preferredSupport.targetPos || preferredSupport.char.gridPos);
             return;
         }
 
@@ -5334,8 +5347,17 @@ class Character {
                     this.setNextAction('CHOP_WOOD', wood, wood);
                     this._lastFallbackTime = now;
                 } else {
-                    this.log('⚠️ No action chosen by AI, falling back to WANDER');
-                    this.setNextAction('WANDER');
+                    const fallbackSupport = this.getPreferredSupportTarget ? this.getPreferredSupportTarget(5) : null;
+                    if (this.homePosition && (this.needs.energy < 60 || (isNight && this.needs.safety < 65))) {
+                        this.log('Fallback: returning home to stabilize');
+                        this.setNextAction('REST');
+                    } else if (fallbackSupport?.char) {
+                        this.log('Fallback: regrouping with nearby support tie');
+                        this.setNextAction('SOCIALIZE', fallbackSupport.char, fallbackSupport.targetPos || fallbackSupport.char.gridPos);
+                    } else {
+                        this.log('⚠️ No action chosen by AI, falling back to WANDER');
+                        this.setNextAction('WANDER');
+                    }
                     this._lastFallbackTime = now;
                 }
             } else {
