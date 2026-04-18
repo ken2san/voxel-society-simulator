@@ -3632,28 +3632,6 @@ function renderCharacterList() {
             `</div>`
         ) : '';
 
-        // --- Society Chronicle ---
-        const _chronicle = Array.isArray(window.__societyChronicle) ? window.__societyChronicle : [];
-        const _simStart = window.__simPopulationStats?.startedAt || Date.now();
-        const chronicleHTML = _chronicle.length > 0 ? (() => {
-            const entries = _chronicle.slice(-10).reverse();
-            const rows = entries.map(e => {
-                const ageSec = Math.round((e.t - _simStart) / 1000);
-                const timeLabel = ageSec >= 60 ? `${Math.floor(ageSec/60)}m${ageSec%60}s` : `${ageSec}s`;
-                return `<div style="display:flex;align-items:baseline;gap:5px;padding:2px 0;border-bottom:1px solid #f0f4fa;">` +
-                    `<span style="font-size:0.9em;min-width:14px;">${e.icon}</span>` +
-                    `<span style="flex:1;color:#334155;font-size:0.82em;">${e.text}</span>` +
-                    `<span style="color:#94a3b8;font-size:0.78em;white-space:nowrap;">t=${timeLabel}</span>` +
-                `</div>`;
-            }).join('');
-            const _chronicleOpen = !!window.sidebarParams?.chronicleExpanded;
-            return `<details style="margin-top:7px;" ${_chronicleOpen ? 'open' : ''} data-chronicle-details>` +
-                `<summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:#ffffffcc;border:1px solid #d7e4f5;font-weight:600;font-size:0.88em;color:#334155;">` +
-                    `<span>${_chronicleOpen ? '▾' : '▸'}</span><span>Chronicle</span><span style="font-size:0.82em;color:#94a3b8;font-weight:400;">${_chronicle.length} events</span>` +
-                `</summary>` +
-                `<div style="margin-top:5px;max-height:160px;overflow-y:auto;">${rows}</div>` +
-            `</details>`;
-        })() : '';
 
         const detailsExpanded = !!window.sidebarParams.populationMetricsExpanded;
         const detailsChevron = detailsExpanded ? '▾' : '▸';
@@ -3759,7 +3737,6 @@ function renderCharacterList() {
                 `<div title="Net growth trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Net</span>${sparkNet}</div>` +
                 `<div title="Average energy trend" style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:0.78em;color:#5a6a80;">Energy</span>${sparkEnergy}</div>` +
             `</div>` +
-            chronicleHTML +
             `<details ${detailsExpanded ? 'open' : ''} data-population-metrics-details style="margin-top:8px;">` +
                 `<summary style="cursor:pointer;color:#334155;list-style:none;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:#ffffffcc;border:1px solid #d7e4f5;font-weight:600;">` +
                     `<span style="font-size:0.92em;color:#64748b;">${detailsChevron}</span>` +
@@ -3772,13 +3749,6 @@ function renderCharacterList() {
             metricsDetails.addEventListener('toggle', () => {
                 if (!window.sidebarParams) window.sidebarParams = {};
                 window.sidebarParams.populationMetricsExpanded = metricsDetails.open;
-            });
-        }
-        const chronicleDetails = statsDiv.querySelector('[data-chronicle-details]');
-        if (chronicleDetails) {
-            chronicleDetails.addEventListener('toggle', () => {
-                if (!window.sidebarParams) window.sidebarParams = {};
-                window.sidebarParams.chronicleExpanded = chronicleDetails.open;
             });
         }
         statsDiv.querySelectorAll('.population-group-trigger').forEach(btn => {
