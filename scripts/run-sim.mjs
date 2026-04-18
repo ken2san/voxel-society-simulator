@@ -289,7 +289,12 @@ const districtMode = Math.max(1, Math.floor(readNumberArg('districtMode', 1)));
 const activeDistrictIndex = Math.max(0, Math.floor(readNumberArg('activeDistrictIndex', 0)));
 const outFile = readFlag('out');
 const verbose = process.argv.includes('--verbose');
-const configPath = readFlag('config') || (fs.existsSync(path.resolve(process.cwd(), 'sim-settings.workspace.json')) ? 'sim-settings.workspace.json' : null);
+// Canonical settings live in public/ (Vite serves it directly to the browser).
+// run-sim.mjs reads the same real file so there is no sync problem.
+const configPath = readFlag('config')
+    || (fs.existsSync(path.resolve(process.cwd(), 'public/sim-settings.workspace.json')) ? 'public/sim-settings.workspace.json'
+        : fs.existsSync(path.resolve(process.cwd(), 'sim-settings.workspace.json')) ? 'sim-settings.workspace.json'
+        : null);
 const sampleIntervalMs = Math.max(200, Math.floor(readNumberArg('sampleIntervalMs', 1000)));
 const maxSamples = Math.max(1000, Math.floor(readNumberArg('maxSamples', 120000)));
 const maxEvents = Math.max(1000, Math.floor(readNumberArg('maxEvents', 50000)));
