@@ -462,8 +462,12 @@ for (let tick = 0; tick < options.ticks; tick++) {
         }
         prevDistrictState = nextDistrictState;
 
+        let fruitCount = 0;
+        worldData.forEach(v => { if (v === 4) fruitCount++; });
+
         globalThis.window.__simTelemetry.addWorldSample({
             t: Date.now(),
+            fruitCount,
             pop: alive.length,
             stageMix,
             districtMode,

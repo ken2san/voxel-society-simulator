@@ -238,6 +238,16 @@ console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high tog
 {
   const recStart = meta.startedAt ?? samples[0].t;
   const BUCKET_SEC = 30;
+
+  // Build fruitCount lookup from worldSamples (30s buckets, take last value in bucket)
+  const worldSamples = Array.isArray(payload.worldSamples) ? payload.worldSamples : [];
+  const fruitByBucket = new Map();
+  for (const ws of worldSamples) {
+    if (ws.fruitCount == null) continue;
+    const bucketIdx = Math.floor((ws.t - recStart) / 1000 / BUCKET_SEC);
+    fruitByBucket.set(bucketIdx, ws.fruitCount);
+  }
+
   const buckets = new Map();
   for (const s of samples) {
     const sec = Math.floor((s.t - recStart) / 1000 / BUCKET_SEC);
@@ -247,7 +257,7 @@ console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high tog
   }
 
   console.log('\n=== Life Stage Mix Over Time ===');
-  console.log('bucket_start_s  child  young  adult  elder  dependency');
+  console.log('bucket_start_s  child  young  adult  elder  dependency  fruit');
   for (const [idx, byId] of Array.from(buckets.entries()).sort((a, b) => a[0] - b[0])) {
     const counts = { child: 0, young: 0, adult: 0, elder: 0 };
     for (const st of byId.values()) {
@@ -256,7 +266,8 @@ console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high tog
     const working = counts.young + counts.adult;
     const dependents = counts.child + counts.elder;
     const depRatio = (dependents / Math.max(1, working)).toFixed(2);
-    console.log(`  t=${String(idx * BUCKET_SEC).padStart(5)}s  ${String(counts.child).padStart(5)}  ${String(counts.young).padStart(5)}  ${String(counts.adult).padStart(5)}  ${String(counts.elder).padStart(5)}  ${depRatio}`);
+    const fruit = fruitByBucket.has(idx) ? String(fruitByBucket.get(idx)).padStart(5) : '    -';
+    console.log(`  t=${String(idx * BUCKET_SEC).padStart(5)}s  ${String(counts.child).padStart(5)}  ${String(counts.young).padStart(5)}  ${String(counts.adult).padStart(5)}  ${String(counts.elder).padStart(5)}  ${depRatio}  ${fruit}`);
   }
   console.log('Hint: Rising dependency ratio means many children/elders are being supported by fewer working-age characters.');
 }
