@@ -2398,6 +2398,7 @@ class Character {
         }
 
         const foodRetryMs = Math.max(5000, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25) * 1000);
+        const starvationPressure = Number(this.needs?.hunger || 0) <= 10 || Number(this._starvationTimer || 0) > 0;
         const candidates = [];
         for (const [key, id] of worldData.entries()) {
             // Skip positions that this character recently failed to reach, but only briefly.
@@ -2407,9 +2408,13 @@ class Character {
                 this._failedFoodTargets.delete(key);
             }
             const reservation = Character.getReservation(key);
-            if (reservation && reservation.owner !== this.id) continue;
-            if (this._busyFoodTargets?.has(key)) continue;
-            if (Character.isBlacklisted(key)) continue;
+            let reservationPenalty = 0;
+            if (reservation && reservation.owner !== this.id) {
+                if (!starvationPressure) continue;
+                reservationPenalty = 4.5;
+            }
+            if (this._busyFoodTargets?.has(key) && !starvationPressure) continue;
+            if (Character.isBlacklisted(key) && !starvationPressure) continue;
 
             const rawBlockVal = typeof id === 'object' && id !== null && id.id !== undefined ? id.id : id;
             const type = Object.values(BLOCK_TYPES).find(t => t.id === rawBlockVal);
@@ -2422,7 +2427,7 @@ class Character {
                 const approachCandidates = adjacentSpots.slice(0, 4).map(spot => ({ x: spot.x, y: spot.y, z: spot.z }));
                 approachCandidates.forEach((adjacentSpot, spotIndex) => {
                     const occupiedPenalty = this.isOccupiedByOther(adjacentSpot.x, adjacentSpot.y, adjacentSpot.z) ? 3 : 0;
-                    const score = (baseDist * knownMultiplier) + (spotIndex * 0.4) + occupiedPenalty;
+                    const score = (baseDist * knownMultiplier) + (spotIndex * 0.4) + occupiedPenalty + reservationPenalty;
                     candidates.push({ x, y, z, key, adjacentSpot, approachCandidates, score });
                 });
             }
@@ -2432,11 +2437,14 @@ class Character {
 
         let closest = null;
         let bestReachableScore = Infinity;
-        const maxPathChecks = this.needs.hunger <= 20 ? 48 : 24;
+        const maxPathChecks = starvationPressure ? 96 : (this.needs.hunger <= 20 ? 48 : 24);
         const searchWindows = [{ start: 0, end: Math.min(12, candidates.length) }];
         if (candidates.length > 12) {
             // Wider later passes help hungry chars escape locally contested fruit clusters.
-            searchWindows.push({ start: 12, end: Math.min(maxPathChecks, candidates.length) });
+            searchWindows.push({ start: 12, end: Math.min(starvationPressure ? 48 : maxPathChecks, candidates.length) });
+        }
+        if (starvationPressure && candidates.length > 48) {
+            searchWindows.push({ start: 48, end: Math.min(maxPathChecks, candidates.length) });
         }
         for (const window of searchWindows) {
             for (let i = window.start; i < window.end; i++) {
@@ -3225,6 +3233,10 @@ class Character {
             ? window.getDistrictRuntime(this.gridPos)
             : { index: 0, isActive: true, shouldRender: true, updateInterval: 0 };
         this.districtIndex = districtRuntime.index ?? 0;
+        const hungerCriticalCutoff = Math.max(18, Number((typeof window !== 'undefined' && window.foodSeekHungerThreshold !== undefined) ? window.foodSeekHungerThreshold : 35) - 8);
+        const keepRealtimeDistrictUpdates = Number(this.needs?.hunger || 0) <= hungerCriticalCutoff
+            || Number(this._starvationTimer || 0) > 0
+            || (this.action && (this.action.type === 'COLLECT_FOOD' || this.action.type === 'EAT'));
         const shouldRender = districtRuntime.shouldRender !== false;
         if (this.mesh) this.mesh.visible = shouldRender;
         if (!shouldRender) {
@@ -3236,7 +3248,7 @@ class Character {
                 this.actionIconDiv.style.opacity = 0;
             }
         }
-        if (!districtRuntime.isActive && Number(districtRuntime.updateInterval || 0) > 0) {
+        if (!districtRuntime.isActive && Number(districtRuntime.updateInterval || 0) > 0 && !keepRealtimeDistrictUpdates) {
             this._districtUpdateAccumulator = (this._districtUpdateAccumulator || 0) + deltaTime;
             if (this._districtUpdateAccumulator < districtRuntime.updateInterval) {
                 return;
@@ -3539,6 +3551,24 @@ class Character {
             }
         } else {
             this._starvationTimer = 0;
+        }
+
+        // Hunger emergency must preempt long rest/work loops.
+        // Without this, characters can remain in non-food states even while edible fruit exists.
+        {
+            const emergencyFoodThreshold = Math.max(15, Number((typeof window !== 'undefined' && window.foodSeekHungerThreshold !== undefined) ? window.foodSeekHungerThreshold : 35) - 10);
+            const activeFoodAction = this.action && (this.action.type === 'COLLECT_FOOD' || this.action.type === 'EAT');
+            const isFoodEmergency = Number(this.needs?.hunger || 0) <= emergencyFoodThreshold || Number(this._starvationTimer || 0) > 0;
+            const preemptibleState = this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || (this.state === 'moving' && !activeFoodAction && this.action?.type !== 'WANDER');
+            if (isFoodEmergency && preemptibleState && !activeFoodAction) {
+                this.releaseReservedSidestep && this.releaseReservedSidestep();
+                this.clearNavigationState();
+                this.action = null;
+                this.state = 'idle';
+                this.actionCooldown = 0;
+                this.log('Interrupting non-food state for hunger emergency', { hunger: Number(this.needs?.hunger || 0), starvationTimer: Number(this._starvationTimer || 0) });
+                this.decideNextAction && this.decideNextAction(isNight);
+            }
         }
 
         // --- 孤立コスト: グループに属さないキャラはsafetyが追加で減衰する ---
