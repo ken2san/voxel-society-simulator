@@ -345,6 +345,8 @@ class Character {
     // Action icon display
     showActionIcon(iconText, duration = 2.0) {
         if (!this.actionIconDiv) return;
+        const effectsEnabled = !(typeof window !== 'undefined' && window.showEffects === false);
+        if (effectsEnabled) this.triggerScenePulse();
         if (typeof window !== 'undefined' && window.showBubbles === false) {
             this.actionIconDiv.style.opacity = 0;
             this.actionIconDiv.style.animation = '';
@@ -376,8 +378,10 @@ class Character {
 
         this.actionIconDiv.textContent = iconText;
         this.actionIconDiv.style.opacity = 1;
-        this.actionIconDiv.style.transform = 'scale(1.2)'; // 少し大きく表示
-        this.actionIconDiv.style.filter = 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3))';
+        this.actionIconDiv.style.transform = effectsEnabled ? 'scale(1.2)' : 'scale(1)';
+        this.actionIconDiv.style.filter = effectsEnabled
+            ? 'drop-shadow(2px 2px 4px rgba(0,0,0,0.3)) drop-shadow(0 0 8px rgba(255,255,255,0.45))'
+            : 'none';
 
         // キャラクターの頭上に配置
         const screenPos = this.getScreenPosition();
@@ -392,11 +396,13 @@ class Character {
         try {
             const animMinMs = (typeof window !== 'undefined' && window.actionIconAnimMinMs !== undefined) ? Number(window.actionIconAnimMinMs) : 300;
             if (!this._lastActionAnimTs) this._lastActionAnimTs = 0;
-            if ((Date.now() - this._lastActionAnimTs) >= animMinMs) {
+            if (effectsEnabled && (Date.now() - this._lastActionAnimTs) >= animMinMs) {
                 this.actionIconDiv.style.animation = 'bounce 0.6s ease-out';
                 this._lastActionAnimTs = Date.now();
+            } else if (!effectsEnabled) {
+                this.actionIconDiv.style.animation = '';
             }
-        } catch (e) { this.actionIconDiv.style.animation = 'bounce 0.6s ease-out'; }
+        } catch (e) { this.actionIconDiv.style.animation = effectsEnabled ? 'bounce 0.6s ease-out' : ''; }
 
         // 指定時間後にフェードアウト
         this._actionIconTimeout = setTimeout(() => {
@@ -413,6 +419,68 @@ class Character {
     getScreenPosition() {
         if (!this.mesh || !window.camera || !window.renderer || this.mesh.visible === false) return null;
         return toScreenPosition(this.iconAnchor || this.mesh, window.camera, window.renderer.domElement);
+    }
+
+    resetVisualEffects() {
+        try {
+            if (this.mesh) this.mesh.rotation.z = 0;
+            if (this.body) {
+                this.body.position.y = 0.25;
+                this.body.scale.set(1, 1, 1);
+            }
+            if (this.head) {
+                this.head.position.y = 0.75;
+                this.head.rotation.x = 0;
+                this.head.rotation.y = 0;
+                this.head.rotation.z = 0;
+            }
+            if (this.leftArm) {
+                this.leftArm.rotation.x = 0;
+                this.leftArm.rotation.y = 0;
+            }
+            if (this.rightArm) {
+                this.rightArm.rotation.x = 0;
+                this.rightArm.rotation.y = 0;
+            }
+            if (this.leftEye) this.leftEye.scale.set(1, 1, 1);
+            if (this.rightEye) this.rightEye.scale.set(1, 1, 1);
+            if (this.mouth) {
+                this.mouth.rotation.z = 0;
+                this.mouth.scale.set(1, 1, 1);
+            }
+            if (this.shadowMesh) {
+                this.shadowMesh.scale.set(1, 1, 1);
+                if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
+                    this.shadowMesh.material.opacity = 0.18;
+                }
+            }
+        } catch (_) { /* ignore visual reset errors */ }
+    }
+
+    triggerScenePulse(durationMs = 180) {
+        if (typeof window !== 'undefined' && window.showEffects === false) return;
+        if (!this.shadowMesh) return;
+        const now = Date.now();
+        if (this._lastScenePulseTs && (now - this._lastScenePulseTs) < 220) return;
+        this._lastScenePulseTs = now;
+        try {
+            if (this._scenePulseTimeout) clearTimeout(this._scenePulseTimeout);
+            this.shadowMesh.scale.set(1.12, 1.12, 1.12);
+            if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
+                this.shadowMesh.material.opacity = 0.28;
+            }
+            this._scenePulseTimeout = setTimeout(() => {
+                try {
+                    if (this.shadowMesh) {
+                        this.shadowMesh.scale.set(1, 1, 1);
+                        if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
+                            this.shadowMesh.material.opacity = 0.18;
+                        }
+                    }
+                } catch (_) { /* ignore pulse cleanup errors */ }
+                this._scenePulseTimeout = null;
+            }, durationMs);
+        } catch (_) { /* ignore pulse errors */ }
     }
 
     // アイテム種類に応じてcarriedItemMeshのマテリアルを変更
@@ -5197,6 +5265,11 @@ class Character {
     }
 
     updateAnimations(deltaTime) {
+        const effectsEnabled = !(typeof window !== 'undefined' && window.showEffects === false);
+        if (!effectsEnabled) {
+            this.resetVisualEffects();
+            return;
+        }
         // --- Enhanced Blinking logic ---
         if (!this.blinkTimer) this.blinkTimer = 0;
         if (!this.blinkInterval) this.blinkInterval = 1.5 + Math.random() * 2; // More varied intervals

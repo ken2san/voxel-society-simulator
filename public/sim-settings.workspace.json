@@ -95,7 +95,8 @@
       "starvationDeathDelaySeconds": 10,
       "districtMode": 1,
       "activeDistrictIndex": 0,
-      "showBubbles": true
+      "showBubbles": true,
+      "showEffects": true
     },
     "telemetryConfig": {
       "sampleIntervalMs": 800,

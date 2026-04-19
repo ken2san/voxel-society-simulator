@@ -332,6 +332,7 @@ function renderCharacterDetail() {
         starvationDeathDelaySeconds:        10,
         districtMode:                       1,
         activeDistrictIndex:                0,
+        showEffects:                       true,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
@@ -341,6 +342,7 @@ function renderCharacterDetail() {
     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
     window.socialThreshold = sidebarParams.socialTh;
     window.showBubbles = sidebarParams.showBubbles;
+    window.showEffects = sidebarParams.showEffects;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');
@@ -434,6 +436,40 @@ function renderCharacterDetail() {
     bubbleToggleRow.appendChild(bubbleToggle);
     bubbleToggleRow.dataset.label = 'Bubbles';
     tabPanels[0].appendChild(bubbleToggleRow);
+
+    const effectsToggleRow = document.createElement('div');
+    effectsToggleRow.style.display = 'flex';
+    effectsToggleRow.style.alignItems = 'center';
+    effectsToggleRow.style.gap = '10px';
+    const effectsToggleLabel = document.createElement('span');
+    effectsToggleLabel.textContent = '✨ Effects:';
+    effectsToggleLabel.style.width = '140px';
+    effectsToggleRow.appendChild(effectsToggleLabel);
+    const effectsToggle = document.createElement('input');
+    effectsToggle.type = 'checkbox';
+    effectsToggle.checked = sidebarParams.showEffects !== false;
+    effectsToggle.style.transform = 'scale(1.1)';
+    effectsToggle.style.cursor = 'pointer';
+    effectsToggle.addEventListener('change', e => {
+        const enabled = !!e.target.checked;
+        sidebarParams.showEffects = enabled;
+        window.showEffects = enabled;
+        try {
+            (window.characters || []).forEach(char => {
+                if (typeof char.resetVisualEffects === 'function') {
+                    char.resetVisualEffects();
+                }
+                if (char.actionIconDiv && !enabled) {
+                    char.actionIconDiv.style.animation = '';
+                    char.actionIconDiv.style.transform = 'scale(1)';
+                    char.actionIconDiv.style.filter = '';
+                }
+            });
+        } catch (_) { /* ignore UI sync errors */ }
+    });
+    effectsToggleRow.appendChild(effectsToggle);
+    effectsToggleRow.dataset.label = 'Effects';
+    tabPanels[0].appendChild(effectsToggleRow);
 
     paramBox.style.background = 'rgba(255,255,255,0.93)';
     paramBox.style.borderRadius = '18px';
