@@ -3850,7 +3850,7 @@ class Character {
                         if ((this.age / _lifespan) < _minAgeRatio || (partner.age / _partnerLifespan) < _minAgeRatio) {
                             // too young — skip silently
                         } else {
-                        try { console.log(`[LOVE] ${this.id} loveTimer expired, reproducing with ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
+                        if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[LOVE] ${this.id} loveTimer expired, reproducing with ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){} }
                         this.reproduceWith && this.reproduceWith(partner);
                         window._pairReproTimestamps.set(_pairKey2, _pairNow2);
                         const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 42;
@@ -3877,14 +3877,14 @@ class Character {
                         // persist partner id so expiry logic can find the partner even if action cleared
                         this._lovePartnerId = partner.id;
                         Character.markGroupsDirty(activeChars);
-                        try { console.log(`[LOVE] ${this.id} started loveTimer with partner ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
+                        if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[LOVE] ${this.id} started loveTimer with partner ${partner.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){} }
                     }
                     if (partner.loveTimer <= 0 && partner.lovePhase !== 'showing') {
                         partner.loveTimer = 3.0;
                         partner.lovePhase = 'showing';
                         partner._lovePartnerId = this.id;
                         Character.markGroupsDirty(activeChars);
-                        try { console.log(`[LOVE] ${partner.id} started loveTimer with partner ${this.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){}
+                        if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[LOVE] ${partner.id} started loveTimer with partner ${this.id}, affinity=${(affinity||0).toFixed ? affinity.toFixed(1) : affinity}`); } catch(e){} }
                     }
                 }
             } else if (partner) {
@@ -3981,14 +3981,14 @@ class Character {
                 if (this.body && this.body.scale) this.body.scale.set(1,1,1);
                 if (this.head && this.head.scale) this.head.scale.set(1,1,1);
                 if (this.shadowMesh && this.shadowMesh.scale) this.shadowMesh.scale.multiplyScalar(1.3333);
-                try { console.log(`[GROW] ${this.id} matured after ${Math.round(this.age)}s`); } catch(e){}
+                if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[GROW] ${this.id} matured after ${Math.round(this.age)}s`); } catch(e){} }
             }
         }
         // Natural lifespan: adults die of old age, making room for offspring
         if (!this.isChild && this.state !== 'dead') {
             const lifespan = this.getEffectiveLifespan();
             if (this.age >= lifespan) {
-                try { console.log(`[LIFESPAN] ${this.id} died of old age (${Math.round(this.age)}s, gen=${this.generation})`); } catch(e){}
+                if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[LIFESPAN] ${this.id} died of old age (${Math.round(this.age)}s, gen=${this.generation})`); } catch(e){} }
                 this.die('old_age');
                 return;
             }
@@ -4004,7 +4004,7 @@ class Character {
                     // prefer persisted partner id but fallback to current action target
                     const partnerId = this._lovePartnerId || (this.action && this.action.target ? this.action.target.id : null);
                     const affinity = partnerId ? (this.relationships.get(partnerId) || 0) : null;
-                    console.log(`[LOVE-TIMER] ${this.id} expired (prev=${prev.toFixed(2)}). lovePhase=${this.lovePhase} state=${this.state} partner=${partnerId} affinity=${affinity}`);
+                    if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} expired (prev=${prev.toFixed(2)}). lovePhase=${this.lovePhase} state=${this.state} partner=${partnerId} affinity=${affinity}`);
 
                     // Attempt reproduction if conditions met and partner still exists
                     if (partnerId && affinity >= ((typeof window !== 'undefined' && window.reproduceAffinityThreshold !== undefined) ? window.reproduceAffinityThreshold : 60)) {
@@ -4025,21 +4025,21 @@ class Character {
                                 const now = Date.now() / 1000;
                                 const left = Math.max(0, Math.ceil(window.pairReproductionCooldownSeconds - (now - last)));
                                 if (last > 0 && (now - last) < window.pairReproductionCooldownSeconds) {
-                                    console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
+                                    if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
                                 } else {
                                     // 繁殖年齢ウィンドウ
                                     const _minAgeRatio2 = (typeof window !== 'undefined' && window.minReproductionAgeRatio !== undefined) ? window.minReproductionAgeRatio : 0.2;
                                     const _ls2 = this.lifespan || (typeof window !== 'undefined' && window.characterLifespan) || 240;
                                     const _pls2 = partner.lifespan || _ls2;
                                     if ((this.age / _ls2) < _minAgeRatio2 || (partner.age / _pls2) < _minAgeRatio2) {
-                                        console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: too young (ageRatio=${(this.age/_ls2).toFixed(2)} partnerRatio=${(partner.age/_pls2).toFixed(2)} min=${_minAgeRatio2})`);
+                                        if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: too young (ageRatio=${(this.age/_ls2).toFixed(2)} partnerRatio=${(partner.age/_pls2).toFixed(2)} min=${_minAgeRatio2})`);
                                     } else if (this.needs.hunger <= 15 || partner.needs.hunger <= 15) {
-                                        console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: hunger crisis (self=${this.needs.hunger.toFixed(1)} partner=${partner.needs.hunger.toFixed(1)})`);
+                                        if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: hunger crisis (self=${this.needs.hunger.toFixed(1)} partner=${partner.needs.hunger.toFixed(1)})`);
                                     } else if (!this.shouldAttemptReproductionWith(partner)) {
                                         const ctx = this._lastReproductionBlockInfo || this.getReproductionReadiness(partner);
-                                        console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: district pressure high (pressure=${(ctx.socialPressure || 0).toFixed(2)} readiness=${(ctx.readiness || 0).toFixed(2)})`);
+                                        if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: district pressure high (pressure=${(ctx.socialPressure || 0).toFixed(2)} readiness=${(ctx.readiness || 0).toFixed(2)})`);
                                     } else {
-                                    console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
+                                    if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} attempting reproduceWith partner ${partner.id} (prox=${prox} state=${partner.state} partnerLove=${partner.lovePhase})`);
                                     this.reproduceWith && this.reproduceWith(partner);
                                     window._pairReproTimestamps.set(key, now);
                                     const resetVal = (typeof window !== 'undefined' && window.affinityResetAfterReproduce !== undefined) ? window.affinityResetAfterReproduce : 42;
@@ -4050,10 +4050,10 @@ class Character {
                                     } // end age gate
                                 }
                             } else {
-                                console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner exists but not socializing/nearby (state=${partner.state} prox=${prox} lovePhase=${partner.lovePhase})`);
+                                if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner exists but not socializing/nearby (state=${partner.state} prox=${prox} lovePhase=${partner.lovePhase})`);
                             }
                         } else {
-                            console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner not found or not socializing`);
+                            if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[LOVE-TIMER] ${this.id} reproduce skipped: partner not found or not socializing`);
                         }
                     }
                 } catch (e) {}
@@ -4127,7 +4127,7 @@ class Character {
                     }
                 }
             } else if (this._stallState.logged) {
-                console.log(`[STALL] Char ${this.id} recovered: actionCooldown=${(this.actionCooldown||0).toFixed(2)}`);
+                if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[STALL] Char ${this.id} recovered: actionCooldown=${(this.actionCooldown||0).toFixed(2)}`);
                 try {
                     if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addEvent === 'function') {
                         window.__simTelemetry.addEvent({
@@ -4417,6 +4417,20 @@ class Character {
             // --- Group/leader re-detection after death ---
             Character.handleLeaderDeath(this, characters);
         }
+        // --- Clean up zombie references in living characters ---
+        // _socialAnchorId pointing to a dead character causes needless pathfinding.
+        // relationships entries for dead characters waste decay-loop iterations.
+        try {
+            const _deadId = this.id;
+            const _allChars = (typeof window !== 'undefined' && window.characters)
+                ? window.characters
+                : (typeof characters !== 'undefined' ? characters : []);
+            for (const _c of _allChars) {
+                if (!_c || _c.state === 'dead') continue;
+                if (_c._socialAnchorId === _deadId) _c._socialAnchorId = null;
+                if (_c.relationships) _c.relationships.delete(_deadId);
+            }
+        } catch (_e) {}
         this.log('Character died and removed', { id: this.id, cause });
     }
 
@@ -5518,7 +5532,7 @@ class Character {
         // Prevent children from reproducing
         if (this.isChild || (partner && partner.isChild)) {
             this.log('Attempted reproduction blocked because one partner is a child', {self: this.id, partner: partner && partner.id});
-            try { console.log(`[REPRO] reproduction blocked: ${this.id} or ${partner && partner.id} is a child`); } catch(e){}
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] reproduction blocked: ${this.id} or ${partner && partner.id} is a child`); } catch(e){} }
             return;
         }
 
@@ -5528,7 +5542,7 @@ class Character {
             || (readinessCtx.pairBond >= 0.58 && readinessCtx.reproductionHazard >= 0.16)
             || (readinessCtx.affinity >= 82 && readinessCtx.relationshipStability >= 0.45);
         if (!hazardGateOpen) {
-            try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)} hazard=${(readinessCtx.reproductionHazard || 0).toFixed(2)})`); } catch(e){}
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction blocked by district pressure (pressure=${readinessCtx.socialPressure.toFixed(2)} readiness=${readinessCtx.readiness.toFixed(2)} hazard=${(readinessCtx.reproductionHazard || 0).toFixed(2)})`); } catch(e){} }
             return;
         }
 
@@ -5536,7 +5550,7 @@ class Character {
         const partnerFertility = (partner && partner.getAgingProfile) ? partner.getAgingProfile().fertilityMul : 1.0;
         const fertilityChance = Math.max(0, Math.min(1, myFertility * partnerFertility));
         if (Math.random() > fertilityChance) {
-            try { console.log(`[REPRO] reproduction skipped due to age-related fertility decline (chance=${fertilityChance.toFixed(2)})`); } catch(e){}
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] reproduction skipped due to age-related fertility decline (chance=${fertilityChance.toFixed(2)})`); } catch(e){} }
             return;
         }
 
@@ -5545,11 +5559,11 @@ class Character {
         // reproduction cooldown per parent to avoid rapid repeated births
         const cooldownSec = (typeof window !== 'undefined' && window.reproductionCooldownSeconds !== undefined) ? window.reproductionCooldownSeconds : 10;
         if (this._lastReproductionTime && (Date.now() - this._lastReproductionTime) < cooldownSec * 1000) {
-            try { console.log(`[REPRO] ${this.id} reproduction aborted: cooldown active (${Math.round((cooldownSec*1000 - (Date.now()-this._lastReproductionTime))/1000)}s left)`); } catch(e){}
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction aborted: cooldown active (${Math.round((cooldownSec*1000 - (Date.now()-this._lastReproductionTime))/1000)}s left)`); } catch(e){} }
             return;
         }
         if (partner && partner._lastReproductionTime && (Date.now() - partner._lastReproductionTime) < cooldownSec * 1000) {
-            try { console.log(`[REPRO] ${this.id} reproduction aborted: partner ${partner.id} cooldown active`); } catch(e){}
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction aborted: partner ${partner.id} cooldown active`); } catch(e){} }
             return;
         }
         // Mix colors
@@ -5585,7 +5599,7 @@ class Character {
         }
         if (!spawnPos) spawnPos = this.gridPos;
     // Spawn child
-    try { console.log(`[REPRO] ${this.id} calling spawnCharacter at`, spawnPos, 'genes=', childGenes); } catch(e){}
+    if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} calling spawnCharacter at`, spawnPos, 'genes=', childGenes); } catch(e){} }
     const child = spawnCharacter(spawnPos, childGenes);
         // Set child color and initial needs after spawn
         if (child && child.bodyMaterial && child.bodyMaterial.color) {
@@ -5697,7 +5711,7 @@ class Character {
                         pos: { x: child.gridPos.x, y: child.gridPos.y, z: child.gridPos.z }
                     });
                 }
-                try { console.log(`[REPRO] ${this.id} spawned child ${child.id} at ${JSON.stringify(spawnPos)} parents=${JSON.stringify(child.parentIds)}`); } catch(e){}
+                if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} spawned child ${child.id} at ${JSON.stringify(spawnPos)} parents=${JSON.stringify(child.parentIds)}`); } catch(e){} }
             } catch (e) { /* ignore visual tweak errors */ }
         }
     }
