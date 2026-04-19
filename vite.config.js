@@ -3,8 +3,8 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   server: {
     host: '0.0.0.0',
-    port: process.env.PORT ? parseInt(process.env.PORT) : 8080,
-    strictPort: true,
+    port: process.env.PORT ? parseInt(process.env.PORT) : 3000,
+    strictPort: false,
     allowedHosts: [
       'voxel-society-simulator-150662223250.us-central1.run.app',
       '.run.app', // Allow all Cloud Run hosts
@@ -14,7 +14,7 @@ export default defineConfig({
     hmr: {
       // Disable HMR in Cloud Run environment
       overlay: false,
-      clientPort: process.env.PORT ? parseInt(process.env.PORT) : 8080
+      clientPort: process.env.PORT ? parseInt(process.env.PORT) : 3000
     }
   },
   optimizeDeps: {
