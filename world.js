@@ -1154,6 +1154,16 @@ export function animate() {
     updateAmbientWorldEffects();
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
     refreshDistrictSummaryCache(characters);
+    if (typeof window !== 'undefined') {
+        let activeCount = 0;
+        for (const char of characters) {
+            if (!char || char.state === 'dead') continue;
+            if (districtMode === 1 || getDistrictIndexForPosition(char.gridPos, districtMode) === activeDistrictIndex) {
+                activeCount++;
+            }
+        }
+        window.__activeCharacterCount = activeCount;
+    }
     if (controls) controls.update();
     for (const char of characters) char.update(deltaTime, isNight, camera);
 

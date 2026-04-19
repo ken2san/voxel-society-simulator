@@ -2329,6 +2329,12 @@ class Character {
     this._lastMicroGestureTs = 0;
     this._idleGestureTimer = 1.5 + Math.random() * 3.5;
     this._idleGestureCooldown = 4.5 + Math.random() * 3.0;
+    // Adaptive visual LOD for busy scenes: UI/render only, no sim logic changes.
+    this._visualUpdateAccumulator = 0;
+    this._lastBubbleRefreshTs = 0;
+    this._lastBubbleHtml = '';
+    this._lastBubbleTheme = '';
+    this._lastBubbleVisible = false;
 
         // --- Action icon (for action effect) ---
         this.actionIconDiv = visuals.actionIconDiv;
@@ -5383,10 +5389,45 @@ class Character {
         return null;
     }
 
+    getVisualPerfProfile() {
+        const selectedId = (typeof window !== 'undefined' && window.selectedCharacterId !== undefined && window.selectedCharacterId !== null)
+            ? String(window.selectedCharacterId)
+            : '';
+        const isSelected = selectedId !== '' && String(this.id) === selectedId;
+        const activeCount = (typeof window !== 'undefined' && Number.isFinite(window.__activeCharacterCount))
+            ? Number(window.__activeCharacterCount)
+            : Character.getLiveCharacterRuntime().alive.length;
+        const urgent = isSelected
+            || this.loveTimer > 0
+            || this.state === 'moving'
+            || this.state === 'working'
+            || this.state === 'socializing'
+            || !!this._nearEnemy
+            || !!(this.needs && (this.needs.hunger < 35 || this.needs.energy < 30 || this.needs.safety < 50));
+        const dense = activeCount >= 60;
+        const busy = activeCount >= 44;
+        return {
+            activeCount,
+            isSelected,
+            urgent,
+            minAnimStep: dense && !urgent ? 0.05 : busy && !urgent ? 0.033 : 0,
+            bubbleMinIntervalMs: dense ? (urgent ? 90 : 220) : busy ? (urgent ? 70 : 140) : 0
+        };
+    }
+
     updateAnimations(deltaTime) {
         const effectsEnabled = !(typeof window !== 'undefined' && window.showEffects === false);
         if (!effectsEnabled && this._scenePulseTimeout) {
             this.resetVisualEffects();
+        }
+        const perfProfile = this.getVisualPerfProfile();
+        if (perfProfile.minAnimStep > 0) {
+            this._visualUpdateAccumulator = (this._visualUpdateAccumulator || 0) + deltaTime;
+            if (this._visualUpdateAccumulator < perfProfile.minAnimStep) return;
+            deltaTime = this._visualUpdateAccumulator;
+            this._visualUpdateAccumulator = 0;
+        } else {
+            this._visualUpdateAccumulator = 0;
         }
         // --- Enhanced Blinking logic ---
         if (!this.blinkTimer) this.blinkTimer = 0;
@@ -5738,9 +5779,40 @@ class Character {
 
     updateThoughtBubble(isNight, camera) {
         if (!this.thoughtBubble) return;
+        const perfProfile = this.getVisualPerfProfile();
         const hideBubble = () => {
+            this._lastBubbleVisible = false;
             this.thoughtBubble.setAttribute('data-show', 'false');
             this.thoughtBubble.style.display = 'none';
+        };
+        const applyTheme = (themeKey) => {
+            if (this._lastBubbleTheme === themeKey) return;
+            if (themeKey === 'love') {
+                this.thoughtBubble.style.background = 'rgba(255,220,235,0.96)';
+                this.thoughtBubble.style.border = '1.2px solid #f9a8d4';
+                this.thoughtBubble.style.borderColor = '#f9a8d4';
+                this.thoughtBubble.style.color = '#333';
+            } else if (themeKey === 'danger') {
+                this.thoughtBubble.style.background = 'rgba(255,90,80,0.93)';
+                this.thoughtBubble.style.border = '1.5px solid #f87171';
+                this.thoughtBubble.style.borderColor = '#f87171';
+                this.thoughtBubble.style.color = '#fff';
+            } else if (themeKey === 'isolated') {
+                this.thoughtBubble.style.background = 'rgba(180,170,200,0.93)';
+                this.thoughtBubble.style.border = '1.2px solid #a78bfa';
+                this.thoughtBubble.style.borderColor = '#a78bfa';
+                this.thoughtBubble.style.color = '#fff';
+            } else {
+                this.thoughtBubble.style.background = 'rgba(255,255,255,0.92)';
+                this.thoughtBubble.style.border = '1.2px solid #eee';
+                this.thoughtBubble.style.borderColor = '#eee';
+                this.thoughtBubble.style.color = '#333';
+            }
+            this.thoughtBubble.style.borderRadius = '16px';
+            this.thoughtBubble.style.boxShadow = '0 2px 8px #0001';
+            this.thoughtBubble.style.padding = '2px 8px';
+            this.thoughtBubble.style.fontSize = '1.08em';
+            this._lastBubbleTheme = themeKey;
         };
         if (typeof window !== 'undefined' && window.showBubbles === false) {
             hideBubble();
@@ -5751,86 +5823,99 @@ class Character {
             hideBubble();
             return;
         }
+
+        const now = Date.now();
         // --- ハートマーク優先表示 ---
         if (this.loveTimer > 0) {
+            const canReuse = perfProfile.bubbleMinIntervalMs > 0
+                && this._lastBubbleVisible
+                && this._lastBubbleHtml === '❤️'
+                && (now - this._lastBubbleRefreshTs) < perfProfile.bubbleMinIntervalMs;
+            if (canReuse) return;
             const canvas = document.getElementById('gameCanvas');
             const pos = toScreenPosition(this.iconAnchor, camera, canvas);
             if (!pos) {
                 hideBubble();
                 return;
             }
-            this.thoughtBubble.textContent = '❤️';
+            if (this._lastBubbleHtml !== '❤️') this.thoughtBubble.textContent = '❤️';
             this.thoughtBubble.setAttribute('data-show', 'true');
             this.thoughtBubble.style.display = '';
-            this.thoughtBubble.style.background = 'rgba(255,220,235,0.96)';
-            this.thoughtBubble.style.borderColor = '#f9a8d4';
             this.thoughtBubble.style.left = `${pos.x - 18}px`;
             this.thoughtBubble.style.top = `${pos.y - 48}px`;
             this.thoughtBubble.style.position = 'fixed';
+            applyTheme('love');
+            this._lastBubbleVisible = true;
+            this._lastBubbleRefreshTs = now;
+            this._lastBubbleHtml = '❤️';
             return;
         }
+
         let html = '';
         if (this.groupId) {
             const groupColors = [
                 '#fbbf24', '#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#f87171', '#38bdf8', '#facc15', '#4ade80', '#c084fc'
             ];
-            const color = groupColors[(this.groupId-1)%groupColors.length] || '#bbb';
+            const color = groupColors[(this.groupId - 1) % groupColors.length] || '#bbb';
             html += `<span style="display:inline-block;min-width:22px;padding:1.5px 6px 1.5px 6px;border-radius:11px;background:${color};color:#fff;font-size:0.92em;font-weight:bold;box-shadow:0 1px 4px #0002;vertical-align:middle;letter-spacing:0.5px;line-height:1.2;">G${this.groupId}`;
             if (this.role === 'leader') {
                 html += ` <span style=\"font-size:1.05em;vertical-align:middle;filter:drop-shadow(0 1px 2px #eab30888);\">👑</span>`;
             }
             html += '</span>';
         }
-        // --- sidebar.jsの状態アイコンロジックを完全コピー ---
         let icons = [];
         if (this.state === 'dead') icons.push('💀');
         else if (this.state === 'resting') icons.push('🛏️');
         else if (this.state === 'socializing') icons.push('💬');
         else if (this.state === 'moving' || this.state === 'active') icons.push('🚶');
-        // COLLECT_FOOD中は必ず🍎を表示
         if (this.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
         else if (this.needs && this.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
         if (this.needs && this.needs.energy < 30) icons.push('💤');
         if (this.needs && this.needs.social < 30) icons.push('👥');
-        // --- 孤立・争いの視覚インジケーター ---
-        if (this._nearEnemy) icons.push('💢');               // 近くに敵がいる
-        else if (!this.groupId && this.needs && this.needs.safety < 60) icons.push('😶'); // 孤立+safety低下
+        if (this._nearEnemy) icons.push('💢');
+        else if (!this.groupId && this.needs && this.needs.safety < 60) icons.push('😶');
         if (icons.length === 0) icons.push('🙂');
-        html += icons.map(ic => ` <span style="font-size:0.98em;vertical-align:middle;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">${ic}</span>`).join('');
-        if (html) {
-            const canvas = document.getElementById('gameCanvas');
-            const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
-            if (!screenPos) {
-                hideBubble();
-                return;
-            }
-            this.thoughtBubble.innerHTML = html;
-            this.thoughtBubble.setAttribute('data-show', 'true');
-            this.thoughtBubble.style.left = `${screenPos.x - 14}px`;
-            this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
-            this.thoughtBubble.style.position = 'fixed';
-            this.thoughtBubble.style.display = 'block';
-            // バブル背景: 争い=赤, 孤立=グレー, 平常=白
-            if (this._nearEnemy) {
-                this.thoughtBubble.style.background = 'rgba(255,90,80,0.93)';
-                this.thoughtBubble.style.border = '1.5px solid #f87171';
-                this.thoughtBubble.style.color = '#fff';
-            } else if (!this.groupId && this.needs && this.needs.safety < 60) {
-                this.thoughtBubble.style.background = 'rgba(180,170,200,0.93)';
-                this.thoughtBubble.style.border = '1.2px solid #a78bfa';
-                this.thoughtBubble.style.color = '#fff';
-            } else {
-                this.thoughtBubble.style.background = 'rgba(255,255,255,0.92)';
-                this.thoughtBubble.style.border = '1.2px solid #eee';
-                this.thoughtBubble.style.color = '#333';
-            }
-            this.thoughtBubble.style.borderRadius = '16px';
-            this.thoughtBubble.style.boxShadow = '0 2px 8px #0001';
-            this.thoughtBubble.style.padding = '2px 8px';
-            this.thoughtBubble.style.fontSize = '1.08em';
-        } else {
+
+        const neutralOnly = icons.length === 1 && icons[0] === '🙂' && !this.groupId;
+        if (perfProfile.activeCount >= 60 && !perfProfile.urgent && neutralOnly) {
             hideBubble();
+            return;
         }
+
+        html += icons.map(ic => ` <span style="font-size:0.98em;vertical-align:middle;font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif;">${ic}</span>`).join('');
+        if (!html) {
+            hideBubble();
+            return;
+        }
+
+        const themeKey = this._nearEnemy
+            ? 'danger'
+            : (!this.groupId && this.needs && this.needs.safety < 60)
+                ? 'isolated'
+                : 'normal';
+        const canReuse = perfProfile.bubbleMinIntervalMs > 0
+            && this._lastBubbleVisible
+            && this._lastBubbleHtml === html
+            && this._lastBubbleTheme === themeKey
+            && (now - this._lastBubbleRefreshTs) < perfProfile.bubbleMinIntervalMs;
+        if (canReuse) return;
+
+        const canvas = document.getElementById('gameCanvas');
+        const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
+        if (!screenPos) {
+            hideBubble();
+            return;
+        }
+        if (this._lastBubbleHtml !== html) this.thoughtBubble.innerHTML = html;
+        this.thoughtBubble.setAttribute('data-show', 'true');
+        this.thoughtBubble.style.left = `${screenPos.x - 14}px`;
+        this.thoughtBubble.style.top = `${screenPos.y - 50}px`;
+        this.thoughtBubble.style.position = 'fixed';
+        this.thoughtBubble.style.display = 'block';
+        applyTheme(themeKey);
+        this._lastBubbleVisible = true;
+        this._lastBubbleRefreshTs = now;
+        this._lastBubbleHtml = html;
     }
 
     reproduceWith(partner) {
