@@ -3631,7 +3631,12 @@ class Character {
             // Include 'idle' so that any pending actionCooldown is cancelled immediately
             // when hunger hits emergency level. Previously, a 1–8s idle cooldown (e.g.
             // post-build) would block food-seeking until the stall detector fired (>8s).
-            const preemptibleState = this.state === 'idle' || this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || this.state === 'socializing' || (this.state === 'moving' && !activeFoodAction);
+            // Protect BUILD_HOME/CHOP_WOOD/DESTROY_BLOCK from mid-work interruption:
+            // abandoning mid-build triggers an infinite pick→start→abandon loop. Only
+            // override when _starvationTimer > 0 (actual starvation started, not just low hunger).
+            const _starvActive = Number(this._starvationTimer || 0) > 0;
+            const _importantWorkActive = !_starvActive && this.state === 'working' && this.action && ['BUILD_HOME', 'CHOP_WOOD', 'DESTROY_BLOCK'].includes(this.action.type);
+            const preemptibleState = this.state === 'idle' || this.state === 'resting' || (this.state === 'working' && !_importantWorkActive) || this.state === 'meeting' || this.state === 'confused' || this.state === 'socializing' || (this.state === 'moving' && !activeFoodAction);
 
             // Throttle: when findClosestFood() returns null (dense settlement, no reachable food),
             // the character falls back to REST/WANDER. Without this guard, the block re-fires
@@ -3759,6 +3764,19 @@ class Character {
                 }
             }
         } catch (e) { /* non-fatal */ }
+        // Periodic pruning: delete stale weak-tie entries (≤ affinityFloor) every 60 sim-seconds.
+        // Prevents unbounded Map growth in long runs. Kinship entries (parent/child/sibling)
+        // start at 24+ so are never affected by the default floor of 5.
+        try {
+            this._relPruneTimer = (this._relPruneTimer || 0) + deltaTime;
+            if (this._relPruneTimer >= 60 && this.relationships && this.relationships.size > 0) {
+                this._relPruneTimer = 0;
+                const _pruneFloor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
+                for (const [_oid, _aff] of this.relationships.entries()) {
+                    if (_aff <= _pruneFloor) this.relationships.delete(_oid);
+                }
+            }
+        } catch (e) { /* non-fatal */ }
         if (this.state === 'socializing') {
             const partner = this.action?.target;
             const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
@@ -3840,7 +3858,7 @@ class Character {
                     const _pairKey2 = `${Math.min(this.id, partner.id)}-${Math.max(this.id, partner.id)}`;
                     if (!window._pairReproTimestamps) window._pairReproTimestamps = new Map();
                     const _pairLast2 = window._pairReproTimestamps.get(_pairKey2) || 0;
-                    const _pairNow2 = Date.now() / 1000;
+                    const _pairNow2 = (typeof window !== 'undefined' && window._simTick !== undefined) ? window._simTick * 0.25 : Date.now() / 1000;
                     const _cooldown2 = window.pairReproductionCooldownSeconds || 60;
                     if (pressureGateOpen && (_pairLast2 === 0 || (_pairNow2 - _pairLast2) >= _cooldown2)) {
                         // 繁殖年齢ウィンドウ: 寿命の minReproductionAgeRatio 未満なら繁殖不可
@@ -4022,7 +4040,7 @@ class Character {
                                 const b = Math.max(this.id, partner.id);
                                 const key = `${a}-${b}`;
                                 const last = window._pairReproTimestamps.get(key) || 0;
-                                const now = Date.now() / 1000;
+                                const now = (typeof window !== 'undefined' && window._simTick !== undefined) ? window._simTick * 0.25 : Date.now() / 1000;
                                 const left = Math.max(0, Math.ceil(window.pairReproductionCooldownSeconds - (now - last)));
                                 if (last > 0 && (now - last) < window.pairReproductionCooldownSeconds) {
                                     if (typeof window !== 'undefined' && window.DEBUG_MODE) console.log(`[REPRO-PAIR] ${this.id}-${partner.id} blocked: cooldown active (${left}s left)`);
@@ -5558,11 +5576,13 @@ class Character {
         this.log('Reproducing with', partner.id);
         // reproduction cooldown per parent to avoid rapid repeated births
         const cooldownSec = (typeof window !== 'undefined' && window.reproductionCooldownSeconds !== undefined) ? window.reproductionCooldownSeconds : 10;
-        if (this._lastReproductionTime && (Date.now() - this._lastReproductionTime) < cooldownSec * 1000) {
-            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction aborted: cooldown active (${Math.round((cooldownSec*1000 - (Date.now()-this._lastReproductionTime))/1000)}s left)`); } catch(e){} }
+        // Use simulated time (seconds) so CLI fast-forward and browser stay consistent.
+        const _reproSimSec = () => (typeof window !== 'undefined' && window._simTick !== undefined) ? window._simTick * 0.25 : Date.now() / 1000;
+        if (this._lastReproductionTime && (_reproSimSec() - this._lastReproductionTime) < cooldownSec) {
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction aborted: cooldown active (${Math.round(cooldownSec - (_reproSimSec()-this._lastReproductionTime))}s left)`); } catch(e){} }
             return;
         }
-        if (partner && partner._lastReproductionTime && (Date.now() - partner._lastReproductionTime) < cooldownSec * 1000) {
+        if (partner && partner._lastReproductionTime && (_reproSimSec() - partner._lastReproductionTime) < cooldownSec) {
             if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction aborted: partner ${partner.id} cooldown active`); } catch(e){} }
             return;
         }
@@ -5691,9 +5711,9 @@ class Character {
                 } else if (typeof characters !== 'undefined') {
                     Character.detectGroupsAndElectLeaders(characters);
                 }
-                // record last reproduction time for both parents
-                this._lastReproductionTime = Date.now();
-                partner._lastReproductionTime = Date.now();
+                // record last reproduction time for both parents (simulated seconds)
+                this._lastReproductionTime = _reproSimSec();
+                partner._lastReproductionTime = _reproSimSec();
                 if (typeof window !== 'undefined' && typeof window.recordPopulationBirth === 'function') {
                     window.recordPopulationBirth({
                         childId: child.id,
