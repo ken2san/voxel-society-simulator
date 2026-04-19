@@ -20,25 +20,23 @@ function toScreenPosition(obj, camera, canvas = null) {
 // 家タイプごとの設定（今後拡張しやすい形で）
 const HOME_TYPES = {
     wood: {
-        bed: 'BED',
+        bed: null,
         wall: 'HOUSE_WALL',
         roof: 'HOUSE_ROOF',
-        // Keep the footprint 1×1, but add a visible body block so the roof does not read as floating.
-        wallPositions: [{dx: 0, dy: 1, dz: 0}],
-        roofPosition: {dx: 0, dy: 2, dz: 0}
+        wallPositions: [{dx: 0, dy: 0, dz: 0}],
+        roofPosition: {dx: 0, dy: 1, dz: 0}
     },
     stone: {
-        bed: 'BED',
+        bed: null,
         wall: 'STONE_WALL',
         roof: 'DARK_ROOF',
-        // Same compact 1×1 silhouette, with stone materials for a different look.
-        wallPositions: [{dx: 0, dy: 1, dz: 0}],
-        roofPosition: {dx: 0, dy: 2, dz: 0}
+        wallPositions: [{dx: 0, dy: 0, dz: 0}],
+        roofPosition: {dx: 0, dy: 1, dz: 0}
     },
     underground: {
         bed: 'BED',
         wall: 'HOUSE_WALL',
-        roof: null // 屋根なし
+        roof: null
     }
 };
 
@@ -48,18 +46,17 @@ class Character {
         // type: 'wood' | 'stone' | 'underground'
         // pos: {x, y, z}
         const config = HOME_TYPES[type];
-        const bedBlock = BLOCK_TYPES[config.bed];
+        const bedBlock = config.bed ? BLOCK_TYPES[config.bed] : null;
         const wallBlock = BLOCK_TYPES[config.wall];
         const roofBlock = config.roof ? BLOCK_TYPES[config.roof] : null;
-        // ベッド設置
         if (typeof addBlock === 'function' && bedBlock) {
             addBlock(pos.x, pos.y, pos.z, bedBlock, true);
             this.log('Placed bed block at', pos);
         }
-        // 壁・屋根設置
+        // Build the compact silhouette from the configured body/roof offsets.
         if (wallBlock) {
             if (type === 'wood' || type === 'stone') {
-                // wallPositions 駆動で壁ポスト設置（wood: 側面2本, stone: 四隅4本）
+                // Place the single grounded body block for the tiny home.
                 for (const rel of config.wallPositions) {
                     const wx = pos.x + rel.dx, wy = pos.y + (rel.dy || 0), wz = pos.z + rel.dz;
                     const key = `${wx},${wy},${wz}`;
@@ -68,7 +65,7 @@ class Character {
                         this.log('Placed wall block at', { x: wx, y: wy, z: wz });
                     }
                 }
-                // roofPosition 駆動で屋根設置
+                // Place the roof directly above the body block.
                 if (config.roofPosition && roofBlock) {
                     const rx = pos.x + config.roofPosition.dx, ry = pos.y + config.roofPosition.dy, rz = pos.z + config.roofPosition.dz;
                     const roofKey = `${rx},${ry},${rz}`;
