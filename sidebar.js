@@ -2,6 +2,7 @@
 // --- Record mood/needs history for each character ---
 if (!window.characterHistory) window.characterHistory = {};
 function recordCharacterHistory() {
+    if (typeof document !== 'undefined' && document.hidden) return;
     if (!window.characters) return;
     window.characters.forEach(char => {
         if (!window.characterHistory[char.id]) {
@@ -197,6 +198,7 @@ function renderCharacterNeeds() {
 // Control auto-update based on presence of openedCharId only
 if (window.__sidebarNeedsInterval) clearInterval(window.__sidebarNeedsInterval);
 window.__sidebarNeedsInterval = setInterval(() => {
+    if (typeof document !== 'undefined' && document.hidden) return;
     // Do not update at all while detail panel is open
     if (openedCharId) return;
     // Redraw entire summary table
@@ -2847,6 +2849,11 @@ function updateSelectedRelationshipMarkers(char, selectedPos = null) {
 function updateSelectedCharacterMarker() {
     const marker = ensureSelectedCharacterMarker();
     if (!marker) return;
+
+    if (typeof document !== 'undefined' && document.hidden) {
+        marker.style.opacity = '0';
+        return;
+    }
 
     const selectedId = openedCharId != null ? String(openedCharId) : '';
     if (!selectedId || !Array.isArray(window.characters)) {

@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -17,6 +17,18 @@ function applyInitialAgeSpread(targetChars = characters) {
 
 if (typeof window !== 'undefined') {
     window.applyInitialAgeSpread = applyInitialAgeSpread;
+
+    if (!window.__visibilityResumeGuardInstalled && typeof document !== 'undefined') {
+        window.__visibilityResumeGuardInstalled = true;
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                requestAnimationFrame(() => {
+                    onWindowResize();
+                    resetFrameTimingAfterVisibilityChange();
+                });
+            }
+        });
+    }
 }
 
 async function init() {

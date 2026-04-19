@@ -60,6 +60,18 @@ export let worldTime = 0;
 export const DAY_DURATION = 120;
 export let nextCharacterId = 0;
 export function resetNextCharacterId() { nextCharacterId = 0; }
+export function resetFrameTimingAfterVisibilityChange() {
+    try {
+        if (clock && typeof clock.getDelta === 'function') {
+            clock.getDelta();
+        }
+        if (typeof updateAmbientWorldEffects === 'function') {
+            updateAmbientWorldEffects._frameCounter = 0;
+        }
+    } catch (e) {
+        // non-fatal: foreground resume should never break the render loop
+    }
+}
 
 let DEBUG_MODE = false;
 export function setDEBUG_MODE(val) { DEBUG_MODE = val; }
