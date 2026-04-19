@@ -3217,6 +3217,7 @@ const _etlKindColor = {
     birth:    '#4ade80',
     death:    '#f87171',
     famine:   '#ef4444',
+    shortage: '#f97316',
     recovery: '#86efac',
     conflict: '#fb923c',
     peace:    '#6ee7b7',

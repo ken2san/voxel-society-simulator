@@ -1009,10 +1009,27 @@ export function animate() {
             const _starving = _alv.filter(c => (c._starvationTimer || 0) > 0).length;
             const _starvRate = _pop > 0 ? _starving / _pop : 0;
             const _prevStarv = animate._lastChronStarving !== undefined ? animate._lastChronStarving : 0;
+            const _simNow = animate.simTime || 0;
             if (_starvRate > 0.4 && _prevStarv <= 0.4) {
+                // Escalate: shortage → famine
                 window.logChronicleEvent('☠️', `Famine — ${_starving}/${_pop} starving`, 'famine');
-            } else if (_starvRate < 0.1 && _prevStarv > 0.4) {
-                window.logChronicleEvent('🍎', `Famine ended`, 'recovery');
+                animate._lastShortageEventTime = _simNow; // reset cooldown so shortage won't double-fire
+            } else if (_starvRate > 0.15 && _prevStarv <= 0.15) {
+                // First crossing into shortage territory
+                window.logChronicleEvent('🌾', `Food shortage — ${_starving}/${_pop} hungry`, 'shortage');
+                animate._lastShortageEventTime = _simNow;
+            } else if (_starvRate > 0.15 && _starvRate <= 0.4) {
+                // Sustained shortage: re-fire with 60s simulated cooldown
+                const _sinceLastShortage = _simNow - (animate._lastShortageEventTime || 0);
+                if (_sinceLastShortage >= 60) {
+                    window.logChronicleEvent('🌾', `Food shortage — ${_starving}/${_pop} hungry`, 'shortage');
+                    animate._lastShortageEventTime = _simNow;
+                }
+            } else if (_starvRate < 0.1 && _prevStarv >= 0.15) {
+                // Recovery from either shortage or famine
+                const _label = _prevStarv > 0.4 ? 'Famine ended' : 'Shortage eased';
+                window.logChronicleEvent('🍎', _label, 'recovery');
+                animate._lastShortageEventTime = 0;
             }
             animate._lastChronStarving = _starvRate;
         }
