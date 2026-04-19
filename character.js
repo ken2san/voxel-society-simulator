@@ -23,16 +23,16 @@ const HOME_TYPES = {
         bed: 'BED',
         wall: 'HOUSE_WALL',
         roof: 'HOUSE_ROOF',
-        // Two side posts give the hut a recognisable silhouette without blocking paths.
-        wallPositions: [{dx:-1,dy:0,dz:0},{dx:1,dy:0,dz:0}],
+        // No side posts — minimal 1×1 footprint so fruit GRASS tiles stay open.
+        wallPositions: [],
         roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     stone: {
         bed: 'BED',
         wall: 'STONE_WALL',
         roof: 'DARK_ROOF',
-        // Four corner posts + flat slab roof — visually distinct from wood hut.
-        wallPositions: [{dx:-1,dy:0,dz:-1},{dx:1,dy:0,dz:-1},{dx:-1,dy:0,dz:1},{dx:1,dy:0,dz:1}],
+        // Single side post (visually distinct from wood) — 2×1 footprint.
+        wallPositions: [{dx:1, dy:0, dz:0}],
         roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     underground: {

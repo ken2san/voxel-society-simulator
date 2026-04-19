@@ -605,9 +605,9 @@ export const BLOCK_TYPES = {
     LEAF:  { id: 6, name: 'Leaf', color: 0x228b22, diggable: true },
     BED:   { id: 7, name: 'Bed', color: 0xffec8b, isBed: true },
     HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd2b48c, isHouseWall: true },
-    HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x8b4513, isHouseRoof: true },
-    STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x7a7a80, isHouseWall: true, isStoneWall: true },
-    DARK_ROOF:  { id: 11, name: 'Dark Roof',  color: 0x4a3828, isHouseRoof: true, isDarkRoof: true }
+    HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0xe05028, isHouseRoof: true },
+    STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x6090b8, isHouseWall: true, isStoneWall: true },
+    DARK_ROOF:  { id: 11, name: 'Dark Roof',  color: 0x1a3a5c, isHouseRoof: true, isDarkRoof: true }
 };
 export const ITEM_TYPES = {
     WOOD_LOG: { id: 100, name: 'Log', material: null },
@@ -783,6 +783,12 @@ export function tickFruitRegen(deltaTime) {
             if (y < 0) continue;
             if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
             if (worldData.has(`${x},${y + 1},${z}`)) continue;
+            // Skip enclosed positions — fruit inside building interiors can never
+            // be reached by characters and causes starvation despite appearing on-screen.
+            const fruitY = y + 1;
+            const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
+                !worldData.has(`${x+dx},${fruitY},${z+dz}`) && worldData.has(`${x+dx},${y},${z+dz}`));
+            if (!hasPassableNeighbor) continue;
             addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
         }
     }
@@ -1158,6 +1164,11 @@ export function animate() {
                 if (y < 0) continue;
                 if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
                 if (worldData.has(`${x},${y + 1},${z}`)) continue;
+                // Skip enclosed positions — fruit inside building interiors is unreachable.
+                const fruitY = y + 1;
+                const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
+                    !worldData.has(`${x+dx},${fruitY},${z+dz}`) && worldData.has(`${x+dx},${y},${z+dz}`));
+                if (!hasPassableNeighbor) continue;
                 addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
             }
         }
