@@ -3603,7 +3603,7 @@ class Character {
             // Include 'idle' so that any pending actionCooldown is cancelled immediately
             // when hunger hits emergency level. Previously, a 1–8s idle cooldown (e.g.
             // post-build) would block food-seeking until the stall detector fired (>8s).
-            const preemptibleState = this.state === 'idle' || this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || (this.state === 'moving' && !activeFoodAction && this.action?.type !== 'WANDER');
+            const preemptibleState = this.state === 'idle' || this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || this.state === 'socializing' || (this.state === 'moving' && !activeFoodAction);
             if (isFoodEmergency && preemptibleState && !activeFoodAction) {
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.clearNavigationState();
