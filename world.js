@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
@@ -617,6 +618,149 @@ export const ITEM_TYPES = {
 export const blockMaterials = new Map();
 export let edgeMaterial = null;
 
+const ambientHouseEffects = new Map();
+const AMBIENT_SMOKE_LIMIT = 14;
+
+function areAmbientEffectsEnabled() {
+    return !(typeof window !== 'undefined' && window.showEffects === false);
+}
+
+function hashWorldKey(key = '') {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+        hash = ((hash << 5) - hash) + key.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+function resetAmbientBlock(block) {
+    if (!block?.userData?.ambientBasePos) return;
+    const base = block.userData.ambientBasePos;
+    block.position?.set?.(base.x, base.y, base.z);
+    if (block.rotation) {
+        block.rotation.x = block.userData.ambientBaseRotX || 0;
+        block.rotation.y = block.userData.ambientBaseRotY || 0;
+        block.rotation.z = block.userData.ambientBaseRotZ || 0;
+    }
+}
+
+function disposeAmbientHouseEffect(effect) {
+    if (!effect) return;
+    try { scene?.remove?.(effect.group); } catch (_) { /* ignore */ }
+    for (const puff of effect.puffs || []) {
+        try { puff.geometry?.dispose?.(); } catch (_) { /* ignore */ }
+        try { puff.material?.dispose?.(); } catch (_) { /* ignore */ }
+    }
+}
+
+function ensureHouseSmokeEffect(key, block) {
+    if (!scene || !block || ambientHouseEffects.has(key)) return ambientHouseEffects.get(key) || null;
+    const group = new THREE.Group();
+    group.visible = false;
+    const puffs = [];
+    for (let i = 0; i < 3; i++) {
+        const puff = new THREE.Mesh(
+            new THREE.SphereGeometry(0.09 + (i * 0.03), 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xe5e7eb, transparent: true, opacity: 0, depthWrite: false })
+        );
+        group.add(puff);
+        puffs.push(puff);
+    }
+    scene.add(group);
+    const effect = {
+        group,
+        puffs,
+        phase: (hashWorldKey(key) % 360) * (Math.PI / 180)
+    };
+    ambientHouseEffects.set(key, effect);
+    return effect;
+}
+
+function updateAmbientWorldEffects() {
+    const enabled = areAmbientEffectsEnabled();
+    const time = Number(worldTime) || 0;
+    const dayPhase = (time % DAY_DURATION) / DAY_DURATION;
+    const isNight = dayPhase > 0.5;
+    const nightBlend = isNight ? (0.45 + 0.55 * Math.sin((dayPhase - 0.5) * Math.PI)) : 0;
+    const warmIntensity = enabled ? nightBlend * (0.1 + 0.06 * (0.5 + 0.5 * Math.sin(time * 2.1))) : 0;
+
+    for (const blockType of [BLOCK_TYPES.HOUSE_WALL, BLOCK_TYPES.HOUSE_ROOF, BLOCK_TYPES.STONE_WALL, BLOCK_TYPES.DARK_ROOF]) {
+        const material = blockMaterials.get(blockType.id);
+        if (!material) continue;
+        if (!material.emissive) material.emissive = simIO().createColor(0xffb36b);
+        if (typeof material.emissive.set === 'function') material.emissive.set(0xffb36b);
+        material.emissiveIntensity = warmIntensity;
+    }
+
+    let smokeCount = 0;
+    const staleKeys = new Set(ambientHouseEffects.keys());
+
+    for (const [key, block] of visualBlocks.entries()) {
+        staleKeys.delete(key);
+        if (!block?.position) continue;
+        if (!block.userData) block.userData = {};
+        const blockId = worldData.get(key);
+
+        if (blockId === BLOCK_TYPES.LEAF.id) {
+            if (!block.userData.ambientBasePos) {
+                block.userData.ambientBasePos = { x: block.position.x, y: block.position.y, z: block.position.z };
+                block.userData.ambientBaseRotX = block.rotation?.x || 0;
+                block.userData.ambientBaseRotY = block.rotation?.y || 0;
+                block.userData.ambientBaseRotZ = block.rotation?.z || 0;
+                block.userData.ambientSeed = (hashWorldKey(key) % 1000) / 1000;
+                block.userData.ambientLeaf = true;
+            }
+            if (enabled && block.visible !== false) {
+                const seed = (block.userData.ambientSeed || 0) * Math.PI * 2;
+                const sway = Math.sin(time * 1.25 + seed) * 0.035;
+                block.position.x = block.userData.ambientBasePos.x + sway;
+                block.position.z = block.userData.ambientBasePos.z + Math.cos(time * 0.9 + seed) * 0.025;
+                if (block.rotation) block.rotation.z = block.userData.ambientBaseRotZ + sway * 0.6;
+            } else {
+                resetAmbientBlock(block);
+            }
+            continue;
+        }
+
+        if (block.userData.ambientLeaf) resetAmbientBlock(block);
+
+        const isRoof = blockId === BLOCK_TYPES.HOUSE_ROOF.id || blockId === BLOCK_TYPES.DARK_ROOF.id;
+        const eligibleForSmoke = enabled && isRoof && block.visible !== false && smokeCount < AMBIENT_SMOKE_LIMIT && (hashWorldKey(key) % 3 === 0);
+        const effect = eligibleForSmoke ? ensureHouseSmokeEffect(key, block) : ambientHouseEffects.get(key);
+        if (!effect) continue;
+        if (!eligibleForSmoke) {
+            effect.group.visible = false;
+            continue;
+        }
+
+        smokeCount += 1;
+        effect.group.visible = true;
+        effect.group.position.set(
+            block.position.x + 0.03 * Math.sin(time * 0.8 + effect.phase),
+            block.position.y + 0.28,
+            block.position.z + 0.03 * Math.cos(time * 0.7 + effect.phase)
+        );
+
+        effect.puffs.forEach((puff, index) => {
+            const drift = time * 0.55 + effect.phase + index * 0.45;
+            const rise = (drift % 1.6) / 1.6;
+            puff.position.set(
+                Math.sin(drift * 1.7) * 0.045,
+                0.08 + rise * 0.55 + index * 0.05,
+                Math.cos(drift * 1.3) * 0.045
+            );
+            puff.scale.setScalar(0.8 + rise * 0.55);
+            if (puff.material) puff.material.opacity = enabled ? Math.max(0, 0.09 * (1 - rise)) : 0;
+        });
+    }
+
+    for (const key of staleKeys) {
+        disposeAmbientHouseEffect(ambientHouseEffects.get(key));
+        ambientHouseEffects.delete(key);
+    }
+}
+
 export function refreshRenderResources() {
     const io = simIO();
     ITEM_TYPES.WOOD_LOG.material = io.createMaterial({ color: BLOCK_TYPES.WOOD.color });
@@ -705,6 +849,9 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     });
 
     if (block) {
+        if (!block.userData) block.userData = {};
+        block.userData.worldKey = key;
+        block.userData.blockTypeId = type.id;
         setObjectDistrictVisibility(block, { x, y, z });
         visualBlocks.set(key, block);
         scene?.add?.(block);
@@ -723,6 +870,10 @@ export function removeBlock(x, y, z, updateMinimap = true) {
         if (block) {
             simIO().removeVisual(scene, block);
             visualBlocks.delete(key);
+        }
+        if (ambientHouseEffects.has(key)) {
+            disposeAmbientHouseEffect(ambientHouseEffects.get(key));
+            ambientHouseEffects.delete(key);
         }
         if(updateMinimap) drawMinimap();
         // signal world change
@@ -908,6 +1059,7 @@ export function animate() {
     if (typeof window !== 'undefined' && window.simulationRunning === false) {
         // 停止中もワールドの描画・UI更新は継続
         updateWorldLighting();
+        updateAmbientWorldEffects();
         if (controls) controls.update();
         renderer.render(scene, camera);
         return;
@@ -915,6 +1067,7 @@ export function animate() {
     worldTime += deltaTime;
     if (typeof window !== 'undefined') window._simTick = (window._simTick || 0) + 1; // used by findClosestFood result cache
     updateWorldLighting();
+    updateAmbientWorldEffects();
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
     refreshDistrictSummaryCache(characters);
     if (controls) controls.update();
