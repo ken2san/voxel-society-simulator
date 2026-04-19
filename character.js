@@ -423,61 +423,58 @@ class Character {
 
     resetVisualEffects() {
         try {
-            if (this.mesh) this.mesh.rotation.z = 0;
-            if (this.body) {
-                this.body.position.y = 0.25;
-                this.body.scale.set(1, 1, 1);
-            }
-            if (this.head) {
-                this.head.position.y = 0.75;
-                this.head.rotation.x = 0;
-                this.head.rotation.y = 0;
-                this.head.rotation.z = 0;
-            }
-            if (this.leftArm) {
-                this.leftArm.rotation.x = 0;
-                this.leftArm.rotation.y = 0;
-            }
-            if (this.rightArm) {
-                this.rightArm.rotation.x = 0;
-                this.rightArm.rotation.y = 0;
-            }
-            if (this.leftEye) this.leftEye.scale.set(1, 1, 1);
-            if (this.rightEye) this.rightEye.scale.set(1, 1, 1);
-            if (this.mouth) {
-                this.mouth.rotation.z = 0;
-                this.mouth.scale.set(1, 1, 1);
-            }
             if (this.shadowMesh) {
                 this.shadowMesh.scale.set(1, 1, 1);
                 if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
                     this.shadowMesh.material.opacity = 0.18;
                 }
             }
+            if (this.mesh) {
+                this.mesh.traverse(node => {
+                    const materials = Array.isArray(node.material) ? node.material : [node.material];
+                    materials.forEach(mat => {
+                        if (!mat?.emissive || mat.userData?.__pulsePrevEmissive === undefined) return;
+                        mat.emissive.setHex(mat.userData.__pulsePrevEmissive);
+                        if ('emissiveIntensity' in mat && typeof mat.userData.__pulsePrevEmissiveIntensity === 'number') {
+                            mat.emissiveIntensity = mat.userData.__pulsePrevEmissiveIntensity;
+                        }
+                        delete mat.userData.__pulsePrevEmissive;
+                        delete mat.userData.__pulsePrevEmissiveIntensity;
+                    });
+                });
+            }
         } catch (_) { /* ignore visual reset errors */ }
     }
 
-    triggerScenePulse(durationMs = 180) {
+    triggerScenePulse(durationMs = 260) {
         if (typeof window !== 'undefined' && window.showEffects === false) return;
-        if (!this.shadowMesh) return;
+        if (!this.mesh) return;
         const now = Date.now();
         if (this._lastScenePulseTs && (now - this._lastScenePulseTs) < 220) return;
         this._lastScenePulseTs = now;
         try {
             if (this._scenePulseTimeout) clearTimeout(this._scenePulseTimeout);
-            this.shadowMesh.scale.set(1.12, 1.12, 1.12);
-            if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
-                this.shadowMesh.material.opacity = 0.28;
+            this.mesh.traverse(node => {
+                const materials = Array.isArray(node.material) ? node.material : [node.material];
+                materials.forEach(mat => {
+                    if (!mat?.emissive) return;
+                    if (!mat.userData) mat.userData = {};
+                    if (mat.userData.__pulsePrevEmissive === undefined) {
+                        mat.userData.__pulsePrevEmissive = mat.emissive.getHex();
+                        mat.userData.__pulsePrevEmissiveIntensity = ('emissiveIntensity' in mat) ? Number(mat.emissiveIntensity || 1) : 1;
+                    }
+                    mat.emissive.setHex(0xfbbf24);
+                    if ('emissiveIntensity' in mat) mat.emissiveIntensity = Math.max(1.55, Number(mat.emissiveIntensity || 1));
+                });
+            });
+            if (this.shadowMesh) {
+                this.shadowMesh.scale.set(1.32, 1.32, 1.32);
+                if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
+                    this.shadowMesh.material.opacity = 0.36;
+                }
             }
             this._scenePulseTimeout = setTimeout(() => {
-                try {
-                    if (this.shadowMesh) {
-                        this.shadowMesh.scale.set(1, 1, 1);
-                        if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
-                            this.shadowMesh.material.opacity = 0.18;
-                        }
-                    }
-                } catch (_) { /* ignore pulse cleanup errors */ }
+                this.resetVisualEffects();
                 this._scenePulseTimeout = null;
             }, durationMs);
         } catch (_) { /* ignore pulse errors */ }
@@ -5266,9 +5263,8 @@ class Character {
 
     updateAnimations(deltaTime) {
         const effectsEnabled = !(typeof window !== 'undefined' && window.showEffects === false);
-        if (!effectsEnabled) {
+        if (!effectsEnabled && this._scenePulseTimeout) {
             this.resetVisualEffects();
-            return;
         }
         // --- Enhanced Blinking logic ---
         if (!this.blinkTimer) this.blinkTimer = 0;
