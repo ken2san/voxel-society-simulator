@@ -604,10 +604,10 @@ export const BLOCK_TYPES = {
     WOOD:  { id: 5, name: 'Wood', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG' },
     LEAF:  { id: 6, name: 'Leaf', color: 0x228b22, diggable: true },
     BED:   { id: 7, name: 'Bed', color: 0xffec8b, isBed: true },
-    HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd2b48c, isHouseWall: true },
-    HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0xe05028, isHouseRoof: true },
-    STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x6090b8, isHouseWall: true, isStoneWall: true },
-    DARK_ROOF:  { id: 11, name: 'Dark Roof',  color: 0x1a3a5c, isHouseRoof: true, isDarkRoof: true }
+    HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd8c39a, isHouseWall: true },
+    HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x6b4a2f, isHouseRoof: true },
+    STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x7b8a94, isHouseWall: true, isStoneWall: true },
+    DARK_ROOF:  { id: 11, name: 'Dark Roof',  color: 0x46515e, isHouseRoof: true, isDarkRoof: true }
 };
 export const ITEM_TYPES = {
     WOOD_LOG: { id: 100, name: 'Log', material: null },
