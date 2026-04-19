@@ -159,7 +159,15 @@ When this roadmap is read by a new thread, use the sections in this order:
 
 If an older handoff says “implement next” but conflicts with the sections above, the older handoff is archival and should not override the current direction.
 
-### Verified progress as of 2026-04-18
+### Active guardrail for current polish work
+
+During the current observation-polish / performance pass:
+
+- **Do not change AI decision logic, ecology tuning, social-model thresholds, or telemetry-driving simulation data** unless the user explicitly asks for it.
+- Prefer fixes in **rendering, camera behavior, DOM/UI refresh cadence, effect throttling, and visibility culling**.
+- If performance regresses at larger populations, treat it as a **display-pipeline problem first**, not a behavior-model problem.
+
+### Verified progress as of 2026-04-19
 
 - Sim-core separation is now live: the simulation runtime has been decoupled from the browser-facing Three.js layer so headless execution and browser execution can share the same behavior model
 - Headless CLI workflow is now live via `npm run sim`, with telemetry export, per-run parameter overrides, and district-mode population validation support
@@ -178,6 +186,8 @@ If an older handoff says “implement next” but conflicts with the sections ab
 - District opportunity scoring is now live: bounded-rational wandering can drift toward lower-pressure, higher-support districts instead of moving as pure local randomness
 - Relationship visibility improved: selected characters now surface top social ties and support-network cues so group structure is observable from outside the sim
 - Selected-character observation now includes live tie lines in the scene, making support hubs and bonded pairs readable at a glance
+- Observation polish pass shipped: live bubble/effects toggles, clearer tiny-home silhouettes, improved roof-vs-fruit contrast, and quiet ambient village cues
+- Render-performance polish shipped: capped HiDPI canvas cost and throttled non-essential ambient updates so camera interaction stays more responsive at larger visible populations
 
 ---
 
@@ -301,35 +311,41 @@ Those variables should plug naturally into the district summaries above rather t
 
 ---
 
-## Current Sprint — Character Motion Readability
+## Current Sprint — Observation UI and Render Performance
 
 ### Goal
 
-Make character movement legible and believable for observation:
-natural collision handling, no wall clipping, and smoother visual intent.
+Keep the simulation easy to watch at larger visible populations without
+changing the underlying society behavior.
+
+### Guardrail
+
+This sprint is **render/UI only**:
+
+- no AI rewrites
+- no ecology / survival retuning
+- no changes whose main effect is to alter observed population outcomes
 
 ### Tasks
 
-| Status     | Item                                                                        |
-| ---------- | --------------------------------------------------------------------------- |
-| ✅ Done    | BFS pathfinding with path validation and invalidation backoff               |
-| ✅ Done    | `canTraverseWorldSegment()` — substep solid collision (0.25 voxel interval) |
-| ✅ Done    | `tryWallSlideMove()` — wall-slide fallback on blocked forward direction     |
-| ✅ Done    | Micro-pause → retry → path-reset escalation chain in `updateMovement`       |
-| ✅ Done    | Dead code removal (`moveAlongPath`) and constructor cleanup                 |
-| ✅ Done    | `PARAM_DEFAULTS` registry in sidebar.js (parameter scaling prep)            |
-| 🔲 Next    | Validate wall-slide with 5–10 min telemetry; compare stuckLike% baseline    |
-| 🔲 Next    | Visual smoothing: interpolate mesh position between grid steps              |
-| 🔲 Next    | Anticipatory rotation: face next path node ahead of move                    |
-| 🔲 Backlog | Consolidate `state` / `action.type` dual intent representation              |
-| 🔲 Backlog | Unify `targetPos` + `action.target` + `path` destination tracking           |
-| 🔲 Backlog | Collapse `actionCooldown` + `_microPauseTimer` + `_arrivalDelay`            |
+| Status     | Item                                                                 |
+| ---------- | -------------------------------------------------------------------- |
+| ✅ Done    | Live bubble toggle for cleaner observation                           |
+| ✅ Done    | Live effects toggle for optional scene polish                        |
+| ✅ Done    | Tiny-home readability pass and roof/fruit contrast cleanup           |
+| ✅ Done    | Quiet ambient world effects with house-body-only night warmth        |
+| ✅ Done    | Canvas performance mitigation for larger scenes on HiDPI displays    |
+| 🔲 Next    | Throttle selected-character overlay / marker refresh under load      |
+| 🔲 Next    | Add a simple low/normal visual quality preset if needed              |
+| 🔲 Next    | Continue camera-responsiveness profiling at ~50+ visible characters  |
+| 🔲 Backlog | Further DOM update coalescing for the left and right observation UI  |
 
-### Baseline Telemetry (2026-04-13, 153 s run)
+### Current success criteria
 
-- avgWanderRatio: 69.3% | avgStuckLikeRatio: 8.1% | avgLowEnergyRatio: 10.9%
-- stallDetected: 0
-- Target after wall-slide: stuckLikeRatio < 5%
+- camera drag / orbit stays responsive during active observation
+- effects remain optional and subtle
+- the scene reads clearly without distorting behavior
+- AI and simulation-data layers remain untouched unless explicitly requested
 
 ---
 
