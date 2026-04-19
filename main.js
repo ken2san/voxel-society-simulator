@@ -34,9 +34,11 @@ async function init() {
         const camera = new THREE.PerspectiveCamera(75, gameCanvas.width / gameCanvas.height, 0.1, 1000);
         camera.position.set(gridSize * 1.2, gridSize * 1.1, gridSize * 1.2);
 
-        const renderer = new THREE.WebGLRenderer({ canvas: gameCanvas, antialias: true });
+        const renderer = new THREE.WebGLRenderer({ canvas: gameCanvas, antialias: true, powerPreference: 'high-performance' });
         renderer.setSize(gameCanvas.width, gameCanvas.height, false);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        // Cap HiDPI rendering so Retina screens do not quadruple the pixel workload
+        // once the observed population becomes large.
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
 
         minimapCanvas.width = 96;
         minimapCanvas.height = 96;

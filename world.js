@@ -679,21 +679,41 @@ function ensureHouseSmokeEffect(key, block) {
 
 function updateAmbientWorldEffects() {
     const enabled = areAmbientEffectsEnabled();
+    const popSize = Array.isArray(characters) ? characters.length : 0;
+    // Ambient motion is observation polish, not gameplay-critical simulation.
+    // Throttle it modestly in larger scenes to keep camera interaction responsive.
+    const frameStride = enabled
+        ? (popSize > 72 ? 4 : popSize > 48 ? 3 : popSize > 24 ? 2 : 1)
+        : 1;
+    updateAmbientWorldEffects._frameCounter = (updateAmbientWorldEffects._frameCounter || 0) + 1;
+    const wasEnabled = updateAmbientWorldEffects._lastEnabled !== false;
+    updateAmbientWorldEffects._lastEnabled = enabled;
+    if (!enabled && !wasEnabled) return;
+    if (enabled && frameStride > 1 && (updateAmbientWorldEffects._frameCounter % frameStride) !== 0) {
+        return;
+    }
+
     const time = Number(worldTime) || 0;
     const dayPhase = (time % DAY_DURATION) / DAY_DURATION;
     const isNight = dayPhase > 0.5;
     const nightBlend = isNight ? (0.45 + 0.55 * Math.sin((dayPhase - 0.5) * Math.PI)) : 0;
     const warmIntensity = enabled ? nightBlend * (0.1 + 0.06 * (0.5 + 0.5 * Math.sin(time * 2.1))) : 0;
 
-    for (const blockType of [BLOCK_TYPES.HOUSE_WALL, BLOCK_TYPES.HOUSE_ROOF, BLOCK_TYPES.STONE_WALL, BLOCK_TYPES.DARK_ROOF]) {
+    for (const blockType of [BLOCK_TYPES.HOUSE_WALL, BLOCK_TYPES.STONE_WALL]) {
         const material = blockMaterials.get(blockType.id);
         if (!material) continue;
         if (!material.emissive) material.emissive = simIO().createColor(0xffb36b);
         if (typeof material.emissive.set === 'function') material.emissive.set(0xffb36b);
         material.emissiveIntensity = warmIntensity;
     }
+    for (const roofType of [BLOCK_TYPES.HOUSE_ROOF, BLOCK_TYPES.DARK_ROOF]) {
+        const material = blockMaterials.get(roofType.id);
+        if (!material) continue;
+        material.emissiveIntensity = 0;
+    }
 
     let smokeCount = 0;
+    const smokeLimit = enabled ? (popSize > 72 ? 4 : popSize > 48 ? 6 : AMBIENT_SMOKE_LIMIT) : 0;
     const staleKeys = new Set(ambientHouseEffects.keys());
 
     for (const [key, block] of visualBlocks.entries()) {
@@ -726,7 +746,7 @@ function updateAmbientWorldEffects() {
         if (block.userData.ambientLeaf) resetAmbientBlock(block);
 
         const isRoof = blockId === BLOCK_TYPES.HOUSE_ROOF.id || blockId === BLOCK_TYPES.DARK_ROOF.id;
-        const eligibleForSmoke = enabled && isRoof && block.visible !== false && smokeCount < AMBIENT_SMOKE_LIMIT && (hashWorldKey(key) % 3 === 0);
+        const eligibleForSmoke = enabled && isRoof && block.visible !== false && smokeCount < smokeLimit && (hashWorldKey(key) % 3 === 0);
         const effect = eligibleForSmoke ? ensureHouseSmokeEffect(key, block) : ambientHouseEffects.get(key);
         if (!effect) continue;
         if (!eligibleForSmoke) {
@@ -989,7 +1009,8 @@ export function onWindowResize() {
     gameCanvas.height = gameCanvas.offsetHeight;
     camera.aspect = gameCanvas.width / gameCanvas.height;
     camera.updateProjectionMatrix();
-    renderer.setSize(gameCanvas.width, gameCanvas.height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    renderer.setSize(gameCanvas.width, gameCanvas.height, false);
 }
 export function isSafeSpot(pos) {
     // Recognize cave air as safe
