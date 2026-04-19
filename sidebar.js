@@ -332,6 +332,7 @@ function renderCharacterDetail() {
         starvationDeathDelaySeconds:        10,
         districtMode:                       1,
         activeDistrictIndex:                0,
+        showBubbles:                        true,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
@@ -395,6 +396,45 @@ function renderCharacterDetail() {
     aiToggleRow.appendChild(aiToggleBtn);
     aiToggleRow.dataset.label = 'AI Mode';
     tabPanels[0].appendChild(aiToggleRow);
+
+    const bubbleToggleRow = document.createElement('div');
+    bubbleToggleRow.style.display = 'flex';
+    bubbleToggleRow.style.alignItems = 'center';
+    bubbleToggleRow.style.gap = '10px';
+    const bubbleToggleLabel = document.createElement('span');
+    bubbleToggleLabel.textContent = '💬 Bubbles:';
+    bubbleToggleLabel.style.width = '140px';
+    bubbleToggleRow.appendChild(bubbleToggleLabel);
+    const bubbleToggle = document.createElement('input');
+    bubbleToggle.type = 'checkbox';
+    bubbleToggle.checked = sidebarParams.showBubbles !== false;
+    bubbleToggle.style.transform = 'scale(1.1)';
+    bubbleToggle.style.cursor = 'pointer';
+    bubbleToggle.addEventListener('change', e => {
+        const enabled = !!e.target.checked;
+        sidebarParams.showBubbles = enabled;
+        window.showBubbles = enabled;
+        try {
+            (window.characters || []).forEach(char => {
+                if (!enabled) {
+                    if (char.thoughtBubble) {
+                        char.thoughtBubble.setAttribute('data-show', 'false');
+                        char.thoughtBubble.style.display = 'none';
+                    }
+                    if (char.actionIconDiv) {
+                        char.actionIconDiv.style.opacity = 0;
+                        char.actionIconDiv.style.animation = '';
+                    }
+                } else if (typeof char.updateThoughtBubble === 'function') {
+                    char.updateThoughtBubble(window.isNight, window.camera);
+                }
+            });
+        } catch (_) { /* ignore UI sync errors */ }
+    });
+    bubbleToggleRow.appendChild(bubbleToggle);
+    bubbleToggleRow.dataset.label = 'Bubbles';
+    tabPanels[0].appendChild(bubbleToggleRow);
+
     paramBox.style.background = 'rgba(255,255,255,0.93)';
     paramBox.style.borderRadius = '18px';
     paramBox.style.boxShadow = '0 2px 12px #b0c8e033';

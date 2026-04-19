@@ -342,9 +342,14 @@ class Character {
 
     // --- 個別のアクション実行メソッド ---
 
-    // アクションアイコンを表示
+    // Action icon display
     showActionIcon(iconText, duration = 2.0) {
         if (!this.actionIconDiv) return;
+        if (typeof window !== 'undefined' && window.showBubbles === false) {
+            this.actionIconDiv.style.opacity = 0;
+            this.actionIconDiv.style.animation = '';
+            return;
+        }
 
         // Debounce rapid icon switches to avoid visual flicker.
         try {
@@ -5523,6 +5528,11 @@ class Character {
             this.thoughtBubble.setAttribute('data-show', 'false');
             this.thoughtBubble.style.display = 'none';
         };
+        if (typeof window !== 'undefined' && window.showBubbles === false) {
+            hideBubble();
+            if (this.actionIconDiv) this.actionIconDiv.style.opacity = 0;
+            return;
+        }
         if (!this.mesh || this.mesh.visible === false || !camera || !this.iconAnchor) {
             hideBubble();
             return;
