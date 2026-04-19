@@ -783,11 +783,14 @@ export function tickFruitRegen(deltaTime) {
             if (y < 0) continue;
             if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
             if (worldData.has(`${x},${y + 1},${z}`)) continue;
-            // Skip enclosed positions — fruit inside building interiors can never
-            // be reached by characters and causes starvation despite appearing on-screen.
+            // Skip enclosed positions — fruit spawned inside building interiors
+            // is unreachable and causes starvation despite appearing on-screen.
+            // Only check that at least one cardinal neighbour at fruit-level is
+            // unoccupied; do NOT require same-height ground (that incorrectly
+            // blocks spawning on sloped terrain where neighbour ground ≠ y).
             const fruitY = y + 1;
             const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
-                !worldData.has(`${x+dx},${fruitY},${z+dz}`) && worldData.has(`${x+dx},${y},${z+dz}`));
+                !worldData.has(`${x+dx},${fruitY},${z+dz}`));
             if (!hasPassableNeighbor) continue;
             addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
         }
@@ -1164,10 +1167,11 @@ export function animate() {
                 if (y < 0) continue;
                 if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
                 if (worldData.has(`${x},${y + 1},${z}`)) continue;
-                // Skip enclosed positions — fruit inside building interiors is unreachable.
+                // Skip enclosed positions — only check fruit-level neighbours,
+                // not same-height ground (avoids blocking on sloped terrain).
                 const fruitY = y + 1;
                 const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
-                    !worldData.has(`${x+dx},${fruitY},${z+dz}`) && worldData.has(`${x+dx},${y},${z+dz}`));
+                    !worldData.has(`${x+dx},${fruitY},${z+dz}`));
                 if (!hasPassableNeighbor) continue;
                 addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
             }
