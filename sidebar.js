@@ -332,7 +332,6 @@ function renderCharacterDetail() {
         starvationDeathDelaySeconds:        10,
         districtMode:                       1,
         activeDistrictIndex:                0,
-        showBubbles:                        true,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
@@ -341,6 +340,7 @@ function renderCharacterDetail() {
     // Rename mappings: sidebarParams uses shorter keys, window.* uses full names
     window.groupAffinityThreshold = sidebarParams.groupAffinityTh;
     window.socialThreshold = sidebarParams.socialTh;
+    window.showBubbles = sidebarParams.showBubbles;
     // --- 右サイドバー：AIパラメータ調整UI ---
     rightSidebar.innerHTML = '';
     const paramBox = document.createElement('div');

@@ -94,7 +94,8 @@
       "mutationRate": 0.05,
       "starvationDeathDelaySeconds": 10,
       "districtMode": 1,
-      "activeDistrictIndex": 0
+      "activeDistrictIndex": 0,
+      "showBubbles": true
     },
     "telemetryConfig": {
       "sampleIntervalMs": 800,
