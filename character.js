@@ -1243,7 +1243,7 @@ class Character {
                 return false;
             }
             const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
-            if (blockType && blockType.diggable) {
+            if (blockType && (blockType.diggable || blockType.isEdible)) {
                 // Perform the removal
                 removeBlock && removeBlock(x, y, z);
                 // Mark recent dig timestamp
@@ -1256,9 +1256,9 @@ class Character {
                 return true;
             }
 
-            // Not diggable: release and return
+            // Not removable: release and return
             Character.releaseReservation(key, this.id);
-            this.log('reserveAndRemoveBlock: block not diggable', key);
+            this.log('reserveAndRemoveBlock: block not removable', key);
             return false;
         } catch (e) {
             try { Character.releaseReservation(`${x},${y},${z}`, this.id); } catch (e2) {}
