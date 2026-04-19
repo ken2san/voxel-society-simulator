@@ -439,6 +439,22 @@ for (let tick = 0; tick < options.ticks; tick++) {
     simulatedNow += options.dt * 1000;
     simTime += options.dt;
 
+    // Advance seasonal info so tickFruitRegen applies the same seasonal multiplier
+    // as the browser animate() loop. Without this, CLI always uses full spawn rate
+    // and misses winter scarcity that causes starvation deaths in the browser.
+    {
+        const _cycleSec = (globalThis.window.seasonCycleSeconds > 0) ? globalThis.window.seasonCycleSeconds : 120;
+        const _amp = Math.min(1, Math.max(0, globalThis.window.seasonAmplitude !== undefined ? globalThis.window.seasonAmplitude : 0.6));
+        const _mul = 1 + _amp * Math.sin(2 * Math.PI * simTime / _cycleSec);
+        const _phase = (simTime % _cycleSec) / _cycleSec;
+        let _name, _icon;
+        if (_phase < 0.25)      { _name = 'Spring'; _icon = '🌸'; }
+        else if (_phase < 0.50) { _name = 'Summer'; _icon = '☀️'; }
+        else if (_phase < 0.75) { _name = 'Autumn'; _icon = '🍂'; }
+        else                    { _name = 'Winter'; _icon = '❄️'; }
+        globalThis.window.currentSeasonInfo = { name: _name, icon: _icon, multiplier: Math.max(0, _mul), amplitude: _amp, phase: _phase };
+    }
+
     // Fruit regeneration (mirrors the animate() loop in the browser)
     if (typeof tickFruitRegen === 'function') tickFruitRegen(options.dt);
 

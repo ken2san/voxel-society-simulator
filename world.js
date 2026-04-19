@@ -770,7 +770,12 @@ export function tickFruitRegen(deltaTime) {
         ? globalThis.window.fruitRegenIntervalSeconds : 60;
     if (_fruitRegenAccum < fruitRegenInterval) return;
     _fruitRegenAccum = 0;
-    const rate = fruitSpawnRate;
+    // Apply the same seasonal multiplier that animate() uses in the browser.
+    // Without this, headless CLI always runs at full spawn rate while the browser
+    // experiences winter dips (amplitude=0.6 → 0.4× rate), making CLI unrepresentative.
+    const seasonalMultiplier = (typeof globalThis.window !== 'undefined' && globalThis.window.currentSeasonInfo)
+        ? Math.max(0, globalThis.window.currentSeasonInfo.multiplier) : 1;
+    const rate = fruitSpawnRate * seasonalMultiplier;
     for (let x = 0; x < gridSize; x++) {
         for (let z = 0; z < gridSize; z++) {
             if (Math.random() >= rate) continue;

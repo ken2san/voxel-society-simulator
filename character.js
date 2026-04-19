@@ -3600,7 +3600,10 @@ class Character {
             const emergencyFoodThreshold = Math.max(15, Number((typeof window !== 'undefined' && window.foodSeekHungerThreshold !== undefined) ? window.foodSeekHungerThreshold : 35) - 10);
             const activeFoodAction = this.action && (this.action.type === 'COLLECT_FOOD' || this.action.type === 'EAT');
             const isFoodEmergency = Number(this.needs?.hunger || 0) <= emergencyFoodThreshold || Number(this._starvationTimer || 0) > 0;
-            const preemptibleState = this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || (this.state === 'moving' && !activeFoodAction && this.action?.type !== 'WANDER');
+            // Include 'idle' so that any pending actionCooldown is cancelled immediately
+            // when hunger hits emergency level. Previously, a 1–8s idle cooldown (e.g.
+            // post-build) would block food-seeking until the stall detector fired (>8s).
+            const preemptibleState = this.state === 'idle' || this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || (this.state === 'moving' && !activeFoodAction && this.action?.type !== 'WANDER');
             if (isFoodEmergency && preemptibleState && !activeFoodAction) {
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.clearNavigationState();
