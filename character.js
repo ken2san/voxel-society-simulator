@@ -472,7 +472,7 @@ class Character {
                 this.inventory[0] = null;
                 this.carriedItemMesh.visible = false;
                 const inDanger = this.needs.hunger <= 15 || this.needs.energy <= 15;
-                this.needs.hunger = Math.min(100, this.needs.hunger + 40 + Math.random() * 20);
+                this.needs.hunger = Math.min(100, this.needs.hunger + blockType.foodValue + Math.random() * 20);
                 this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                 if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
                 this.eatCount = (this.eatCount || 0) + 1;
@@ -3484,7 +3484,7 @@ class Character {
         const unsafeNightSafetyDecayRate = (typeof window !== 'undefined' && window.unsafeNightSafetyDecayRate !== undefined) ? Number(window.unsafeNightSafetyDecayRate) : 5;
         const daytimeSafetyRecoveryRate = (typeof window !== 'undefined' && window.daytimeSafetyRecoveryRate !== undefined) ? Number(window.daytimeSafetyRecoveryRate) : 16;
         this.needs.hunger -= deltaTime * hungerDecayRate * this.personality.diligence;
-        const socialNeedDecayRate = (typeof window !== 'undefined' && window.socialNeedDecayRate !== undefined) ? Number(window.socialNeedDecayRate) : 1.5;
+        const socialNeedDecayRate = (typeof window !== 'undefined' && window.socialNeedDecayRate !== undefined) ? Number(window.socialNeedDecayRate) : 0.8;
         this.needs.social -= deltaTime * socialNeedDecayRate;
         if (this.state === 'moving' || this.state === 'working') {
             this.needs.energy -= deltaTime * activeEnergyDrainRate;
@@ -3627,7 +3627,7 @@ class Character {
 
         // Recovery
         if (this.state === 'resting') {
-            const restEnergyRecoveryRate = (typeof window !== 'undefined' && window.restEnergyRecoveryRate !== undefined) ? Number(window.restEnergyRecoveryRate) : 18;
+            const restEnergyRecoveryRate = (typeof window !== 'undefined' && window.restEnergyRecoveryRate !== undefined) ? Number(window.restEnergyRecoveryRate) : 10;
             this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
