@@ -913,6 +913,7 @@ export function animate() {
         return;
     }
     worldTime += deltaTime;
+    if (typeof window !== 'undefined') window._simTick = (window._simTick || 0) + 1; // used by findClosestFood result cache
     updateWorldLighting();
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
     refreshDistrictSummaryCache(characters);
