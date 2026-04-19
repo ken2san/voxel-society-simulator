@@ -11,9 +11,9 @@ export function createThreeSimulationIO() {
         if (type.isBed) {
             geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
         } else if (type.isStoneWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.65, blockSize * 1.15, blockSize * 0.65);
+            geometry = new THREE.BoxGeometry(blockSize * 0.92, blockSize * 1.08, blockSize * 0.92);
         } else if (type.isHouseWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.85, blockSize, blockSize * 0.85);
+            geometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize * 1.02, blockSize * 0.9);
         } else if (type.isDarkRoof) {
             const longX = (variantSeed % 2) === 0;
             geometry = new THREE.BoxGeometry(
@@ -22,8 +22,8 @@ export function createThreeSimulationIO() {
                 blockSize * (longX ? 1.15 : 1.45)
             );
         } else if (type.isHouseRoof) {
-            const roofHeight = [0.68, 0.8, 0.92][variantSeed % 3];
-            geometry = new THREE.ConeGeometry(blockSize * 0.7, blockSize * roofHeight, 4);
+            const roofHeight = [0.72, 0.84, 0.96][variantSeed % 3];
+            geometry = new THREE.ConeGeometry(blockSize * 0.8, blockSize * roofHeight, 4);
         }
 
         const block = new THREE.Mesh(geometry, material);

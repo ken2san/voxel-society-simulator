@@ -23,16 +23,16 @@ const HOME_TYPES = {
         bed: 'BED',
         wall: 'HOUSE_WALL',
         roof: 'HOUSE_ROOF',
-        // No side posts — minimal 1×1 footprint so fruit GRASS tiles stay open.
-        wallPositions: [],
+        // Keep the footprint 1×1, but add a visible body block so the roof does not read as floating.
+        wallPositions: [{dx: 0, dy: 1, dz: 0}],
         roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     stone: {
         bed: 'BED',
         wall: 'STONE_WALL',
         roof: 'DARK_ROOF',
-        // Single side post (visually distinct from wood) — 2×1 footprint.
-        wallPositions: [{dx:1, dy:0, dz:0}],
+        // Same compact 1×1 silhouette, with stone materials for a different look.
+        wallPositions: [{dx: 0, dy: 1, dz: 0}],
         roofPosition: {dx: 0, dy: 2, dz: 0}
     },
     underground: {
@@ -2730,7 +2730,20 @@ class Character {
 
                 const fromBase = Math.abs(base.x - spot.x) + Math.abs(base.y - spot.y) + Math.abs(base.z - spot.z);
                 const fromAnchor = Math.abs(anchor.x - spot.x) + Math.abs(anchor.y - spot.y) + Math.abs(anchor.z - spot.z);
-                const score = fromBase + Math.abs(fromAnchor - 2) * 0.8 + Math.abs(spot.y - base.y) * 0.35;
+
+                const above1 = worldData.get(`${spot.x},${spot.y + 1},${spot.z}`);
+                const above2 = worldData.get(`${spot.x},${spot.y + 2},${spot.z}`);
+                const coveredPenalty = (above1 ? 3.5 : 0) + (above2 ? 2.0 : 0);
+
+                let openSides = 0;
+                for (const dir of [{dx:1,dz:0},{dx:-1,dz:0},{dx:0,dz:1},{dx:0,dz:-1}]) {
+                    const bodyKey = `${spot.x + dir.dx},${spot.y},${spot.z + dir.dz}`;
+                    const headKey = `${spot.x + dir.dx},${spot.y + 1},${spot.z + dir.dz}`;
+                    if (!worldData.has(bodyKey) && !worldData.has(headKey)) openSides++;
+                }
+                const opennessPenalty = (4 - openSides) * 0.75;
+
+                const score = fromBase + Math.abs(fromAnchor - 2) * 0.8 + Math.abs(spot.y - base.y) * 0.35 + coveredPenalty + opennessPenalty;
                 if (score < bestScore) {
                     bestScore = score;
                     bestSpot = { x: spot.x, y: spot.y, z: spot.z };
