@@ -280,10 +280,22 @@ export function decideNextAction_rulebase(character, isNight) {
 
         // 木材があれば建築開始
         if (character.inventory[0] === 'WOOD_LOG') {
-            character.log('🏠 Has wood → BUILD_HOME');
-            character.setNextAction('BUILD_HOME');
-            // provisionalHome解除
-            if (character.provisionalHome) character.provisionalHome = null;
+            const preferredHomeSpot = character.provisionalHome || (character.pickCompactHomeSpot ? character.pickCompactHomeSpot(character.gridPos) : character.gridPos);
+            const shouldMoveToBuildSpot = preferredHomeSpot && (
+                character.gridPos.x !== preferredHomeSpot.x ||
+                character.gridPos.y !== preferredHomeSpot.y ||
+                character.gridPos.z !== preferredHomeSpot.z
+            );
+            if (shouldMoveToBuildSpot) {
+                character.log('🏠 Has wood → moving to compact home spot');
+                character.provisionalHome = preferredHomeSpot;
+                character.setNextAction('BUILD_HOME', null, preferredHomeSpot);
+            } else {
+                character.log('🏠 Has wood → BUILD_HOME');
+                character.setNextAction('BUILD_HOME');
+                // provisionalHome解除
+                if (character.provisionalHome) character.provisionalHome = null;
+            }
             return;
         }
 
@@ -328,10 +340,10 @@ export function decideNextAction_rulebase(character, isNight) {
             // If we've failed too many times, try alternative strategies
             if (character._woodFailureCount >= 3) {
                 character.log('🏠 Too many wood failures → alternative strategy');
-                character.provisionalHome = character.gridPos;
+                character.provisionalHome = character.pickCompactHomeSpot ? character.pickCompactHomeSpot(character.gridPos) : { ...character.gridPos };
                 character._woodFailureCount = 0;
                 character._lastWoodTarget = null;
-                character.log('🏠 Created provisional home due to wood access issues');
+                character.log('🏠 Created compact provisional home due to wood access issues');
                 character.setNextAction('WANDER');
                 return;
             }
@@ -379,8 +391,8 @@ export function decideNextAction_rulebase(character, isNight) {
             character.log('🏠 No reachable wood found → exploring for wood');
             // Create provisional home to prevent getting stuck in this state
             if (!character.provisionalHome) {
-                character.provisionalHome = character.gridPos;
-                character.log('🏠 Created provisional home at current position');
+                character.provisionalHome = character.pickCompactHomeSpot ? character.pickCompactHomeSpot(character.gridPos) : { ...character.gridPos };
+                character.log('🏠 Created compact provisional home near the local cluster');
             }
             // provisionalHome状態が続いた回数をカウント
             if (!character._provisionalHomeCount) character._provisionalHomeCount = 0;

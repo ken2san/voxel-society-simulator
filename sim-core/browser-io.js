@@ -6,6 +6,7 @@ export function createThreeSimulationIO() {
 
     function createBlockVisual({ x = 0, y = 0, z = 0, type = {}, blockSize = 1, material, edgeMaterial, isVisible = true }) {
         let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
+        const variantSeed = Math.abs((x * 73856093) ^ (y * 19349663) ^ (z * 83492791));
 
         if (type.isBed) {
             geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
@@ -14,9 +15,15 @@ export function createThreeSimulationIO() {
         } else if (type.isHouseWall) {
             geometry = new THREE.BoxGeometry(blockSize * 0.85, blockSize, blockSize * 0.85);
         } else if (type.isDarkRoof) {
-            geometry = new THREE.BoxGeometry(blockSize * 1.4, blockSize * 0.22, blockSize * 1.4);
+            const longX = (variantSeed % 2) === 0;
+            geometry = new THREE.BoxGeometry(
+                blockSize * (longX ? 1.45 : 1.15),
+                blockSize * 0.22,
+                blockSize * (longX ? 1.15 : 1.45)
+            );
         } else if (type.isHouseRoof) {
-            geometry = new THREE.ConeGeometry(blockSize * 0.7, blockSize * 0.8, 4);
+            const roofHeight = [0.68, 0.8, 0.92][variantSeed % 3];
+            geometry = new THREE.ConeGeometry(blockSize * 0.7, blockSize * roofHeight, 4);
         }
 
         const block = new THREE.Mesh(geometry, material);
@@ -26,7 +33,8 @@ export function createThreeSimulationIO() {
         else if (type.isHouseRoof) yOffset = 0.4;
 
         block.position.set(x + 0.5, y + yOffset, z + 0.5);
-        if (type.isHouseRoof) block.rotation.y = Math.PI / 4;
+        if (type.isHouseRoof) block.rotation.y = Math.PI / 4 + ((variantSeed % 4) * (Math.PI / 2));
+        if (type.isDarkRoof) block.rotation.y = ((variantSeed % 2) * (Math.PI / 2));
         if (edgeMaterial) {
             const edges = new THREE.LineSegments(new THREE.EdgesGeometry(block.geometry), edgeMaterial);
             block.add(edges);

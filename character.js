@@ -2688,6 +2688,59 @@ class Character {
         return candidates.length > 0 ? candidates[0] : null;
     }
 
+    pickCompactHomeSpot(basePos = this.gridPos) {
+        const base = (basePos && basePos.x !== undefined && basePos.y !== undefined && basePos.z !== undefined)
+            ? { x: basePos.x, y: basePos.y, z: basePos.z }
+            : (this.gridPos ? { ...this.gridPos } : null);
+        if (!base) return null;
+
+        const anchors = [];
+        const householdSupport = this.getNearbyHouseholdSupport ? this.getNearbyHouseholdSupport(5) : null;
+        const supportTarget = householdSupport?.target || null;
+        if (supportTarget?.homePosition) anchors.push(supportTarget.homePosition);
+        if (supportTarget?.provisionalHome) anchors.push(supportTarget.provisionalHome);
+
+        if (typeof window !== 'undefined' && Array.isArray(window.characters)) {
+            for (const other of window.characters) {
+                if (!other || other.id === this.id || other.state === 'dead') continue;
+                const otherHome = other.homePosition || other.provisionalHome;
+                if (!otherHome) continue;
+                const dist = Math.abs(base.x - otherHome.x) + Math.abs(base.z - otherHome.z);
+                if (dist <= 6) anchors.push(otherHome);
+            }
+        }
+
+        if (anchors.length === 0) return { ...base };
+
+        let bestSpot = { ...base };
+        let bestScore = Infinity;
+        const seen = new Set();
+
+        for (const anchor of anchors) {
+            const candidateSpots = this.findAdjacentSpots(anchor, { preferUnoccupied: true });
+            for (const spot of candidateSpots) {
+                if (!spot || spot.x === undefined || spot.y === undefined || spot.z === undefined) continue;
+                const spotKey = `${spot.x},${spot.y},${spot.z}`;
+                if (seen.has(spotKey)) continue;
+                seen.add(spotKey);
+                if (worldData.has(spotKey) || this.isOccupiedByOther(spot.x, spot.y, spot.z)) continue;
+
+                const footingKey = `${spot.x},${spot.y - 1},${spot.z}`;
+                if (spot.y > 0 && !worldData.has(footingKey)) continue;
+
+                const fromBase = Math.abs(base.x - spot.x) + Math.abs(base.y - spot.y) + Math.abs(base.z - spot.z);
+                const fromAnchor = Math.abs(anchor.x - spot.x) + Math.abs(anchor.y - spot.y) + Math.abs(anchor.z - spot.z);
+                const score = fromBase + Math.abs(fromAnchor - 2) * 0.8 + Math.abs(spot.y - base.y) * 0.35;
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestSpot = { x: spot.x, y: spot.y, z: spot.z };
+                }
+            }
+        }
+
+        return bestSpot;
+    }
+
     rememberBusyFoodTarget(target, ttlMs = null) {
         if (!target || target.x === undefined || target.y === undefined || target.z === undefined) return;
         if (!this._busyFoodTargets) this._busyFoodTargets = new Map();
@@ -3680,7 +3733,7 @@ class Character {
                 this.state = 'idle';
                 this.learn && this.learn({ type: 'FOUND_SHELTER' });
                 if (this.provisionalHome === null) {
-                    this.provisionalHome = this.gridPos;
+                    this.provisionalHome = this.pickCompactHomeSpot ? this.pickCompactHomeSpot(this.gridPos) : { ...this.gridPos };
                 }
             }
         }
