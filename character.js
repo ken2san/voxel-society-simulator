@@ -2069,13 +2069,13 @@ class Character {
             }
         }
         const _defaultTraits = {
-            bravery:         0.5 + Math.random() * 0.5,
-            diligence:       0.5 + Math.random() * 0.5,
+            bravery:         0.3 + Math.random() * 0.7,
+            diligence:       0.3 + Math.random() * 0.7,
             // --- pseudo-evolution traits (added for Anlife-like drift) ---
-            sociality:       0.5 + Math.random() * 0.5, // seeks social earlier; modulates socialThreshold
-            curiosity:       0.5 + Math.random() * 0.5, // drives exploration probability
-            resourcefulness: 0.5 + Math.random() * 0.5, // proactive foraging threshold
-            resilience:      0.5 + Math.random() * 0.5, // energy stress tolerance
+            sociality:       0.3 + Math.random() * 0.7, // seeks social earlier; modulates socialThreshold
+            curiosity:       0.3 + Math.random() * 0.7, // drives exploration probability
+            resourcefulness: 0.3 + Math.random() * 0.7, // proactive foraging threshold
+            resilience:      0.3 + Math.random() * 0.7, // energy stress tolerance
         };
         // Merge: genes values override defaults; missing keys fall back to random defaults.
         this.personality = genes ? { ..._defaultTraits, ...genes } : _defaultTraits;
