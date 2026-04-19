@@ -122,6 +122,7 @@ class Character {
             // 木の家完成時はインベントリクリア処理を削除（buildHome内で既に処理済み）
             this.showActionIcon('🏠', 3.0);
         }
+        this.triggerMicroGesture('celebrate', type === 'underground' ? 0.8 : 1.05, type === 'underground' ? 0.9 : 1.15);
         this.log(`Construction complete! type=${type} buildCount=${this.buildCount || 0}`, this.homePosition);
         this._buildingProgress = 0;
         this._buildingStage = 0;
@@ -214,6 +215,7 @@ class Character {
             case 'SOCIALIZE':
                 // 社交状態に遷移
                 this.state = 'socializing';
+                this.triggerMicroGesture('chat', 0.95 + Math.random() * 0.25, 1.0);
                 // パートナーも同時に社交状態にする
                 const partner = this.action.target;
                 if (partner && partner !== this) {
@@ -277,6 +279,7 @@ class Character {
             case 'REST':
                 // 休息状態に遷移
                 this.state = 'resting';
+                this.triggerMicroGesture('settle', 0.8, 0.9);
                 break;
             case 'CRAFT_TOOL':
                 // 道具作成のため作業状態に遷移
@@ -502,6 +505,96 @@ class Character {
         } catch (_) { /* ignore pulse errors */ }
     }
 
+    triggerMicroGesture(type = 'glance', duration = 0.8, intensity = 1.0) {
+        if (!this.body || !this.head) return;
+        const now = Date.now();
+        const minIntervalMs = 450; // Visual-only anti-flicker guard.
+        if ((this._lastMicroGestureTs || 0) && (now - this._lastMicroGestureTs) < minIntervalMs) return;
+        this._lastMicroGestureTs = now;
+        this._microGesture = {
+            type,
+            timer: Math.max(0.2, Number(duration) || 0.8),
+            duration: Math.max(0.2, Number(duration) || 0.8),
+            intensity: Math.max(0.35, Math.min(1.5, Number(intensity) || 1)),
+            side: Math.random() < 0.5 ? -1 : 1,
+            seed: Math.random() * Math.PI * 2
+        };
+    }
+
+    updateMicroGesture(deltaTime) {
+        if (!this.body || !this.head) return null;
+        if (!this._idleGestureTimer) this._idleGestureTimer = 2 + Math.random() * 4;
+
+        if (this.state === 'idle' && !this.action && !this._microGesture) {
+            this._idleGestureTimer -= deltaTime;
+            if (this._idleGestureTimer <= 0) {
+                const kind = Math.random() < 0.72 ? 'glance' : 'settle';
+                this.triggerMicroGesture(kind, 0.55 + Math.random() * 0.45, 0.7 + Math.random() * 0.25);
+                this._idleGestureTimer = (this._idleGestureCooldown || 4.5) + Math.random() * 2.5;
+            }
+        } else if (this.state !== 'idle') {
+            this._idleGestureTimer = Math.max(this._idleGestureTimer || 0, 1.2);
+        }
+
+        const gesture = this._microGesture;
+        if (!gesture) return null;
+
+        gesture.timer -= deltaTime;
+        const duration = Math.max(0.001, gesture.duration || 0.8);
+        const progress = 1 - Math.max(0, gesture.timer) / duration;
+        const env = Math.sin(progress * Math.PI);
+        const intensity = gesture.intensity || 1;
+        const pose = {
+            bodyLift: 0,
+            headX: 0,
+            headZ: 0,
+            armX: 0,
+            armY: 0,
+            lean: 0,
+            scaleY: 1
+        };
+
+        switch (gesture.type) {
+            case 'celebrate':
+                pose.bodyLift = Math.sin(progress * Math.PI) * 0.05 * intensity;
+                pose.headX = -0.16 * env * intensity;
+                pose.armX = 0.28 * env * intensity;
+                pose.armY = 0.24 * env * intensity;
+                pose.lean = gesture.side * Math.sin(progress * Math.PI * 2) * 0.06 * intensity;
+                pose.scaleY = 1 + 0.05 * env * intensity;
+                break;
+            case 'savor':
+                pose.bodyLift = Math.sin(progress * Math.PI) * 0.03 * intensity;
+                pose.headX = -0.10 * env * intensity;
+                pose.headZ = gesture.side * 0.08 * env * intensity;
+                pose.armY = 0.12 * env * intensity;
+                pose.scaleY = 1 + 0.03 * env * intensity;
+                break;
+            case 'chat':
+                pose.bodyLift = 0.018 * env * intensity;
+                pose.headX = Math.sin((progress * Math.PI * 3) + gesture.seed) * 0.06 * intensity;
+                pose.headZ = gesture.side * 0.06 * env * intensity;
+                pose.armY = 0.16 * env * intensity;
+                break;
+            case 'settle':
+                pose.bodyLift = -0.014 * env * intensity;
+                pose.headX = 0.10 * env * intensity;
+                pose.lean = gesture.side * 0.04 * env * intensity;
+                pose.scaleY = 1 - 0.03 * env * intensity;
+                break;
+            case 'glance':
+            default:
+                pose.headX = -0.05 * env * intensity;
+                pose.headZ = gesture.side * 0.12 * env * intensity;
+                pose.armX = 0.06 * env * intensity;
+                pose.lean = gesture.side * 0.03 * env * intensity;
+                break;
+        }
+
+        if (gesture.timer <= 0) this._microGesture = null;
+        return pose;
+    }
+
     // アイテム種類に応じてcarriedItemMeshのマテリアルを変更
     updateCarriedItemAppearance(itemType) {
         if (!this.carriedItemMesh) return;
@@ -565,6 +658,7 @@ class Character {
                 this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                 if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
                 this.eatCount = (this.eatCount || 0) + 1;
+                this.triggerMicroGesture('savor', 0.9, inDanger ? 1.1 : 0.95);
                 this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
                 // Visual-only animations (no-op in headless where setTimeout is disabled)
@@ -977,6 +1071,7 @@ class Character {
         // シェルター到達時の処理
         this.log('Reached shelter');
         this.state = 'resting';
+        this.triggerMicroGesture('settle', 0.85, 0.9);
         this.action = null;
     }
 
@@ -2229,6 +2324,11 @@ class Character {
     this._stepAmp = 0.10; // vertical bob amplitude (grid units)
     this._swayAmp = 0.06; // lateral sway amplitude
     this._lastMoveProgressTime = Date.now();
+    // Visual-only micro gestures add lived-in motion without continuous heavy effects.
+    this._microGesture = null;
+    this._lastMicroGestureTs = 0;
+    this._idleGestureTimer = 1.5 + Math.random() * 3.5;
+    this._idleGestureCooldown = 4.5 + Math.random() * 3.0;
 
         // --- Action icon (for action effect) ---
         this.actionIconDiv = visuals.actionIconDiv;
@@ -5608,6 +5708,29 @@ class Character {
                 const control = 0.8; // Reduce randomness
                 this.mesh.rotation.z *= control;
                 this.head.rotation.z *= control;
+            }
+        }
+
+        const gesturePose = this.updateMicroGesture(deltaTime);
+        if (gesturePose) {
+            if (this.body) {
+                this.body.position.y += gesturePose.bodyLift;
+                this.body.scale.y *= gesturePose.scaleY;
+            }
+            if (this.head) {
+                this.head.rotation.x += gesturePose.headX;
+                this.head.rotation.z += gesturePose.headZ;
+            }
+            if (this.leftArm) {
+                this.leftArm.rotation.x += gesturePose.armX;
+                this.leftArm.rotation.y += gesturePose.armY;
+            }
+            if (this.rightArm) {
+                this.rightArm.rotation.x += gesturePose.armX;
+                this.rightArm.rotation.y -= gesturePose.armY;
+            }
+            if (this.mesh) {
+                this.mesh.rotation.z += gesturePose.lean;
             }
         }
     }
