@@ -210,7 +210,11 @@ export function decideNextAction_rulebase(character, isNight) {
     // === PRIORITY 2: SOCIAL NEEDS ===
     // sociality scales the threshold: social characters seek interaction earlier
     const effectiveSocialThreshold = socialThreshold * (character.personality.sociality ?? 1.0) * (aging.socialMul || 1.0) * (1 + adapt.social * socialAdaptationBoost - adapt.forage * socialForagePenalty - adapt.rest * socialRestPenalty);
-    if (character.needs.social <= effectiveSocialThreshold) {
+    // Guard: suppress SOCIALIZE when hunger is at or below the food-seeking threshold.
+    // Without this guard, decideNextAction called from the emergency preemption block
+    // can re-select SOCIALIZE when findClosestFood() returns null (e.g. dense settlement
+    // with complex pathfinding), causing an infinite preempt→SOCIALIZE loop until starvation.
+    if (character.needs.social <= effectiveSocialThreshold && character.needs.hunger > foodSeekHungerThreshold) {
         const partner = character.findClosestPartner && character.findClosestPartner();
         if (partner) {
             character.log(`SOCIALIZE selected: social=${character.needs.social}, threshold=${effectiveSocialThreshold.toFixed(1)}`);
@@ -833,7 +837,7 @@ export function decideNextAction_rulebase(character, isNight) {
     // === PRIORITY 9: SOCIAL NEEDS (Lower priority) ===
     if (character.needs.social < socialDriftThreshold
         && character.needs.energy > (effectiveEnergyEmergency + 6)
-        && character.needs.hunger > 25) {
+        && character.needs.hunger > foodSeekHungerThreshold) {
         const partner = character.findClosestPartner();
         if (partner) {
             character.setNextAction('SOCIALIZE', partner, partner.gridPos);
@@ -899,7 +903,9 @@ export function decideNextAction_rulebase(character, isNight) {
     }
     if (settlementStability >= 0.62) {
         const localSupportTarget = character.getPreferredSupportTarget && character.getPreferredSupportTarget();
-        if (localSupportTarget?.char && Math.random() < 0.7) {
+        // Guard: suppress SOCIALIZE when hungry. Without this, the DEFAULT block bypasses all
+        // priority-level hunger guards and triggers the preempt→SOCIALIZE loop (100% CPU hang).
+        if (localSupportTarget?.char && Math.random() < 0.7 && character.needs.hunger > foodSeekHungerThreshold) {
             character.setNextAction('SOCIALIZE', localSupportTarget.char, localSupportTarget.targetPos || localSupportTarget.char.gridPos);
             character.log('Action: SOCIALIZE (stable household routine)');
         } else {

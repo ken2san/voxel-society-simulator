@@ -2422,6 +2422,22 @@ class Character {
     }
 
     findClosestFood() {
+        // Result cache: avoid re-running expensive A* search when nothing has changed.
+        // Cache key: grid position + sim tick (globalThis.window._simTick if available, else Date.now bucket).
+        // TTL: 8 ticks (= 2 sim-seconds at dt=0.25). Invalidated when character moves.
+        {
+            const _tick = (typeof globalThis !== 'undefined' && globalThis.window?._simTick != null)
+                ? globalThis.window._simTick
+                : Math.floor(Date.now() / 250);
+            const _posKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
+            if (this._foodSearchCache &&
+                this._foodSearchCache.pos === _posKey &&
+                (_tick - this._foodSearchCache.tick) < 8) {
+                return this._foodSearchCache.result;
+            }
+            this._foodSearchCache = null; // will be populated at end of method
+        }
+
         // Expire stale spatial-memory entries (TTL 60s = approximate fruit respawn window)
         if (this._knownFoodSpots && this._knownFoodSpots.size > 0) {
             const now = Date.now();
@@ -2528,6 +2544,18 @@ class Character {
         // Track food-seek outcome for telemetry diagnostics
         this._lastFoodSeekFailed = (closest === null);
         this._lastFoodSeekHadCandidates = candidates.length > 0;
+
+        // Write result cache
+        {
+            const _tick = (typeof globalThis !== 'undefined' && globalThis.window?._simTick != null)
+                ? globalThis.window._simTick
+                : Math.floor(Date.now() / 250);
+            this._foodSearchCache = {
+                pos: `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`,
+                tick: _tick,
+                result: closest
+            };
+        }
 
         return closest;
     }
@@ -3604,7 +3632,21 @@ class Character {
             // when hunger hits emergency level. Previously, a 1–8s idle cooldown (e.g.
             // post-build) would block food-seeking until the stall detector fired (>8s).
             const preemptibleState = this.state === 'idle' || this.state === 'resting' || this.state === 'working' || this.state === 'meeting' || this.state === 'confused' || this.state === 'socializing' || (this.state === 'moving' && !activeFoodAction);
-            if (isFoodEmergency && preemptibleState && !activeFoodAction) {
+
+            // Throttle: when findClosestFood() returns null (dense settlement, no reachable food),
+            // the character falls back to REST/WANDER. Without this guard, the block re-fires
+            // every tick (every 0.25s), calling expensive A* pathfinding 48×/tick = sim hang.
+            // Allow re-fire at most once per 2 sim-seconds; immediate re-fire only when transitioning
+            // into emergency from above the threshold.
+            if (this._foodEmergencyCooldown > 0) {
+                this._foodEmergencyCooldown -= deltaTime;
+            }
+            if (!isFoodEmergency) {
+                // Reset so the next emergency entry fires immediately
+                this._foodEmergencyCooldown = 0;
+            }
+            if (isFoodEmergency && preemptibleState && !activeFoodAction && !(this._foodEmergencyCooldown > 0)) {
+                this._foodEmergencyCooldown = 2.0; // 2 sim-seconds = 8 ticks at dt=0.25
                 this.releaseReservedSidestep && this.releaseReservedSidestep();
                 this.clearNavigationState();
                 this.action = null;
@@ -3731,6 +3773,11 @@ class Character {
                 // Energy interrupt uses a tighter floor (10) so socializing isn't cut short
                 // every time energy dips below the rest-threshold (32). AI still routes to
                 // REST after socializing ends via the normal PRIORITY 0 energy emergency check.
+                // Hunger interrupt uses hungerEmergency (default 5) — the actual death threshold.
+                // Exiting socializing earlier (at foodSeekHungerThreshold) was tried but caused
+                // rapid preempt→SOCIALIZE cycling when findClosestFood() returns null.
+                // The correct guard is in AI_rulebase.js: all SOCIALIZE picks require
+                // hunger > foodSeekHungerThreshold so preemption can never re-select SOCIALIZE.
                 const myCritical = (this.needs.hunger <= hungerEmergency || this.needs.energy <= 10);
                 const partnerCritical = (partner.needs?.hunger <= hungerEmergency || partner.needs?.energy <= 10);
 

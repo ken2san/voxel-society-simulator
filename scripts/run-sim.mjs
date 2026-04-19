@@ -428,6 +428,7 @@ let prevDistrictState = new Map();
 
 for (let tick = 0; tick < options.ticks; tick++) {
     globalThis.window.characters = characters;
+    globalThis.window._simTick = tick; // used by findClosestFood result cache
     const isNight = (simTime % DAY_DURATION) > (DAY_DURATION / 2);
     const currentChars = [...characters];
     for (const char of currentChars) {
