@@ -873,7 +873,7 @@ class Character {
                 this._buildingStage = 0;
                 this.state = 'idle';
                 this.action = null;
-                this.actionCooldown = 12.0; // 建設後は非常に長い休憩（8→12秒）
+                this.actionCooldown = 4.0; // post-build rest; kept short so hunger emergency can fire promptly
             }
             return;
         }
