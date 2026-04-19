@@ -90,6 +90,53 @@ let districtMode = 1;
 let activeDistrictIndex = 0;
 let districtSummaryCache = [];
 let districtSummaryCacheUpdatedAt = 0;
+const blockKeyIndex = new Map();
+
+function normalizeBlockTypeId(blockValue) {
+    if (typeof blockValue === 'object' && blockValue !== null && blockValue.id !== undefined) {
+        return blockValue.id;
+    }
+    return blockValue;
+}
+
+function indexWorldBlockKey(key, blockValue) {
+    const typeId = normalizeBlockTypeId(blockValue);
+    if (typeId === undefined || typeId === null) return;
+    let keys = blockKeyIndex.get(typeId);
+    if (!keys) {
+        keys = new Set();
+        blockKeyIndex.set(typeId, keys);
+    }
+    keys.add(key);
+}
+
+function deindexWorldBlockKey(key, blockValue) {
+    const typeId = normalizeBlockTypeId(blockValue);
+    if (typeId === undefined || typeId === null) return;
+    const keys = blockKeyIndex.get(typeId);
+    if (!keys) return;
+    keys.delete(key);
+    if (keys.size === 0) {
+        blockKeyIndex.delete(typeId);
+    }
+}
+
+export function forEachWorldKeyOfTypes(typeIds = [], callback) {
+    if (typeof callback !== 'function' || !Array.isArray(typeIds) || typeIds.length === 0) return;
+    for (const typeId of typeIds) {
+        const keys = blockKeyIndex.get(typeId);
+        if (!keys || keys.size === 0) continue;
+        for (const key of keys) {
+            callback(key, typeId);
+        }
+    }
+}
+
+export function resetWorldSpatialIndex() {
+    blockKeyIndex.clear();
+    districtSummaryCache = [];
+    districtSummaryCacheUpdatedAt = 0;
+}
 
 function clampDistrictMode(mode) {
     const numeric = Number(mode);
@@ -817,6 +864,7 @@ export function generateTerrain() {
                     // Mark as cave air (special flag)
                     const key = `${x},${y},${z}`;
                     worldData.set(key, { id: BLOCK_TYPES.AIR.id, cave: true });
+                    indexWorldBlockKey(key, BLOCK_TYPES.AIR.id);
                     isCave = true;
                 } else {
                     addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
@@ -856,6 +904,7 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
     if (worldData.has(key) || y >= maxHeight) return;
     removeBlock(x,y,z, false);
     worldData.set(key, type.id);
+    indexWorldBlockKey(key, type.id);
     const material = blockMaterials.get(type.id);
     const block = simIO().createBlockVisual({
         x,
@@ -885,7 +934,9 @@ export function removeBlock(x, y, z, updateMinimap = true) {
     if (y <= 0) return;
     const key = `${x},${y},${z}`;
     if (worldData.has(key)) {
+        const previousBlock = worldData.get(key);
         worldData.delete(key);
+        deindexWorldBlockKey(key, previousBlock);
         const block = visualBlocks.get(key);
         if (block) {
             simIO().removeVisual(scene, block);

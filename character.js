@@ -1,6 +1,6 @@
 // --- 落下先が安全か（抜け出せるか）判定 ---
 
-import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter } from './world.js';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter, forEachWorldKeyOfTypes } from './world.js';
 import { decideNextAction_rulebase } from './sim-core/AI_rulebase.js';
 import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
@@ -39,6 +39,28 @@ const HOME_TYPES = {
         roof: null
     }
 };
+
+function getFoodBlockTypeIds() {
+    return Object.values(BLOCK_TYPES)
+        .filter(type => type?.isEdible)
+        .map(type => type.id);
+}
+
+function getWoodBlockTypeIds() {
+    return [BLOCK_TYPES.WOOD?.id, BLOCK_TYPES.LEAF?.id].filter(id => id !== undefined && id !== null);
+}
+
+function getStoneBlockTypeIds() {
+    return Object.values(BLOCK_TYPES)
+        .filter(type => type?.diggable && typeof type.name === 'string' && (type.name === 'Stone' || type.name.includes('Stone') || type.name === 'STONE'))
+        .map(type => type.id);
+}
+
+function getDiggableBlockTypeIds() {
+    return Object.values(BLOCK_TYPES)
+        .filter(type => type?.diggable)
+        .map(type => type.id);
+}
 
 class Character {
     // --- 家完成処理の共通化 ---
@@ -2523,38 +2545,34 @@ class Character {
         const foodRetryMs = Math.max(5000, Number((typeof window !== 'undefined' && window.foodTargetRetrySeconds !== undefined) ? window.foodTargetRetrySeconds : 25) * 1000);
         const starvationPressure = Number(this.needs?.hunger || 0) <= 10 || Number(this._starvationTimer || 0) > 0;
         const candidates = [];
-        for (const [key, id] of worldData.entries()) {
+        forEachWorldKeyOfTypes(getFoodBlockTypeIds(), (key) => {
             // Skip positions that this character recently failed to reach, but only briefly.
             const _failTs = this._failedFoodTargets?.get(key);
             if (_failTs !== undefined) {
-                if (Date.now() - _failTs < foodRetryMs) continue;
+                if (Date.now() - _failTs < foodRetryMs) return;
                 this._failedFoodTargets.delete(key);
             }
             const reservation = Character.getReservation(key);
             let reservationPenalty = 0;
             if (reservation && reservation.owner !== this.id) {
-                if (!starvationPressure) continue;
+                if (!starvationPressure) return;
                 reservationPenalty = 4.5;
             }
-            if (this._busyFoodTargets?.has(key) && !starvationPressure) continue;
-            if (Character.isBlacklisted(key) && !starvationPressure) continue;
+            if (this._busyFoodTargets?.has(key) && !starvationPressure) return;
+            if (Character.isBlacklisted(key) && !starvationPressure) return;
 
-            const rawBlockVal = typeof id === 'object' && id !== null && id.id !== undefined ? id.id : id;
-            const type = Object.values(BLOCK_TYPES).find(t => t.id === rawBlockVal);
-            if (type && type.isEdible) {
-                const [x, y, z] = key.split(',').map(Number);
-                const adjacentSpots = this.findAdjacentSpots ? this.findAdjacentSpots({ x, y, z }) : [];
-                if (!adjacentSpots || adjacentSpots.length === 0) continue;
-                const baseDist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                const knownMultiplier = this._knownFoodSpots?.has(key) ? 0.5 : 1;
-                const approachCandidates = adjacentSpots.slice(0, 4).map(spot => ({ x: spot.x, y: spot.y, z: spot.z }));
-                approachCandidates.forEach((adjacentSpot, spotIndex) => {
-                    const occupiedPenalty = this.isOccupiedByOther(adjacentSpot.x, adjacentSpot.y, adjacentSpot.z) ? 3 : 0;
-                    const score = (baseDist * knownMultiplier) + (spotIndex * 0.4) + occupiedPenalty + reservationPenalty;
-                    candidates.push({ x, y, z, key, adjacentSpot, approachCandidates, score });
-                });
-            }
-        }
+            const [x, y, z] = key.split(',').map(Number);
+            const adjacentSpots = this.findAdjacentSpots ? this.findAdjacentSpots({ x, y, z }) : [];
+            if (!adjacentSpots || adjacentSpots.length === 0) return;
+            const baseDist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+            const knownMultiplier = this._knownFoodSpots?.has(key) ? 0.5 : 1;
+            const approachCandidates = adjacentSpots.slice(0, 4).map(spot => ({ x: spot.x, y: spot.y, z: spot.z }));
+            approachCandidates.forEach((adjacentSpot, spotIndex) => {
+                const occupiedPenalty = this.isOccupiedByOther(adjacentSpot.x, adjacentSpot.y, adjacentSpot.z) ? 3 : 0;
+                const score = (baseDist * knownMultiplier) + (spotIndex * 0.4) + occupiedPenalty + reservationPenalty;
+                candidates.push({ x, y, z, key, adjacentSpot, approachCandidates, score });
+            });
+        });
 
         candidates.sort((a, b) => a.score - b.score);
 
@@ -2631,32 +2649,25 @@ class Character {
         let minDist = Infinity, closest = null;
         // 認識範囲を元に戻す（5→4に調整）
         const searchRange = 4;
-        for (const [key, id] of worldData.entries()) {
-            const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
-            // 木ブロックまたは葉ブロックを検索対象に
-            if (type && type.diggable && (type.name === 'Wood' || type.name === 'Leaf')) {
-                const [x, y, z] = key.split(',').map(Number);
-                const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                if (dist < minDist && dist <= searchRange) {
-                    minDist = dist;
-                    closest = {x, y, z};
-                }
+        forEachWorldKeyOfTypes(getWoodBlockTypeIds(), (key) => {
+            const [x, y, z] = key.split(',').map(Number);
+            const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+            if (dist < minDist && dist <= searchRange) {
+                minDist = dist;
+                closest = {x, y, z};
             }
-        }
+        });
 
         return closest;
     }
 
     findClosestStone() {
         let minDist = Infinity, closest = null;
-        for (const [key, id] of worldData.entries()) {
-            const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
-            if (type && type.diggable && (type.name === 'Stone' || type.name.includes('Stone') || type.name === 'STONE')) {
-                const [x, y, z] = key.split(',').map(Number);
-                const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
-            }
-        }
+        forEachWorldKeyOfTypes(getStoneBlockTypeIds(), (key) => {
+            const [x, y, z] = key.split(',').map(Number);
+            const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+            if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+        });
         return closest;
     }
 
@@ -2684,14 +2695,11 @@ class Character {
 
     findDiggableBlock() {
         let minDist = Infinity, closest = null;
-        for (const [key, id] of worldData.entries()) {
-            const type = Object.values(BLOCK_TYPES).find(t => t.id === id);
-            if (type && type.diggable) {
-                const [x, y, z] = key.split(',').map(Number);
-                const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
-                if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
-            }
-        }
+        forEachWorldKeyOfTypes(getDiggableBlockTypeIds(), (key) => {
+            const [x, y, z] = key.split(',').map(Number);
+            const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+            if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+        });
         return closest;
     }
 
@@ -4581,6 +4589,20 @@ class Character {
                 if (_c._socialAnchorId === _deadId) _c._socialAnchorId = null;
                 if (_c.relationships) _c.relationships.delete(_deadId);
             }
+        } catch (_e) {}
+
+        try {
+            this.relationships?.clear?.();
+            this._knownFoodSpots?.clear?.();
+            this._failedFoodTargets?.clear?.();
+            this._busyFoodTargets?.clear?.();
+            this.ownedLand?.clear?.();
+            this.actionHistory = [];
+            this._positionHistory = [];
+            this._foodSearchCache = null;
+            if (this._actionIconTimeout) clearTimeout(this._actionIconTimeout);
+            if (this._scenePulseTimeout) clearTimeout(this._scenePulseTimeout);
+            if (this._skullTimeout) clearTimeout(this._skullTimeout);
         } catch (_e) {}
         this.log('Character died and removed', { id: this.id, cause });
     }

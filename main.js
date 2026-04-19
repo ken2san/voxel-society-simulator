@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -501,6 +501,7 @@ function setupResourceSliders() {
 async function regenerateWorld() {
     // Clear existing world data and visual blocks
     worldData.clear();
+    resetWorldSpatialIndex();
 
     // Remove all visual blocks from scene
     for (const [key, block] of visualBlocks) {
