@@ -242,9 +242,9 @@ function setupTelemetryManagerPanel() {
 
     const renderStatus = () => {
         const telemetry = window.__simTelemetry;
-        const sampleCount = telemetry?.samples?.length || 0;
-        const eventCount = telemetry?.events?.length || 0;
-        const mode = window.simTestMode ? 'running' : 'idle';
+        const sampleCount = telemetry?.samples?.length || telemetry?.archivedMeta?.sampleCount || 0;
+        const eventCount = telemetry?.events?.length || telemetry?.archivedMeta?.eventCount || 0;
+        const mode = window.simTestMode ? 'running' : (telemetry?.archivedJSON ? 'stopped/saved' : 'idle');
         const auto = !!window.simTelemetryConfig?.autoDownloadOnStop;
         status.textContent = `Telemetry ${mode} | samples=${sampleCount} events=${eventCount} | autoDownload=${auto ? 'on' : 'off'}`;
     };
@@ -857,6 +857,8 @@ window.__simTelemetry = {
     samples: [],
     worldSamples: [],
     events: [],
+    archivedJSON: '',
+    archivedMeta: null,
     counters: {
         droppedSamples: 0,
         droppedEvents: 0
@@ -1109,12 +1111,30 @@ window.__simTelemetry = {
             events: this.events
         };
     },
+    archiveSnapshot(pretty = false) {
+        const payload = this.exportObject();
+        this.archivedMeta = payload.meta;
+        this.archivedJSON = JSON.stringify(payload, null, pretty ? 2 : 0);
+        return this.archivedJSON;
+    },
+    clearLiveData() {
+        this.samples = [];
+        this.worldSamples = [];
+        this.events = [];
+        this._profiledIds = new Set();
+    },
+    clearArchive() {
+        this.archivedJSON = '';
+        this.archivedMeta = null;
+    },
     reset() {
         this.startedAt = Date.now();
         this.endedAt = 0;
         this.samples = [];
         this.worldSamples = [];
         this.events = [];
+        this.archivedJSON = '';
+        this.archivedMeta = null;
         this.counters = { droppedSamples: 0, droppedEvents: 0 };
         this._profiledIds = new Set();
     }
@@ -1145,6 +1165,11 @@ window.stopTelemetryTest = function stopTelemetryTest(opts = {}) {
     window.simTestMode = false;
     window.__simTelemetry.endedAt = Date.now();
     console.log('[Telemetry] stopped', window.__simTelemetry.snapshotMeta());
+
+    // Preserve one exportable snapshot while releasing the heavier live object graph.
+    window.__simTelemetry.archiveSnapshot(false);
+    window.__simTelemetry.clearLiveData();
+
     const shouldAutoDownload = (opts.autoDownloadOnStop !== undefined)
         ? !!opts.autoDownloadOnStop
         : !!window.simTelemetryConfig.autoDownloadOnStop;
@@ -1153,18 +1178,27 @@ window.stopTelemetryTest = function stopTelemetryTest(opts = {}) {
             ? opts.fileNamePrefix.trim()
             : window.simTelemetryConfig.fileNamePrefix;
         const fileName = `${prefix || 'telemetry'}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-        const saved = window.downloadTelemetryJSON(fileName);
-        console.log('[Telemetry] auto-downloaded', saved);
+        const saved = window.downloadTelemetryJSON(fileName, { clearArchive: true });
+        console.log('[Telemetry] auto-downloaded and released buffers', saved);
         return saved;
     }
     return null;
 };
 
 window.getTelemetryJSON = function getTelemetryJSON(pretty = false) {
-    return JSON.stringify(window.__simTelemetry.exportObject(), null, pretty ? 2 : 0);
+    const telemetry = window.__simTelemetry;
+    if (!window.simTestMode && telemetry.archivedJSON) {
+        if (!pretty) return telemetry.archivedJSON;
+        try {
+            return JSON.stringify(JSON.parse(telemetry.archivedJSON), null, 2);
+        } catch (err) {
+            console.warn('[Telemetry] archived snapshot parse failed; rebuilding export.', err);
+        }
+    }
+    return JSON.stringify(telemetry.exportObject(), null, pretty ? 2 : 0);
 };
 
-window.downloadTelemetryJSON = function downloadTelemetryJSON(fileName = null) {
+window.downloadTelemetryJSON = function downloadTelemetryJSON(fileName = null, opts = {}) {
     const safeName = fileName || `telemetry-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     const blob = new Blob([window.getTelemetryJSON(false)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1175,5 +1209,8 @@ window.downloadTelemetryJSON = function downloadTelemetryJSON(fileName = null) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    if (!window.simTestMode && opts.clearArchive !== false) {
+        window.__simTelemetry.clearArchive();
+    }
     return safeName;
 };
