@@ -1743,6 +1743,7 @@ class Character {
         const grievance = 2 + Math.random() * 3;
         this.relationships.set(otherChar.id, Math.max(0, currentAff - grievance));
         otherChar.relationships.set(this.id, Math.max(0, otherAff - grievance));
+        this.noteMutualContact(otherChar);
         this._nearEnemy = true;
         otherChar._nearEnemy = true;
 
@@ -2312,6 +2313,7 @@ class Character {
         this.bobTime = Math.random() * 100;
         this.actionAnim = { active: false, timer: 0, duration: 0.4 };
         this.relationships = new Map();
+        this._relationshipContactAt = new Map();
         this.bfsFailCount = 0;
 
         const visuals = simIO().createCharacterVisuals(this, this.scene) || {};
@@ -2653,6 +2655,32 @@ class Character {
         if (Array.isArray(this.parentIds) && this.parentIds.includes(otherId)) return true;
         if (Array.isArray(this.children) && this.children.includes(otherId)) return true;
         return false;
+    }
+
+    getSimTimeSeconds() {
+        if (typeof window !== 'undefined') {
+            if (Number.isFinite(Number(window.worldTime))) return Number(window.worldTime);
+            if (Number.isFinite(Number(window._simTick))) return Number(window._simTick) * 0.25;
+        }
+        return Date.now() / 1000;
+    }
+
+    touchRelationshipRecency(otherId, timestamp = null) {
+        if (otherId === undefined || otherId === null || String(otherId) === String(this.id)) return;
+        if (!this._relationshipContactAt) this._relationshipContactAt = new Map();
+        const t = Number.isFinite(Number(timestamp)) ? Number(timestamp) : this.getSimTimeSeconds();
+        this._relationshipContactAt.set(String(otherId), t);
+    }
+
+    noteMutualContact(other, timestamp = null) {
+        const otherChar = typeof other === 'object' ? other : null;
+        const otherId = otherChar?.id ?? other;
+        if (otherId === undefined || otherId === null) return;
+        const t = Number.isFinite(Number(timestamp)) ? Number(timestamp) : this.getSimTimeSeconds();
+        this.touchRelationshipRecency(otherId, t);
+        if (otherChar && typeof otherChar.touchRelationshipRecency === 'function') {
+            otherChar.touchRelationshipRecency(this.id, t);
+        }
     }
 
     getNearbyHouseholdSupport(maxDistance = null) {
@@ -4045,6 +4073,7 @@ class Character {
                                     if (donation > 0) {
                                         this.needs.hunger -= donation;
                                         other.needs.hunger = Math.min(100, other.needs.hunger + donation);
+                                        this.noteMutualContact(other);
                                         this.log(`Donated ${donation.toFixed(1)} food to ${this.getRelationshipClass(otherId)} #${otherId} (aff=${aff.toFixed(0)})`);
                                         this.showActionIcon('🤝', 1.5);
                                     }
@@ -4090,8 +4119,50 @@ class Character {
             if (this._relPruneTimer >= 60 && this.relationships && this.relationships.size > 0) {
                 this._relPruneTimer = 0;
                 const _pruneFloor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
-                for (const [_oid, _aff] of this.relationships.entries()) {
-                    if (_aff <= _pruneFloor) this.relationships.delete(_oid);
+                const { acquaintance, ally, bonded } = this.getRelationshipThresholds();
+                const { nearbyRadius } = this.getSupportModelParams();
+                const _nowSec = this.getSimTimeSeconds();
+                const _runtime = Character.getLiveCharacterRuntime();
+                // These are implementation constants for conservative social-memory fading,
+                // not experiment-facing tuning knobs: weak ties fade after long inactivity,
+                // while household and strong bonds remain intact.
+                const weakTieForgetSeconds = 90;
+                const midTieCooloffSeconds = 180;
+                for (const [_oid, _aff] of Array.from(this.relationships.entries())) {
+                    const _oidKey = String(_oid);
+                    const other = _runtime?.aliveById?.get(_oidKey);
+                    if (!other) {
+                        this.relationships.delete(_oid);
+                        this._relationshipContactAt?.delete?.(_oidKey);
+                        if (String(this._socialAnchorId || '') === _oidKey) this._socialAnchorId = null;
+                        continue;
+                    }
+                    if (this.isHouseholdTie(other) || _aff >= bonded) {
+                        this.touchRelationshipRecency(_oid, _nowSec);
+                        continue;
+                    }
+                    const lastContact = Number(this._relationshipContactAt?.get?.(_oidKey) || 0);
+                    const sinceContact = lastContact > 0 ? Math.max(0, _nowSec - lastContact) : Infinity;
+                    const dist = other.gridPos
+                        ? Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.y - other.gridPos.y) + Math.abs(this.gridPos.z - other.gridPos.z)
+                        : Infinity;
+                    if (_aff <= _pruneFloor) {
+                        this.relationships.delete(_oid);
+                        this._relationshipContactAt?.delete?.(_oidKey);
+                        if (String(this._socialAnchorId || '') === _oidKey) this._socialAnchorId = null;
+                        continue;
+                    }
+                    if (_aff < acquaintance && sinceContact >= weakTieForgetSeconds && dist > (nearbyRadius + 2)) {
+                        this.relationships.delete(_oid);
+                        this._relationshipContactAt?.delete?.(_oidKey);
+                        if (String(this._socialAnchorId || '') === _oidKey) this._socialAnchorId = null;
+                        continue;
+                    }
+                    if (_aff < ally && sinceContact >= midTieCooloffSeconds && dist > (nearbyRadius * 2)) {
+                        const cooled = Math.max(_pruneFloor, _aff - Math.max(4, (_aff - acquaintance) * 0.35));
+                        this.relationships.set(_oid, cooled);
+                        if (cooled <= _pruneFloor + 1 && String(this._socialAnchorId || '') === _oidKey) this._socialAnchorId = null;
+                    }
                 }
             }
         } catch (e) { /* non-fatal */ }
@@ -4105,6 +4176,8 @@ class Character {
             const { nearbyRadius } = this.getSupportModelParams();
 
             if (partner && partner.state === 'socializing') {
+                const contactTs = this.getSimTimeSeconds();
+                this.noteMutualContact(partner, contactTs);
                 // 双方の緊急ニーズをチェック（中断条件）
                 // Energy interrupt uses a tighter floor (10) so socializing isn't cut short
                 // every time energy dips below the rest-threshold (32). AI still routes to
@@ -4770,6 +4843,7 @@ class Character {
 
         try {
             this.relationships?.clear?.();
+            this._relationshipContactAt?.clear?.();
             this._knownFoodSpots?.clear?.();
             this._failedFoodTargets?.clear?.();
             this._busyFoodTargets?.clear?.();
@@ -6097,6 +6171,8 @@ class Character {
                     child.relationships.set(partner.id, _kclamp(_kinshipBonus));
                     this.relationships.set(child.id, _kclamp(Math.max(this.relationships.get(child.id) || 0, _kinshipBonus)));
                     partner.relationships.set(child.id, _kclamp(Math.max(partner.relationships.get(child.id) || 0, _kinshipBonus)));
+                    child.noteMutualContact?.(this);
+                    child.noteMutualContact?.(partner);
                     // Seed social anchor: child and parents seek each other preferentially
                     child._socialAnchorId = this.id;
                     this._socialAnchorId = child.id;
