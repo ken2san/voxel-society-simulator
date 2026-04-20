@@ -2443,12 +2443,19 @@ class Character {
         const aliveById = new Map();
         const occupiedByPos = new Map();
         const groupCounts = new Map();
+        const spatialBuckets = new Map();
         for (const char of sourceChars) {
             if (!char || char.state === 'dead') continue;
             alive.push(char);
             aliveById.set(String(char.id), char);
             if (char.gridPos) {
                 occupiedByPos.set(`${char.gridPos.x},${char.gridPos.y},${char.gridPos.z}`, char);
+                const sx = Math.floor(char.gridPos.x / 4);
+                const sy = Math.floor(char.gridPos.y / 2);
+                const sz = Math.floor(char.gridPos.z / 4);
+                const bucketKey = `${sx},${sy},${sz}`;
+                if (!spatialBuckets.has(bucketKey)) spatialBuckets.set(bucketKey, []);
+                spatialBuckets.get(bucketKey).push(char);
             }
             if (char.groupId) {
                 groupCounts.set(char.groupId, (groupCounts.get(char.groupId) || 0) + 1);
@@ -2461,10 +2468,41 @@ class Character {
             alive,
             aliveById,
             occupiedByPos,
+            spatialBuckets,
             groupCounts
         };
         Character._liveRuntimeCache = runtime;
         return runtime;
+    }
+
+    getNearbyCharacters(searchRange = 4) {
+        const runtime = Character.getLiveCharacterRuntime();
+        if (!this.gridPos) return [];
+        const range = Math.max(1, Number(searchRange) || 4);
+        const bucketRadiusX = Math.ceil(range / 4);
+        const bucketRadiusY = Math.ceil(Math.max(1, range) / 2);
+        const bucketRadiusZ = Math.ceil(range / 4);
+        const sx = Math.floor(this.gridPos.x / 4);
+        const sy = Math.floor(this.gridPos.y / 2);
+        const sz = Math.floor(this.gridPos.z / 4);
+        const nearby = [];
+
+        for (let bx = sx - bucketRadiusX; bx <= sx + bucketRadiusX; bx++) {
+            for (let by = sy - bucketRadiusY; by <= sy + bucketRadiusY; by++) {
+                for (let bz = sz - bucketRadiusZ; bz <= sz + bucketRadiusZ; bz++) {
+                    const bucket = runtime.spatialBuckets?.get(`${bx},${by},${bz}`);
+                    if (!bucket) continue;
+                    for (const char of bucket) {
+                        if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
+                        const dist = Math.abs(this.gridPos.x - char.gridPos.x)
+                            + Math.abs(this.gridPos.y - char.gridPos.y)
+                            + Math.abs(this.gridPos.z - char.gridPos.z);
+                        if (dist > 0 && dist <= range) nearby.push({ char, dist });
+                    }
+                }
+            }
+        }
+        return nearby;
     }
 
     // --- キャラ削除時のクリーンアップ ---
@@ -2522,7 +2560,6 @@ class Character {
     findClosestPartner() {
         let best = null;
         let bestScore = -Infinity;
-        const { alive: chars } = Character.getLiveCharacterRuntime();
         const baseRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? Number(window.perceptionRange) : 3;
         const sociality = Math.max(0, Math.min(1.5, Number(this.personality?.sociality || 0.7)));
         const { nearbyRadius } = this.getSupportModelParams();
@@ -2533,10 +2570,10 @@ class Character {
         const preferred = this.getPreferredSupportTarget(searchRange);
         if (preferred?.char) return preferred.char;
 
-        for (const char of chars) {
-            if (!char || char.id === this.id || char.state === 'dead') continue;
-            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-            if (dist <= 0 || dist > searchRange) continue;
+        const nearbyChars = this.getNearbyCharacters(searchRange);
+        for (const entry of nearbyChars) {
+            const char = entry.char;
+            const dist = entry.dist;
             const affinity = Number(this.relationships.get(char.id) || 0);
             const relationClass = this.getRelationshipClass(char.id);
             const familiarTie = affinity >= acquaintance;
@@ -2562,7 +2599,6 @@ class Character {
     }
 
     getPreferredSupportTarget(maxDistance = null) {
-        const { alive: chars } = Character.getLiveCharacterRuntime();
         const { nearbyRadius, groupBonus, allyPresenceBonus } = this.getSupportModelParams();
         const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
         const { acquaintance } = this.getRelationshipThresholds();
@@ -2570,10 +2606,10 @@ class Character {
         let best = null;
         let bestScore = -Infinity;
 
-        for (const char of chars) {
-            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
-            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-            if (dist <= 0 || dist > searchRange) continue;
+        const nearbyChars = this.getNearbyCharacters(searchRange);
+        for (const entry of nearbyChars) {
+            const char = entry.char;
+            const dist = entry.dist;
 
             const affinity = Number(this.relationships.get(char.id) || 0);
             const relationClass = this.getRelationshipClass(char.id);
@@ -3077,17 +3113,16 @@ class Character {
 
     getConflictEnvironmentContext(maxDistance = 5) {
         const clamp01 = (value) => Math.max(0, Math.min(1, Number(value) || 0));
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
         const { floor, ally } = this.getRelationshipThresholds();
         const searchRange = Math.max(2, Number.isFinite(Number(maxDistance)) ? Number(maxDistance) : 5);
         let rivalCount = 0;
         const hostileGroups = new Set();
         let localThreat = 0;
 
-        for (const char of chars) {
-            if (!char || char.id === this.id || char.state === 'dead' || !char.gridPos) continue;
-            const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-            if (dist <= 0 || dist > searchRange) continue;
+        const nearbyChars = this.getNearbyCharacters(searchRange);
+        for (const entry of nearbyChars) {
+            const char = entry.char;
+            const dist = entry.dist;
             const affinity = Number(this.relationships.get(char.id) || 0);
             const sameGroup = !!this.groupId && !!char.groupId && this.groupId === char.groupId;
             const householdTie = this.isHouseholdTie(char);
@@ -3654,15 +3689,11 @@ class Character {
         }
         // --- 社交needs回復イベント: idle中に近くに他キャラがいれば少し回復 ---
         if (this.state === 'idle' && this.needs && this.needs.social < 100) {
-            const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
             let foundNearby = false;
             const perceptionRange = (typeof window !== 'undefined' && window.perceptionRange !== undefined) ? window.perceptionRange : 2;
             const socialRecoveryMul = (typeof window !== 'undefined' && window.socialNeedRecovery !== undefined) ? Number(window.socialNeedRecovery) : 1.0;
-            for (const char of chars) {
-                if (char.id === this.id) continue;
-                const dist = Math.abs(this.gridPos.x - char.gridPos.x) + Math.abs(this.gridPos.y - char.gridPos.y) + Math.abs(this.gridPos.z - char.gridPos.z);
-                if (dist > 0 && dist <= perceptionRange) { foundNearby = true; break; }
-            }
+            const nearbyChars = this.getNearbyCharacters(perceptionRange);
+            if (nearbyChars.length > 0) foundNearby = true;
             if (foundNearby) {
                 this.needs.social = Math.min(100, this.needs.social + deltaTime * 5 * socialRecoveryMul);
             }
@@ -6375,12 +6406,7 @@ class Character {
         if (y - belowY > 3) return false;
 
         // 落下先に他キャラがいないか
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        for (const char of chars) {
-            if (char !== this && char.gridPos.x === x && char.gridPos.y === y && char.gridPos.z === z) {
-                return false;
-            }
-        }
+        if (this.isOccupiedByOther(x, y, z)) return false;
         return true;
     }
 
