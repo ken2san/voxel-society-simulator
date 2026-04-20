@@ -62,6 +62,34 @@ function getDiggableBlockTypeIds() {
         .map(type => type.id);
 }
 
+let _blockTypeByIdCache = null;
+let _passableBlockIdCache = null;
+
+function getBlockTypeByIdCached(blockId) {
+    if (!_blockTypeByIdCache) {
+        _blockTypeByIdCache = new Map(Object.values(BLOCK_TYPES).map(type => [type.id, type]));
+    }
+    return _blockTypeByIdCache.get(blockId);
+}
+
+function getPassableBlockIdsCached() {
+    if (!_passableBlockIdCache) {
+        _passableBlockIdCache = new Set(
+            Object.values(BLOCK_TYPES)
+                .filter(type => type && (
+                    type.name === 'Air'
+                    || type.name === 'Leaf'
+                    || type.name === 'Fruit'
+                    || type.isBed
+                    || type.isHouseWall
+                ))
+                .map(type => type.id)
+        );
+        if (BLOCK_TYPES.AIR?.id !== undefined) _passableBlockIdCache.add(BLOCK_TYPES.AIR.id);
+    }
+    return _passableBlockIdCache;
+}
+
 class Character {
     // --- 家完成処理の共通化 ---
     completeHomeBuild(type, pos) {
@@ -1240,6 +1268,10 @@ class Character {
 
     static failedTargetCounts = new Map();
 
+    static invalidateRuntimeCache() {
+        Character._liveRuntimeCache = null;
+    }
+
     // --- Failed target counter with TTL/decay ---
     // Stores entries as key -> { count, lastFailTs }
     static incrFailedTarget(key) {
@@ -1732,13 +1764,10 @@ class Character {
 
     // --- 指定座標に他キャラがいるか判定 ---
     isOccupiedByOther(x, y, z) {
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        for (const char of chars) {
-            if (char.id !== this.id && char.gridPos.x === x && char.gridPos.y === y && char.gridPos.z === z) {
-                return true;
-            }
-        }
-        return false;
+        const runtime = Character.getLiveCharacterRuntime();
+        const occupant = runtime.occupiedByPos?.get(`${x},${y},${z}`);
+        if (!occupant) return false;
+        return String(occupant.id) !== String(this.id);
     }
 
     // --- BFSパスファインディング（超簡素化・必ず成功版）---
@@ -1825,17 +1854,16 @@ class Character {
         const blockId = this._normalizeBlockVal(blockVal);
         if (blockId === undefined || blockId === null) return true;
 
-        const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+        const passableIds = getPassableBlockIdsCached();
+        if (passableIds.has(blockId)) return true;
+
+        const blockType = getBlockTypeByIdCached(blockId);
         if (!blockType) return true;
 
         // Wood trunks are solid — characters must path around them, not through them.
         // Leaf blocks remain passable (visually thin, and blocking them causes BFS failures
         // in dense canopy where no clear route exists).
-        const passableBlocks = ['Air', 'Leaf', 'Fruit'];
-        return passableBlocks.includes(blockType.name) ||
-               blockType.isBed ||
-               blockType.isHouseWall || // decorative posts — characters can pass through
-               blockId === BLOCK_TYPES.AIR?.id;
+        return false;
     }
 
     // --- 移動可能性チェック（当たり判定＋頭上チェック） ---
@@ -2403,26 +2431,38 @@ class Character {
             : ((typeof window !== 'undefined' && Array.isArray(window.characters))
                 ? window.characters
                 : ((typeof characters !== 'undefined' && Array.isArray(characters)) ? characters : []));
-        const now = Date.now();
-        const bucket = Math.floor(now / 120);
+        const simTickBucket = (typeof window !== 'undefined' && Number.isFinite(window._simTick))
+            ? Number(window._simTick)
+            : Math.floor(Date.now() / 120);
         const cached = Character._liveRuntimeCache;
-        if (!force && cached && cached.bucket === bucket && cached.size === sourceChars.length) {
+        if (!force && cached && cached.bucket === simTickBucket && cached.size === sourceChars.length) {
             return cached;
         }
 
         const alive = [];
         const aliveById = new Map();
+        const occupiedByPos = new Map();
         const groupCounts = new Map();
         for (const char of sourceChars) {
             if (!char || char.state === 'dead') continue;
             alive.push(char);
             aliveById.set(String(char.id), char);
+            if (char.gridPos) {
+                occupiedByPos.set(`${char.gridPos.x},${char.gridPos.y},${char.gridPos.z}`, char);
+            }
             if (char.groupId) {
                 groupCounts.set(char.groupId, (groupCounts.get(char.groupId) || 0) + 1);
             }
         }
 
-        const runtime = { bucket, size: sourceChars.length, alive, aliveById, groupCounts };
+        const runtime = {
+            bucket: simTickBucket,
+            size: sourceChars.length,
+            alive,
+            aliveById,
+            occupiedByPos,
+            groupCounts
+        };
         Character._liveRuntimeCache = runtime;
         return runtime;
     }
@@ -6287,6 +6327,7 @@ class Character {
     }
 
     updateWorldPosFromGrid() {
+        Character.invalidateRuntimeCache();
         // ブロックとキャラクターの座標系を一致させる
         // ブロックは (x+0.5, y+0.5, z+0.5) に配置されているため、
         // キャラクターも同じ基準で配置する
