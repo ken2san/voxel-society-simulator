@@ -570,7 +570,11 @@ export function getDistrictSocialContextForPosition(pos, sourceChars = character
 export function refreshDistrictSummaryCache(sourceChars = characters, { force = false } = {}) {
     const now = Date.now();
     const popSize = Array.isArray(sourceChars) ? sourceChars.length : 0;
-    const minRefreshMs = districtMode >= 16 ? 1000 : districtMode >= 4 ? (popSize > 64 ? 750 : 500) : 250;
+    const minRefreshMs = districtMode >= 16
+        ? 1200
+        : districtMode >= 4
+            ? (popSize > 64 ? 900 : 600)
+            : (popSize > 80 ? 1400 : popSize > 48 ? 900 : 250);
     if (!force && districtSummaryCache.length > 0 && (now - districtSummaryCacheUpdatedAt) < minRefreshMs) {
         return districtSummaryCache;
     }

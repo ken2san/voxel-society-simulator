@@ -3135,7 +3135,8 @@ function computeSocietySocialMetrics(alive = []) {
     const living = Array.isArray(alive) ? alive.filter(c => c && c.state !== 'dead') : [];
     const now = Date.now();
     const cache = window.__societySocialMetricsCache;
-    if (window.simulationRunning && cache && cache.count === living.length && (now - cache.t) < 600) {
+    const cacheMs = living.length > 80 ? 2200 : living.length > 48 ? 1400 : 600;
+    if (window.simulationRunning && cache && cache.count === living.length && (now - cache.t) < cacheMs) {
         return cache.value;
     }
     if (!living.length) {

@@ -1555,10 +1555,10 @@ class Character {
             const queue = [char];
             char.groupId = groupIdCounter;
             let groupMembers = [char];
-            while (queue.length > 0) {
-                const current = queue.shift();
+            for (let queueIndex = 0; queueIndex < queue.length; queueIndex++) {
+                const current = queue[queueIndex];
                 for (const [otherId, affinity] of current.relationships.entries()) {
-                    const other = byId.get(otherId);
+                    const other = byId.get(otherId) || byId.get(String(otherId));
                     if (!other) continue;
                     const householdTie = !!current.isHouseholdTie?.(other) || !!other.isHouseholdTie?.(current);
                     if (affinity < affinityTh && !householdTie) continue;
