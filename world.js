@@ -601,6 +601,53 @@ function focusCameraOnActiveDistrict() {
     const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
     controls.target.set(bounds.centerX, 2, bounds.centerZ);
     if (camera) camera.lookAt(controls.target);
+    if (typeof controls.update === 'function') controls.update();
+}
+
+function getPreferredCameraFocusTarget() {
+    const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
+    const fallback = new THREE.Vector3(bounds.centerX, 2, bounds.centerZ);
+    if (typeof window === 'undefined') return fallback;
+
+    const selectedId = (window.selectedCharacterId !== undefined && window.selectedCharacterId !== null)
+        ? String(window.selectedCharacterId)
+        : '';
+    if (!selectedId || !Array.isArray(characters)) return fallback;
+
+    const selected = characters.find(char => String(char?.id) === selectedId && char?.state !== 'dead' && char?.mesh?.position);
+    if (!selected?.mesh?.position) return fallback;
+
+    const pos = selected.mesh.position;
+    return new THREE.Vector3(pos.x, Math.max(1.5, pos.y + 1.2), pos.z);
+}
+
+export function stabilizeCameraAfterVisibilityChange() {
+    if (!camera || !controls) return false;
+
+    const desiredTarget = getPreferredCameraFocusTarget();
+    const validTarget = controls.target
+        && Number.isFinite(controls.target.x)
+        && Number.isFinite(controls.target.y)
+        && Number.isFinite(controls.target.z);
+    const currentTarget = validTarget ? controls.target.clone() : desiredTarget.clone();
+
+    let offset = (camera.position
+        && Number.isFinite(camera.position.x)
+        && Number.isFinite(camera.position.y)
+        && Number.isFinite(camera.position.z))
+        ? camera.position.clone().sub(currentTarget)
+        : new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
+
+    if (!Number.isFinite(offset.x) || !Number.isFinite(offset.y) || !Number.isFinite(offset.z) || offset.lengthSq() < 0.001) {
+        offset = new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
+    }
+
+    offset.clampLength(6, Math.max(14, gridSize * 1.8));
+    controls.target.copy(desiredTarget);
+    camera.position.copy(desiredTarget.clone().add(offset));
+    camera.lookAt(controls.target);
+    if (typeof controls.update === 'function') controls.update();
+    return true;
 }
 
 function emitDistrictChange() {
@@ -1071,13 +1118,18 @@ export function updateWorldLighting() {
     }
 }
 export function onWindowResize() {
-    if(!camera || !renderer) return;
-    gameCanvas.width = gameCanvas.offsetWidth;
-    gameCanvas.height = gameCanvas.offsetHeight;
-    camera.aspect = gameCanvas.width / gameCanvas.height;
+    if (!camera || !renderer || !gameCanvas) return;
+    const nextWidth = Math.max(1, Math.floor(gameCanvas.clientWidth || gameCanvas.offsetWidth || window.innerWidth || 1));
+    const nextHeight = Math.max(1, Math.floor(gameCanvas.clientHeight || gameCanvas.offsetHeight || window.innerHeight || 1));
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight)) return;
+
+    gameCanvas.width = nextWidth;
+    gameCanvas.height = nextHeight;
+    camera.aspect = nextWidth / nextHeight;
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
-    renderer.setSize(gameCanvas.width, gameCanvas.height, false);
+    renderer.setSize(nextWidth, nextHeight, false);
+    if (typeof controls?.update === 'function') controls.update();
 }
 export function isSafeSpot(pos) {
     // Recognize cave air as safe

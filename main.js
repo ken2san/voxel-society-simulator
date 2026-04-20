@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -22,10 +22,20 @@ if (typeof window !== 'undefined') {
         window.__visibilityResumeGuardInstalled = true;
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                requestAnimationFrame(() => {
+                const resumePass = () => {
                     onWindowResize();
                     resetFrameTimingAfterVisibilityChange();
+                    stabilizeCameraAfterVisibilityChange();
+                };
+                requestAnimationFrame(() => {
+                    resumePass();
+                    requestAnimationFrame(resumePass);
                 });
+                if (window.__resumeViewStabilizeTimer) clearTimeout(window.__resumeViewStabilizeTimer);
+                window.__resumeViewStabilizeTimer = setTimeout(() => {
+                    resumePass();
+                    window.__resumeViewStabilizeTimer = null;
+                }, 180);
             }
         });
     }

@@ -3537,6 +3537,7 @@ window.renderCharacterDetail = renderCharacterDetail;
 window.selectCharacterById = function selectCharacterById(id, options = {}) {
     if (id === undefined || id === null) return;
     openedCharId = String(id);
+    window.selectedCharacterId = String(id);
     if (typeof window.renderCharacterList === 'function') window.renderCharacterList();
     if (typeof updateSelectedCharacterMarker === 'function') updateSelectedCharacterMarker();
     if (!options.skipCameraFocus && typeof window.focusCharacterInView === 'function') {
