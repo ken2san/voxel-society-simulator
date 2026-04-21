@@ -1663,6 +1663,10 @@ class Character {
     visualizeOwnedLand() {
         // Only tint if a live mesh exists and worldData/blockMaterials is available
         if (!this.ownedLand || !blockMaterials) return;
+        // Throttle: only redraw every 2 seconds per character
+        const now = Date.now();
+        if (this._lastLandVisTime && now - this._lastLandVisTime < 2000) return;
+        this._lastLandVisTime = now;
         for (const key of this.ownedLand) {
             const [x, y, z] = key.split(',').map(Number);
             // Find ground block just below y (if any)
@@ -1697,22 +1701,38 @@ class Character {
             }
         }
     }
-    // --- Land ownership: claim current position ---
+    // --- Land ownership: claim current position (bounded, global index) ---
     claimCurrentLand() {
         const key = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
-        this.ownedLand.add(key);
-    }
-
-    // --- Check if a position is owned by another character ---
-    isLandOwnedByOther(pos) {
-        const key = `${pos.x},${pos.y},${pos.z}`;
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        for (const char of chars) {
-            if (char.id !== this.id && char.ownedLand && char.ownedLand.has(key)) {
-                return char;
+        if (this.ownedLand.has(key)) return; // already claimed, no-op
+        // Enforce cap: evict oldest if at limit
+        const CAP = 32;
+        if (this.ownedLand.size >= CAP) {
+            const evict = this._ownedLandQueue.shift();
+            if (evict && this.ownedLand.has(evict)) {
+                this.ownedLand.delete(evict);
+                const globalMap = (typeof window !== 'undefined') ? window.worldTerritoryOwner : null;
+                if (globalMap && globalMap.get(evict) === this.id) globalMap.delete(evict);
             }
         }
-        return null;
+        this.ownedLand.add(key);
+        this._ownedLandQueue.push(key);
+        // Update global reverse index
+        if (typeof window !== 'undefined') {
+            if (!window.worldTerritoryOwner) window.worldTerritoryOwner = new Map();
+            window.worldTerritoryOwner.set(key, this.id);
+        }
+    }
+
+    // --- Check if a position is owned by another character (O(1) via global index) ---
+    isLandOwnedByOther(pos) {
+        const key = `${pos.x},${pos.y},${pos.z}`;
+        const globalMap = (typeof window !== 'undefined') ? window.worldTerritoryOwner : null;
+        if (!globalMap) return null;
+        const ownerId = globalMap.get(key);
+        if (!ownerId || ownerId === this.id) return null;
+        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        return chars.find(c => c.id === ownerId && c.state !== 'dead') || null;
     }
 
     // --- Land contest: episodic, local rivalry instead of per-tick punishment ---
@@ -1747,11 +1767,18 @@ class Character {
         this._nearEnemy = true;
         otherChar._nearEnemy = true;
 
+        const globalMap = (typeof window !== 'undefined') ? window.worldTerritoryOwner : null;
         if (myScore > otherScore) {
+            // Transfer loser's land — respect winner's cap
+            const CAP = 32;
             for (const key of otherChar.ownedLand) {
+                if (this.ownedLand.size >= CAP) break;
                 this.ownedLand.add(key);
+                this._ownedLandQueue.push(key);
+                if (globalMap) globalMap.set(key, this.id);
             }
             otherChar.ownedLand.clear();
+            otherChar._ownedLandQueue = [];
             this.needs.safety = Math.max(0, this.needs.safety - 0.6);
             otherChar.needs.safety = Math.max(0, otherChar.needs.safety - 1.4);
             otherChar._uncertaintyShock = Math.max(Number(otherChar._uncertaintyShock || 0), 0.16);
@@ -2262,8 +2289,9 @@ class Character {
         // --- Social role assignment ---
         this.role = 'worker'; // All start as worker; leader emerges via group detection
         this.groupId = null; // Will be set by group detection
-        // --- Owned land (set of grid keys) ---
+        // --- Owned land (set of grid keys, capped) ---
         this.ownedLand = new Set();
+        this._ownedLandQueue = []; // eviction deque for cap enforcement
 
         // AI & State
         this.gridPos = startPos;
@@ -4045,10 +4073,11 @@ class Character {
             this._nearEnemy = false;
             if (this.relationships && this.relationships.size > 0) {
                 const _floor = (typeof window !== 'undefined' && window.affinityFloor !== undefined) ? Number(window.affinityFloor) : 5;
-                const _chars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
                 const { ally } = this.getRelationshipThresholds();
+                const _runtime2s = Character.getLiveCharacterRuntime();
+                const _aliveById2s = _runtime2s.aliveById;
                 for (const [otherId, aff] of this.relationships.entries()) {
-                    const other = _chars.find(c => c.id === otherId && c.state !== 'dead');
+                    const other = _aliveById2s.get(String(otherId));
                     if (!other) continue;
                     const crossGroupThreat = !!this.groupId && !!other.groupId && this.groupId !== other.groupId && aff < Math.max(_floor + 8, ally - 10);
                     if (aff <= _floor + 3 || crossGroupThreat) {
@@ -4060,12 +4089,11 @@ class Character {
 
                 // Food donation: well-fed ally/bonded shares food with nearby hungry partner (every 2s tick)
                 if (this.needs.hunger > 70) {
-                    const _donateChars = _chars;
                     const { ally } = this.getRelationshipThresholds();
                     const { nearbyRadius } = this.getSupportModelParams();
                     for (const [otherId, aff] of this.relationships.entries()) {
                         if (aff >= ally) {
-                            const other = _donateChars.find(c => c.id === otherId && c.state !== 'dead');
+                            const other = _aliveById2s.get(String(otherId));
                             if (other && other.needs.hunger < 40) {
                                 const d = Math.abs(this.gridPos.x - other.gridPos.x) + Math.abs(this.gridPos.z - other.gridPos.z);
                                 if (d <= nearbyRadius) {
@@ -4847,7 +4875,26 @@ class Character {
             this._knownFoodSpots?.clear?.();
             this._failedFoodTargets?.clear?.();
             this._busyFoodTargets?.clear?.();
+            // Remove owned cells from global territory index
+            if (this.ownedLand) {
+                const globalMap = (typeof window !== 'undefined') ? window.worldTerritoryOwner : null;
+                if (globalMap) {
+                    for (const key of this.ownedLand) {
+                        if (globalMap.get(key) === this.id) globalMap.delete(key);
+                    }
+                }
+            }
             this.ownedLand?.clear?.();
+            this._ownedLandQueue = [];
+            // Prune stale contest cooldown entries for this character
+            if (Character._landContestCooldowns) {
+                const deadId = this.id;
+                for (const pairKey of Character._landContestCooldowns.keys()) {
+                    if (pairKey.startsWith(deadId + ':') || pairKey.endsWith(':' + deadId)) {
+                        Character._landContestCooldowns.delete(pairKey);
+                    }
+                }
+            }
             this.actionHistory = [];
             this._positionHistory = [];
             this._foodSearchCache = null;
@@ -5619,13 +5666,22 @@ class Character {
             } else if (this.state === 'idle') {
                 // idle glance: occasionally look at a nearby char or food
                 if (this._idleGlanceTimer <= 0) {
-                    // find nearby char or food
+                    // find nearby char or food using spatial runtime (O(1) bucket lookup)
                     let found = null;
-                    const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-                    for (const c of chars) {
-                        if (c.id === this.id) continue;
-                        const dist = Math.abs(this.gridPos.x - c.gridPos.x) + Math.abs(this.gridPos.y - c.gridPos.y) + Math.abs(this.gridPos.z - c.gridPos.z);
-                        if (dist <= 4) { found = c; break; }
+                    const _glanceRuntime = Character.getLiveCharacterRuntime();
+                    const sx = Math.floor(this.gridPos.x / 4);
+                    const sz = Math.floor(this.gridPos.z / 4);
+                    const sy = Math.floor(this.gridPos.y / 2);
+                    outer: for (let bx = sx - 1; bx <= sx + 1; bx++) {
+                        for (let bz = sz - 1; bz <= sz + 1; bz++) {
+                            const bucket = _glanceRuntime.spatialBuckets?.get(`${bx},${sy},${bz}`);
+                            if (!bucket) continue;
+                            for (const c of bucket) {
+                                if (c.id === this.id) continue;
+                                const dist = Math.abs(this.gridPos.x - c.gridPos.x) + Math.abs(this.gridPos.z - c.gridPos.z);
+                                if (dist <= 4) { found = c; break outer; }
+                            }
+                        }
                     }
                     if (found) this._lookTargetPos = { ...found.gridPos };
                     else {
@@ -5977,8 +6033,8 @@ class Character {
                 && this._lastBubbleHtml === '❤️'
                 && (now - this._lastBubbleRefreshTs) < perfProfile.bubbleMinIntervalMs;
             if (canReuse) return;
-            const canvas = document.getElementById('gameCanvas');
-            const pos = toScreenPosition(this.iconAnchor, camera, canvas);
+            if (!Character._cachedGameCanvas) Character._cachedGameCanvas = document.getElementById('gameCanvas');
+            const pos = toScreenPosition(this.iconAnchor, camera, Character._cachedGameCanvas);
             if (!pos) {
                 hideBubble();
                 return;
@@ -6045,8 +6101,8 @@ class Character {
             && (now - this._lastBubbleRefreshTs) < perfProfile.bubbleMinIntervalMs;
         if (canReuse) return;
 
-        const canvas = document.getElementById('gameCanvas');
-        const screenPos = toScreenPosition(this.iconAnchor, camera, canvas);
+        if (!Character._cachedGameCanvas) Character._cachedGameCanvas = document.getElementById('gameCanvas');
+        const screenPos = toScreenPosition(this.iconAnchor, camera, Character._cachedGameCanvas);
         if (!screenPos) {
             hideBubble();
             return;

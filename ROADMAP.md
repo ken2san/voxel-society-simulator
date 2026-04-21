@@ -21,6 +21,12 @@ Implications for all development decisions:
 - **Behavioral integrity over forced survival.** Avoid hard-coded rescue logic
   whose primary goal is to keep agents alive. Characters should survive (or not)
   through plausible behavior under environmental pressure.
+  - AI behavior code **may** be actively modified when the goal is to make behavior more
+    realistic or naturalistic (e.g. anxiety when isolated, risk when entering rival territory).
+  - AI behavior code **must not** be modified to force a desired simulation outcome
+    (e.g. raising birth probability when population drops, boosting EAT priority when
+    starvation deaths are high). Reverse-engineering AI toward a demographic target
+    violates this principle even when framed as a "fix".
 - **Adaptation via environment and learning.** Prefer ecology-level changes
   (resource distribution, risk, travel cost) and character learning/growth
   dynamics over direct "do-not-die" overrides in decision code.
@@ -328,17 +334,17 @@ This sprint is **render/UI only**:
 
 ### Tasks
 
-| Status     | Item                                                                 |
-| ---------- | -------------------------------------------------------------------- |
-| ✅ Done    | Live bubble toggle for cleaner observation                           |
-| ✅ Done    | Live effects toggle for optional scene polish                        |
-| ✅ Done    | Tiny-home readability pass and roof/fruit contrast cleanup           |
-| ✅ Done    | Quiet ambient world effects with house-body-only night warmth        |
-| ✅ Done    | Canvas performance mitigation for larger scenes on HiDPI displays    |
-| 🔲 Next    | Throttle selected-character overlay / marker refresh under load      |
-| 🔲 Next    | Add a simple low/normal visual quality preset if needed              |
-| 🔲 Next    | Continue camera-responsiveness profiling at ~50+ visible characters  |
-| 🔲 Backlog | Further DOM update coalescing for the left and right observation UI  |
+| Status     | Item                                                                |
+| ---------- | ------------------------------------------------------------------- |
+| ✅ Done    | Live bubble toggle for cleaner observation                          |
+| ✅ Done    | Live effects toggle for optional scene polish                       |
+| ✅ Done    | Tiny-home readability pass and roof/fruit contrast cleanup          |
+| ✅ Done    | Quiet ambient world effects with house-body-only night warmth       |
+| ✅ Done    | Canvas performance mitigation for larger scenes on HiDPI displays   |
+| 🔲 Next    | Throttle selected-character overlay / marker refresh under load     |
+| 🔲 Next    | Add a simple low/normal visual quality preset if needed             |
+| 🔲 Next    | Continue camera-responsiveness profiling at ~50+ visible characters |
+| 🔲 Backlog | Further DOM update coalescing for the left and right observation UI |
 
 ### Current success criteria
 

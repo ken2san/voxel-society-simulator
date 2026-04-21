@@ -838,6 +838,22 @@ export function decideNextAction_rulebase(character, isNight) {
     if (character.needs.hunger < hungerCollectionThreshold) {
         const foodPos = character.findClosestFood();
         if (foodPos) {
+            // Safety cost for foraging in enemy territory (O(1) via global index)
+            const foodKey = `${foodPos.x},${foodPos.y},${foodPos.z}`;
+            const globalMap = (typeof window !== 'undefined') ? window.worldTerritoryOwner : null;
+            if (globalMap) {
+                const ownerId = globalMap.get(foodKey);
+                if (ownerId && ownerId !== character.id) {
+                    // Check if owner is from a different group
+                    const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : [];
+                    const owner = chars.find(c => c.id === ownerId && c.state !== 'dead');
+                    if (owner && owner.groupId !== character.groupId) {
+                        // Entering enemy territory costs safety — discourages easy poaching
+                        character.needs.safety = Math.max(0, character.needs.safety - 1.5);
+                        character._nearEnemy = true;
+                    }
+                }
+            }
             const adjacentSpot = character.findAdjacentSpot(foodPos);
             if (adjacentSpot) {
                 character.setNextAction('EAT', foodPos, adjacentSpot);
