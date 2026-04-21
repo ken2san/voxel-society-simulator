@@ -51,12 +51,12 @@ export function createThreeSimulationIO() {
 
         const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
         bodyMaterial.gradientMap = null;
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(m.bodyTopRadius, m.bodyBottomRadius, m.bodyHeight, 32), bodyMaterial);
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(m.bodyTopRadius, m.bodyBottomRadius, m.bodyHeight, 8), bodyMaterial);
         body.castShadow = true;
         body.receiveShadow = true;
         mesh.add(body);
 
-        const head = new THREE.Mesh(new THREE.CylinderGeometry(m.headRadiusTop, m.headRadiusBottom, m.headHeight, 24), bodyMaterial);
+        const head = new THREE.Mesh(new THREE.CylinderGeometry(m.headRadiusTop, m.headRadiusBottom, m.headHeight, 8), bodyMaterial);
         head.castShadow = true;
         head.receiveShadow = true;
         mesh.add(head);
@@ -65,7 +65,7 @@ export function createThreeSimulationIO() {
         head.add(iconAnchor);
 
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
-        const eyeGeometry = new THREE.CylinderGeometry(m.eyeRadius, m.eyeRadius, 0.01, 12);
+        const eyeGeometry = new THREE.CylinderGeometry(m.eyeRadius, m.eyeRadius, 0.01, 6);
         const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
         leftEye.rotation.x = Math.PI / 2;
         head.add(leftEye);
@@ -74,13 +74,13 @@ export function createThreeSimulationIO() {
         rightEye.rotation.x = Math.PI / 2;
         head.add(rightEye);
 
-        const mouthGeometry = new THREE.CylinderGeometry(m.mouthRadius, m.mouthRadius, 0.01, 12);
+        const mouthGeometry = new THREE.CylinderGeometry(m.mouthRadius, m.mouthRadius, 0.01, 6);
         const mouth = new THREE.Mesh(mouthGeometry, eyeMaterial);
         mouth.rotation.x = Math.PI / 2;
         head.add(mouth);
 
         const armMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
-        const armGeometry = new THREE.TorusGeometry(m.armLoopRadius, m.armThickness, 10, 24, Math.PI * 1.2);
+        const armGeometry = new THREE.TorusGeometry(m.armLoopRadius, m.armThickness, 6, 10, Math.PI * 1.2);
         const leftArm = new THREE.Mesh(armGeometry, armMaterial);
         leftArm.rotation.z = Math.PI / 2.2;
         body.add(leftArm);
@@ -97,7 +97,7 @@ export function createThreeSimulationIO() {
         mesh.add(carriedItemMesh);
 
         const shadowMesh = new THREE.Mesh(
-            new THREE.CircleGeometry(m.shadowRadius, 32),
+            new THREE.CircleGeometry(m.shadowRadius, 16),
             new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 })
         );
         shadowMesh.position.set(0, 0.01, 0);
@@ -155,7 +155,7 @@ export function createThreeSimulationIO() {
         updateShadowGeometry(shadowMesh, radius) {
             if (!shadowMesh) return;
             if (shadowMesh.geometry) shadowMesh.geometry.dispose();
-            shadowMesh.geometry = new THREE.CircleGeometry(radius, 32);
+            shadowMesh.geometry = new THREE.CircleGeometry(radius, 16);
         },
         toScreenPosition(obj, camera, canvas = null) {
             if (!obj || !camera || obj.visible === false) return null;
@@ -169,12 +169,20 @@ export function createThreeSimulationIO() {
             if (!Number.isFinite(vector.x) || !Number.isFinite(vector.y) || !Number.isFinite(vector.z)) return null;
             if (vector.z < -1 || vector.z > 1) return null;
 
-            let rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+            // Cache getBoundingClientRect to avoid forced layout reflow every call
+            const now = Date.now();
             if (!canvas && typeof document !== 'undefined') {
                 canvas = document.getElementById('gameCanvas');
             }
-            if (canvas && typeof canvas.getBoundingClientRect === 'function') {
-                rect = canvas.getBoundingClientRect();
+            let rect;
+            if (canvas) {
+                if (!canvas._cachedRect || now - (canvas._cachedRectTs || 0) > 500) {
+                    canvas._cachedRect = canvas.getBoundingClientRect();
+                    canvas._cachedRectTs = now;
+                }
+                rect = canvas._cachedRect;
+            } else {
+                rect = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
             }
             const x = (vector.x + 1) / 2 * rect.width + rect.left;
             const y = (1 - vector.y) / 2 * rect.height + rect.top;

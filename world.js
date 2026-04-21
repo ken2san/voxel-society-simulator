@@ -802,7 +802,7 @@ function updateAmbientWorldEffects() {
     // Ambient motion is observation polish, not gameplay-critical simulation.
     // Throttle it modestly in larger scenes to keep camera interaction responsive.
     const frameStride = enabled
-        ? (popSize > 72 ? 4 : popSize > 48 ? 3 : popSize > 24 ? 2 : 1)
+        ? (popSize > 90 ? 8 : popSize > 64 ? 6 : popSize > 48 ? 4 : popSize > 24 ? 2 : 1)
         : 1;
     updateAmbientWorldEffects._frameCounter = (updateAmbientWorldEffects._frameCounter || 0) + 1;
     const wasEnabled = updateAmbientWorldEffects._lastEnabled !== false;
@@ -1115,8 +1115,11 @@ export function updateWorldLighting() {
     if (directionalLight) directionalLight.intensity = Math.max(0, dayIntensity) * 0.8;
     if (ambientLight) ambientLight.intensity = 0.3 + Math.max(0, dayIntensity) * 0.6;
     const io = simIO();
-    const nightColor = io.createColor(0x0a0a2a);
-    const dayColor = io.createColor(0x87CEEB);
+    // Reuse module-level Color objects to avoid per-frame GC allocation
+    if (!updateWorldLighting._nightColor) updateWorldLighting._nightColor = io.createColor(0x0a0a2a);
+    if (!updateWorldLighting._dayColor) updateWorldLighting._dayColor = io.createColor(0x87CEEB);
+    const nightColor = updateWorldLighting._nightColor;
+    const dayColor = updateWorldLighting._dayColor;
     if (scene) {
         if (!scene.background) scene.background = io.createColor(0x87CEEB);
         if (typeof scene.background?.lerpColors === 'function') {
