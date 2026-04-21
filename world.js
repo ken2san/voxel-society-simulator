@@ -610,7 +610,6 @@ export function focusCameraOnActiveDistrict() {
     const startPos = camera.position.clone();
     const startedAt = performance.now();
     const duration = 280;
-
     if (window.__focusCharacterAnim) cancelAnimationFrame(window.__focusCharacterAnim);
     function step(now) {
         const t = Math.min(1, (now - startedAt) / duration);
@@ -627,40 +626,33 @@ function getPreferredCameraFocusTarget() {
     const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
     const fallback = new THREE.Vector3(bounds.centerX, 2, bounds.centerZ);
     if (typeof window === 'undefined') return fallback;
-
     const selectedId = (window.selectedCharacterId !== undefined && window.selectedCharacterId !== null)
         ? String(window.selectedCharacterId)
         : '';
     if (!selectedId || !Array.isArray(characters)) return fallback;
-
     const selected = characters.find(char => String(char?.id) === selectedId && char?.state !== 'dead' && char?.mesh?.position);
     if (!selected?.mesh?.position) return fallback;
-
     const pos = selected.mesh.position;
     return new THREE.Vector3(pos.x, Math.max(1.5, pos.y + 1.2), pos.z);
 }
 
 export function stabilizeCameraAfterVisibilityChange() {
     if (!camera || !controls) return false;
-
     const desiredTarget = getPreferredCameraFocusTarget();
     const validTarget = controls.target
         && Number.isFinite(controls.target.x)
         && Number.isFinite(controls.target.y)
         && Number.isFinite(controls.target.z);
     const currentTarget = validTarget ? controls.target.clone() : desiredTarget.clone();
-
     let offset = (camera.position
         && Number.isFinite(camera.position.x)
         && Number.isFinite(camera.position.y)
         && Number.isFinite(camera.position.z))
         ? camera.position.clone().sub(currentTarget)
         : new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
-
     if (!Number.isFinite(offset.x) || !Number.isFinite(offset.y) || !Number.isFinite(offset.z) || offset.lengthSq() < 0.001) {
         offset = new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
     }
-
     offset.clampLength(6, Math.max(14, gridSize * 1.8));
     controls.target.copy(desiredTarget);
     camera.position.copy(desiredTarget.clone().add(offset));
@@ -702,7 +694,6 @@ export function setDistrictMode(mode = 1) {
     districtSummaryCache = [];
     districtSummaryCacheUpdatedAt = 0;
     applyDistrictVisualization();
-    focusCameraOnActiveDistrict();
     emitDistrictChange();
     return getDistrictState();
 }
@@ -712,7 +703,6 @@ export function setActiveDistrict(index = 0) {
     if (districtMode === 1) activeDistrictIndex = 0;
     districtSummaryCacheUpdatedAt = 0;
     applyDistrictVisualization();
-    focusCameraOnActiveDistrict();
     emitDistrictChange();
     return getDistrictState();
 }
@@ -1532,4 +1522,3 @@ export function spawnCharacter(pos, genes = null) {
     }
     return null;
 }
-// ...other world functions as needed...
