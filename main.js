@@ -240,6 +240,7 @@ async function init() {
         if (window.renderCharacterList) window.renderCharacterList();
 
         setupTelemetryManagerPanel();
+        setupPerfOverlay();
 
         animate();
     } catch (error) { console.error("Initialization Error:", error); }
@@ -392,6 +393,47 @@ function setupTelemetryManagerPanel() {
     window.setInterval(renderStatus, 1000);
     renderStatus();
     setSettingsStatus('Settings preset ready');
+}
+
+function setupPerfOverlay() {
+    const el = document.createElement('div');
+    el.id = 'perfOverlay';
+    Object.assign(el.style, {
+        position: 'fixed',
+        bottom: '8px',
+        left: '8px',
+        background: 'rgba(0,0,0,0.65)',
+        color: '#0f0',
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        lineHeight: '1.5',
+        padding: '5px 8px',
+        borderRadius: '4px',
+        zIndex: '9999',
+        pointerEvents: 'none',
+        display: 'none',          // hidden until Shift+P is pressed
+        whiteSpace: 'pre',
+    });
+    document.body.appendChild(el);
+
+    // Toggle with Shift+P
+    window.addEventListener('keydown', e => {
+        if (e.shiftKey && e.key === 'P') el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // Expose toggle so console can use it
+    window.togglePerfOverlay = () => { el.style.display = el.style.display === 'none' ? 'block' : 'none'; };
+
+    setInterval(() => {
+        if (el.style.display === 'none') return;
+        const s = window.__perfStats;
+        if (!s) return;
+        el.textContent =
+            `FPS   ${String(s.fps).padStart(3)} (avg ${String(s.avgFps).padStart(3)})\n` +
+            `Frame ${String(s.frameMs).padStart(3)} ms  (logic ${s.logicMs} / render ${s.renderMs})\n` +
+            `Draw  ${String(s.drawCalls).padStart(4)} calls  △ ${s.triangles.toLocaleString()}\n` +
+            `Chars ${s.charCount}`;
+    }, 200);
 }
 
 function main() {

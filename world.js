@@ -1210,6 +1210,7 @@ export function drawMinimap() {
 }
 export function animate() {
     requestAnimationFrame(animate);
+    const _frameStart = performance.now();
     const deltaTime = Math.min(clock.getDelta(), 0.1); // cap at 100ms to prevent tab-backgrounding spikes
     // simulationRunningがtrueのときだけ進行
     if (typeof window !== 'undefined' && window.simulationRunning === false) {
@@ -1521,7 +1522,34 @@ export function animate() {
         animate.lastFruitRegenTime = 0;
     }
 
+    const _renderStart = performance.now();
     renderer.render(scene, camera);
+    const _frameEnd = performance.now();
+
+    // --- Perf stats for debug overlay ---
+    if (typeof window !== 'undefined') {
+        const _info = renderer.info;
+        const _fps = animate._lastFrameEnd ? Math.round(1000 / (_frameEnd - animate._lastFrameEnd)) : 0;
+        const _frameMs = Math.round(_frameEnd - _frameStart);
+        const _renderMs = Math.round(_frameEnd - _renderStart);
+        const _logicMs = Math.round(_renderStart - _frameStart);
+        // Rolling 60-frame averages
+        if (!animate._fpsHistory) animate._fpsHistory = [];
+        animate._fpsHistory.push(_fps);
+        if (animate._fpsHistory.length > 60) animate._fpsHistory.shift();
+        const _avgFps = Math.round(animate._fpsHistory.reduce((a, b) => a + b, 0) / animate._fpsHistory.length);
+        window.__perfStats = {
+            fps: _fps,
+            avgFps: _avgFps,
+            frameMs: _frameMs,
+            logicMs: _logicMs,
+            renderMs: _renderMs,
+            drawCalls: _info.render.calls,
+            triangles: _info.render.triangles,
+            charCount: characters.filter(c => c && c.state !== 'dead').length,
+        };
+        animate._lastFrameEnd = _frameEnd;
+    }
 }
 export function spawnCharacter(pos, genes = null) {
     if (pos) {
