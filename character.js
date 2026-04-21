@@ -691,6 +691,18 @@ class Character {
                 this.triggerMicroGesture('savor', 0.9, inDanger ? 1.1 : 0.95);
                 this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
+                // After eating, drift back toward home if not in danger — creates "eating at home" feel.
+                // Only trigger when not starving (inDanger) so survival-mode food-grabbing is unchanged.
+                if (!inDanger && this.homePosition) {
+                    const homeDist = Math.abs(this.gridPos.x - this.homePosition.x)
+                        + Math.abs(this.gridPos.y - this.homePosition.y)
+                        + Math.abs(this.gridPos.z - this.homePosition.z);
+                    if (homeDist > 4) {
+                        // Queue a home-return wander so char strolls back before next decision
+                        this._postMealHomeReturn = true;
+                    }
+                }
+
                 // Visual-only animations (no-op in headless where setTimeout is disabled)
                 setTimeout(() => {
                     this.showActionIcon('😋', 1.5);
@@ -6367,23 +6379,40 @@ class Character {
     decideNextAction(isNight) {
         const hungerEmergency = (typeof window !== 'undefined' && window.hungerEmergencyThreshold !== undefined) ? Number(window.hungerEmergencyThreshold) : 5;
         const energyEmergency = (typeof window !== 'undefined' && window.energyEmergencyThreshold !== undefined) ? Number(window.energyEmergencyThreshold) : 20;
+
+        // Post-meal home drift: after eating (when not in danger), walk back toward home
+        // before the next decision cycle. Gives the impression of "eating at home" rather
+        // than grazing at the food block and immediately doing something else.
+        if (this._postMealHomeReturn && this.homePosition) {
+            this._postMealHomeReturn = false;
+            const homeDist = Math.abs(this.gridPos.x - this.homePosition.x)
+                + Math.abs(this.gridPos.y - this.homePosition.y)
+                + Math.abs(this.gridPos.z - this.homePosition.z);
+            if (homeDist > 4) {
+                this.setNextAction('WANDER', null, this.homePosition);
+                return;
+            }
+        }
+
         // Child-specific behavior: simpler decision-making and no adult tasks
         if (this.isChild) {
-            // If parents exist, attempt to stay near them or follow briefly
-            const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+            // If parents exist, attempt to stay near them or follow briefly.
+            // Use O(1) aliveById lookup instead of O(N) chars.find().
             if (this.parentIds && this.parentIds.length > 0) {
+                const liveRuntime = Character.getLiveCharacterRuntime(null);
                 let nearestParent = null;
                 let pdist = 1e9;
                 for (const pid of this.parentIds) {
-                    const p = chars.find(c => c.id === pid);
+                    const p = liveRuntime.aliveById.get(pid);
                     if (p) {
                         const d = Math.abs(this.gridPos.x - p.gridPos.x) + Math.abs(this.gridPos.y - p.gridPos.y) + Math.abs(this.gridPos.z - p.gridPos.z);
                         if (d < pdist) { pdist = d; nearestParent = p; }
                     }
                 }
                 if (nearestParent) {
-                    if (pdist > 3) {
-                        // move closer to parent
+                    if (pdist > 5) {
+                        // move closer to parent — follow distance widened (3→5) so children
+                        // trail parents across the village rather than hugging them
                         this.setNextAction('MOVE', nearestParent, nearestParent.gridPos);
                         return;
                     } else if (Math.random() < 0.4) {
