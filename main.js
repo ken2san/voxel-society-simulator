@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, nextCharacterId, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange, focusCameraOnActiveDistrict } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -197,11 +197,8 @@ async function init() {
         const centreCameraBtn = document.getElementById('centreCameraBtn');
         if (centreCameraBtn) {
             centreCameraBtn.addEventListener('click', () => {
-                import('./world.js').then(worldMod => {
-                    if (typeof worldMod.focusCameraOnActiveDistrict === 'function') {
-                        worldMod.focusCameraOnActiveDistrict();
-                    }
-                });
+                window.selectedCharacterId = null;
+                focusCameraOnActiveDistrict();
             });
             centreCameraBtn.addEventListener('mouseenter', () => { centreCameraBtn.style.background = 'rgba(30,58,138,0.85)'; });
             centreCameraBtn.addEventListener('mouseleave', () => { centreCameraBtn.style.background = 'rgba(15,23,42,0.72)'; });

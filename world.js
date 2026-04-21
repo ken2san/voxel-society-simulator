@@ -596,12 +596,31 @@ export function getDistrictState() {
     };
 }
 
-function focusCameraOnActiveDistrict() {
-    if (!controls) return;
+export function focusCameraOnActiveDistrict() {
+    if (!controls || !camera) return;
     const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
-    controls.target.set(bounds.centerX, 2, bounds.centerZ);
-    if (camera) camera.lookAt(controls.target);
-    if (typeof controls.update === 'function') controls.update();
+    const desiredTarget = new THREE.Vector3(bounds.centerX, 2, bounds.centerZ);
+    const offset = camera.position.clone().sub(controls.target);
+    const desiredDistance = Math.min(Math.max(offset.length(), 12), Math.max(20, gridSize * 1.4));
+    const desiredOffset = offset.length() > 0.001
+        ? offset.clone().setLength(desiredDistance)
+        : new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
+    const desiredCameraPos = desiredTarget.clone().add(desiredOffset);
+    const startTarget = controls.target.clone();
+    const startPos = camera.position.clone();
+    const startedAt = performance.now();
+    const duration = 280;
+
+    if (window.__focusCharacterAnim) cancelAnimationFrame(window.__focusCharacterAnim);
+    function step(now) {
+        const t = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        controls.target.lerpVectors(startTarget, desiredTarget, eased);
+        camera.position.lerpVectors(startPos, desiredCameraPos, eased);
+        controls.update();
+        if (t < 1) window.__focusCharacterAnim = requestAnimationFrame(step);
+    }
+    window.__focusCharacterAnim = requestAnimationFrame(step);
 }
 
 function getPreferredCameraFocusTarget() {
