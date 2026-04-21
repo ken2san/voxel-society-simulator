@@ -39,6 +39,15 @@ coverage/
 # Backup files
 bak_*
 
+# Local dev scripts and debug output
+run_and_report.sh
+out.txt
+output.txt
+sim_output.txt
+
+# Local test telemetry (root-level)
+test-*.json
+
 # Others
 *.swp
 *.tmp
