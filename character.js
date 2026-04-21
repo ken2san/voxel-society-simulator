@@ -1733,8 +1733,9 @@ class Character {
         if (!globalMap) return null;
         const ownerId = globalMap.get(key);
         if (!ownerId || ownerId === this.id) return null;
-        const chars = (typeof window !== 'undefined' && window.characters) ? window.characters : (typeof characters !== 'undefined' ? characters : []);
-        return chars.find(c => c.id === ownerId && c.state !== 'dead') || null;
+        // O(1) lookup via getLiveCharacterRuntime cache instead of O(N) chars.find()
+        const runtime = Character.getLiveCharacterRuntime(null);
+        return runtime.aliveById.get(ownerId) || null;
     }
 
     // --- Land contest: episodic, local rivalry instead of per-tick punishment ---
@@ -2057,9 +2058,15 @@ class Character {
         const heuristic = (p) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) + Math.abs(p.z - goal.z);
 
         while (open.length > 0 && steps < maxStep) {
-            // sort by heuristic ascending (closest to goal first)
-            open.sort((a, b) => heuristic(a.pos) - heuristic(b.pos));
-            const node = open.shift();
+            // Linear min-scan instead of sort: O(K) vs O(K log K) per iteration.
+            let minIdx = 0, minH = heuristic(open[0].pos);
+            for (let _i = 1; _i < open.length; _i++) {
+                const _h = heuristic(open[_i].pos);
+                if (_h < minH) { minH = _h; minIdx = _i; }
+            }
+            const node = open[minIdx];
+            open[minIdx] = open[open.length - 1];
+            open.pop();
             const cur = node.pos;
             steps++;
             const curKey = key(cur);
@@ -2828,14 +2835,11 @@ class Character {
 
         let closest = null;
         let bestReachableScore = Infinity;
-        const maxPathChecks = starvationPressure ? 96 : (this.needs.hunger <= 20 ? 48 : 24);
-        const searchWindows = [{ start: 0, end: Math.min(12, candidates.length) }];
-        if (candidates.length > 12) {
-            // Wider later passes help hungry chars escape locally contested fruit clusters.
-            searchWindows.push({ start: 12, end: Math.min(starvationPressure ? 48 : maxPathChecks, candidates.length) });
-        }
-        if (starvationPressure && candidates.length > 48) {
-            searchWindows.push({ start: 48, end: Math.min(maxPathChecks, candidates.length) });
+        const maxPathChecks = starvationPressure ? 32 : (this.needs.hunger <= 20 ? 16 : 8);
+        const searchWindows = [{ start: 0, end: Math.min(8, candidates.length) }];
+        if (candidates.length > 8) {
+            // Wider later pass helps hungry chars escape locally contested fruit clusters.
+            searchWindows.push({ start: 8, end: Math.min(maxPathChecks, candidates.length) });
         }
         for (const window of searchWindows) {
             for (let i = window.start; i < window.end; i++) {
