@@ -228,7 +228,7 @@ function renderCharacterDetail() {
     if (!window.sidebarParams) {
         const existingCharCount = Array.isArray(window.characters) && window.characters.length > 0
             ? window.characters.length
-            : 10;
+            : 20;
         window.sidebarParams = {
             charNum: existingCharCount,
             socialTh: 82,

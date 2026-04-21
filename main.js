@@ -119,8 +119,9 @@ async function init() {
 
 
         generateTerrain();
-        // Spawn 10 characters (await each for correct timing)
-        for (let i = 0; i < 10; i++) {
+        // Spawn initial characters — count from sidebar config (defaults to 10)
+        const initialCharCount = Math.max(5, Number(window.sidebarParams?.charNum) || 10);
+        for (let i = 0; i < initialCharCount; i++) {
             await spawnCharacter(findValidSpawn());
         }
         // Randomize initial ages to reduce synchronized cohort die-off.
