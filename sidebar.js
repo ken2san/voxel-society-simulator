@@ -2420,6 +2420,25 @@ function renderCharacterDetail() {
         window.__simStarting = false;
         window.__simHasUserStarted = true;
         window.__simFinishedAt = Date.now();
+        // --- Run History: finalize result ---
+        if (window.__pendingRunEntry) {
+            const popStats = (typeof window.getPopulationStats === 'function') ? window.getPopulationStats() : null;
+            const alive = Array.isArray(window.characters) ? window.characters.filter(c => c.state !== 'dead').length : 0;
+            const dc = popStats?.deathsByCause || {};
+            window.__pendingRunEntry.result = {
+                alive,
+                deaths: popStats ? Number(popStats.deaths || 0) : 0,
+                starvation: Number(dc.starvation || 0) + Number(dc.starved || 0),
+                maxGen: Array.isArray(window.characters)
+                    ? window.characters.reduce((m, c) => Math.max(m, c.generation || 0), 0)
+                    : 0,
+                durationSec: Math.round((Date.now() - window.__pendingRunEntry.startedAt) / 1000)
+            };
+            if (!Array.isArray(window.__simRunHistory)) window.__simRunHistory = [];
+            window.__simRunHistory.push(window.__pendingRunEntry);
+            if (window.__simRunHistory.length > 5) window.__simRunHistory.shift();
+            window.__pendingRunEntry = null;
+        }
         updateToggleBtn();
         // Re-seed district proportions so slider stays reactive for the next run
         _idleDistrictProportions = null;
@@ -2435,6 +2454,22 @@ function renderCharacterDetail() {
         const useRandom = !!sidebarParams.useRandom;
         window.__simStarting = true;
         window.__simFinishedAt = null;
+        // --- Run History: snapshot settings at Start time ---
+        if (!Array.isArray(window.__simRunHistory)) window.__simRunHistory = [];
+        window.__pendingRunEntry = {
+            runIndex: (window.__simRunHistory.length > 0
+                ? window.__simRunHistory[window.__simRunHistory.length - 1].runIndex + 1
+                : 1),
+            startedAt: Date.now(),
+            settings: {
+                charNum: num,
+                districtMode: Number(sidebarParams.districtMode) || 1,
+                socialTh,
+                groupAffinityTh,
+                useRandom
+            },
+            result: null
+        };
         updateToggleBtn();
         window.characters = [];
         window.groupAffinityThreshold = groupAffinityTh;
@@ -4106,6 +4141,53 @@ function renderCharacterList() {
         emptyState.textContent = 'No active character cards remain, but the society metrics above are preserved.';
         leftSidebar.appendChild(emptyState);
     }
+
+    // --- Run History panel (shown when sim is not running and there are past runs) ---
+    const runHistory = Array.isArray(window.__simRunHistory) ? window.__simRunHistory : [];
+    if (!window.simulationRunning && runHistory.length > 0) {
+        const histDiv = document.createElement('div');
+        histDiv.style.cssText = 'margin-top:10px;background:linear-gradient(140deg,#fff 0%,#f0f4ff 100%);border:1px solid #d7e4f5;border-radius:10px;padding:8px 10px;font-size:0.82em;color:#2b3340;box-shadow:0 2px 8px rgba(0,0,0,0.05);';
+        histDiv.innerHTML = `<div style="font-weight:700;color:#334155;margin-bottom:6px;font-size:0.92em;letter-spacing:0.02em;">🕓 Run History</div>`;
+        [...runHistory].reverse().forEach(run => {
+            const r = run.result;
+            const s = run.settings;
+            const dStr = r ? `${Math.floor(r.durationSec / 60)}m${r.durationSec % 60}s` : '—';
+            const row = document.createElement('div');
+            row.style.cssText = 'background:#ffffffbb;border:1px solid #dfe8f7;border-radius:8px;padding:6px 8px;margin-bottom:5px;';
+            row.innerHTML =
+                `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">` +
+                    `<span style="font-weight:700;color:#1d4ed8;">Run #${run.runIndex}</span>` +
+                    `<span style="color:#64748b;font-size:0.88em;">${dStr}</span>` +
+                `</div>` +
+                `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">` +
+                    `<span style="background:#dbeafe;color:#1e40af;border-radius:4px;padding:1px 5px;">👥 ${s.charNum}</span>` +
+                    `<span style="background:#dcfce7;color:#166534;border-radius:4px;padding:1px 5px;">D${s.districtMode}</span>` +
+                    (r ? `<span style="background:#f0fdf4;color:#15803d;border-radius:4px;padding:1px 5px;">alive ${r.alive}</span>` : '') +
+                    (r && r.deaths > 0 ? `<span style="background:#fef2f2;color:#b91c1c;border-radius:4px;padding:1px 5px;">✝ ${r.deaths}${r.starvation > 0 ? ` (⚡${r.starvation})` : ''}</span>` : '') +
+                    (r && r.maxGen > 0 ? `<span style="background:#faf5ff;color:#7c3aed;border-radius:4px;padding:1px 5px;">gen ${r.maxGen}</span>` : '') +
+                `</div>` +
+                `<div style="margin-top:5px;text-align:right;">` +
+                    `<button data-run-index="${run.runIndex}" style="font-size:0.8em;padding:2px 8px;border-radius:5px;border:1px solid #93c5fd;background:#eff6ff;color:#1d4ed8;cursor:pointer;">↩ Reuse settings</button>` +
+                `</div>`;
+            const reuseBtn = row.querySelector('button[data-run-index]');
+            if (reuseBtn) {
+                reuseBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!window.sidebarParams) window.sidebarParams = {};
+                    window.sidebarParams.charNum = s.charNum;
+                    window.sidebarParams.districtMode = s.districtMode;
+                    window.sidebarParams.socialTh = s.socialTh;
+                    window.sidebarParams.groupAffinityTh = s.groupAffinityTh;
+                    window.sidebarParams.useRandom = s.useRandom;
+                    renderCharacterDetail();
+                    window.renderCharacterList && window.renderCharacterList();
+                });
+            }
+            histDiv.appendChild(row);
+        });
+        leftSidebar.appendChild(histDiv);
+    }
+
     updateSelectedCharacterMarker();
     renderEventTimeline();
 // サマリー表の詳細カード生成
