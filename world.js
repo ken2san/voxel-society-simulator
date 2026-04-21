@@ -50,6 +50,10 @@ export function setWorldObjects(objs) {
     minimapCtx = objs.minimapCtx;
     applyDistrictVisualization();
     emitDistrictChange();
+    // Initialize instanced character renderer (browser only)
+    if (scene && typeof window !== 'undefined') {
+        window._instancedCharRenderer = simIO().createInstancedCharacterRenderer(scene, 300);
+    }
 }
 export const blockSize = 1;
 export const gridSize = 16;
@@ -1234,6 +1238,11 @@ export function animate() {
     }
     if (controls) controls.update();
     for (const char of characters) char.update(deltaTime, isNight, camera);
+
+    // Sync instanced character renderer (batches body/head/arms/shadow into 5 draw calls)
+    if (typeof window !== 'undefined' && window._instancedCharRenderer) {
+        window._instancedCharRenderer.update(characters);
+    }
 
     // --- グループ再判定は人口が増えたら間引く ---
     if (!animate.lastGroupDetectTime) animate.lastGroupDetectTime = 0;

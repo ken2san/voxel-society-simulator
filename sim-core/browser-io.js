@@ -209,6 +209,152 @@ export function createThreeSimulationIO() {
         getWorldPosition(obj, target = new THREE.Vector3()) {
             if (obj && typeof obj.getWorldPosition === 'function') return obj.getWorldPosition(target);
             return target.set(obj?.position?.x || 0, obj?.position?.y || 0, obj?.position?.z || 0);
+        },
+        createInstancedCharacterRenderer(scene, maxCount = 200) {
+            return createInstancedCharacterRenderer(scene, maxCount);
+        }
+    };
+}
+
+/**
+ * InstancedMesh-based character renderer.
+ * Renders body, head, arms, and shadow as batched GPU draw calls (one per part type)
+ * instead of one draw call per character per part (~9× reduction in draw calls).
+ *
+ * Selected characters are excluded from InstancedMesh and use their individual Three.js
+ * meshes (required for emissive selection glow). Parts are hidden via Layer 31.
+ */
+export function createInstancedCharacterRenderer(scene, maxCount = 200) {
+    // --- Reusable math objects (avoid per-frame allocation) ---
+    const _m4group  = new THREE.Matrix4();
+    const _m4body   = new THREE.Matrix4();
+    const _m4world  = new THREE.Matrix4();
+    const _pos      = new THREE.Vector3();
+    const _quat     = new THREE.Quaternion();
+    const _scl      = new THREE.Vector3(); // throwaway decompose target
+    const _dummy    = new THREE.Object3D();
+    const _color    = new THREE.Color();
+
+    function makeIM(geo, mat) {
+        const im = new THREE.InstancedMesh(geo, mat, maxCount);
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        im.frustumCulled = false;
+        im.count = 0;
+        scene.add(im);
+        return im;
+    }
+
+    // Base geometries (normalized: bottomRadius=1, height=1, so per-instance scale encodes size)
+    // Average taper ratios derived from morphology formula ranges:
+    //   bodyTopRadius  ≈ 0.15–0.25, bodyBottomRadius ≈ 0.20–0.35  → top/bottom ≈ 0.76
+    //   headRadiusTop  ≈ 0.12–0.25, headRadiusBottom ≈ 0.14–0.28  → top/bottom ≈ 0.90
+    const bodyGeo   = new THREE.CylinderGeometry(0.76, 1.0, 1, 8);
+    const headGeo   = new THREE.CylinderGeometry(0.90, 1.0, 1, 8);
+    const shadowGeo = new THREE.CircleGeometry(1, 16);
+    // TorusGeometry(radius, tube, radialSeg, tubularSeg, arc); tube=0.2 ≈ avg armThickness/armLoopRadius
+    const armGeo    = new THREE.TorusGeometry(1, 0.2, 6, 10, Math.PI * 1.2);
+
+    // White base material so per-instance colour multiplies through correctly
+    const mkBodyMat = () => new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const iBody     = makeIM(bodyGeo,   mkBodyMat());
+    const iHead     = makeIM(headGeo,   mkBodyMat());
+    const iLeftArm  = makeIM(armGeo,    mkBodyMat());
+    const iRightArm = makeIM(armGeo,    mkBodyMat());
+    const iShadow   = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
+        color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false
+    }));
+
+    return {
+        /** Call once per frame, after all char.update() calls, before renderer.render(). */
+        update(characters) {
+            const selectedId = (typeof window !== 'undefined' && window.selectedCharacterId != null)
+                ? String(window.selectedCharacterId) : '';
+
+            let idx = 0;
+            for (const char of characters) {
+                if (!char || char.state === 'dead') continue;
+                if (!char.body || !char.head || !char.leftArm || !char.rightArm || !char.mesh) continue;
+                // Selected character keeps individual mesh (needed for emissive glow)
+                if (selectedId && String(char.id) === selectedId) continue;
+                const m = char.morphology;
+                if (!m) continue;
+
+                const group = char.mesh;
+
+                // Group world matrix (group is a root-level scene child → worldMatrix = local)
+                group.updateMatrix();
+                _m4group.compose(group.position, group.quaternion, group.scale);
+
+                // --- Body (direct child of group) ---
+                char.body.updateMatrix();
+                _m4body.multiplyMatrices(_m4group, char.body.matrix);
+                _m4body.decompose(_pos, _quat, _scl);
+                _dummy.position.copy(_pos);
+                _dummy.quaternion.copy(_quat);
+                _dummy.scale.set(m.bodyBottomRadius, m.bodyHeight, m.bodyBottomRadius);
+                _dummy.updateMatrix();
+                iBody.setMatrixAt(idx, _dummy.matrix);
+
+                // --- Head (direct child of group) ---
+                char.head.updateMatrix();
+                _m4world.multiplyMatrices(_m4group, char.head.matrix);
+                _m4world.decompose(_pos, _quat, _scl);
+                _dummy.position.copy(_pos);
+                _dummy.quaternion.copy(_quat);
+                _dummy.scale.set(m.headRadiusBottom, m.headHeight, m.headRadiusBottom);
+                _dummy.updateMatrix();
+                iHead.setMatrixAt(idx, _dummy.matrix);
+
+                // --- Left arm (child of body) ---
+                char.leftArm.updateMatrix();
+                _m4world.multiplyMatrices(_m4body, char.leftArm.matrix);
+                _m4world.decompose(_pos, _quat, _scl);
+                _dummy.position.copy(_pos);
+                _dummy.quaternion.copy(_quat);
+                _dummy.scale.setScalar(m.armLoopRadius);
+                _dummy.updateMatrix();
+                iLeftArm.setMatrixAt(idx, _dummy.matrix);
+
+                // --- Right arm (child of body) ---
+                char.rightArm.updateMatrix();
+                _m4world.multiplyMatrices(_m4body, char.rightArm.matrix);
+                _m4world.decompose(_pos, _quat, _scl);
+                _dummy.position.copy(_pos);
+                _dummy.quaternion.copy(_quat);
+                _dummy.scale.setScalar(m.armLoopRadius);
+                _dummy.updateMatrix();
+                iRightArm.setMatrixAt(idx, _dummy.matrix);
+
+                // --- Shadow (flat circle at ground level, scale encodes radius + pulse) ---
+                const sr = m.shadowRadius * (char._shadowInstanceScale ?? 1.0);
+                _dummy.position.set(group.position.x, 0.01, group.position.z);
+                _dummy.rotation.set(-Math.PI / 2, 0, 0);
+                _dummy.scale.set(sr, sr, 1);
+                _dummy.updateMatrix();
+                iShadow.setMatrixAt(idx, _dummy.matrix);
+
+                // --- Per-instance colour from personality ---
+                _color.copy(char.bodyMaterial.color);
+                iBody.setColorAt(idx, _color);
+                iHead.setColorAt(idx, _color);
+                iLeftArm.setColorAt(idx, _color);
+                iRightArm.setColorAt(idx, _color);
+
+                idx++;
+            }
+
+            iBody.count = iHead.count = iLeftArm.count = iRightArm.count = iShadow.count = idx;
+
+            iBody.instanceMatrix.needsUpdate = true;
+            iHead.instanceMatrix.needsUpdate = true;
+            iLeftArm.instanceMatrix.needsUpdate = true;
+            iRightArm.instanceMatrix.needsUpdate = true;
+            iShadow.instanceMatrix.needsUpdate = true;
+
+            if (iBody.instanceColor)    iBody.instanceColor.needsUpdate = true;
+            if (iHead.instanceColor)    iHead.instanceColor.needsUpdate = true;
+            if (iLeftArm.instanceColor) iLeftArm.instanceColor.needsUpdate = true;
+            if (iRightArm.instanceColor)iRightArm.instanceColor.needsUpdate = true;
         }
     };
 }

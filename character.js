@@ -476,6 +476,7 @@ class Character {
 
     resetVisualEffects() {
         try {
+            this._shadowInstanceScale = 1.0; // reset instanced shadow pulse
             if (this.shadowMesh) {
                 this.shadowMesh.scale.set(1, 1, 1);
                 if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
@@ -520,6 +521,7 @@ class Character {
                     if ('emissiveIntensity' in mat) mat.emissiveIntensity = Math.max(1.55, Number(mat.emissiveIntensity || 1));
                 });
             });
+            this._shadowInstanceScale = 1.32; // scale up instanced shadow too
             if (this.shadowMesh) {
                 this.shadowMesh.scale.set(1.32, 1.32, 1.32);
                 if (this.shadowMesh.material && this.shadowMesh.material.opacity !== undefined) {
@@ -2364,6 +2366,16 @@ class Character {
         this.applyMorphologyToMeshes();
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
+
+        // Hide individual body parts from the camera — InstancedMesh handles rendering.
+        // Eyes and mouth (children of head) stay on layer 0 since they follow head rotation.
+        // Selected characters are toggled back to layer 0 in updateAnimations().
+        this._isSelectedForInstanced = false;
+        if (typeof window !== 'undefined' && window._instancedCharRenderer) {
+            for (const part of [this.body, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
+                if (part) part.layers.set(31);
+            }
+        }
 
     // --- Liveliness: breathing and glance state ---
     this._breathPhase = Math.random() * Math.PI * 2;
@@ -5613,6 +5625,19 @@ class Character {
             this.resetVisualEffects();
         }
         const perfProfile = this.getVisualPerfProfile();
+
+        // Toggle individual mesh visibility for selected character vs InstancedMesh rendering
+        if (typeof window !== 'undefined' && window._instancedCharRenderer) {
+            const nowSelected = perfProfile.isSelected;
+            if (nowSelected !== this._isSelectedForInstanced) {
+                this._isSelectedForInstanced = nowSelected;
+                const layer = nowSelected ? 0 : 31;
+                for (const part of [this.body, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
+                    if (part) part.layers.set(layer);
+                }
+            }
+        }
+
         if (perfProfile.minAnimStep > 0) {
             this._visualUpdateAccumulator = (this._visualUpdateAccumulator || 0) + deltaTime;
             if (this._visualUpdateAccumulator < perfProfile.minAnimStep) return;

@@ -307,6 +307,9 @@ function createHeadlessIO() {
         getWorldPosition(obj, target = createVector3()) {
             if (obj && typeof obj.getWorldPosition === 'function') return obj.getWorldPosition(target);
             return target.copy(obj?.position || obj || { x: 0, y: 0, z: 0 });
+        },
+        createInstancedCharacterRenderer() {
+            return { update() {} }; // no-op in headless mode
         }
     };
 }
