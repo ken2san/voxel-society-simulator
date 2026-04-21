@@ -2786,28 +2786,29 @@ class Character {
         const _tick = (typeof globalThis !== 'undefined' && globalThis.window?._simTick != null)
             ? globalThis.window._simTick
             : Math.floor(Date.now() / 250);
-        {
-            const _posKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
-            if (this._foodSearchCache &&
-                this._foodSearchCache.pos === _posKey &&
-                (_tick - this._foodSearchCache.tick) < 8) {
-                return this._foodSearchCache.result;
-            }
-            this._foodSearchCache = null; // will be populated at end of method
+        // Check cache validity; keep stale cache as fallback for budget overflow.
+        const _posKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
+        const _staleResult = this._foodSearchCache ? this._foodSearchCache.result : undefined;
+        if (this._foodSearchCache &&
+            this._foodSearchCache.pos === _posKey &&
+            (_tick - this._foodSearchCache.tick) < 8) {
+            return this._foodSearchCache.result; // fresh cache hit — free
         }
+        this._foodSearchCache = null; // will be populated at end of method
 
         // Global per-tick BFS budget: cap the number of full food searches per sim tick
-        // to prevent 150+ hungry characters from all running BFS simultaneously in winter.
-        // Cache hits (above) are free. Over-budget calls return stale cache or null.
+        // to prevent 150+ hungry characters from all running BFS simultaneously.
+        // Fresh cache hits (above) are free. Over-budget calls return stale cache or null.
         {
             if (Character._foodSeekBudgetTick !== _tick) {
                 Character._foodSeekBudgetTick = _tick;
                 Character._foodSeekBudgetUsed = 0;
             }
-            const maxBudget = 30;
+            const maxBudget = 50;
             if (Character._foodSeekBudgetUsed >= maxBudget) {
-                // Return stale cache if available, else null (will retry next tick).
-                return this._foodSearchCache ? this._foodSearchCache.result : null;
+                // Return stale cache result if available — better than null which causes
+                // aggressive retry spam every tick with no backoff.
+                return _staleResult !== undefined ? _staleResult : null;
             }
             Character._foodSeekBudgetUsed++;
         }
