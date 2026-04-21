@@ -5657,11 +5657,17 @@ class Character {
         }
 
         if (perfProfile.minAnimStep > 0) {
-            this._visualUpdateAccumulator = (this._visualUpdateAccumulator || 0) + deltaTime;
+            // Stagger initial accumulator to avoid thundering herd (all chars firing same frame)
+            if (!this._animStepSeeded) {
+                this._animStepSeeded = true;
+                this._visualUpdateAccumulator = Math.random() * perfProfile.minAnimStep;
+            }
+            this._visualUpdateAccumulator += deltaTime;
             if (this._visualUpdateAccumulator < perfProfile.minAnimStep) return;
             deltaTime = this._visualUpdateAccumulator;
             this._visualUpdateAccumulator = 0;
         } else {
+            this._animStepSeeded = false;
             this._visualUpdateAccumulator = 0;
         }
         // --- Enhanced Blinking logic ---
