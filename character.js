@@ -5594,6 +5594,11 @@ class Character {
     }
 
     getVisualPerfProfile() {
+        // Frame-level cache: avoid computing twice per update (updateAnimations + updateThoughtBubble)
+        const now = performance.now();
+        if (this._perfProfileCache && (now - this._perfProfileCacheTs) < 14) {
+            return this._perfProfileCache;
+        }
         const selectedId = (typeof window !== 'undefined' && window.selectedCharacterId !== undefined && window.selectedCharacterId !== null)
             ? String(window.selectedCharacterId)
             : '';
@@ -5601,22 +5606,35 @@ class Character {
         const activeCount = (typeof window !== 'undefined' && Number.isFinite(window.__activeCharacterCount))
             ? Number(window.__activeCharacterCount)
             : Character.getLiveCharacterRuntime().alive.length;
+        // urgent: truly needs full-rate animation (selected, critical needs, combat)
         const urgent = isSelected
             || this.loveTimer > 0
-            || this.state === 'moving'
-            || this.state === 'working'
-            || this.state === 'socializing'
             || !!this._nearEnemy
             || !!(this.needs && (this.needs.hunger < 35 || this.needs.energy < 30 || this.needs.safety < 50));
+        // activeMotion: visually active but can tolerate mild throttle
+        const activeMotion = this.state === 'moving' || this.state === 'working' || this.state === 'socializing';
+        const superDense = activeCount >= 75;
         const dense = activeCount >= 60;
         const busy = activeCount >= 44;
-        return {
+        // minAnimStep: how many seconds to skip between animation updates
+        let minAnimStep = 0;
+        if (superDense) {
+            minAnimStep = urgent ? 0 : activeMotion ? 0.033 : 0.083;
+        } else if (dense) {
+            minAnimStep = urgent ? 0 : activeMotion ? 0.025 : 0.05;
+        } else if (busy) {
+            minAnimStep = urgent ? 0 : 0.033;
+        }
+        const profile = {
             activeCount,
             isSelected,
             urgent,
-            minAnimStep: dense && !urgent ? 0.05 : busy && !urgent ? 0.033 : 0,
-            bubbleMinIntervalMs: dense ? (urgent ? 90 : 220) : busy ? (urgent ? 70 : 140) : 0
+            minAnimStep,
+            bubbleMinIntervalMs: superDense ? (urgent ? 120 : 350) : dense ? (urgent ? 90 : 220) : busy ? (urgent ? 70 : 140) : 0
         };
+        this._perfProfileCache = profile;
+        this._perfProfileCacheTs = now;
+        return profile;
     }
 
     updateAnimations(deltaTime) {
