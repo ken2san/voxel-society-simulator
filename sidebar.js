@@ -711,10 +711,8 @@ function renderCharacterDetail() {
     affinityRateNumber.min = 1;
     affinityRateNumber.max = 50;
     affinityRateNumber.value = sidebarParams.affinityIncreaseRate;
-    affinityRateNumber.disabled = paramDisabled;
     affinityRateNumber.style.width = '48px';
-    affinityRateNumber.id = 'affinityRateNumber';
-    affinityRateNumber.name = 'affinityRateNumber';
+    affinityRateNumber.disabled = paramDisabled;
     affinityRateNumber.addEventListener('input', e => {
         sidebarParams.affinityIncreaseRate = Number(e.target.value);
         affinityRateInput.value = e.target.value;
@@ -1148,7 +1146,6 @@ function renderCharacterDetail() {
     perceptionNumber.min = 1;
     perceptionNumber.max = 10;
     perceptionNumber.value = sidebarParams.perceptionRange;
-    perceptionNumber.disabled = paramDisabled;
     perceptionNumber.style.width = '48px';
     perceptionNumber.id = 'perceptionNumber';
     perceptionNumber.name = 'perceptionNumber';
@@ -1179,8 +1176,6 @@ function renderCharacterDetail() {
     affinityResetInput.value = sidebarParams.affinityResetAfterReproduce;
     affinityResetInput.style.width = '120px';
     affinityResetInput.disabled = paramDisabled;
-    affinityResetInput.id = 'affinityResetInput';
-    affinityResetInput.name = 'affinityResetInput';
     affinityResetInput.addEventListener('input', e => {
         sidebarParams.affinityResetAfterReproduce = Number(e.target.value);
         affinityResetNumber.value = e.target.value;
@@ -1193,7 +1188,6 @@ function renderCharacterDetail() {
     affinityResetNumber.max = 50;
     affinityResetNumber.step = 1;
     affinityResetNumber.value = sidebarParams.affinityResetAfterReproduce;
-    affinityResetNumber.disabled = paramDisabled;
     affinityResetNumber.style.width = '48px';
     affinityResetNumber.id = 'affinityResetNumber';
     affinityResetNumber.name = 'affinityResetNumber';
@@ -1702,7 +1696,6 @@ function renderCharacterDetail() {
     ageSpreadVal.style.width = '56px';
     ageSpreadVal.id = 'ageSpreadVal';
     ageSpreadVal.name = 'ageSpreadVal';
-    ageSpreadRow.appendChild(ageSpreadVal);
     ageSpreadInput.oninput = () => {
         ageSpreadVal.value = ageSpreadInput.value;
         sidebarParams.initialAgeMaxRatio = parseFloat(ageSpreadInput.value);
@@ -1745,8 +1738,6 @@ function renderCharacterDetail() {
     socialVal.style.width = '48px';
     socialVal.id = 'socialVal';
     socialVal.name = 'socialVal';
-    socialRow.appendChild(socialVal);
-    // 双方向同期＋sidebarParams更新
     socialInput.oninput = () => {
         socialVal.value = socialInput.value;
         sidebarParams.socialTh = parseInt(socialInput.value);
@@ -3047,7 +3038,7 @@ function openPopulationMetricDialog(metricOrGroup, metricLabel, color = '#2563eb
                 const values = history.map(h => Number(h[s.key] || 0));
                 const latest = values.length ? values[values.length - 1] : 0;
                 const delta = values.length >= 2 ? values[values.length - 1] - values[0] : 0;
-                return `<div style="border:1px solid #dbeafe;border-radius:12px;padding:8px;background:#ffffff;">` +
+                return `<div style="border:1px solid #dbeafe;border-radius:12px;padding:8px;background:#ffffffbb;">` +
                     `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:6px;">` +
                         `<span style="font-weight:700;color:#334155;">${s.label}</span>` +
                         `<span style="font-size:0.82em;color:${s.color};font-weight:700;">${latest.toFixed(1)} ${delta > 0 ? '▲' : delta < 0 ? '▼' : '•'}</span>` +
@@ -3459,7 +3450,7 @@ function initEventTimelineDrawer() {
             `<span id="etl-counts" style="font-size:0.82em;font-weight:600;background:rgba(255,255,255,0.1);border-radius:4px;padding:1px 5px;white-space:nowrap;"></span>` +
             `<span id="etl-latest" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;` +
             `font-size:0.88em;color:#a8c4df;padding-left:8px;"></span>` +
-            `<span id="etl-toggle-icon" style="font-size:0.88em;transition:transform 200ms;">▲</span>` +
+            `<span id="etl-toggle-icon" style="font-size:0.88em;transform:rotate(0deg);transition:transform 200ms;">▲</span>` +
         `</div>` +
         `<div id="etl-body" style="display:none;background:rgba(14,24,42,0.96);` +
         `backdrop-filter:blur(6px);max-height:200px;overflow-y:auto;padding:6px 8px;">` +
@@ -3507,6 +3498,9 @@ function renderEventTimeline() {
 document.addEventListener('DOMContentLoaded', () => {
     leftSidebar = document.getElementById('sidebar-left');
     rightSidebar = document.getElementById('sidebar-right');
+    // サマリー表で開いている詳細キャラID
+    openedCharId = undefined;
+
     // サイドバーのUIをゲーム画面に溶け込むよう調整（幅を拡張）
     if (leftSidebar) {
         leftSidebar.style.width = 'min(440px, 34vw)';
@@ -4322,7 +4316,7 @@ function createCharacterDetailCard(char) {
         legend.style.textAlign = 'center';
         needKeys.forEach(k => {
             const span = document.createElement('span');
-            span.innerHTML = `<span style=\"display:inline-block;width:18px;height:4px;background:${needColors[k]};margin-right:4px;vertical-align:middle;border-radius:2px;\"></span>${k}`;
+            span.innerHTML = `<span style="display:inline-block;width:18px;height:4px;background:${needColors[k]};margin-right:4px;vertical-align:middle;border-radius:2px;"></span>${k}`;
             legend.appendChild(span);
         });
         // mood凡例

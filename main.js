@@ -192,6 +192,21 @@ async function init() {
         });
 
         window.addEventListener('resize', onWindowResize);
+
+        // --- Centre Camera overlay button ---
+        const centreCameraBtn = document.getElementById('centreCameraBtn');
+        if (centreCameraBtn) {
+            centreCameraBtn.addEventListener('click', () => {
+                import('./world.js').then(worldMod => {
+                    if (typeof worldMod.focusCameraOnActiveDistrict === 'function') {
+                        worldMod.focusCameraOnActiveDistrict();
+                    }
+                });
+            });
+            centreCameraBtn.addEventListener('mouseenter', () => { centreCameraBtn.style.background = 'rgba(30,58,138,0.85)'; });
+            centreCameraBtn.addEventListener('mouseleave', () => { centreCameraBtn.style.background = 'rgba(15,23,42,0.72)'; });
+        }
+
         const msgBoxBtn = document.getElementById('messageBoxCloseBtn');
         if (msgBoxBtn) msgBoxBtn.addEventListener('click', () => document.getElementById('messageBox').classList.add('hidden'));
         const debugToggle = document.getElementById('debugToggle');
