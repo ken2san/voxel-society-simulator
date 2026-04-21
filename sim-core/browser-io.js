@@ -333,10 +333,11 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _dummy.updateMatrix();
                 iShadow.setMatrixAt(idx, _dummy.matrix);
 
-                // --- Per-instance colour from personality ---
+                // --- Per-instance colour: body/head from personality, arms fixed brown ---
                 _color.copy(char.bodyMaterial.color);
                 iBody.setColorAt(idx, _color);
                 iHead.setColorAt(idx, _color);
+                _color.setHex(0xc68642);
                 iLeftArm.setColorAt(idx, _color);
                 iRightArm.setColorAt(idx, _color);
 
