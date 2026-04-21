@@ -2783,10 +2783,10 @@ class Character {
         // Result cache: avoid re-running expensive A* search when nothing has changed.
         // Cache key: grid position + sim tick (globalThis.window._simTick if available, else Date.now bucket).
         // TTL: 8 ticks (= 2 sim-seconds at dt=0.25). Invalidated when character moves.
+        const _tick = (typeof globalThis !== 'undefined' && globalThis.window?._simTick != null)
+            ? globalThis.window._simTick
+            : Math.floor(Date.now() / 250);
         {
-            const _tick = (typeof globalThis !== 'undefined' && globalThis.window?._simTick != null)
-                ? globalThis.window._simTick
-                : Math.floor(Date.now() / 250);
             const _posKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
             if (this._foodSearchCache &&
                 this._foodSearchCache.pos === _posKey &&
@@ -2794,6 +2794,22 @@ class Character {
                 return this._foodSearchCache.result;
             }
             this._foodSearchCache = null; // will be populated at end of method
+        }
+
+        // Global per-tick BFS budget: cap the number of full food searches per sim tick
+        // to prevent 150+ hungry characters from all running BFS simultaneously in winter.
+        // Cache hits (above) are free. Over-budget calls return stale cache or null.
+        {
+            if (Character._foodSeekBudgetTick !== _tick) {
+                Character._foodSeekBudgetTick = _tick;
+                Character._foodSeekBudgetUsed = 0;
+            }
+            const maxBudget = 30;
+            if (Character._foodSeekBudgetUsed >= maxBudget) {
+                // Return stale cache if available, else null (will retry next tick).
+                return this._foodSearchCache ? this._foodSearchCache.result : null;
+            }
+            Character._foodSeekBudgetUsed++;
         }
 
         // Expire stale spatial-memory entries (TTL 60s = approximate fruit respawn window)
@@ -2897,16 +2913,11 @@ class Character {
         this._lastFoodSeekHadCandidates = candidates.length > 0;
 
         // Write result cache
-        {
-            const _tick = (typeof globalThis !== 'undefined' && globalThis.window?._simTick != null)
-                ? globalThis.window._simTick
-                : Math.floor(Date.now() / 250);
-            this._foodSearchCache = {
-                pos: `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`,
-                tick: _tick,
-                result: closest
-            };
-        }
+        this._foodSearchCache = {
+            pos: `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`,
+            tick: _tick,
+            result: closest
+        };
 
         return closest;
     }
