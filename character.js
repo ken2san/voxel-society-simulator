@@ -5634,10 +5634,13 @@ class Character {
         const activeCount = (typeof window !== 'undefined' && Number.isFinite(window.__activeCharacterCount))
             ? Number(window.__activeCharacterCount)
             : Character.getLiveCharacterRuntime().alive.length;
-        // urgent: truly needs full-rate animation (selected, critical needs, combat)
-        const urgent = isSelected
-            || this.loveTimer > 0
-            || !!this._nearEnemy
+        // animUrgent: requires full-rate animation — only visually salient events.
+        // Deliberately excludes low needs: a resting/walking char with low energy looks
+        // identical at 12fps vs 60fps, and including it caused whole-colony throttle bypass
+        // during energy crises (all N chars urgent → O(N) full anim every frame).
+        const animUrgent = isSelected || this.loveTimer > 0 || !!this._nearEnemy;
+        // needsUrgent: used only for thought-bubble refresh rate — keeps needs visible to player.
+        const needsUrgent = animUrgent
             || !!(this.needs && (this.needs.hunger < 35 || this.needs.energy < 30 || this.needs.safety < 50));
         // activeMotion: visually active but can tolerate mild throttle
         const activeMotion = this.state === 'moving' || this.state === 'working' || this.state === 'socializing';
@@ -5647,18 +5650,18 @@ class Character {
         // minAnimStep: how many seconds to skip between animation updates
         let minAnimStep = 0;
         if (superDense) {
-            minAnimStep = urgent ? 0 : activeMotion ? 0.033 : 0.083;
+            minAnimStep = animUrgent ? 0 : activeMotion ? 0.033 : 0.083;
         } else if (dense) {
-            minAnimStep = urgent ? 0 : activeMotion ? 0.025 : 0.05;
+            minAnimStep = animUrgent ? 0 : activeMotion ? 0.025 : 0.05;
         } else if (busy) {
-            minAnimStep = urgent ? 0 : 0.033;
+            minAnimStep = animUrgent ? 0 : 0.033;
         }
         const profile = {
             activeCount,
             isSelected,
-            urgent,
+            urgent: needsUrgent,
             minAnimStep,
-            bubbleMinIntervalMs: superDense ? (urgent ? 120 : 350) : dense ? (urgent ? 90 : 220) : busy ? (urgent ? 70 : 140) : 0
+            bubbleMinIntervalMs: superDense ? (needsUrgent ? 120 : 350) : dense ? (needsUrgent ? 90 : 220) : busy ? (needsUrgent ? 70 : 140) : 0
         };
         this._perfProfileCache = profile;
         this._perfProfileCacheTs = now;
