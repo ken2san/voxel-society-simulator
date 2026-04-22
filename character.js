@@ -2219,57 +2219,93 @@ class Character {
     createMorphologyProfile(sourceTraits = this.appearanceProfile || this.personality) {
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
         const traits = sourceTraits || {};
-        const bravery = traits.bravery ?? 1.0;
-        const diligence = traits.diligence ?? 1.0;
-        const sociality = traits.sociality ?? 1.0;
-        const curiosity = traits.curiosity ?? 1.0;
-        const resourcefulness = traits.resourcefulness ?? 1.0;
+        const bravery    = traits.bravery    ?? 1.0;
+        const diligence  = traits.diligence  ?? 1.0;
+        const sociality  = traits.sociality  ?? 1.0;
+        const curiosity  = traits.curiosity  ?? 1.0;
         const resilience = traits.resilience ?? 1.0;
 
-        const bodyHeight = clamp(0.92 + (diligence - 1.0) * 0.26 + (resilience - 1.0) * 0.18, 0.74, 1.24);
-        const bodyTopRadius = clamp(0.19 + (sociality - 1.0) * 0.03 - (resourcefulness - 1.0) * 0.02, 0.15, 0.25);
-        const bodyBottomRadius = clamp(0.25 + (resilience - 1.0) * 0.05 + (bravery - 1.0) * 0.03, 0.20, 0.35);
-        const headRadiusTop = clamp(0.16 + (curiosity - 1.0) * 0.04 + (sociality - 1.0) * 0.02, 0.12, 0.25);
-        const headRadiusBottom = clamp(headRadiusTop + 0.02 + (resourcefulness - 1.0) * -0.01, 0.14, 0.28);
-        const headHeight = clamp(0.28 + (sociality - 1.0) * 0.05 + (curiosity - 1.0) * 0.05, 0.22, 0.40);
-        const neckGap = clamp(0.08 + (bravery - 1.0) * 0.02, 0.05, 0.12);
-        const eyeRadius = clamp(headRadiusBottom * 0.14, 0.018, 0.035);
-        const eyeSpacing = clamp(0.05 + (sociality - 1.0) * 0.02 + (curiosity - 1.0) * 0.01, 0.035, 0.09);
-        const eyeY = clamp(headHeight * 0.16 + (sociality - 1.0) * 0.01, 0.02, 0.10);
-        const faceZ = clamp(headRadiusBottom * 0.88, 0.11, 0.24);
-        const mouthRadius = clamp(0.035 + (sociality - 1.0) * 0.012, 0.025, 0.055);
-        const mouthY = clamp(-headHeight * 0.14, -0.08, -0.02);
-        const armLoopRadius = clamp(0.12 + (resourcefulness - 1.0) * 0.03 + (bravery - 1.0) * 0.01, 0.09, 0.17);
-        const armThickness = clamp(0.024 + (resilience - 1.0) * 0.006, 0.018, 0.034);
-        const armOffsetX = clamp(bodyBottomRadius * 0.92 + armThickness * 0.5, 0.18, 0.34);
-        const armY = clamp(bodyHeight * 0.64 + (diligence - 1.0) * 0.03, 0.45, 0.92);
-        const carriedItemSize = clamp(0.44 + (resourcefulness - 1.0) * 0.08, 0.34, 0.56);
-        const carriedItemY = clamp(bodyHeight * 0.78 + headHeight * 0.40, 0.72, 1.30);
-        const carriedItemZ = clamp(bodyBottomRadius + 0.05, 0.20, 0.42);
-        const shadowRadius = clamp(bodyBottomRadius + headRadiusBottom * 0.38, 0.26, 0.42);
+        // --- Body rows (stacked voxel robe) ---
+        const bodyRow1H = 0.22, bodyRow2H = 0.20, bodyRow3H = 0.18;
+        const bodyRow1W = clamp(0.38 + (resilience - 1) * 0.04, 0.32, 0.44);
+        const bodyRow2W = bodyRow1W - 0.04;
+        const bodyRow3W = bodyRow1W - 0.08;
+        const bodyDepth = bodyRow1W * 0.88;
+        const bodyRow1Y = bodyRow1H / 2;
+        const bodyRow2Y = bodyRow1H + bodyRow2H / 2;
+        const bodyRow3Y = bodyRow1H + bodyRow2H + bodyRow3H / 2;
+        const bodyTop   = bodyRow1H + bodyRow2H + bodyRow3H;
+
+        // --- Head ---
+        const headW = clamp(0.36 + (curiosity - 1) * 0.04, 0.30, 0.42);
+        const headH = clamp(0.36 + (sociality - 1) * 0.04, 0.30, 0.42);
+        const headD = headW * 0.90;
+        const neckGap = 0.02;
+        const headCenterY = bodyTop + neckGap + headH / 2;
+
+        // --- Hair (children of head) ---
+        const hairTopW = headW * 0.72, hairTopH = 0.10, hairTopD = headD * 0.72;
+        const hairTopLocalY = headH / 2 + hairTopH / 2;
+        const hairSideH = clamp(headH * 0.58, 0.18, 0.26);
+        const hairSideW = 0.09, hairSideD = headD * 0.82;
+        const hairSideLocalX = headW / 2 + hairSideW / 2;
+        const hairSideLocalY = headH * 0.12;
+
+        // --- Halo (child of head) ---
+        const haloW = headW * 1.28, haloH = 0.04, haloD = headD * 1.28;
+        const haloLocalY = headH / 2 + hairTopH + 0.10;
+
+        // --- Eyes (children of head) ---
+        const eyeW = clamp(headW * 0.28, 0.08, 0.14);
+        const eyeH = clamp(headH * 0.18, 0.06, 0.10);
+        const eyeD = 0.04;
+        const eyeLocalX = headW * 0.22;
+        const eyeLocalY = headH * 0.08;
+        const eyeLocalZ = headD / 2 + eyeD / 2;
+
+        // --- Cheeks (children of head) ---
+        const cheekW = headW * 0.24, cheekH = headH * 0.16, cheekD = 0.03;
+        const cheekLocalX = headW * 0.30;
+        const cheekLocalY = eyeLocalY - eyeH * 0.8 - cheekH * 0.5;
+        const cheekLocalZ = headD / 2 + cheekD / 2;
+
+        // --- Wings (replace arms) ---
+        const wingW = 0.16, wingH = 0.13, wingD = bodyDepth * 0.60;
+        const wingLocalX = bodyRow3W / 2 + wingW / 2;
+        const wingLocalY = bodyRow3Y;
+
+        // --- Shadow + carried item ---
+        const shadowRadius = clamp(bodyRow1W * 0.70 + 0.04, 0.20, 0.34);
+        const carriedItemSize = 0.34;
+        const carriedItemY = headCenterY + headH * 0.30;
+        const carriedItemZ = headD / 2 + 0.10;
+        const mouthY = -headH * 0.20;
 
         return {
-            bodyHeight,
-            bodyTopRadius,
-            bodyBottomRadius,
-            headRadiusTop,
-            headRadiusBottom,
-            headHeight,
-            neckGap,
-            eyeRadius,
-            eyeSpacing,
-            eyeY,
-            faceZ,
-            mouthRadius,
-            mouthY,
-            armLoopRadius,
-            armThickness,
-            armOffsetX,
-            armY,
-            carriedItemSize,
-            carriedItemY,
-            carriedItemZ,
-            shadowRadius,
+            bodyRow1H, bodyRow2H, bodyRow3H,
+            bodyRow1W, bodyRow2W, bodyRow3W, bodyDepth,
+            bodyRow1Y, bodyRow2Y, bodyRow3Y, bodyTop,
+            headW, headH, headD, neckGap, headCenterY,
+            hairTopW, hairTopH, hairTopD, hairTopLocalY,
+            hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY,
+            haloW, haloH, haloD, haloLocalY,
+            eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ,
+            cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ,
+            wingW, wingH, wingD, wingLocalX, wingLocalY,
+            shadowRadius, carriedItemSize, carriedItemY, carriedItemZ, mouthY,
+            // Legacy aliases for IM renderer + animation compatibility
+            bodyHeight: bodyTop,
+            bodyBottomRadius: bodyRow1W / 2,
+            bodyTopRadius: bodyRow3W / 2,
+            headHeight: headH,
+            headRadiusBottom: headW / 2,
+            headRadiusTop: headW / 2,
+            armLoopRadius: wingW / 2,
+            eyeRadius: Math.min(eyeW, eyeH) / 2,
+            eyeSpacing: eyeLocalX,
+            eyeY: eyeLocalY,
+            faceZ: eyeLocalZ,
+            mouthRadius: 0.02,
         };
     }
 
@@ -2277,26 +2313,46 @@ class Character {
         if (!this.morphology || !this.body || !this.head) return;
         const m = this.morphology;
 
-        this.body.position.y = m.bodyHeight / 2;
-        this.head.position.y = m.bodyHeight + m.neckGap + (m.headHeight / 2);
+        this.body.position.y = m.bodyRow1Y;
+        if (this.bodyRow2) this.bodyRow2.position.y = m.bodyRow2Y;
+        if (this.bodyRow3) this.bodyRow3.position.y = m.bodyRow3Y;
+        this.head.position.y = m.headCenterY;
 
         if (this.iconAnchor) {
-            this.iconAnchor.position.set(0, m.headHeight * 0.70, 0);
+            this.iconAnchor.position.set(0, m.headH * 0.70, 0);
         }
         if (this.leftEye) {
-            this.leftEye.position.set(-m.eyeSpacing, m.eyeY, m.faceZ);
+            this.leftEye.position.set(-m.eyeLocalX, m.eyeLocalY, m.eyeLocalZ);
         }
         if (this.rightEye) {
-            this.rightEye.position.set(m.eyeSpacing, m.eyeY, m.faceZ);
+            this.rightEye.position.set(m.eyeLocalX, m.eyeLocalY, m.eyeLocalZ);
         }
         if (this.mouth) {
-            this.mouth.position.set(0, m.mouthY, m.faceZ);
+            this.mouth.position.set(0, m.mouthY, m.eyeLocalZ);
+        }
+        if (this.leftCheek) {
+            this.leftCheek.position.set(-m.cheekLocalX, m.cheekLocalY, m.cheekLocalZ);
+        }
+        if (this.rightCheek) {
+            this.rightCheek.position.set(m.cheekLocalX, m.cheekLocalY, m.cheekLocalZ);
+        }
+        if (this.hairTop) {
+            this.hairTop.position.set(0, m.hairTopLocalY, 0);
+        }
+        if (this.hairSideL) {
+            this.hairSideL.position.set(-m.hairSideLocalX, m.hairSideLocalY, 0);
+        }
+        if (this.hairSideR) {
+            this.hairSideR.position.set(m.hairSideLocalX, m.hairSideLocalY, 0);
+        }
+        if (this.halo) {
+            this.halo.position.set(0, m.haloLocalY, 0);
         }
         if (this.leftArm) {
-            this.leftArm.position.set(-m.armOffsetX, m.armY, 0);
+            this.leftArm.position.set(-m.wingLocalX, m.wingLocalY, 0);
         }
         if (this.rightArm) {
-            this.rightArm.position.set(m.armOffsetX, m.armY, 0);
+            this.rightArm.position.set(m.wingLocalX, m.wingLocalY, 0);
         }
         if (this.carriedItemMesh) {
             this.carriedItemMesh.position.set(0, m.carriedItemY, m.carriedItemZ);
@@ -2400,6 +2456,16 @@ class Character {
         this.mouth = visuals.mouth;
         this.leftArm = visuals.leftArm;
         this.rightArm = visuals.rightArm;
+        this.bodyRow2 = visuals.bodyRow2;
+        this.bodyRow3 = visuals.bodyRow3;
+        this.hairTop = visuals.hairTop;
+        this.hairSideL = visuals.hairSideL;
+        this.hairSideR = visuals.hairSideR;
+        this.halo = visuals.halo;
+        this.leftCheek = visuals.leftCheek;
+        this.rightCheek = visuals.rightCheek;
+        this.hairMaterial = visuals.hairMaterial;
+        this.skinMaterial = visuals.skinMaterial;
         this.carriedItemMesh = visuals.carriedItemMesh;
         this.shadowMesh = visuals.shadowMesh;
         this.thoughtBubble = visuals.thoughtBubble;
@@ -2408,12 +2474,17 @@ class Character {
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
 
+        this._bodyRow1RestY = this.morphology ? this.morphology.bodyRow1Y : 0.11;
+        this._bodyRow2RestY = this.morphology ? this.morphology.bodyRow2Y : 0.32;
+        this._bodyRow3RestY = this.morphology ? this.morphology.bodyRow3Y : 0.51;
+        this._headRestY     = this.morphology ? this.morphology.headCenterY : 0.80;
+
         // Hide individual body parts from the camera — InstancedMesh handles rendering.
         // Eyes and mouth (children of head) stay on layer 0 since they follow head rotation.
         // Selected characters are toggled back to layer 0 in updateAnimations().
         this._isSelectedForInstanced = false;
         if (typeof window !== 'undefined' && window._instancedCharRenderer) {
-            for (const part of [this.body, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
+            for (const part of [this.body, this.bodyRow2, this.bodyRow3, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
                 if (part) part.layers.set(31);
             }
         }
@@ -2432,8 +2503,8 @@ class Character {
     this._stepPhase = Math.random() * Math.PI * 2;
     this._stepOffset = Math.random() * Math.PI * 2;
     this._stepFreqBase = 6.0; // base step freq multiplier for movement
-    this._stepAmp = 0.16; // vertical bob amplitude (grid units)
-    this._swayAmp = 0.11; // lateral sway amplitude
+    this._stepAmp = 0.06; // vertical bob amplitude (grid units)
+    this._swayAmp = 0.05; // lateral sway amplitude
     this._lastMoveProgressTime = Date.now();
     // Visual-only micro gestures add lived-in motion without continuous heavy effects.
     this._microGesture = null;
@@ -5662,7 +5733,7 @@ class Character {
             if (nowSelected !== this._isSelectedForInstanced) {
                 this._isSelectedForInstanced = nowSelected;
                 const layer = nowSelected ? 0 : 31;
-                for (const part of [this.body, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
+                for (const part of [this.body, this.bodyRow2, this.bodyRow3, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
                     if (part) part.layers.set(layer);
                 }
             }
@@ -5904,12 +5975,14 @@ class Character {
 
         // --- Body animation: more charming/expressive ---
         if (this.state === 'idle') {
-            // Cute idle bounce
-            this.bobTime += deltaTime * 2.8;
-            const bob = Math.sin(this.bobTime) * 0.10 + Math.sin(this.bobTime * 0.5) * 0.03;
+            // Ethereal idle float
+            this.bobTime += deltaTime * 1.8;
+            const bob = Math.sin(this.bobTime) * 0.020;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.11) + bob;
+            if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + bob;
+            if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + bob;
             const wiggle = Math.sin(this.bobTime * 0.7) * 0.08;
-            this.body.position.y = 0.25 + Math.max(0, bob);
-            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1.2) * 0.05;
+            this.head.position.y = (this._headRestY ?? 0.80) + bob * 0.7;
             this.mesh.rotation.z = wiggle * 0.5;
             // Arms: cute wing-flap in sync with bounce
             this.leftArm.rotation.y = Math.sin(this.bobTime * 1.2) * 0.28;
@@ -5931,8 +6004,10 @@ class Character {
             // vertical bob and lateral sway
             const walkBob = Math.abs(step) * (this._stepAmp || 0.1);
             const sway = Math.sin(this._stepPhase * 0.5) * (this._swayAmp || 0.06);
-            this.body.position.y = 0.25 + walkBob;
-            this.head.position.y = 0.75 + Math.sin(this._stepPhase + 1) * 0.07;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.11) + walkBob;
+            if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + walkBob;
+            if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + walkBob;
+            this.head.position.y = (this._headRestY ?? 0.80) + Math.sin(this._stepPhase + 1) * 0.07;
             this.mesh.rotation.z = sway;
             // arms swing opposite phase + gentle spread
             this.leftArm.rotation.x = (Math.sin(this._stepPhase) * 0.9) * 0.7;
@@ -5946,8 +6021,10 @@ class Character {
             this.mesh.rotation.z *= 0.85;
             this.leftArm.rotation.x *= 0.85;
             this.rightArm.rotation.x *= 0.85;
-            this.body.position.y += (0.25 - this.body.position.y) * 0.2;
-            this.head.position.y += (0.75 - this.head.position.y) * 0.2;
+            this.body.position.y += ((this._bodyRow1RestY ?? 0.11) - this.body.position.y) * 0.2;
+            if (this.bodyRow2) this.bodyRow2.position.y += ((this._bodyRow2RestY ?? 0.32) - this.bodyRow2.position.y) * 0.2;
+            if (this.bodyRow3) this.bodyRow3.position.y += ((this._bodyRow3RestY ?? 0.51) - this.bodyRow3.position.y) * 0.2;
+            this.head.position.y += ((this._headRestY ?? 0.80) - this.head.position.y) * 0.2;
             this.head.rotation.z *= 0.85;
         }
 
@@ -5980,8 +6057,10 @@ class Character {
             // Excited, bouncy animation
             this.bobTime += deltaTime * 4;
             const excitement = Math.sin(this.bobTime) * 0.08;
-            this.body.position.y = 0.25 + Math.abs(excitement);
-            this.head.position.y = 0.75 + Math.abs(excitement) * 1.2;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.11) + Math.abs(excitement);
+            if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + Math.abs(excitement);
+            if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + Math.abs(excitement);
+            this.head.position.y = (this._headRestY ?? 0.80) + Math.abs(excitement) * 1.2;
             // Head nodding
             this.head.rotation.x = Math.sin(this.bobTime * 2) * 0.15;
             // Expressive talking arm gestures — amplitude raised so readable from top-down view
@@ -5994,8 +6073,10 @@ class Character {
             // Focused work animation
             this.bobTime += deltaTime * 3;
             const workBob = Math.sin(this.bobTime) * 0.04;
-            this.body.position.y = 0.25 + workBob;
-            this.head.position.y = 0.75 + workBob;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.11) + workBob;
+            if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + workBob;
+            if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + workBob;
+            this.head.position.y = (this._headRestY ?? 0.80) + workBob;
             // Concentrated head tilt
             this.head.rotation.z = Math.sin(this.bobTime * 0.3) * 0.05;
             this.head.rotation.x = -0.1; // Looking down
@@ -6014,8 +6095,10 @@ class Character {
             // Weak, tired animation
             this.bobTime += deltaTime * 1.5;
             const weakness = Math.sin(this.bobTime * 0.5) * 0.02;
-            this.body.position.y = 0.22 + weakness; // Lower stance
-            this.head.position.y = 0.72 + weakness;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.11) - 0.03 + weakness;
+            if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) - 0.03 + weakness;
+            if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) - 0.03 + weakness;
+            this.head.position.y = (this._headRestY ?? 0.80) - 0.03 + weakness;
             this.mesh.rotation.z = Math.sin(this.bobTime * 0.3) * 0.03; // Slight swaying
             if (!this.actionAnim.active) this.body.scale.y = 0.95; // Slightly compressed
         } else if (!this.actionAnim.active) {
@@ -6594,10 +6677,26 @@ class Character {
     }
 
     updateColorFromPersonality() {
-        const r = Math.max(0, Math.min(1, 0.2 + (this.personality.bravery - 0.5)));
-        const g = Math.max(0, Math.min(1, 0.2 + (this.personality.diligence - 0.5)));
-        const b = 0.3;
-        this.bodyMaterial.color.setRGB(r, g, b);
+        const traits = this.personality || {};
+        const bravery   = traits.bravery   ?? 1.0;
+        const diligence = traits.diligence ?? 1.0;
+        const sociality = traits.sociality ?? 1.0;
+        const curiosity = traits.curiosity ?? 1.0;
+        // Body: near-white robe with subtle personality tint
+        const r = Math.max(0.88, Math.min(0.98, 0.94 + (bravery - 1) * 0.02));
+        const g = Math.max(0.88, Math.min(0.98, 0.94 + (diligence - 1) * 0.02));
+        const b = Math.max(0.88, Math.min(0.98, 0.94 + (sociality - 1) * 0.02));
+        if (this.bodyMaterial) this.bodyMaterial.color.setRGB(r, g, b);
+        // Skin: warm beige
+        const sr = Math.max(0.90, Math.min(0.98, 0.96 + (curiosity - 1) * 0.01));
+        const sg = Math.max(0.74, Math.min(0.84, 0.79 + (bravery - 1) * 0.02));
+        const sb = Math.max(0.55, Math.min(0.65, 0.60 + (sociality - 1) * 0.02));
+        if (this.skinMaterial) this.skinMaterial.color.setRGB(sr, sg, sb);
+        // Hair: orange/salmon
+        const hr = Math.max(0.82, Math.min(0.96, 0.90 + (bravery - 1) * 0.04));
+        const hg = Math.max(0.35, Math.min(0.52, 0.43 + (diligence - 1) * 0.04));
+        const hb = Math.max(0.08, Math.min(0.20, 0.13 + (curiosity - 1) * 0.02));
+        if (this.hairMaterial) this.hairMaterial.color.setRGB(hr, hg, hb);
     }
 
     updateWorldPosFromGrid() {
@@ -6605,7 +6704,7 @@ class Character {
         // ブロックとキャラクターの座標系を一致させる
         // ブロックは (x+0.5, y+0.5, z+0.5) に配置されているため、
         // キャラクターも同じ基準で配置する
-        this.mesh.position.set(this.gridPos.x + 0.5, this.gridPos.y + 0.5, this.gridPos.z + 0.5);
+        this.mesh.position.set(this.gridPos.x + 0.5, this.gridPos.y, this.gridPos.z + 0.5);
     }
 
     log(message, ...args) {
