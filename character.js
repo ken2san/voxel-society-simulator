@@ -2256,36 +2256,39 @@ class Character {
         const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;
 
         // ── Head ──────────────────────────────────────────────────────────────────
-        const headW = clamp(0.44 + (curiosity - 1) * 0.03, 0.40, 0.50);
-        const headH = clamp(0.46 + (sociality - 1) * 0.03, 0.42, 0.52);
-        const headD = headW * 0.86;
-        const neckGap    = 0.02;
-        const headCenterY = bodyTop + neckGap + headH / 2;  // ~1.01
+        // Realistic voxel art: head ≈ 80% torso width, 2.5-head body ratio
+        const headW = clamp(0.28 + (curiosity - 1) * 0.02, 0.25, 0.33);
+        const headH = clamp(0.30 + (sociality - 1) * 0.02, 0.27, 0.35);
+        const headD = headW * 0.90;
+        const neckGap    = 0.01;
+        const headCenterY = bodyTop + neckGap + headH / 2;
 
         // ── Hair ──────────────────────────────────────────────────────────────────
-        const hairTopW = headW * 1.02, hairTopH = 0.18, hairTopD = headD * 0.96;
+        // Proportional to smaller head; single fluffy top + thin side panels
+        const hairTopW = headW * 1.05, hairTopH = 0.11, hairTopD = headD * 0.98;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
-        const hairCapW = headW * 0.72, hairCapH = 0.15, hairCapD = headD * 0.70;
+        const hairCapW = headW * 0.68, hairCapH = 0.09, hairCapD = headD * 0.70;
         const hairCapLocalY = headH / 2 + hairTopH + hairCapH / 2;
-        const hairSideH = clamp(headH * 1.0, 0.40, 0.54);
-        const hairSideW = 0.17, hairSideD = headD * 0.96;
+        const hairSideH = clamp(headH * 0.92, 0.24, 0.36);
+        const hairSideW = 0.08, hairSideD = headD * 0.98;
         const hairSideLocalX = headW / 2 + hairSideW / 2;
-        const hairSideLocalY = 0;  // centred → frames full face
+        const hairSideLocalY = 0;
 
         // ── Halo ──────────────────────────────────────────────────────────────────
-        const haloW = headW * 1.40, haloH = 0.07, haloD = headD * 1.40;
-        const haloLocalY = headH / 2 + hairTopH + hairCapH + 0.08;
+        const haloW = headW * 1.55, haloH = 0.06, haloD = headD * 1.55;
+        const haloLocalY = headH / 2 + hairTopH + hairCapH + 0.06;
 
         // ── Eyes + cheeks ─────────────────────────────────────────────────────────
-        const eyeW = clamp(headW * 0.30, 0.11, 0.16);
-        const eyeH = clamp(headH * 0.26, 0.09, 0.14);
-        const eyeD = 0.04;
-        const eyeLocalX = headW * 0.22;
-        const eyeLocalY = headH * 0.06;
+        // Voxel art eyes: small 2-voxel-ish squares, dark with white highlight
+        const eyeW = clamp(headW * 0.22, 0.055, 0.075);
+        const eyeH = clamp(headH * 0.23, 0.060, 0.080);
+        const eyeD = 0.035;
+        const eyeLocalX = headW * 0.24;
+        const eyeLocalY = headH * 0.04;
         const eyeLocalZ = headD / 2 + eyeD / 2;
-        const cheekW = headW * 0.26, cheekH = headH * 0.16, cheekD = 0.03;
-        const cheekLocalX = headW * 0.33;
-        const cheekLocalY = eyeLocalY - eyeH * 0.9 - cheekH * 0.5;
+        const cheekW = headW * 0.22, cheekH = headH * 0.12, cheekD = 0.025;
+        const cheekLocalX = headW * 0.30;
+        const cheekLocalY = eyeLocalY - eyeH * 0.85 - cheekH * 0.5;
         const cheekLocalZ = headD / 2 + cheekD / 2;
 
         // ── Angel wings (4 panels, positioned behind torso) ───────────────────────
@@ -2303,24 +2306,22 @@ class Character {
         const carriedItemY = headCenterY + headH * 0.30;
         const carriedItemZ = headD / 2 + 0.08;
         const mouthY = -headH * 0.22;
-        // Mouth (cute wide smile on face surface)
-        const mouthW = headW * 0.40;
-        const mouthH = headH * 0.08;
-        const mouthD = 0.04;
-        const mouthLocalZ = headD / 2 + mouthD / 2;
-        // Eye highlights (sparkle dot: upper-inner corner of each eye)
-        const eyeHLW = eyeW * 0.30;
-        const eyeHLH = eyeH * 0.36;
-        const eyeHLD = 0.02;
-        const eyeHLLocalX = eyeLocalX - eyeW * 0.24;  // slightly inward toward nose
-        const eyeHLLocalY = eyeLocalY + eyeH * 0.28;  // upper part of eye
-        const eyeHLLocalZ = eyeLocalZ + eyeD * 0.5 + 0.006;  // just in front of eye face
-        // Eyebrows (thin bars above eyes, slight inward tilt)
-        const browW = eyeW * 1.05;
-        const browH = 0.035;
-        const browD = 0.05;
+        // Mouth — hidden (zero dimensions → IM will write zero scale)
+        const mouthW = 0, mouthH = 0, mouthD = 0;
+        const mouthLocalZ = headD / 2 + 0.02;
+        // Eye highlights — small sparkle in upper-inner corner
+        const eyeHLW = eyeW * 0.35;
+        const eyeHLH = eyeH * 0.40;
+        const eyeHLD = 0.018;
+        const eyeHLLocalX = eyeLocalX - eyeW * 0.20;
+        const eyeHLLocalY = eyeLocalY + eyeH * 0.22;
+        const eyeHLLocalZ = eyeLocalZ + eyeD * 0.5 + 0.005;
+        // Eyebrows
+        const browW = eyeW * 1.10;
+        const browH = 0.025;
+        const browD = 0.04;
         const browLocalX = eyeLocalX;
-        const browLocalY = eyeLocalY + eyeH * 0.65 + browH * 0.5;
+        const browLocalY = eyeLocalY + eyeH * 0.60 + browH * 0.5;
         const browLocalZ = eyeLocalZ;
 
         return {

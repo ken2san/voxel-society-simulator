@@ -440,7 +440,7 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
                 _write(iRightCheek, idx, char.rightCheek, _m4head, m.cheekW, m.cheekH, m.cheekD);
-                _write(iMouth,      idx, char.mouth,      _m4head, m.mouthW, m.mouthH, m.mouthD);
+                _write(iMouth,      idx, null,         _m4head, 0, 0, 0); // hidden
                 _write(iLeftEyeHL,  idx, char.leftEyeHL,  _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
                 _write(iRightEyeHL, idx, char.rightEyeHL, _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
                 _write(iLeftBrow,   idx, char.leftBrow,   _m4head, m.browW, m.browH, m.browD);
