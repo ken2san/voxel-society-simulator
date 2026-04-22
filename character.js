@@ -2303,6 +2303,25 @@ class Character {
         const carriedItemY = headCenterY + headH * 0.30;
         const carriedItemZ = headD / 2 + 0.08;
         const mouthY = -headH * 0.22;
+        // Mouth (cute wide smile on face surface)
+        const mouthW = headW * 0.40;
+        const mouthH = headH * 0.08;
+        const mouthD = 0.04;
+        const mouthLocalZ = headD / 2 + mouthD / 2;
+        // Eye highlights (sparkle dot: upper-inner corner of each eye)
+        const eyeHLW = eyeW * 0.30;
+        const eyeHLH = eyeH * 0.36;
+        const eyeHLD = 0.02;
+        const eyeHLLocalX = eyeLocalX - eyeW * 0.24;  // slightly inward toward nose
+        const eyeHLLocalY = eyeLocalY + eyeH * 0.28;  // upper part of eye
+        const eyeHLLocalZ = eyeLocalZ + eyeD * 0.5 + 0.006;  // just in front of eye face
+        // Eyebrows (thin bars above eyes, slight inward tilt)
+        const browW = eyeW * 1.05;
+        const browH = 0.035;
+        const browD = 0.05;
+        const browLocalX = eyeLocalX;
+        const browLocalY = eyeLocalY + eyeH * 0.65 + browH * 0.5;
+        const browLocalZ = eyeLocalZ;
 
         return {
             // Body
@@ -2328,12 +2347,18 @@ class Character {
             // Face
             eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ,
             cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ,
+            // Mouth
+            mouthW, mouthH, mouthD, mouthY, mouthLocalZ,
+            // Eye highlights
+            eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ,
+            // Eyebrows
+            browW, browH, browD, browLocalX, browLocalY, browLocalZ,
             // Wings
             wingZ,
             wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY,
             wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY,
             // Misc
-            shadowRadius, carriedItemSize, carriedItemY, carriedItemZ, mouthY,
+            shadowRadius, carriedItemSize, carriedItemY, carriedItemZ,
             // Legacy aliases (referenced by old IM code paths / animation defaults)
             bodyHeight: bodyTop,
             bodyRow1Y: torsoCenterY,  bodyRow1H: torsoH,  bodyRow1W: torsoW, bodyDepth: torsoD,
@@ -2379,7 +2404,11 @@ class Character {
         // Head children
         if (this.leftEye)    this.leftEye.position.set(  -m.eyeLocalX,    m.eyeLocalY,   m.eyeLocalZ);
         if (this.rightEye)   this.rightEye.position.set(   m.eyeLocalX,   m.eyeLocalY,   m.eyeLocalZ);
-        if (this.mouth)      this.mouth.position.set(0, m.mouthY, m.eyeLocalZ);
+        if (this.mouth)      this.mouth.position.set(0, m.mouthY, m.mouthLocalZ);
+        if (this.leftEyeHL)  this.leftEyeHL.position.set(  -m.eyeHLLocalX, m.eyeHLLocalY, m.eyeHLLocalZ);
+        if (this.rightEyeHL) this.rightEyeHL.position.set(   m.eyeHLLocalX, m.eyeHLLocalY, m.eyeHLLocalZ);
+        if (this.leftBrow)   this.leftBrow.position.set(    -m.browLocalX,  m.browLocalY,  m.browLocalZ);
+        if (this.rightBrow)  this.rightBrow.position.set(    m.browLocalX,  m.browLocalY,  m.browLocalZ);
         if (this.leftCheek)  this.leftCheek.position.set( -m.cheekLocalX, m.cheekLocalY, m.cheekLocalZ);
         if (this.rightCheek) this.rightCheek.position.set(  m.cheekLocalX, m.cheekLocalY, m.cheekLocalZ);
         if (this.hairTop)    this.hairTop.position.set(0, m.hairTopLocalY, 0);
@@ -2486,6 +2515,11 @@ class Character {
         this.mouth = visuals.mouth;
         this.leftArm = visuals.leftArm;
         this.rightArm = visuals.rightArm;
+        this.mouth      = visuals.mouth;
+        this.leftEyeHL  = visuals.leftEyeHL;
+        this.rightEyeHL = visuals.rightEyeHL;
+        this.leftBrow   = visuals.leftBrow;
+        this.rightBrow  = visuals.rightBrow;
         this.bodyRow2 = null;  // humanoid design has no pyramid rows
         this.bodyRow3 = null;
         this.bodyRow4 = null;
@@ -2540,6 +2574,7 @@ class Character {
                 this.leftArm, this.rightArm, this.leftForearm, this.rightForearm,
                 this.leftWingUpper, this.rightWingUpper, this.leftWingLower, this.rightWingLower,
                 this.head, this.shadowMesh,
+                this.mouth, this.leftEyeHL, this.rightEyeHL, this.leftBrow, this.rightBrow,
             ]) {
                 if (part) part.layers.set(31);
             }
@@ -5795,6 +5830,7 @@ class Character {
                     this.leftArm, this.rightArm, this.leftForearm, this.rightForearm,
                     this.leftWingUpper, this.rightWingUpper, this.leftWingLower, this.rightWingLower,
                     this.head, this.shadowMesh,
+                    this.mouth, this.leftEyeHL, this.rightEyeHL, this.leftBrow, this.rightBrow,
                 ]) {
                     if (part) part.layers.set(layer);
                 }

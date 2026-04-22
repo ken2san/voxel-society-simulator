@@ -119,7 +119,7 @@ export function createThreeSimulationIO() {
         head.add(halo);
 
         // ── Eyes + cheeks (children of head) ──
-        const eyeMaterial   = new THREE.MeshBasicMaterial({ color: 0xcc1515 });
+        const eyeMaterial   = new THREE.MeshBasicMaterial({ color: 0x330a0a });
         const cheekMaterial = new THREE.MeshBasicMaterial({ color: 0xf0a0a0 });
         const leftEye    = box(m.eyeW, m.eyeH, m.eyeD, eyeMaterial);
         const rightEye   = box(m.eyeW, m.eyeH, m.eyeD, eyeMaterial);
@@ -128,10 +128,22 @@ export function createThreeSimulationIO() {
         head.add(leftEye); head.add(rightEye);
         head.add(leftCheek); head.add(rightCheek);
 
-        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.02),
-            new THREE.MeshBasicMaterial({ color: 0x8b1010 }));
-        mouth.visible = false;
+        // Mouth (cute smile)
+        const mouth = box(m.mouthW, m.mouthH, m.mouthD,
+            new THREE.MeshBasicMaterial({ color: 0xd05070 }));
         head.add(mouth);
+
+        // Eye highlights (sparkle — small white dot upper-inner corner of each eye)
+        const eyeHLMat   = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const leftEyeHL  = box(m.eyeHLW, m.eyeHLH, m.eyeHLD, eyeHLMat);
+        const rightEyeHL = box(m.eyeHLW, m.eyeHLH, m.eyeHLD, eyeHLMat);
+        head.add(leftEyeHL); head.add(rightEyeHL);
+
+        // Eyebrows
+        const browMat   = new THREE.MeshBasicMaterial({ color: 0x6a3010 });
+        const leftBrow  = box(m.browW, m.browH, m.browD, browMat);
+        const rightBrow = box(m.browW, m.browH, m.browD, browMat);
+        head.add(leftBrow); head.add(rightBrow);
 
         // ── Carried item + shadow ──
         const carriedItemMesh = new THREE.Mesh(
@@ -178,7 +190,7 @@ export function createThreeSimulationIO() {
             leftWingUpper, rightWingUpper, leftWingLower, rightWingLower,
             head, iconAnchor,
             eyeMaterial, leftEye, rightEye, eyeMeshes: [leftEye, rightEye],
-            mouth,
+            mouth, leftEyeHL, rightEyeHL, leftBrow, rightBrow,
             leftCheek, rightCheek,
             hairTop, hairCapTop, hairSideL, hairSideR,
             halo,
@@ -317,10 +329,16 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
     // — Fixed colour (material only, no setColorAt) —
     const iHairCapTop    = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xe05068 }));
     const iHalo          = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xf5c830 }));
-    const iLeftEye       = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
-    const iRightEye      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
+    const iLeftEye       = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x330a0a }));
+    const iRightEye      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x330a0a }));
     const iLeftCheek     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
     const iRightCheek    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
+    // Face details: mouth + eye highlights + eyebrows
+    const iMouth         = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xd05070 }));
+    const iLeftEyeHL     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const iRightEyeHL    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const iLeftBrow      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x6a3010 }));
+    const iRightBrow     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x6a3010 }));
     const iShadow        = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
         color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false,
     }));
@@ -332,6 +350,7 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         iLeftWingUpper, iRightWingUpper, iLeftWingLower, iRightWingLower,
         iHead, iHairTop, iHairSideL, iHairSideR, iHairCapTop,
         iHalo, iLeftEye, iRightEye, iLeftCheek, iRightCheek,
+        iMouth, iLeftEyeHL, iRightEyeHL, iLeftBrow, iRightBrow,
         iShadow,
     ];
     // Cloth colour = bodyMaterial
@@ -421,6 +440,11 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
                 _write(iRightCheek, idx, char.rightCheek, _m4head, m.cheekW, m.cheekH, m.cheekD);
+                _write(iMouth,      idx, char.mouth,      _m4head, m.mouthW, m.mouthH, m.mouthD);
+                _write(iLeftEyeHL,  idx, char.leftEyeHL,  _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
+                _write(iRightEyeHL, idx, char.rightEyeHL, _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
+                _write(iLeftBrow,   idx, char.leftBrow,   _m4head, m.browW, m.browH, m.browD);
+                _write(iRightBrow,  idx, char.rightBrow,  _m4head, m.browW, m.browH, m.browD);
 
                 // — Shadow —
                 const sr = m.shadowRadius * (char._shadowInstanceScale ?? 1.0);
