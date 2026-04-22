@@ -571,8 +571,10 @@ class Character {
         if (this.state === 'idle' && !this.action && !this._microGesture) {
             this._idleGestureTimer -= deltaTime;
             if (this._idleGestureTimer <= 0) {
-                const kind = Math.random() < 0.72 ? 'glance' : 'settle';
-                this.triggerMicroGesture(kind, 0.55 + Math.random() * 0.45, 0.7 + Math.random() * 0.25);
+                // stretch (arms wide) is most visible from top-down; added alongside glance/settle
+                const r = Math.random();
+                const kind = r < 0.48 ? 'glance' : (r < 0.76 ? 'stretch' : 'settle');
+                this.triggerMicroGesture(kind, 0.65 + Math.random() * 0.50, 0.8 + Math.random() * 0.30);
                 this._idleGestureTimer = (this._idleGestureCooldown || 4.5) + Math.random() * 2.5;
             }
         } else if (this.state !== 'idle') {
@@ -599,38 +601,51 @@ class Character {
 
         switch (gesture.type) {
             case 'celebrate':
-                pose.bodyLift = Math.sin(progress * Math.PI) * 0.05 * intensity;
-                pose.headX = -0.16 * env * intensity;
-                pose.armX = 0.28 * env * intensity;
-                pose.armY = 0.24 * env * intensity;
-                pose.lean = gesture.side * Math.sin(progress * Math.PI * 2) * 0.06 * intensity;
-                pose.scaleY = 1 + 0.05 * env * intensity;
+                // Raised-arms victory pose — armY spread is visible from top-down view
+                pose.bodyLift = Math.sin(progress * Math.PI) * 0.08 * intensity;
+                pose.headX = -0.20 * env * intensity;
+                pose.armX = 0.72 * env * intensity;  // both arms forward/up strongly
+                pose.armY = 0.60 * env * intensity;  // arms spread wide — legible from above
+                pose.lean = gesture.side * Math.sin(progress * Math.PI * 2) * 0.08 * intensity;
+                pose.scaleY = 1 + 0.06 * env * intensity;
                 break;
             case 'savor':
-                pose.bodyLift = Math.sin(progress * Math.PI) * 0.03 * intensity;
-                pose.headX = -0.10 * env * intensity;
-                pose.headZ = gesture.side * 0.08 * env * intensity;
-                pose.armY = 0.12 * env * intensity;
-                pose.scaleY = 1 + 0.03 * env * intensity;
+                // Eating: both arms reach out and lift toward mouth — clearly readable from top
+                pose.bodyLift = Math.sin(progress * Math.PI) * 0.05 * intensity;
+                pose.headX = -0.18 * env * intensity;  // head tilts back with enjoyment
+                pose.headZ = gesture.side * 0.10 * env * intensity;
+                pose.armX = 0.50 * env * intensity;   // arms reach forward
+                pose.armY = 0.55 * env * intensity;   // arms spread out — visible from above
+                pose.scaleY = 1 + 0.04 * env * intensity;
                 break;
             case 'chat':
-                pose.bodyLift = 0.018 * env * intensity;
-                pose.headX = Math.sin((progress * Math.PI * 3) + gesture.seed) * 0.06 * intensity;
-                pose.headZ = gesture.side * 0.06 * env * intensity;
-                pose.armY = 0.16 * env * intensity;
+                // Talking gesture: arms wave expressively, alternating sides
+                pose.bodyLift = 0.022 * env * intensity;
+                pose.headX = Math.sin((progress * Math.PI * 3) + gesture.seed) * 0.08 * intensity;
+                pose.headZ = gesture.side * 0.08 * env * intensity;
+                pose.armX = Math.sin((progress * Math.PI * 2) + gesture.seed) * 0.35 * intensity;
+                pose.armY = 0.50 * env * intensity;   // arms open wide when talking
                 break;
             case 'settle':
                 pose.bodyLift = -0.014 * env * intensity;
                 pose.headX = 0.10 * env * intensity;
-                pose.lean = gesture.side * 0.04 * env * intensity;
+                pose.lean = gesture.side * 0.06 * env * intensity;
                 pose.scaleY = 1 - 0.03 * env * intensity;
+                break;
+            case 'stretch':
+                // Idle stretch: arms spread wide — the most visible gesture from top-down
+                pose.bodyLift = 0.05 * env * intensity;
+                pose.headX = -0.14 * env * intensity;  // head tilts back in stretch
+                pose.armX = -0.18 * env * intensity;   // arms slightly back
+                pose.armY = 1.10 * env * intensity;    // arms fully open — clearly legible from above
+                pose.scaleY = 1 + 0.04 * env * intensity;
                 break;
             case 'glance':
             default:
                 pose.headX = -0.05 * env * intensity;
-                pose.headZ = gesture.side * 0.12 * env * intensity;
-                pose.armX = 0.06 * env * intensity;
-                pose.lean = gesture.side * 0.03 * env * intensity;
+                pose.headZ = gesture.side * 0.14 * env * intensity;
+                pose.armX = 0.08 * env * intensity;
+                pose.lean = gesture.side * 0.04 * env * intensity;
                 break;
         }
 
@@ -5958,9 +5973,11 @@ class Character {
             this.head.position.y = 0.75 + Math.abs(excitement) * 1.2;
             // Head nodding
             this.head.rotation.x = Math.sin(this.bobTime * 2) * 0.15;
-            // Happy arm movements
-            this.leftArm.rotation.y = Math.sin(this.bobTime * 1.5) * 0.3;
-            this.rightArm.rotation.y = -Math.sin(this.bobTime * 1.5) * 0.3;
+            // Expressive talking arm gestures — amplitude raised so readable from top-down view
+            this.leftArm.rotation.y = Math.sin(this.bobTime * 1.5) * 0.65;
+            this.rightArm.rotation.y = -Math.sin(this.bobTime * 1.5) * 0.65;
+            this.leftArm.rotation.x = Math.sin(this.bobTime * 1.2 + 0.8) * 0.30;
+            this.rightArm.rotation.x = Math.sin(this.bobTime * 1.2) * 0.30;
             if (!this.actionAnim.active) this.body.scale.y = 1.0;
         } else if (this.state === 'working') {
             // Focused work animation
