@@ -1,0 +1,22 @@
+
+> build
+> vite build
+
+vite v7.0.6 building for production...
+transforming...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+✓ 16 modules transformed.
+[plugin vite:reporter] 
+(!) /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/character.js is dynamically imported by /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/sidebar.js but also statically imported by /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/main.js, /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/world.js, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/world.js is dynamically imported by /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/sidebar.js, /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/sidebar.js, /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/sidebar.js, /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/sidebar.js but also statically imported by /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/character.js, /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/main.js, /Users/kenji/Library/CloudStorage/Dropbox/Sandbox/project-voxel-society-simulator/sim-core/AI_rulebase.js, dynamic import will not move module into another chunk.
+
+rendering chunks...
+computing gzip size...
+dist/index.html                  13.54 kB │ gzip:   3.57 kB
+dist/assets/index-CcQTyRel.css   12.28 kB │ gzip:   3.14 kB
+dist/assets/index-RPzTfDhJ.js   399.35 kB │ gzip: 108.94 kB
+✓ built in 443ms
