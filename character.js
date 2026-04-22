@@ -2432,8 +2432,8 @@ class Character {
     this._stepPhase = Math.random() * Math.PI * 2;
     this._stepOffset = Math.random() * Math.PI * 2;
     this._stepFreqBase = 6.0; // base step freq multiplier for movement
-    this._stepAmp = 0.10; // vertical bob amplitude (grid units)
-    this._swayAmp = 0.06; // lateral sway amplitude
+    this._stepAmp = 0.16; // vertical bob amplitude (grid units)
+    this._swayAmp = 0.11; // lateral sway amplitude
     this._lastMoveProgressTime = Date.now();
     // Visual-only micro gestures add lived-in motion without continuous heavy effects.
     this._microGesture = null;
@@ -5904,18 +5904,20 @@ class Character {
 
         // --- Body animation: more charming/expressive ---
         if (this.state === 'idle') {
-            // Bouncier idle bob and subtle wiggle
-            this.bobTime += deltaTime * 2.5;
-            const bob = Math.sin(this.bobTime) * 0.06 + Math.sin(this.bobTime * 0.5) * 0.02;
+            // Cute idle bounce
+            this.bobTime += deltaTime * 2.8;
+            const bob = Math.sin(this.bobTime) * 0.10 + Math.sin(this.bobTime * 0.5) * 0.03;
             const wiggle = Math.sin(this.bobTime * 0.7) * 0.08;
-            this.body.position.y = 0.25 + bob;
-            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1) * 0.03;
+            this.body.position.y = 0.25 + Math.max(0, bob);
+            this.head.position.y = 0.75 + Math.sin(this.bobTime + 1.2) * 0.05;
             this.mesh.rotation.z = wiggle * 0.5;
-            // Arms: gentle sway
-            this.leftArm.rotation.x = Math.sin(this.bobTime * 0.7) * 0.2;
-            this.rightArm.rotation.x = -Math.sin(this.bobTime * 0.7) * 0.2;
-            // Head: slight tilt
-            this.head.rotation.z = Math.sin(this.bobTime * 0.5) * 0.08;
+            // Arms: cute wing-flap in sync with bounce
+            this.leftArm.rotation.y = Math.sin(this.bobTime * 1.2) * 0.28;
+            this.rightArm.rotation.y = -Math.sin(this.bobTime * 1.2) * 0.28;
+            this.leftArm.rotation.x = Math.sin(this.bobTime * 0.7) * 0.15;
+            this.rightArm.rotation.x = -Math.sin(this.bobTime * 0.7) * 0.15;
+            // Head: expressive tilt
+            this.head.rotation.z = Math.sin(this.bobTime * 0.5) * 0.12;
         } else if (this.state === 'moving') {
             // Step-synced walk bob and arm swing
             const globalStepFreq = (typeof window !== 'undefined' && window.stepFreqMultiplier) ? (window.stepFreqMultiplier) : 1.0;
@@ -5930,13 +5932,15 @@ class Character {
             const walkBob = Math.abs(step) * (this._stepAmp || 0.1);
             const sway = Math.sin(this._stepPhase * 0.5) * (this._swayAmp || 0.06);
             this.body.position.y = 0.25 + walkBob;
-            this.head.position.y = 0.75 + Math.sin(this._stepPhase + 1) * 0.04;
+            this.head.position.y = 0.75 + Math.sin(this._stepPhase + 1) * 0.07;
             this.mesh.rotation.z = sway;
-            // arms swing opposite phase
+            // arms swing opposite phase + gentle spread
             this.leftArm.rotation.x = (Math.sin(this._stepPhase) * 0.9) * 0.7;
             this.rightArm.rotation.x = (Math.sin(this._stepPhase + Math.PI) * 0.9) * 0.7;
-            // Head: slight energetic tilt
-            this.head.rotation.z = Math.sin(this._stepPhase * 0.7) * 0.13;
+            this.leftArm.rotation.y = Math.sin(this._stepPhase * 0.5 + Math.PI * 0.5) * 0.22;
+            this.rightArm.rotation.y = -Math.sin(this._stepPhase * 0.5 + Math.PI * 0.5) * 0.22;
+            // Head: expressive tilt
+            this.head.rotation.z = Math.sin(this._stepPhase * 0.7) * 0.18;
         } else {
             // Smoothly return to neutral pose
             this.mesh.rotation.z *= 0.85;
@@ -5966,8 +5970,12 @@ class Character {
             this.body.scale.x = 1.0 + breathe;
             this.body.scale.z = 1.0 + breathe;
         } else if (this.state === 'moving') {
-            // Movement: body compression (power stance)
-            if (!this.actionAnim.active) this.body.scale.y = 0.95;
+            // Cute squash/stretch: squash at landing, stretch at peak
+            if (!this.actionAnim.active) {
+                const t = Math.abs(Math.sin(this._stepPhase + this._stepOffset));
+                this.body.scale.y = 0.88 + t * 0.26; // 0.88 squash → 1.14 stretch
+                this.body.scale.x = this.body.scale.z = 1.0 + (1.0 - t) * 0.08;
+            }
         } else if (this.state === 'socializing') {
             // Excited, bouncy animation
             this.bobTime += deltaTime * 4;
