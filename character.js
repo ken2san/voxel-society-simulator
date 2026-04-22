@@ -1595,10 +1595,6 @@ class Character {
         }
         // --- グループ合併処理 ---
         Character.mergeGroupsIfPossible(characters);
-        // --- デバッグ: 各キャラクターのグループIDと役割を出力 ---
-        // for (const char of characters) {
-        //     console.log(`Character ${char.id}: groupId=${char.groupId}, role=${char.role}`);
-        // }
     }
 
     // グループ合併: リーダー同士が近く友好度が高い場合グループ統合
@@ -1669,10 +1665,6 @@ class Character {
             char.role = (char === leader) ? 'leader' : 'worker';
         }
     }
-    // --- Affinity-based leader election ---
-    // Call this after any event that may change the social network (e.g., after death, reproduction, or periodically)
-    // (Deprecated: use detectGroupsAndElectLeaders instead)
-    static electLeader() {}
     // --- Visualize owned land: tint ground block under owned tiles ---
     visualizeOwnedLand() {
         // Only tint if a live mesh exists and worldData/blockMaterials is available
@@ -3824,7 +3816,6 @@ class Character {
             this._stuckCheckCooldown = 0.3; // 0.3秒ごとにチェック
         }
 
-        // this.log('update called', { deltaTime, isNight, state: this.state, gridPos: this.gridPos, targetPos: this.targetPos }); // コメントアウト
         // Claim land underfoot every update
         this.claimCurrentLand();
 

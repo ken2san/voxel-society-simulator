@@ -49,9 +49,6 @@ export function createVector3(x = 0, y = 0, z = 0) {
             if (len > 1e-8) this.multiplyScalar(1 / len);
             return this;
         },
-        project() {
-            return this;
-        },
         setFromMatrixPosition(matrixLike) {
             if (matrixLike && typeof matrixLike === 'object') {
                 this.copy(matrixLike.position || matrixLike);
@@ -59,13 +56,6 @@ export function createVector3(x = 0, y = 0, z = 0) {
             return this;
         }
     };
-}
-
-export function toVector3(value) {
-    if (value && typeof value.clone === 'function' && typeof value.x === 'number') {
-        return value.clone();
-    }
-    return createVector3(value?.x, value?.y, value?.z);
 }
 
 export function gridToWorldPosition(pos, yOffset = 0.5) {

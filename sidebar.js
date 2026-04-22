@@ -335,6 +335,7 @@ function renderCharacterDetail() {
         districtMode:                       1,
         activeDistrictIndex:                0,
         showEffects:                       true,
+        showBubbles:                        true,
     };
     for (const [key, def] of Object.entries(PARAM_DEFAULTS)) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = def;
