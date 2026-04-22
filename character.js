@@ -2041,41 +2041,64 @@ class Character {
 
     // --- BFS経路探索（統合版） ---
     bfsPath(start, goal, maxStep = 128, allowDiagonal = true, allowVertical = true, directMoveThreshold = 3, ignoreOccupied = false) {
-        // Greedy best-first search using heuristic (Manhattan). This is a small, low-risk change
-        // that focuses exploration toward the goal and generally yields shorter, more natural paths
-        // without full A* bookkeeping.
+        // Greedy best-first search using Manhattan heuristic.
         const directDist = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y) + Math.abs(start.z - goal.z);
         if (directDist <= 1) return [goal];
 
         const key = (p) => `${p.x},${p.y},${p.z}`;
-        const open = [{ pos: start, parent: null }];
         const parent = new Map();
         const visited = new Set();
         visited.add(key(start));
         let steps = 0;
         let bestCandidate = start;
+        let bestH = directDist;
 
-        const heuristic = (p) => Math.abs(p.x - goal.x) + Math.abs(p.y - goal.y) + Math.abs(p.z - goal.z);
+        // Pre-compute movement directions once — constant throughout the search.
+        // Cache the common (true, true) case at the class level to avoid repeated allocation.
+        const dirs = (allowDiagonal && allowVertical)
+            ? (Character._moveDirsCacheFull || (Character._moveDirsCacheFull = this._getMovementDirections(true, true)))
+            : this._getMovementDirections(allowDiagonal, allowVertical);
 
-        while (open.length > 0 && steps < maxStep) {
-            // Linear min-scan instead of sort: O(K) vs O(K log K) per iteration.
-            let minIdx = 0, minH = heuristic(open[0].pos);
-            for (let _i = 1; _i < open.length; _i++) {
-                const _h = heuristic(open[_i].pos);
-                if (_h < minH) { minH = _h; minIdx = _i; }
+        // Binary min-heap for O(log K) pop instead of O(K) linear scan.
+        // Each entry: { pos, h } where h is the pre-computed Manhattan heuristic.
+        const heap = [{ pos: start, h: directDist }];
+        const _heapPush = (item) => {
+            heap.push(item);
+            let i = heap.length - 1;
+            while (i > 0) {
+                const p = (i - 1) >> 1;
+                if (heap[p].h <= heap[i].h) break;
+                const tmp = heap[p]; heap[p] = heap[i]; heap[i] = tmp;
+                i = p;
             }
-            const node = open[minIdx];
-            open[minIdx] = open[open.length - 1];
-            open.pop();
+        };
+        const _heapPop = () => {
+            const top = heap[0];
+            const last = heap.pop();
+            if (heap.length > 0) {
+                heap[0] = last;
+                let i = 0;
+                for (;;) {
+                    const l = 2 * i + 1, r = 2 * i + 2;
+                    let s = i;
+                    if (l < heap.length && heap[l].h < heap[s].h) s = l;
+                    if (r < heap.length && heap[r].h < heap[s].h) s = r;
+                    if (s === i) break;
+                    const tmp = heap[s]; heap[s] = heap[i]; heap[i] = tmp;
+                    i = s;
+                }
+            }
+            return top;
+        };
+
+        while (heap.length > 0 && steps < maxStep) {
+            const node = _heapPop();
             const cur = node.pos;
             steps++;
-            const curKey = key(cur);
 
-            const curH = heuristic(cur);
-            if (curH < heuristic(bestCandidate)) bestCandidate = cur;
+            if (node.h < bestH) { bestH = node.h; bestCandidate = cur; }
 
             if (cur.x === goal.x && cur.y === goal.y && cur.z === goal.z) {
-                // reached goal
                 const path = [];
                 let c = cur;
                 while (c && (c.x !== start.x || c.y !== start.y || c.z !== start.z)) {
@@ -2086,15 +2109,12 @@ class Character {
                 return path;
             }
 
-            // expand neighbors
-            const dirs = this._getMovementDirections(allowDiagonal, allowVertical);
             for (const d of dirs) {
                 const nx = cur.x + d.dx, ny = cur.y + d.dy, nz = cur.z + d.dz;
                 if (ny < 0 || ny > maxHeight) continue;
                 const nkey = `${nx},${ny},${nz}`;
                 if (visited.has(nkey)) continue;
 
-                // basic filters same as before
                 const blockId = worldData.get(nkey);
                 if (!this.isBlockPassable(blockId)) continue;
                 if (ny > 0) {
@@ -2105,18 +2125,17 @@ class Character {
                 const aboveBlockId = worldData.get(`${nx},${ny+1},${nz}`);
                 if (!this.isBlockPassable(aboveBlockId)) continue;
                 if (d.dy > 0 && Math.abs(ny - cur.y) > 2) continue;
-                // avoid stepping into a cell occupied by other characters (skip for reachability tests)
                 if (!ignoreOccupied && this.isOccupiedByOther(nx, ny, nz)) continue;
-                // diagonal corner check
                 if (this._isDiagonalCornerMoveBlocked(cur, {x:nx,y:ny,z:nz}, ignoreOccupied)) continue;
 
                 visited.add(nkey);
                 parent.set(nkey, cur);
-                open.push({ pos: { x: nx, y: ny, z: nz }, parent: cur });
+                const nh = Math.abs(nx - goal.x) + Math.abs(ny - goal.y) + Math.abs(nz - goal.z);
+                _heapPush({ pos: { x: nx, y: ny, z: nz }, h: nh });
             }
         }
 
-        // no path found: try to return best candidate toward goal
+        // No path found: return best partial path toward goal
         if (bestCandidate && (bestCandidate.x !== start.x || bestCandidate.y !== start.y || bestCandidate.z !== start.z)) {
             const path = [];
             let c = bestCandidate;
