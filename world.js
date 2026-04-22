@@ -94,13 +94,6 @@ export function setStoneSpawnRate(rate) { stoneSpawnRate = Math.max(0, Math.min(
 export function setCaveSpawnRate(rate) { caveSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setLeafSpawnRate(rate) { leafSpawnRate = Math.max(0, Math.min(1, rate)); }
 
-// Export getters for current rates
-export function getTreeSpawnRate() { return treeSpawnRate; }
-export function getFruitSpawnRate() { return fruitSpawnRate; }
-export function getStoneSpawnRate() { return stoneSpawnRate; }
-export function getCaveSpawnRate() { return caveSpawnRate; }
-export function getLeafSpawnRate() { return leafSpawnRate; }
-
 export const DISTRICT_MODE_OPTIONS = Object.freeze([1, 4, 16]);
 let districtMode = 1;
 let activeDistrictIndex = 0;

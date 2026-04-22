@@ -366,7 +366,7 @@ class Character {
                 this.collectFood();
                 break;
             case 'EAT':
-                this.eatFood();
+                this.collectFood();
                 break;
             case 'CHOP_WOOD':
                 this.chopWood();
@@ -720,12 +720,6 @@ class Character {
         this.state = 'idle';
         this.action = null;
         this.actionCooldown = 1.0;
-    }
-
-    eatFood() {
-        // EATアクションはCOLLECT_FOODと同様の処理
-        this.log('EAT_FOOD: meal started');
-        this.collectFood();
     }
 
     chopWood() {
@@ -3868,13 +3862,7 @@ class Character {
         if (otherOwner) {
             this.contestLand(otherOwner);
         }
-        // Death timer for revival
         if (this.state === 'dead') {
-            if (!this.deathTimer) this.deathTimer = 0;
-            this.deathTimer += deltaTime;
-            if (this.deathTimer > 10) {
-                this.revive();
-            }
             this.updateThoughtBubble(isNight, camera);
             return;
         }
@@ -4944,46 +4932,6 @@ class Character {
                 if (char.state === 'confused') char.state = 'idle';
             }
         }, 2500 + Math.random() * 2000);
-    }
-
-    // 死亡時に消滅する仕様のため、revive()は無効化
-    revive() {}
-
-    // --- 移動実行の一元化 ---
-    moveToGridPos(newGridPos, updateMesh = true) {
-        if (!newGridPos) return false;
-
-        // 座標検証
-        if (typeof newGridPos.x !== 'number' || typeof newGridPos.y !== 'number' || typeof newGridPos.z !== 'number') {
-            this.log('Invalid grid position:', newGridPos);
-            return false;
-        }
-
-        // 移動可能性チェック
-        const key = `${newGridPos.x},${newGridPos.y},${newGridPos.z}`;
-        if (worldData.has(key)) {
-            this.log('Cannot move to occupied position:', newGridPos);
-            return false;
-        }
-
-        // 座標更新
-        const oldPos = { ...this.gridPos };
-        this.gridPos = { ...newGridPos };
-
-        // メッシュ位置更新
-        if (updateMesh && this.mesh) {
-            this.updateWorldPosFromGrid();
-        }
-
-        // 移動距離記録
-        if (typeof this.moveDistance === 'number') {
-            this.moveDistance += Math.abs(newGridPos.x - oldPos.x) +
-                               Math.abs(newGridPos.y - oldPos.y) +
-                               Math.abs(newGridPos.z - oldPos.z);
-        }
-
-        this.log('Moved from', oldPos, 'to', newGridPos);
-        return true;
     }
 
     // Validate a computed path step-by-step for current passability and corner-cutting
