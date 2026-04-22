@@ -104,7 +104,7 @@ export function createThreeSimulationIO() {
         head.add(iconAnchor);
 
         // ── Hair (children of head) ──
-        const hairMaterial = new THREE.MeshLambertMaterial({ color: 0xe87040 });
+        const hairMaterial = new THREE.MeshLambertMaterial({ color: 0xb8d400 }); // lime/chartreuse — photo ref
         const hairCapMaterial = new THREE.MeshLambertMaterial({ color: 0xe05068 });
         const hairTop    = box(m.hairTopW, m.hairTopH, m.hairTopD, hairMaterial);
         const hairCapTop = box(m.hairCapW, m.hairCapH, m.hairCapD, hairCapMaterial);
@@ -120,7 +120,7 @@ export function createThreeSimulationIO() {
 
         // ── Eyes + cheeks (children of head) ──
         const eyeMaterial   = new THREE.MeshBasicMaterial({ color: 0x330a0a });
-        const cheekMaterial = new THREE.MeshBasicMaterial({ color: 0xf0a0a0 });
+        const cheekMaterial = new THREE.MeshBasicMaterial({ color: 0xe07840 }); // orange blush — photo ref
         const leftEye    = box(m.eyeW, m.eyeH, m.eyeD, eyeMaterial);
         const rightEye   = box(m.eyeW, m.eyeH, m.eyeD, eyeMaterial);
         const leftCheek  = box(m.cheekW, m.cheekH, m.cheekD, cheekMaterial);
@@ -307,8 +307,8 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
     const iRightUpperArm = makeIM(boxGeo, mkWhite());
     const iLeftThigh     = makeIM(boxGeo, mkWhite());
     const iRightThigh    = makeIM(boxGeo, mkWhite());
-    const iLeftFoot      = makeIM(boxGeo, mkWhite());
-    const iRightFoot     = makeIM(boxGeo, mkWhite());
+    const iLeftFoot      = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0x111111 })); // black shoes
+    const iRightFoot     = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0x111111 })); // black shoes
     const iLeftWingUpper = makeIM(boxGeo, mkWhite());
     const iRightWingUpper= makeIM(boxGeo, mkWhite());
     const iLeftWingLower = makeIM(boxGeo, mkWhite());
@@ -353,14 +353,16 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         iMouth, iLeftEyeHL, iRightEyeHL, iLeftBrow, iRightBrow,
         iShadow,
     ];
-    // Cloth colour = bodyMaterial
-    const _robeIMs = [iTorso, iPelvis, iLeftUpperArm, iRightUpperArm,
-                      iLeftThigh, iRightThigh, iLeftFoot, iRightFoot,
-                      iLeftWingUpper, iRightWingUpper, iLeftWingLower, iRightWingLower];
-    // Skin colour = skinMaterial
-    const _skinIMs = [iHead, iLeftForearm, iRightForearm, iLeftShin, iRightShin];
+    // Cloth colour = bodyMaterial (jacket: torso + upper arms only)
+    const _robeIMs  = [iTorso, iLeftUpperArm, iRightUpperArm];
+    // Skin colour = skinMaterial (head + forearms/hands)
+    const _skinIMs  = [iHead, iLeftForearm, iRightForearm];
+    // Pants — fixed dark brown
+    const _pantsIMs = [iPelvis, iLeftThigh, iRightThigh, iLeftShin, iRightShin];
+    // Feet — fixed black (material preset; setColorAt keeps instanceColor buffer in sync)
+    const _feetIMs  = [iLeftFoot, iRightFoot];
     // Hair colour = hairMaterial
-    const _hairIMs = [iHairTop, iHairSideL, iHairSideR];
+    const _hairIMs  = [iHairTop, iHairSideL, iHairSideR];
 
     // Compute world matrix of a direct group child → load pos+quat into _dummy
     function _fromChild(parentM4, child) {
@@ -417,10 +419,8 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _write(iLeftFoot,   idx, char.leftFoot,   _m4group, m.footW,  m.footH,  m.footD);
                 _write(iRightFoot,  idx, char.rightFoot,  _m4group, m.footW,  m.footH,  m.footD);
                 // — Wings —
-                _write(iLeftWingUpper,  idx, char.leftWingUpper,  _m4group, m.wingUpperW, m.wingUpperH, m.wingUpperD);
-                _write(iRightWingUpper, idx, char.rightWingUpper, _m4group, m.wingUpperW, m.wingUpperH, m.wingUpperD);
-                _write(iLeftWingLower,  idx, char.leftWingLower,  _m4group, m.wingLowerW, m.wingLowerH, m.wingLowerD);
-                _write(iRightWingLower, idx, char.rightWingLower, _m4group, m.wingLowerW, m.wingLowerH, m.wingLowerD);
+                _z(iLeftWingUpper,  idx); _z(iRightWingUpper, idx); // wings hidden
+                _z(iLeftWingLower,  idx); _z(iRightWingLower,  idx);
 
                 // — Head —
                 char.head.updateMatrix();
@@ -435,7 +435,7 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _write(iHairCapTop, idx, null, _m4head, 0, 0, 0); // hidden — no stacking
                 _write(iHairSideL,  idx, null, _m4head, 0, 0, 0); // hidden — no side panels
                 _write(iHairSideR,  idx, null, _m4head, 0, 0, 0); // hidden — no side panels
-                _write(iHalo,       idx, char.halo,       _m4head, m.haloW, m.haloH, m.haloD);
+                _z(iHalo, idx); // halo hidden
                 _write(iLeftEye,    idx, char.leftEye,    _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
@@ -462,15 +462,22 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _color.setHex(skinHex);
                 for (const im of _skinIMs) im.setColorAt(idx, _color);
 
-                _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xe87040);
+                _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xb8d400);
                 for (const im of _hairIMs) im.setColorAt(idx, _color);
+
+                // Pants — fixed dark brown
+                _color.setHex(0x6b3515);
+                for (const im of _pantsIMs) im.setColorAt(idx, _color);
+                // Feet — fixed black
+                _color.setHex(0x111111);
+                for (const im of _feetIMs) im.setColorAt(idx, _color);
 
                 idx++;
             }
 
             for (const im of _allIMs) im.count = idx;
             for (const im of _allIMs) im.instanceMatrix.needsUpdate = true;
-            for (const im of [..._robeIMs, ..._skinIMs, ..._hairIMs]) {
+            for (const im of [..._robeIMs, ..._skinIMs, ..._hairIMs, ..._pantsIMs, ..._feetIMs]) {
                 if (im.instanceColor) im.instanceColor.needsUpdate = true;
             }
         }

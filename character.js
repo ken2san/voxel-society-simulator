@@ -2264,22 +2264,20 @@ class Character {
         const headCenterY = bodyTop + neckGap + headH / 2;
 
         // ── Hair ──────────────────────────────────────────────────────────────────
-        // One thick block cap wider than head — ref photo style (voxel game hat hair)
-        // Width: clearly overhangs head on all sides
-        // Height: ~75% of head height — substantial, reads as "hair cap" not hat/brim
-        const hairTopH = headH * 0.75;
-        const hairTopW = headW * 1.32, hairTopD = headD * 1.10;
+        // Thick block cap, nearly same width as head, 80% of head height (photo ref)
+        const hairTopH = headH * 0.80;
+        const hairTopW = headW * 1.08, hairTopD = headD * 1.06;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
-        // Everything else hidden — no stacking, no side panels
+        // Everything else hidden
         const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001;
         const hairCapLocalY = 0;
         const hairSideW = 0.001, hairSideH = 0.001, hairSideD = 0.001;
         const hairSideLocalX = 0, hairSideLocalY = 0;
 
         // ── Halo ──────────────────────────────────────────────────────────────────
-        // Thin ring floating clearly above the hair cap
-        const haloW = headW * 1.65, haloH = 0.04, haloD = headD * 1.65;
-        const haloLocalY = headH / 2 + hairTopH + 0.09;
+        // Hidden (zero dims — IM writes null)
+        const haloW = 0.001, haloH = 0.001, haloD = 0.001;
+        const haloLocalY = 0;
 
         // ── Eyes + cheeks ─────────────────────────────────────────────────────────
         // Voxel art eyes: small 2-voxel-ish squares, dark with white highlight
