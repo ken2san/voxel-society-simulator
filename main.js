@@ -171,7 +171,11 @@ async function init() {
                 const target = char.body || char.head || char.mesh;
                 if (target) { hitTargets.push(target); hitOwners.push(char); }
             }
+            // Bodies may be on layer 31 (InstancedMesh mode): enable all layers so the
+            // raycaster hits them regardless of their current rendering layer.
+            raycaster.layers.enableAll();
             const hits = raycaster.intersectObjects(hitTargets, false);
+            raycaster.layers.set(0); // restore default layer
             const hit = hits.find(entry => entry?.object);
             if (!hit) return;
 

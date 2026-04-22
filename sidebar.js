@@ -2689,6 +2689,7 @@ let openedCharId = undefined;
 
 function closeOpenedCharacterDetail(root = leftSidebar) {
     openedCharId = null;
+    window.selectedCharacterId = null; // deselect in InstancedMesh + layer switching
     updateSelectedCharacterMarker();
     if (!root) return;
     root.querySelectorAll('.character-summary-row').forEach(row => row.classList.remove('is-open'));
@@ -4105,6 +4106,7 @@ function renderCharacterList() {
                 tbody.querySelectorAll('.character-detail-row').forEach(row => row.style.display = 'none');
                 // クリックしたキャラの詳細だけ開く
                 openedCharId = String(char.id);
+                window.selectedCharacterId = String(char.id); // sync for InstancedMesh + layer switching
                 tr.classList.add('is-open');
                 detailTr.style.display = '';
                 updateSelectedCharacterMarker();
