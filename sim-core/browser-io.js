@@ -334,7 +334,7 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
     const iLeftCheek     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
     const iRightCheek    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
     // Face details: mouth + eye highlights + eyebrows
-    const iMouth         = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xd05070 }));
+    const iMouth         = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xe07840 })); // orange nose
     const iLeftEyeHL     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
     const iRightEyeHL    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
     const iLeftBrow      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x6a3010 }));
@@ -357,11 +357,11 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
     const _robeIMs  = [iTorso, iLeftUpperArm, iRightUpperArm];
     // Skin colour = skinMaterial (head + forearms/hands)
     const _skinIMs  = [iHead, iLeftForearm, iRightForearm];
-    // Pants — fixed dark brown
-    const _pantsIMs = [iPelvis, iLeftThigh, iRightThigh, iLeftShin, iRightShin];
-    // Feet — fixed black (material preset; setColorAt keeps instanceColor buffer in sync)
+    // Pants — fixed dark brown (pelvis separated for olive colour)
+    const _pantsIMs = [iLeftThigh, iRightThigh, iLeftShin, iRightShin];
+    // Feet — fixed black
     const _feetIMs  = [iLeftFoot, iRightFoot];
-    // Hair colour = hairMaterial
+    // Hair colour = hairMaterial (top + sides — same lime as jacket)
     const _hairIMs  = [iHairTop, iHairSideL, iHairSideR];
 
     // Compute world matrix of a direct group child → load pos+quat into _dummy
@@ -432,15 +432,15 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
 
                 // — Head children —
                 _write(iHairTop,    idx, char.hairTop,    _m4head, m.hairTopW, m.hairTopH, m.hairTopD);
-                _write(iHairCapTop, idx, null, _m4head, 0, 0, 0); // hidden — no stacking
-                _write(iHairSideL,  idx, null, _m4head, 0, 0, 0); // hidden — no side panels
-                _write(iHairSideR,  idx, null, _m4head, 0, 0, 0); // hidden — no side panels
+                _write(iHairCapTop, idx, null, _m4head, 0, 0, 0); // pink cap hidden
+                _write(iHairSideL,  idx, char.hairSideL,  _m4head, m.hairSideW, m.hairSideH, m.hairSideD);
+                _write(iHairSideR,  idx, char.hairSideR,  _m4head, m.hairSideW, m.hairSideH, m.hairSideD);
                 _z(iHalo, idx); // halo hidden
                 _write(iLeftEye,    idx, char.leftEye,    _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
                 _write(iRightCheek, idx, char.rightCheek, _m4head, m.cheekW, m.cheekH, m.cheekD);
-                _write(iMouth,      idx, null,         _m4head, 0, 0, 0); // hidden
+                _write(iMouth,      idx, char.mouth,      _m4head, m.mouthW, m.mouthH, m.mouthD); // nose
                 _write(iLeftEyeHL,  idx, char.leftEyeHL,  _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
                 _write(iRightEyeHL, idx, char.rightEyeHL, _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
                 _write(iLeftBrow,   idx, char.leftBrow,   _m4head, m.browW, m.browH, m.browD);
@@ -465,6 +465,9 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xb8d400);
                 for (const im of _hairIMs) im.setColorAt(idx, _color);
 
+                // Pelvis — fixed olive green (inner shirt showing below jacket)
+                _color.setHex(0x4e6800);
+                iPelvis.setColorAt(idx, _color);
                 // Pants — fixed dark brown
                 _color.setHex(0x6b3515);
                 for (const im of _pantsIMs) im.setColorAt(idx, _color);
@@ -477,7 +480,7 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
 
             for (const im of _allIMs) im.count = idx;
             for (const im of _allIMs) im.instanceMatrix.needsUpdate = true;
-            for (const im of [..._robeIMs, ..._skinIMs, ..._hairIMs, ..._pantsIMs, ..._feetIMs]) {
+            for (const im of [..._robeIMs, ..._skinIMs, ..._hairIMs, ..._pantsIMs, ..._feetIMs, iPelvis]) {
                 if (im.instanceColor) im.instanceColor.needsUpdate = true;
             }
         }
