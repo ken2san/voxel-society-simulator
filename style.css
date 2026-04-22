@@ -21,6 +21,27 @@
 }
 
 @keyframes iconIn { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+/* Birth / Death event effects — CSS-only, zero per-frame JS cost */
+@keyframes birthRise {
+  0%   { transform: translate(-50%, 0)     scale(0.5); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translate(-50%, -72px) scale(1.1); opacity: 0; }
+}
+@keyframes deathFade {
+  0%   { transform: translate(-50%, 0)     scale(1.0); opacity: 1; }
+  100% { transform: translate(-50%, -44px) scale(0.6); opacity: 0; }
+}
+.event-effect {
+  position: fixed;
+  pointer-events: none;
+  z-index: 50;
+  font-size: 1.7rem;
+  white-space: nowrap;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.event-effect-birth { animation: birthRise 2.0s ease-out forwards; }
+.event-effect-death { animation: deathFade 1.4s ease-in  forwards; }
 .card { background: linear-gradient(120deg, #232946 80%, #1a1a2e 100%); border-radius: 2rem; box-shadow: 0 16px 32px -8px rgba(0,0,0,0.22), 0 8px 16px -6px rgba(0,0,0,0.14); border: 2px solid #3b82f6; }
 h1 { font-size: 2.7rem; color: #60a5fa; letter-spacing: 0.04em; text-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 p { font-size: 1.15rem; color: #e0e7ef; }

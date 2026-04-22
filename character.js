@@ -14,6 +14,19 @@ function simIO() {
 function toScreenPosition(obj, camera, canvas = null) {
     return simIO().toScreenPosition(obj, camera, canvas);
 }
+
+// --- Birth / Death CSS effect (zero per-frame cost) ---
+function spawnScreenEffect(x, y, type) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    if (window.showEffects === false) return;
+    const el = document.createElement('div');
+    el.className = `event-effect event-effect-${type}`;
+    el.textContent = type === 'birth' ? '👶✨' : '💨';
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => { if (el.parentNode) el.parentNode.removeChild(el); }, { once: true });
+}
 // charactersはグローバル参照のまま（循環参照回避のため）
 
 
@@ -4767,6 +4780,12 @@ class Character {
         this.releaseReservedSidestep();
         this.state = 'dead';
 
+        // Death visual effect — CSS animation, zero per-frame cost
+        try {
+            const _dsp = this.getScreenPosition ? this.getScreenPosition() : null;
+            if (_dsp) spawnScreenEffect(_dsp.x, _dsp.y, 'death');
+        } catch (_) {}
+
         try {
             if (typeof window !== 'undefined' && typeof window.recordPopulationDeath === 'function') {
                 window.recordPopulationDeath({
@@ -6304,6 +6323,11 @@ class Character {
                         parentIds: [this.id, partner.id]
                     });
                 }
+                // Birth visual effect — CSS animation, zero per-frame cost
+                try {
+                    const _bsp = this.getScreenPosition ? this.getScreenPosition() : null;
+                    if (_bsp) spawnScreenEffect(_bsp.x, _bsp.y, 'birth');
+                } catch (_) {}
                 if (typeof window !== 'undefined' && window.simTestMode && window.__simTelemetry && typeof window.__simTelemetry.addEvent === 'function') {
                     window.__simTelemetry.addEvent({
                         t: Date.now(),
