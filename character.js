@@ -2244,36 +2244,39 @@ class Character {
         const neckGap = 0.02;
         const headCenterY = bodyTop + neckGap + headH / 2;  // ~0.575
 
-        // --- Hair: thick orange, tall side tufts that extend beyond head ---
-        const hairTopW = headW * 0.92, hairTopH = 0.14, hairTopD = headD * 0.90;
+        // --- Hair top: wide puff sitting on top of head ---
+        const hairTopW = headW * 1.02, hairTopH = 0.18, hairTopD = headD * 0.96;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
-        const hairSideH = clamp(headH * 0.72, 0.28, 0.38);
-        const hairSideW = 0.13, hairSideD = headD * 0.88;
+
+        // --- Hair sides: tall curtains framing the FULL face (not just top) ---
+        // localY=0 centers on face so hair drapes from top to below chin
+        const hairSideH = clamp(headH * 1.0, 0.40, 0.52);   // matches full head height
+        const hairSideW = 0.18, hairSideD = headD * 0.96;
         const hairSideLocalX = headW / 2 + hairSideW / 2;
-        const hairSideLocalY = headH * 0.16;
+        const hairSideLocalY = 0;                             // centered → frames full face
 
-        // --- Halo: wide flat disc, floating above hair ---
-        const haloW = headW * 1.35, haloH = 0.05, haloD = headD * 1.35;
-        const haloLocalY = headH / 2 + hairTopH + 0.09;
+        // --- Halo: prominent thick floating disc ---
+        const haloW = headW * 1.42, haloH = 0.07, haloD = headD * 1.42;
+        const haloLocalY = headH / 2 + hairTopH + 0.10;
 
-        // --- Eyes: big expressive squares ---
-        const eyeW = clamp(headW * 0.28, 0.10, 0.15);
-        const eyeH = clamp(headH * 0.22, 0.08, 0.12);
+        // --- Eyes: large expressive squares ---
+        const eyeW = clamp(headW * 0.30, 0.11, 0.16);
+        const eyeH = clamp(headH * 0.26, 0.09, 0.14);
         const eyeD = 0.04;
         const eyeLocalX = headW * 0.22;
-        const eyeLocalY = headH * 0.07;
+        const eyeLocalY = headH * 0.06;
         const eyeLocalZ = headD / 2 + eyeD / 2;
 
         // --- Cheeks ---
-        const cheekW = headW * 0.26, cheekH = headH * 0.17, cheekD = 0.03;
-        const cheekLocalX = headW * 0.33;
+        const cheekW = headW * 0.28, cheekH = headH * 0.18, cheekD = 0.03;
+        const cheekLocalX = headW * 0.34;
         const cheekLocalY = eyeLocalY - eyeH * 0.9 - cheekH * 0.5;
         const cheekLocalZ = headD / 2 + cheekD / 2;
 
-        // --- Wings: broader white tabs ---
-        const wingW = 0.22, wingH = 0.18, wingD = bodyDepth * 0.50;
+        // --- Wings: large chunky white blocks at shoulder/neck level ---
+        const wingW = 0.32, wingH = 0.26, wingD = bodyDepth * 0.55;
         const wingLocalX = bodyRow3W / 2 + wingW / 2;
-        const wingLocalY = bodyRow3Y;
+        const wingLocalY = bodyRow3Y + bodyRow3H * 0.3;  // slightly high on body
 
         // --- Shadow + carried item ---
         const shadowRadius = clamp(bodyRow1W * 0.58 + 0.04, 0.20, 0.40);
