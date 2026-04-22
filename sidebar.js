@@ -3617,8 +3617,28 @@ window.renderCharacterList = renderCharacterList;
 window.renderCharacterDetail = renderCharacterDetail;
 window.selectCharacterById = function selectCharacterById(id, options = {}) {
     if (id === undefined || id === null) return;
+    const prevId = openedCharId;
     openedCharId = String(id);
     window.selectedCharacterId = String(id);
+
+    // Optimistic DOM update: toggle is-open/detail visibility on existing rows immediately,
+    // so the user sees instant feedback even if renderCharacterList is throttled.
+    if (leftSidebar) {
+        const tbody = leftSidebar.querySelector('tbody');
+        if (tbody) {
+            const summaryRows = tbody.querySelectorAll('.character-summary-row');
+            const detailRows  = tbody.querySelectorAll('.character-detail-row');
+            summaryRows.forEach((row, i) => {
+                const rowId = row.children?.[0]?.textContent;
+                const match = String(rowId) === String(id);
+                row.classList.toggle('is-open', match);
+                if (detailRows[i]) detailRows[i].style.display = match ? '' : 'none';
+            });
+        }
+    }
+
+    // Force throttle bypass for user-initiated selection so the full list refreshes immediately.
+    window.__lastCharacterListRenderAt = 0;
     if (typeof window.renderCharacterList === 'function') window.renderCharacterList();
     if (typeof updateSelectedCharacterMarker === 'function') updateSelectedCharacterMarker();
     if (!options.skipCameraFocus && typeof window.focusCharacterInView === 'function') {

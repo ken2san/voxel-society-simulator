@@ -162,19 +162,20 @@ async function init() {
             pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             raycaster.setFromCamera(pointer, camera);
 
-            const hitTargets = characters
-                .filter(char => char?.mesh?.visible !== false)
-                .map(char => char.mesh);
-            const hits = raycaster.intersectObjects(hitTargets, true);
+            // Use body mesh (largest single geometry per char) as hit target with
+            // recursive=false — reduces raycasts from ~300+ (all sub-meshes) to N.
+            const hitTargets = [];
+            const hitOwners = [];
+            for (const char of characters) {
+                if (char?.mesh?.visible === false) continue;
+                const target = char.body || char.head || char.mesh;
+                if (target) { hitTargets.push(target); hitOwners.push(char); }
+            }
+            const hits = raycaster.intersectObjects(hitTargets, false);
             const hit = hits.find(entry => entry?.object);
             if (!hit) return;
 
-            let targetObject = hit.object;
-            while (targetObject?.parent && !String(targetObject.name || '').startsWith('Character')) {
-                targetObject = targetObject.parent;
-            }
-
-            const selected = characters.find(char => char?.mesh === targetObject || char?.mesh?.uuid === targetObject?.uuid);
+            const selected = hitOwners[hitTargets.indexOf(hit.object)];
             if (selected) {
                 window.selectCharacterById(selected.id);
             }
