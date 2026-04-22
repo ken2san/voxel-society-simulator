@@ -44,6 +44,7 @@ run_and_report.sh
 out.txt
 output.txt
 sim_output.txt
+*_output.txt
 
 # Local test telemetry (root-level)
 test-*.json
