@@ -49,118 +49,81 @@ export function createThreeSimulationIO() {
         mesh.name = 'Character_' + character.id;
         if (scene && typeof scene.add === 'function') scene.add(mesh);
 
-        // Robe body material — white/ivory, personality colour applied via updateColorFromPersonality
+        // Robe material — white/ivory, personality tint via updateColorFromPersonality
         const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xf4f4f4 });
 
-        // --- Body rows (3 stacked voxel boxes = fluffy robe effect) ---
-        const body = new THREE.Mesh(
-            new THREE.BoxGeometry(m.bodyRow1W, m.bodyRow1H, m.bodyDepth),
-            bodyMaterial
-        );
-        body.castShadow = true;
-        mesh.add(body);
+        // --- Body rows: 5-layer pyramid robe ---
+        const body = new THREE.Mesh(new THREE.BoxGeometry(m.bodyRow1W, m.bodyRow1H, m.bodyDepth), bodyMaterial);
+        body.castShadow = true; mesh.add(body);
 
-        const bodyRow2 = new THREE.Mesh(
-            new THREE.BoxGeometry(m.bodyRow2W, m.bodyRow2H, m.bodyDepth * 0.96),
-            bodyMaterial
-        );
-        bodyRow2.castShadow = true;
-        mesh.add(bodyRow2);
+        const bodyRow2 = new THREE.Mesh(new THREE.BoxGeometry(m.bodyRow2W, m.bodyRow2H, m.bodyDepth * 0.94), bodyMaterial);
+        bodyRow2.castShadow = true; mesh.add(bodyRow2);
 
-        const bodyRow3 = new THREE.Mesh(
-            new THREE.BoxGeometry(m.bodyRow3W, m.bodyRow3H, m.bodyDepth * 0.88),
-            bodyMaterial
-        );
-        bodyRow3.castShadow = true;
-        mesh.add(bodyRow3);
+        const bodyRow3 = new THREE.Mesh(new THREE.BoxGeometry(m.bodyRow3W, m.bodyRow3H, m.bodyDepth * 0.96), bodyMaterial);
+        bodyRow3.castShadow = true; mesh.add(bodyRow3);
 
-        // --- Head (large boxy, beige skin) ---
+        const bodyRow4 = new THREE.Mesh(new THREE.BoxGeometry(m.bodyRow4W, m.bodyRow4H, m.bodyDepth * 0.88), bodyMaterial);
+        bodyRow4.castShadow = true; mesh.add(bodyRow4);
+
+        const bodyRow5 = new THREE.Mesh(new THREE.BoxGeometry(m.bodyRow5W, m.bodyRow5H, m.bodyDepth * 0.92), bodyMaterial);
+        bodyRow5.castShadow = true; mesh.add(bodyRow5);
+
+        // --- Head (large boxy chibi, beige skin) ---
         const skinMaterial = new THREE.MeshLambertMaterial({ color: 0xf5c89a });
-        const head = new THREE.Mesh(
-            new THREE.BoxGeometry(m.headW, m.headH, m.headD),
-            skinMaterial
-        );
-        head.castShadow = true;
-        mesh.add(head);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(m.headW, m.headH, m.headD), skinMaterial);
+        head.castShadow = true; mesh.add(head);
 
         const iconAnchor = new THREE.Object3D();
         head.add(iconAnchor);
 
-        // --- Hair (orange/salmon voxels, children of head) ---
+        // --- Hair top: orange puff base (child of head) ---
         const hairMaterial = new THREE.MeshLambertMaterial({ color: 0xe87040 });
-        const hairTop = new THREE.Mesh(
-            new THREE.BoxGeometry(m.hairTopW, m.hairTopH, m.hairTopD),
-            hairMaterial
-        );
+        const hairTop = new THREE.Mesh(new THREE.BoxGeometry(m.hairTopW, m.hairTopH, m.hairTopD), hairMaterial);
         head.add(hairTop);
 
-        const hairSideL = new THREE.Mesh(
-            new THREE.BoxGeometry(m.hairSideW, m.hairSideH, m.hairSideD),
-            hairMaterial
-        );
-        head.add(hairSideL);
+        // --- Hair cap: pink/rose layer on top of orange puff (child of head) ---
+        const hairCapMaterial = new THREE.MeshLambertMaterial({ color: 0xe05068 });
+        const hairCapTop = new THREE.Mesh(new THREE.BoxGeometry(m.hairCapW, m.hairCapH, m.hairCapD), hairCapMaterial);
+        head.add(hairCapTop);
 
-        const hairSideR = new THREE.Mesh(
-            new THREE.BoxGeometry(m.hairSideW, m.hairSideH, m.hairSideD),
-            hairMaterial
-        );
+        // --- Hair sides: long orange curtains framing full face (children of head) ---
+        const hairSideL = new THREE.Mesh(new THREE.BoxGeometry(m.hairSideW, m.hairSideH, m.hairSideD), hairMaterial);
+        head.add(hairSideL);
+        const hairSideR = new THREE.Mesh(new THREE.BoxGeometry(m.hairSideW, m.hairSideH, m.hairSideD), hairMaterial);
         head.add(hairSideR);
 
         // --- Halo (flat golden box, child of head) ---
         const haloMaterial = new THREE.MeshLambertMaterial({ color: 0xf5c830 });
-        const halo = new THREE.Mesh(
-            new THREE.BoxGeometry(m.haloW, m.haloH, m.haloD),
-            haloMaterial
-        );
+        const halo = new THREE.Mesh(new THREE.BoxGeometry(m.haloW, m.haloH, m.haloD), haloMaterial);
         head.add(halo);
 
-        // --- Eyes (dark red flat boxes, children of head) ---
+        // --- Eyes (dark red, children of head) ---
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xcc1515 });
-        const leftEye = new THREE.Mesh(
-            new THREE.BoxGeometry(m.eyeW, m.eyeH, m.eyeD),
-            eyeMaterial
-        );
-        head.add(leftEye);
-
-        const rightEye = new THREE.Mesh(
-            new THREE.BoxGeometry(m.eyeW, m.eyeH, m.eyeD),
-            eyeMaterial
-        );
-        head.add(rightEye);
+        const leftEye  = new THREE.Mesh(new THREE.BoxGeometry(m.eyeW, m.eyeH, m.eyeD), eyeMaterial);
+        const rightEye = new THREE.Mesh(new THREE.BoxGeometry(m.eyeW, m.eyeH, m.eyeD), eyeMaterial);
+        head.add(leftEye); head.add(rightEye);
 
         // --- Cheeks (pink blush, children of head) ---
         const cheekMaterial = new THREE.MeshBasicMaterial({ color: 0xf0a0a0 });
-        const leftCheek = new THREE.Mesh(
-            new THREE.BoxGeometry(m.cheekW, m.cheekH, m.cheekD),
-            cheekMaterial
-        );
-        head.add(leftCheek);
+        const leftCheek  = new THREE.Mesh(new THREE.BoxGeometry(m.cheekW, m.cheekH, m.cheekD), cheekMaterial);
+        const rightCheek = new THREE.Mesh(new THREE.BoxGeometry(m.cheekW, m.cheekH, m.cheekD), cheekMaterial);
+        head.add(leftCheek); head.add(rightCheek);
 
-        const rightCheek = new THREE.Mesh(
-            new THREE.BoxGeometry(m.cheekW, m.cheekH, m.cheekD),
-            cheekMaterial
-        );
-        head.add(rightCheek);
-
-        // --- Mouth (stub kept for animation compatibility) ---
-        const mouthMaterial = new THREE.MeshBasicMaterial({ color: 0x8b1010 });
-        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.02), mouthMaterial);
+        // --- Mouth stub (kept for animation compatibility) ---
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.02),
+            new THREE.MeshBasicMaterial({ color: 0x8b1010 }));
         mouth.visible = false;
         head.add(mouth);
 
-        // --- Wings (white box stubs, replace arms as direct group children) ---
+        // --- Wings: 2 rows per side (upper + lower) ---
         const wingMaterial = new THREE.MeshLambertMaterial({ color: 0xf8f8f8 });
-        const leftArm = new THREE.Mesh(
-            new THREE.BoxGeometry(m.wingW, m.wingH, m.wingD),
-            wingMaterial
-        );
-        mesh.add(leftArm);
+        const leftArm  = new THREE.Mesh(new THREE.BoxGeometry(m.wingUpperW, m.wingUpperH, m.wingUpperD), wingMaterial);
+        const rightArm = new THREE.Mesh(new THREE.BoxGeometry(m.wingUpperW, m.wingUpperH, m.wingUpperD), wingMaterial);
+        mesh.add(leftArm); mesh.add(rightArm);
 
-        const rightArm = new THREE.Mesh(
-            new THREE.BoxGeometry(m.wingW, m.wingH, m.wingD),
-            wingMaterial
-        );
-        mesh.add(rightArm);
+        const leftWingLower  = new THREE.Mesh(new THREE.BoxGeometry(m.wingLowerW, m.wingLowerH, m.wingLowerD), wingMaterial);
+        const rightWingLower = new THREE.Mesh(new THREE.BoxGeometry(m.wingLowerW, m.wingLowerH, m.wingLowerD), wingMaterial);
+        mesh.add(leftWingLower); mesh.add(rightWingLower);
 
         const carriedItemMesh = new THREE.Mesh(
             new THREE.BoxGeometry(m.carriedItemSize, m.carriedItemSize, m.carriedItemSize),
@@ -200,15 +163,16 @@ export function createThreeSimulationIO() {
         return {
             mesh,
             bodyMaterial,
-            body, bodyRow2, bodyRow3,
-            skinMaterial, hairMaterial,
+            body, bodyRow2, bodyRow3, bodyRow4, bodyRow5,
+            skinMaterial, hairMaterial, hairCapMaterial,
             head, iconAnchor,
             eyeMaterial, leftEye, rightEye,
             eyeMeshes: [leftEye, rightEye],
             mouth,
-            leftArm, rightArm,       // wings
+            leftArm, rightArm,
+            leftWingLower, rightWingLower,
             leftCheek, rightCheek,
-            hairTop, hairSideL, hairSideR,
+            hairTop, hairCapTop, hairSideL, hairSideR,
             halo,
             carriedItemMesh,
             shadowMesh,
@@ -291,11 +255,10 @@ export function createThreeSimulationIO() {
 
 /**
  * InstancedMesh-based voxel character renderer.
- * 15 draw calls total (body×3, head, hair×3, halo, eyes×2, cheeks×2, wings×2, shadow),
- * all GPU-instanced — N characters at any population costs the same 15 draw calls.
+ * 20 draw calls (body×5, head, hair×3+cap, halo, eyes×2, cheeks×2, wings×4, shadow),
+ * all GPU-instanced — N characters at any population costs the same 20 draw calls.
  */
 export function createInstancedCharacterRenderer(scene, maxCount = 200) {
-    // Reusable math objects — avoids per-frame allocation
     const _m4group = new THREE.Matrix4();
     const _m4body  = new THREE.Matrix4();
     const _m4head  = new THREE.Matrix4();
@@ -315,44 +278,59 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         return im;
     }
 
-    // Unit box + circle geometries — per-instance scale encodes actual dimensions
     const boxGeo    = new THREE.BoxGeometry(1, 1, 1);
     const shadowGeo = new THREE.CircleGeometry(1, 16);
+    const mkWhite   = () => new THREE.MeshLambertMaterial({ color: 0xffffff });
 
-    const mkWhite = () => new THREE.MeshLambertMaterial({ color: 0xffffff });
+    // Personality-coloured (setColorAt per frame)
+    const iBodyRow1      = makeIM(boxGeo, mkWhite());
+    const iBodyRow2      = makeIM(boxGeo, mkWhite());
+    const iBodyRow3      = makeIM(boxGeo, mkWhite());
+    const iBodyRow4      = makeIM(boxGeo, mkWhite());
+    const iBodyRow5      = makeIM(boxGeo, mkWhite());
+    const iHead          = makeIM(boxGeo, mkWhite());
+    const iHairTop       = makeIM(boxGeo, mkWhite());
+    const iHairSideL     = makeIM(boxGeo, mkWhite());
+    const iHairSideR     = makeIM(boxGeo, mkWhite());
+    const iLeftWing      = makeIM(boxGeo, mkWhite());
+    const iRightWing     = makeIM(boxGeo, mkWhite());
+    const iLeftWingLow   = makeIM(boxGeo, mkWhite());
+    const iRightWingLow  = makeIM(boxGeo, mkWhite());
 
-    // Personality-coloured (white base + setColorAt per frame)
-    const iBodyRow1  = makeIM(boxGeo, mkWhite());
-    const iBodyRow2  = makeIM(boxGeo, mkWhite());
-    const iBodyRow3  = makeIM(boxGeo, mkWhite());
-    const iHead      = makeIM(boxGeo, mkWhite());
-    const iHairTop   = makeIM(boxGeo, mkWhite());
-    const iHairSideL = makeIM(boxGeo, mkWhite());
-    const iHairSideR = makeIM(boxGeo, mkWhite());
-    const iLeftWing  = makeIM(boxGeo, mkWhite());
-    const iRightWing = makeIM(boxGeo, mkWhite());
-
-    // Fixed-colour (material colour only, no setColorAt)
-    const iHalo      = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xf5c830 }));
-    const iLeftEye   = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
-    const iRightEye  = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
-    const iLeftCheek = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
-    const iRightCheek= makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
-    const iShadow    = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
+    // Fixed-colour (material colour only)
+    const iHairCapTop    = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xe05068 }));
+    const iHalo          = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xf5c830 }));
+    const iLeftEye       = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
+    const iRightEye      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
+    const iLeftCheek     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
+    const iRightCheek    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
+    const iShadow        = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
         color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false
     }));
 
-    const _allIMs    = [iBodyRow1, iBodyRow2, iBodyRow3, iHead, iHairTop, iHairSideL, iHairSideR,
-                        iHalo, iLeftEye, iRightEye, iLeftCheek, iRightCheek, iLeftWing, iRightWing, iShadow];
-    const _colorIMs  = [iBodyRow1, iBodyRow2, iBodyRow3, iHead, iHairTop, iHairSideL, iHairSideR, iLeftWing, iRightWing];
+    const _allIMs = [
+        iBodyRow1, iBodyRow2, iBodyRow3, iBodyRow4, iBodyRow5,
+        iHead, iHairTop, iHairSideL, iHairSideR, iHairCapTop,
+        iHalo, iLeftEye, iRightEye, iLeftCheek, iRightCheek,
+        iLeftWing, iRightWing, iLeftWingLow, iRightWingLow,
+        iShadow,
+    ];
+    const _colorIMs = [
+        iBodyRow1, iBodyRow2, iBodyRow3, iBodyRow4, iBodyRow5,
+        iHead, iHairTop, iHairSideL, iHairSideR,
+        iLeftWing, iRightWing, iLeftWingLow, iRightWingLow,
+    ];
 
-    // Compute world matrix of child (child of parentM4) and load into _dummy pos/quat
     function _fromChild(parentM4, child) {
         child.updateMatrix();
         _m4world.multiplyMatrices(parentM4, child.matrix);
         _m4world.decompose(_pos, _quat, _scl);
         _dummy.position.copy(_pos);
         _dummy.quaternion.copy(_quat);
+    }
+
+    function _z(im, idx) {
+        _dummy.scale.setScalar(0); _dummy.updateMatrix(); im.setMatrixAt(idx, _dummy.matrix);
     }
 
     return {
@@ -372,118 +350,64 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 group.updateMatrix();
                 _m4group.compose(group.position, group.quaternion, group.scale);
 
-                // --- Body rows (direct children of group) ---
+                // --- Body rows ---
                 char.body.updateMatrix();
                 _m4body.multiplyMatrices(_m4group, char.body.matrix);
                 _m4body.decompose(_pos, _quat, _scl);
                 _dummy.position.copy(_pos); _dummy.quaternion.copy(_quat);
                 _dummy.scale.set(m.bodyRow1W, m.bodyRow1H, m.bodyDepth);
-                _dummy.updateMatrix();
-                iBodyRow1.setMatrixAt(idx, _dummy.matrix);
+                _dummy.updateMatrix(); iBodyRow1.setMatrixAt(idx, _dummy.matrix);
 
-                if (char.bodyRow2) {
-                    _fromChild(_m4group, char.bodyRow2);
-                    _dummy.scale.set(m.bodyRow2W, m.bodyRow2H, m.bodyDepth * 0.96);
-                    _dummy.updateMatrix();
-                    iBodyRow2.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iBodyRow2.setMatrixAt(idx, _dummy.matrix); }
+                if (char.bodyRow2) { _fromChild(_m4group, char.bodyRow2); _dummy.scale.set(m.bodyRow2W, m.bodyRow2H, m.bodyDepth * 0.94); _dummy.updateMatrix(); iBodyRow2.setMatrixAt(idx, _dummy.matrix); } else _z(iBodyRow2, idx);
+                if (char.bodyRow3) { _fromChild(_m4group, char.bodyRow3); _dummy.scale.set(m.bodyRow3W, m.bodyRow3H, m.bodyDepth * 0.96); _dummy.updateMatrix(); iBodyRow3.setMatrixAt(idx, _dummy.matrix); } else _z(iBodyRow3, idx);
+                if (char.bodyRow4) { _fromChild(_m4group, char.bodyRow4); _dummy.scale.set(m.bodyRow4W, m.bodyRow4H, m.bodyDepth * 0.88); _dummy.updateMatrix(); iBodyRow4.setMatrixAt(idx, _dummy.matrix); } else _z(iBodyRow4, idx);
+                if (char.bodyRow5) { _fromChild(_m4group, char.bodyRow5); _dummy.scale.set(m.bodyRow5W, m.bodyRow5H, m.bodyDepth * 0.92); _dummy.updateMatrix(); iBodyRow5.setMatrixAt(idx, _dummy.matrix); } else _z(iBodyRow5, idx);
 
-                if (char.bodyRow3) {
-                    _fromChild(_m4group, char.bodyRow3);
-                    _dummy.scale.set(m.bodyRow3W, m.bodyRow3H, m.bodyDepth * 0.88);
-                    _dummy.updateMatrix();
-                    iBodyRow3.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iBodyRow3.setMatrixAt(idx, _dummy.matrix); }
-
-                // --- Head (direct child of group) ---
+                // --- Head ---
                 char.head.updateMatrix();
                 _m4head.multiplyMatrices(_m4group, char.head.matrix);
                 _m4head.decompose(_pos, _quat, _scl);
                 _dummy.position.copy(_pos); _dummy.quaternion.copy(_quat);
                 _dummy.scale.set(m.headW, m.headH, m.headD);
-                _dummy.updateMatrix();
-                iHead.setMatrixAt(idx, _dummy.matrix);
+                _dummy.updateMatrix(); iHead.setMatrixAt(idx, _dummy.matrix);
 
                 // --- Hair (children of head) ---
-                if (char.hairTop) {
-                    _fromChild(_m4head, char.hairTop);
-                    _dummy.scale.set(m.hairTopW, m.hairTopH, m.hairTopD);
-                    _dummy.updateMatrix(); iHairTop.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iHairTop.setMatrixAt(idx, _dummy.matrix); }
+                if (char.hairTop)    { _fromChild(_m4head, char.hairTop);    _dummy.scale.set(m.hairTopW, m.hairTopH, m.hairTopD);    _dummy.updateMatrix(); iHairTop.setMatrixAt(idx, _dummy.matrix); }    else _z(iHairTop, idx);
+                if (char.hairCapTop) { _fromChild(_m4head, char.hairCapTop); _dummy.scale.set(m.hairCapW, m.hairCapH, m.hairCapD);    _dummy.updateMatrix(); iHairCapTop.setMatrixAt(idx, _dummy.matrix); } else _z(iHairCapTop, idx);
+                if (char.hairSideL)  { _fromChild(_m4head, char.hairSideL);  _dummy.scale.set(m.hairSideW, m.hairSideH, m.hairSideD); _dummy.updateMatrix(); iHairSideL.setMatrixAt(idx, _dummy.matrix); }  else _z(iHairSideL, idx);
+                if (char.hairSideR)  { _fromChild(_m4head, char.hairSideR);  _dummy.scale.set(m.hairSideW, m.hairSideH, m.hairSideD); _dummy.updateMatrix(); iHairSideR.setMatrixAt(idx, _dummy.matrix); }  else _z(iHairSideR, idx);
 
-                if (char.hairSideL) {
-                    _fromChild(_m4head, char.hairSideL);
-                    _dummy.scale.set(m.hairSideW, m.hairSideH, m.hairSideD);
-                    _dummy.updateMatrix(); iHairSideL.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iHairSideL.setMatrixAt(idx, _dummy.matrix); }
+                // --- Halo ---
+                if (char.halo) { _fromChild(_m4head, char.halo); _dummy.scale.set(m.haloW, m.haloH, m.haloD); _dummy.updateMatrix(); iHalo.setMatrixAt(idx, _dummy.matrix); } else _z(iHalo, idx);
 
-                if (char.hairSideR) {
-                    _fromChild(_m4head, char.hairSideR);
-                    _dummy.scale.set(m.hairSideW, m.hairSideH, m.hairSideD);
-                    _dummy.updateMatrix(); iHairSideR.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iHairSideR.setMatrixAt(idx, _dummy.matrix); }
+                // --- Eyes ---
+                if (char.leftEye)  { _fromChild(_m4head, char.leftEye);  _dummy.scale.set(m.eyeW, m.eyeH, m.eyeD); _dummy.updateMatrix(); iLeftEye.setMatrixAt(idx, _dummy.matrix); }  else _z(iLeftEye, idx);
+                if (char.rightEye) { _fromChild(_m4head, char.rightEye); _dummy.scale.set(m.eyeW, m.eyeH, m.eyeD); _dummy.updateMatrix(); iRightEye.setMatrixAt(idx, _dummy.matrix); } else _z(iRightEye, idx);
 
-                // --- Halo (child of head) ---
-                if (char.halo) {
-                    _fromChild(_m4head, char.halo);
-                    _dummy.scale.set(m.haloW, m.haloH, m.haloD);
-                    _dummy.updateMatrix(); iHalo.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iHalo.setMatrixAt(idx, _dummy.matrix); }
+                // --- Cheeks ---
+                if (char.leftCheek)  { _fromChild(_m4head, char.leftCheek);  _dummy.scale.set(m.cheekW, m.cheekH, m.cheekD); _dummy.updateMatrix(); iLeftCheek.setMatrixAt(idx, _dummy.matrix); }  else _z(iLeftCheek, idx);
+                if (char.rightCheek) { _fromChild(_m4head, char.rightCheek); _dummy.scale.set(m.cheekW, m.cheekH, m.cheekD); _dummy.updateMatrix(); iRightCheek.setMatrixAt(idx, _dummy.matrix); } else _z(iRightCheek, idx);
 
-                // --- Eyes (children of head) ---
-                if (char.leftEye) {
-                    _fromChild(_m4head, char.leftEye);
-                    _dummy.scale.set(m.eyeW, m.eyeH, m.eyeD);
-                    _dummy.updateMatrix(); iLeftEye.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iLeftEye.setMatrixAt(idx, _dummy.matrix); }
-
-                if (char.rightEye) {
-                    _fromChild(_m4head, char.rightEye);
-                    _dummy.scale.set(m.eyeW, m.eyeH, m.eyeD);
-                    _dummy.updateMatrix(); iRightEye.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iRightEye.setMatrixAt(idx, _dummy.matrix); }
-
-                // --- Cheeks (children of head) ---
-                if (char.leftCheek) {
-                    _fromChild(_m4head, char.leftCheek);
-                    _dummy.scale.set(m.cheekW, m.cheekH, m.cheekD);
-                    _dummy.updateMatrix(); iLeftCheek.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iLeftCheek.setMatrixAt(idx, _dummy.matrix); }
-
-                if (char.rightCheek) {
-                    _fromChild(_m4head, char.rightCheek);
-                    _dummy.scale.set(m.cheekW, m.cheekH, m.cheekD);
-                    _dummy.updateMatrix(); iRightCheek.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iRightCheek.setMatrixAt(idx, _dummy.matrix); }
-
-                // --- Wings / arms (direct children of group) ---
-                if (char.leftArm) {
-                    _fromChild(_m4group, char.leftArm);
-                    _dummy.scale.set(m.wingW, m.wingH, m.wingD);
-                    _dummy.updateMatrix(); iLeftWing.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iLeftWing.setMatrixAt(idx, _dummy.matrix); }
-
-                if (char.rightArm) {
-                    _fromChild(_m4group, char.rightArm);
-                    _dummy.scale.set(m.wingW, m.wingH, m.wingD);
-                    _dummy.updateMatrix(); iRightWing.setMatrixAt(idx, _dummy.matrix);
-                } else { _dummy.scale.setScalar(0); _dummy.updateMatrix(); iRightWing.setMatrixAt(idx, _dummy.matrix); }
+                // --- Wings upper + lower ---
+                if (char.leftArm)        { _fromChild(_m4group, char.leftArm);        _dummy.scale.set(m.wingUpperW, m.wingUpperH, m.wingUpperD); _dummy.updateMatrix(); iLeftWing.setMatrixAt(idx, _dummy.matrix); }    else _z(iLeftWing, idx);
+                if (char.rightArm)       { _fromChild(_m4group, char.rightArm);       _dummy.scale.set(m.wingUpperW, m.wingUpperH, m.wingUpperD); _dummy.updateMatrix(); iRightWing.setMatrixAt(idx, _dummy.matrix); }   else _z(iRightWing, idx);
+                if (char.leftWingLower)  { _fromChild(_m4group, char.leftWingLower);  _dummy.scale.set(m.wingLowerW, m.wingLowerH, m.wingLowerD); _dummy.updateMatrix(); iLeftWingLow.setMatrixAt(idx, _dummy.matrix); } else _z(iLeftWingLow, idx);
+                if (char.rightWingLower) { _fromChild(_m4group, char.rightWingLower); _dummy.scale.set(m.wingLowerW, m.wingLowerH, m.wingLowerD); _dummy.updateMatrix(); iRightWingLow.setMatrixAt(idx, _dummy.matrix); } else _z(iRightWingLow, idx);
 
                 // --- Shadow ---
                 const sr = m.shadowRadius * (char._shadowInstanceScale ?? 1.0);
                 _dummy.position.set(group.position.x, 0.01, group.position.z);
                 _dummy.rotation.set(-Math.PI / 2, 0, 0);
                 _dummy.scale.set(sr, sr, 1);
-                _dummy.updateMatrix();
-                iShadow.setMatrixAt(idx, _dummy.matrix);
+                _dummy.updateMatrix(); iShadow.setMatrixAt(idx, _dummy.matrix);
 
                 // --- Per-instance colours ---
                 _color.copy(char.bodyMaterial.color);
-                iBodyRow1.setColorAt(idx, _color);
-                iBodyRow2.setColorAt(idx, _color);
-                iBodyRow3.setColorAt(idx, _color);
-                iLeftWing.setColorAt(idx, _color);
-                iRightWing.setColorAt(idx, _color);
+                iBodyRow1.setColorAt(idx, _color); iBodyRow2.setColorAt(idx, _color);
+                iBodyRow3.setColorAt(idx, _color); iBodyRow4.setColorAt(idx, _color);
+                iBodyRow5.setColorAt(idx, _color);
+                iLeftWing.setColorAt(idx, _color); iRightWing.setColorAt(idx, _color);
+                iLeftWingLow.setColorAt(idx, _color); iRightWingLow.setColorAt(idx, _color);
 
                 _color.setHex(char.skinMaterial ? char.skinMaterial.color.getHex() : 0xf5c89a);
                 iHead.setColorAt(idx, _color);
@@ -502,3 +426,5 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         }
     };
 }
+
+

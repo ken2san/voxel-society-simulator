@@ -2225,39 +2225,46 @@ class Character {
         const curiosity  = traits.curiosity  ?? 1.0;
         const resilience = traits.resilience ?? 1.0;
 
-        // --- Body rows: short + wide pyramid = fluffy chibi robe ---
-        // bodyTop=0.33 << headH=0.45 → head dominates (true chibi ratio)
-        const bodyRow1H = 0.12, bodyRow2H = 0.11, bodyRow3H = 0.10;  // total=0.33
+        // --- Body rows: 5-layer pyramid robe ---
+        // Row 1 = widest base, row 5 = narrowest top; total height ~0.48
+        const bodyRow1H = 0.12, bodyRow2H = 0.11, bodyRow3H = 0.10, bodyRow4H = 0.08, bodyRow5H = 0.07;
         const bodyRow1W = clamp(0.56 + (resilience - 1) * 0.04, 0.50, 0.62);
         const bodyRow2W = bodyRow1W - 0.08;
         const bodyRow3W = bodyRow1W - 0.16;
+        const bodyRow4W = bodyRow1W - 0.24;
+        const bodyRow5W = bodyRow1W - 0.32;
         const bodyDepth = bodyRow1W * 0.76;
-        const bodyRow1Y = bodyRow1H / 2;                                      // 0.060
-        const bodyRow2Y = bodyRow1H + bodyRow2H / 2;                          // 0.175
-        const bodyRow3Y = bodyRow1H + bodyRow2H + bodyRow3H / 2;              // 0.280
-        const bodyTop   = bodyRow1H + bodyRow2H + bodyRow3H;                  // 0.330
+        const bodyRow1Y = bodyRow1H / 2;                                                              // 0.060
+        const bodyRow2Y = bodyRow1H + bodyRow2H / 2;                                                  // 0.175
+        const bodyRow3Y = bodyRow1H + bodyRow2H + bodyRow3H / 2;                                      // 0.280
+        const bodyRow4Y = bodyRow1H + bodyRow2H + bodyRow3H + bodyRow4H / 2;                          // 0.370
+        const bodyRow5Y = bodyRow1H + bodyRow2H + bodyRow3H + bodyRow4H + bodyRow5H / 2;              // 0.445
+        const bodyTop   = bodyRow1H + bodyRow2H + bodyRow3H + bodyRow4H + bodyRow5H;                  // 0.480
 
-        // --- Head: large chibi cube, wider than body top row ---
-        const headW = clamp(0.44 + (curiosity - 1) * 0.03, 0.40, 0.50);
-        const headH = clamp(0.45 + (sociality - 1) * 0.03, 0.41, 0.51);
-        const headD = headW * 0.88;
+        // --- Head: larger chibi square, taller ---
+        const headW = clamp(0.48 + (curiosity - 1) * 0.03, 0.44, 0.54);
+        const headH = clamp(0.50 + (sociality - 1) * 0.03, 0.46, 0.56);
+        const headD = headW * 0.86;
         const neckGap = 0.02;
-        const headCenterY = bodyTop + neckGap + headH / 2;  // ~0.575
+        const headCenterY = bodyTop + neckGap + headH / 2;  // ~0.73
 
-        // --- Hair top: wide puff sitting on top of head ---
+        // --- Hair top: orange puff base ---
         const hairTopW = headW * 1.02, hairTopH = 0.18, hairTopD = headD * 0.96;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
 
-        // --- Hair sides: tall curtains framing the FULL face (not just top) ---
-        // localY=0 centers on face so hair drapes from top to below chin
-        const hairSideH = clamp(headH * 1.0, 0.40, 0.52);   // matches full head height
+        // --- Hair cap: pink/rose layer stacked above orange puff ---
+        const hairCapW = headW * 0.72, hairCapH = 0.15, hairCapD = headD * 0.70;
+        const hairCapLocalY = headH / 2 + hairTopH + hairCapH / 2;
+
+        // --- Hair sides: tall curtains framing the full face ---
+        const hairSideH = clamp(headH * 1.0, 0.40, 0.56);
         const hairSideW = 0.18, hairSideD = headD * 0.96;
         const hairSideLocalX = headW / 2 + hairSideW / 2;
-        const hairSideLocalY = 0;                             // centered → frames full face
+        const hairSideLocalY = 0;  // centered → frames full face
 
-        // --- Halo: prominent thick floating disc ---
+        // --- Halo: floating above hair cap ---
         const haloW = headW * 1.42, haloH = 0.07, haloD = headD * 1.42;
-        const haloLocalY = headH / 2 + hairTopH + 0.10;
+        const haloLocalY = headH / 2 + hairTopH + hairCapH + 0.08;
 
         // --- Eyes: large expressive squares ---
         const eyeW = clamp(headW * 0.30, 0.11, 0.16);
@@ -2273,10 +2280,13 @@ class Character {
         const cheekLocalY = eyeLocalY - eyeH * 0.9 - cheekH * 0.5;
         const cheekLocalZ = headD / 2 + cheekD / 2;
 
-        // --- Wings: large chunky white blocks at shoulder/neck level ---
-        const wingW = 0.32, wingH = 0.26, wingD = bodyDepth * 0.55;
-        const wingLocalX = bodyRow3W / 2 + wingW / 2;
-        const wingLocalY = bodyRow3Y + bodyRow3H * 0.3;  // slightly high on body
+        // --- Wings: 2 rows per side (upper wing + lower wing) ---
+        const wingUpperW = 0.26, wingUpperH = 0.16, wingUpperD = bodyDepth * 0.54;
+        const wingUpperLocalX = bodyRow5W / 2 + wingUpperW / 2;
+        const wingUpperLocalY = bodyRow5Y + bodyRow5H * 0.2;
+        const wingLowerW = 0.32, wingLowerH = 0.18, wingLowerD = bodyDepth * 0.50;
+        const wingLowerLocalX = bodyRow4W / 2 + wingLowerW / 2;
+        const wingLowerLocalY = bodyRow4Y;
 
         // --- Shadow + carried item ---
         const shadowRadius = clamp(bodyRow1W * 0.58 + 0.04, 0.20, 0.40);
@@ -2286,25 +2296,26 @@ class Character {
         const mouthY = -headH * 0.22;
 
         return {
-            bodyRow1H, bodyRow2H, bodyRow3H,
-            bodyRow1W, bodyRow2W, bodyRow3W, bodyDepth,
-            bodyRow1Y, bodyRow2Y, bodyRow3Y, bodyTop,
+            bodyRow1H, bodyRow2H, bodyRow3H, bodyRow4H, bodyRow5H,
+            bodyRow1W, bodyRow2W, bodyRow3W, bodyRow4W, bodyRow5W, bodyDepth,
+            bodyRow1Y, bodyRow2Y, bodyRow3Y, bodyRow4Y, bodyRow5Y, bodyTop,
             headW, headH, headD, neckGap, headCenterY,
             hairTopW, hairTopH, hairTopD, hairTopLocalY,
+            hairCapW, hairCapH, hairCapD, hairCapLocalY,
             hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY,
             haloW, haloH, haloD, haloLocalY,
             eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ,
             cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ,
-            wingW, wingH, wingD, wingLocalX, wingLocalY,
+            wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY,
+            wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY,
+            // Legacy aliases
+            wingW: wingUpperW, wingH: wingUpperH, wingD: wingUpperD,
+            wingLocalX: wingUpperLocalX, wingLocalY: wingUpperLocalY,
             shadowRadius, carriedItemSize, carriedItemY, carriedItemZ, mouthY,
-            // Legacy aliases for IM renderer + animation compatibility
             bodyHeight: bodyTop,
             bodyBottomRadius: bodyRow1W / 2,
-            bodyTopRadius: bodyRow3W / 2,
+            bodyTopRadius: bodyRow5W / 2,
             headHeight: headH,
-            headRadiusBottom: headW / 2,
-            headRadiusTop: headW / 2,
-            armLoopRadius: wingW / 2,
             eyeRadius: Math.min(eyeW, eyeH) / 2,
             eyeSpacing: eyeLocalX,
             eyeY: eyeLocalY,
@@ -2320,6 +2331,8 @@ class Character {
         this.body.position.y = m.bodyRow1Y;
         if (this.bodyRow2) this.bodyRow2.position.y = m.bodyRow2Y;
         if (this.bodyRow3) this.bodyRow3.position.y = m.bodyRow3Y;
+        if (this.bodyRow4) this.bodyRow4.position.y = m.bodyRow4Y;
+        if (this.bodyRow5) this.bodyRow5.position.y = m.bodyRow5Y;
         this.head.position.y = m.headCenterY;
 
         if (this.iconAnchor) {
@@ -2343,6 +2356,9 @@ class Character {
         if (this.hairTop) {
             this.hairTop.position.set(0, m.hairTopLocalY, 0);
         }
+        if (this.hairCapTop) {
+            this.hairCapTop.position.set(0, m.hairCapLocalY, 0);
+        }
         if (this.hairSideL) {
             this.hairSideL.position.set(-m.hairSideLocalX, m.hairSideLocalY, 0);
         }
@@ -2353,10 +2369,16 @@ class Character {
             this.halo.position.set(0, m.haloLocalY, 0);
         }
         if (this.leftArm) {
-            this.leftArm.position.set(-m.wingLocalX, m.wingLocalY, 0);
+            this.leftArm.position.set(-m.wingUpperLocalX, m.wingUpperLocalY, 0);
         }
         if (this.rightArm) {
-            this.rightArm.position.set(m.wingLocalX, m.wingLocalY, 0);
+            this.rightArm.position.set(m.wingUpperLocalX, m.wingUpperLocalY, 0);
+        }
+        if (this.leftWingLower) {
+            this.leftWingLower.position.set(-m.wingLowerLocalX, m.wingLowerLocalY, 0);
+        }
+        if (this.rightWingLower) {
+            this.rightWingLower.position.set(m.wingLowerLocalX, m.wingLowerLocalY, 0);
         }
         if (this.carriedItemMesh) {
             this.carriedItemMesh.position.set(0, m.carriedItemY, m.carriedItemZ);
@@ -2462,14 +2484,20 @@ class Character {
         this.rightArm = visuals.rightArm;
         this.bodyRow2 = visuals.bodyRow2;
         this.bodyRow3 = visuals.bodyRow3;
+        this.bodyRow4 = visuals.bodyRow4;
+        this.bodyRow5 = visuals.bodyRow5;
         this.hairTop = visuals.hairTop;
+        this.hairCapTop = visuals.hairCapTop;
         this.hairSideL = visuals.hairSideL;
         this.hairSideR = visuals.hairSideR;
         this.halo = visuals.halo;
         this.leftCheek = visuals.leftCheek;
         this.rightCheek = visuals.rightCheek;
         this.hairMaterial = visuals.hairMaterial;
+        this.hairCapMaterial = visuals.hairCapMaterial;
         this.skinMaterial = visuals.skinMaterial;
+        this.leftWingLower = visuals.leftWingLower;
+        this.rightWingLower = visuals.rightWingLower;
         this.carriedItemMesh = visuals.carriedItemMesh;
         this.shadowMesh = visuals.shadowMesh;
         this.thoughtBubble = visuals.thoughtBubble;
@@ -2478,17 +2506,19 @@ class Character {
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
 
-        this._bodyRow1RestY = this.morphology ? this.morphology.bodyRow1Y : 0.06;
+        this._bodyRow1RestY = this.morphology ? this.morphology.bodyRow1Y : 0.060;
         this._bodyRow2RestY = this.morphology ? this.morphology.bodyRow2Y : 0.175;
-        this._bodyRow3RestY = this.morphology ? this.morphology.bodyRow3Y : 0.28;
-        this._headRestY     = this.morphology ? this.morphology.headCenterY : 0.575;
+        this._bodyRow3RestY = this.morphology ? this.morphology.bodyRow3Y : 0.280;
+        this._bodyRow4RestY = this.morphology ? this.morphology.bodyRow4Y : 0.370;
+        this._bodyRow5RestY = this.morphology ? this.morphology.bodyRow5Y : 0.445;
+        this._headRestY     = this.morphology ? this.morphology.headCenterY : 0.73;
 
         // Hide individual body parts from the camera — InstancedMesh handles rendering.
         // Eyes and mouth (children of head) stay on layer 0 since they follow head rotation.
         // Selected characters are toggled back to layer 0 in updateAnimations().
         this._isSelectedForInstanced = false;
         if (typeof window !== 'undefined' && window._instancedCharRenderer) {
-            for (const part of [this.body, this.bodyRow2, this.bodyRow3, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
+            for (const part of [this.body, this.bodyRow2, this.bodyRow3, this.bodyRow4, this.bodyRow5, this.head, this.leftArm, this.rightArm, this.leftWingLower, this.rightWingLower, this.shadowMesh]) {
                 if (part) part.layers.set(31);
             }
         }
@@ -5737,7 +5767,7 @@ class Character {
             if (nowSelected !== this._isSelectedForInstanced) {
                 this._isSelectedForInstanced = nowSelected;
                 const layer = nowSelected ? 0 : 31;
-                for (const part of [this.body, this.bodyRow2, this.bodyRow3, this.head, this.leftArm, this.rightArm, this.shadowMesh]) {
+                for (const part of [this.body, this.bodyRow2, this.bodyRow3, this.bodyRow4, this.bodyRow5, this.head, this.leftArm, this.rightArm, this.leftWingLower, this.rightWingLower, this.shadowMesh]) {
                     if (part) part.layers.set(layer);
                 }
             }
@@ -5985,6 +6015,8 @@ class Character {
             this.body.position.y = (this._bodyRow1RestY ?? 0.11) + bob;
             if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + bob;
             if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + bob;
+            if (this.bodyRow4) this.bodyRow4.position.y = (this._bodyRow4RestY ?? 0.370) + bob;
+            if (this.bodyRow5) this.bodyRow5.position.y = (this._bodyRow5RestY ?? 0.445) + bob;
             const wiggle = Math.sin(this.bobTime * 0.7) * 0.08;
             this.head.position.y = (this._headRestY ?? 0.80) + bob * 0.7;
             this.mesh.rotation.z = wiggle * 0.5;
@@ -6011,6 +6043,8 @@ class Character {
             this.body.position.y = (this._bodyRow1RestY ?? 0.11) + walkBob;
             if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + walkBob;
             if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + walkBob;
+            if (this.bodyRow4) this.bodyRow4.position.y = (this._bodyRow4RestY ?? 0.370) + walkBob;
+            if (this.bodyRow5) this.bodyRow5.position.y = (this._bodyRow5RestY ?? 0.445) + walkBob;
             this.head.position.y = (this._headRestY ?? 0.80) + Math.sin(this._stepPhase + 1) * 0.07;
             this.mesh.rotation.z = sway;
             // arms swing opposite phase + gentle spread
@@ -6028,6 +6062,8 @@ class Character {
             this.body.position.y += ((this._bodyRow1RestY ?? 0.11) - this.body.position.y) * 0.2;
             if (this.bodyRow2) this.bodyRow2.position.y += ((this._bodyRow2RestY ?? 0.32) - this.bodyRow2.position.y) * 0.2;
             if (this.bodyRow3) this.bodyRow3.position.y += ((this._bodyRow3RestY ?? 0.51) - this.bodyRow3.position.y) * 0.2;
+            if (this.bodyRow4) this.bodyRow4.position.y += ((this._bodyRow4RestY ?? 0.370) - this.bodyRow4.position.y) * 0.2;
+            if (this.bodyRow5) this.bodyRow5.position.y += ((this._bodyRow5RestY ?? 0.445) - this.bodyRow5.position.y) * 0.2;
             this.head.position.y += ((this._headRestY ?? 0.80) - this.head.position.y) * 0.2;
             this.head.rotation.z *= 0.85;
         }
@@ -6064,6 +6100,8 @@ class Character {
             this.body.position.y = (this._bodyRow1RestY ?? 0.11) + Math.abs(excitement);
             if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + Math.abs(excitement);
             if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + Math.abs(excitement);
+            if (this.bodyRow4) this.bodyRow4.position.y = (this._bodyRow4RestY ?? 0.370) + Math.abs(excitement);
+            if (this.bodyRow5) this.bodyRow5.position.y = (this._bodyRow5RestY ?? 0.445) + Math.abs(excitement);
             this.head.position.y = (this._headRestY ?? 0.80) + Math.abs(excitement) * 1.2;
             // Head nodding
             this.head.rotation.x = Math.sin(this.bobTime * 2) * 0.15;
@@ -6080,6 +6118,8 @@ class Character {
             this.body.position.y = (this._bodyRow1RestY ?? 0.11) + workBob;
             if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) + workBob;
             if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) + workBob;
+            if (this.bodyRow4) this.bodyRow4.position.y = (this._bodyRow4RestY ?? 0.370) + workBob;
+            if (this.bodyRow5) this.bodyRow5.position.y = (this._bodyRow5RestY ?? 0.445) + workBob;
             this.head.position.y = (this._headRestY ?? 0.80) + workBob;
             // Concentrated head tilt
             this.head.rotation.z = Math.sin(this.bobTime * 0.3) * 0.05;
@@ -6102,6 +6142,8 @@ class Character {
             this.body.position.y = (this._bodyRow1RestY ?? 0.11) - 0.03 + weakness;
             if (this.bodyRow2) this.bodyRow2.position.y = (this._bodyRow2RestY ?? 0.32) - 0.03 + weakness;
             if (this.bodyRow3) this.bodyRow3.position.y = (this._bodyRow3RestY ?? 0.51) - 0.03 + weakness;
+            if (this.bodyRow4) this.bodyRow4.position.y = (this._bodyRow4RestY ?? 0.370) - 0.03 + weakness;
+            if (this.bodyRow5) this.bodyRow5.position.y = (this._bodyRow5RestY ?? 0.445) - 0.03 + weakness;
             this.head.position.y = (this._headRestY ?? 0.80) - 0.03 + weakness;
             this.mesh.rotation.z = Math.sin(this.bobTime * 0.3) * 0.03; // Slight swaying
             if (!this.actionAnim.active) this.body.scale.y = 0.95; // Slightly compressed
