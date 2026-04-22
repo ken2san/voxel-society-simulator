@@ -432,9 +432,9 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
 
                 // — Head children —
                 _write(iHairTop,    idx, char.hairTop,    _m4head, m.hairTopW, m.hairTopH, m.hairTopD);
-                _write(iHairCapTop, idx, char.hairCapTop, _m4head, m.hairCapW, m.hairCapH, m.hairCapD);
-                _write(iHairSideL,  idx, char.hairSideL,  _m4head, m.hairSideW, m.hairSideH, m.hairSideD);
-                _write(iHairSideR,  idx, char.hairSideR,  _m4head, m.hairSideW, m.hairSideH, m.hairSideD);
+                _write(iHairCapTop, idx, null, _m4head, 0, 0, 0); // hidden — no stacking
+                _write(iHairSideL,  idx, null, _m4head, 0, 0, 0); // hidden — no side panels
+                _write(iHairSideR,  idx, null, _m4head, 0, 0, 0); // hidden — no side panels
                 _write(iHalo,       idx, char.halo,       _m4head, m.haloW, m.haloH, m.haloD);
                 _write(iLeftEye,    idx, char.leftEye,    _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
