@@ -5965,6 +5965,9 @@ class Character {
             const breathe = Math.sin(this.bobTime * 0.8) * 0.03;
             this.body.scale.x = 1.0 + breathe;
             this.body.scale.z = 1.0 + breathe;
+        } else if (this.state === 'moving') {
+            // Movement: body compression (power stance)
+            if (!this.actionAnim.active) this.body.scale.y = 0.95;
         } else if (this.state === 'socializing') {
             // Excited, bouncy animation
             this.bobTime += deltaTime * 4;
@@ -5989,6 +5992,16 @@ class Character {
             this.head.rotation.z = Math.sin(this.bobTime * 0.3) * 0.05;
             this.head.rotation.x = -0.1; // Looking down
             if (!this.actionAnim.active) this.body.scale.y = 1.0;
+        } else if (this.action && (this.action.type === 'COLLECT_FOOD' || this.action.type === 'EAT')) {
+            // Food gathering: body reaches up, head looks down
+            if (!this.actionAnim.active) this.body.scale.y = 1.10; // Stretched reach
+            if (!this.actionAnim.active && this.head) this.head.scale.y = 0.95; // Head looks down
+        } else if (this.action && (this.action.type === 'BUILD_HOME' || this.action.type === 'CHOP_WOOD' || this.action.type === 'DESTROY_BLOCK')) {
+            // Construction work: pulse body for effort
+            if (!this.actionAnim.active) {
+                const buildPulse = 0.90 + Math.sin(this.bobTime * 3) * 0.15;
+                this.body.scale.y = Math.max(0.85, Math.min(1.1, buildPulse));
+            }
         } else if (this.needs && this.needs.hunger < 20) {
             // Weak, tired animation
             this.bobTime += deltaTime * 1.5;
@@ -5999,6 +6012,7 @@ class Character {
             if (!this.actionAnim.active) this.body.scale.y = 0.95; // Slightly compressed
         } else if (!this.actionAnim.active) {
             this.body.scale.set(1.0, 1.0, 1.0); // Reset scale for other states
+            if (this.head) this.head.scale.set(1.0, 1.0, 1.0);
         }
 
         // Personality-based micro-animations
@@ -6025,6 +6039,10 @@ class Character {
             if (this.head) {
                 this.head.rotation.x += gesturePose.headX;
                 this.head.rotation.z += gesturePose.headZ;
+                // Apply gesture head scale if defined
+                if (gesturePose.scaleYHead && gesturePose.scaleYHead !== 1.0) {
+                    this.head.scale.y *= gesturePose.scaleYHead;
+                }
             }
             if (this.leftArm) {
                 this.leftArm.rotation.x += gesturePose.armX;
