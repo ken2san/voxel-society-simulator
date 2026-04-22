@@ -432,10 +432,10 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
 
                 // — Head children —
                 _write(iHairTop,    idx, char.hairTop,    _m4head, m.hairTopW, m.hairTopH, m.hairTopD);
-                _write(iHairCapTop, idx, null, _m4head, 0, 0, 0); // pink cap hidden
-                _write(iHairSideL,  idx, char.hairSideL,  _m4head, m.hairSideW, m.hairSideH, m.hairSideD);
-                _write(iHairSideR,  idx, char.hairSideR,  _m4head, m.hairSideW, m.hairSideH, m.hairSideD);
-                _z(iHalo, idx); // halo hidden
+                _z(iHairCapTop, idx); // hidden
+                _z(iHairSideL,  idx); // hidden — one clean pom only
+                _z(iHairSideR,  idx); // hidden
+                _z(iHalo, idx); // hidden
                 _write(iLeftEye,    idx, char.leftEye,    _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
@@ -462,11 +462,11 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _color.setHex(skinHex);
                 for (const im of _skinIMs) im.setColorAt(idx, _color);
 
-                _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xb8d400);
+                _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xd0e000);
                 for (const im of _hairIMs) im.setColorAt(idx, _color);
 
-                // Pelvis — fixed olive green (inner shirt showing below jacket)
-                _color.setHex(0x4e6800);
+                // Pelvis — dark olive belt (inner shirt visible between jacket and pants)
+                _color.setHex(0x3d5000);
                 iPelvis.setColorAt(idx, _color);
                 // Pants — fixed dark brown
                 _color.setHex(0x6b3515);

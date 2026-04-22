@@ -2225,90 +2225,82 @@ class Character {
         const curiosity  = traits.curiosity  ?? 1.0;
         const resilience = traits.resilience ?? 1.0;
 
-        // ── Photo-ref chibi: lime-hair puff + jacket, brown pants, black feet ───────
-        // Feet (black)
-        const footH = 0.10, footW = 0.18, footD = 0.22;
-        const legSpacingX = clamp(0.08 + (resilience - 1) * 0.01, 0.07, 0.10);
-        // Shins (brown pants)
-        const shinH = 0.18, shinW = 0.13, shinD = 0.13;
-        // Thighs (brown pants)
-        const thighH = 0.15, thighW = 0.15, thighD = 0.14;
-        // Pelvis (olive inner shirt strip visible below jacket)
-        const pelvisH = 0.10, pelvisW = clamp(0.32 + (resilience - 1) * 0.03, 0.28, 0.38), pelvisD = 0.20;
-        // Torso (lime jacket)
-        const torsoH = 0.22, torsoW = clamp(0.36 + (resilience - 1) * 0.03, 0.30, 0.42), torsoD = 0.22;
+        // ─────────────────────────────────────────────────────────────────────────
+        // VOXEL ART CHIBI — fixed proportions, each part is one proud clean block
+        // Silhouette: massive lime pom (top) → skin face → lime jacket → olive belt
+        //             → brown pants → black feet.  Head+hair = 48% of total height.
+        // ─────────────────────────────────────────────────────────────────────────
 
-        // Accumulate Y centres from ground
-        const footCenterY   = footH  / 2;
-        const shinCenterY   = footH  + shinH  / 2;
-        const thighCenterY  = footH  + shinH  + thighH  / 2;
-        const pelvisCenterY = footH  + shinH  + thighH  + pelvisH / 2;
-        const bodyBottom    = footH  + shinH  + thighH  + pelvisH;
-        const torsoCenterY  = bodyBottom + torsoH / 2;
-        const bodyTop       = bodyBottom + torsoH;
+        // ── Legs (brown pants) + feet (black) ─────────────────────────────────────
+        const footH = 0.10, footW = 0.20, footD = 0.24;
+        const legSpacingX = 0.09;
+        const shinH = 0.18, shinW = 0.14, shinD = 0.13;
+        const thighH = 0.16, thighW = 0.16, thighD = 0.14;
 
-        // ── Arms ──────────────────────────────────────────────────────────────────
-        const upperArmH = 0.16, upperArmW = 0.12, upperArmD = 0.12;
-        const forearmH  = 0.14, forearmW  = 0.10, forearmD  = 0.10;
-        const armSpacingX     = torsoW / 2 + upperArmW / 2 - 0.015;
-        const upperArmCenterY = bodyTop - upperArmH * 0.5 - 0.01;
-        const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;
+        // ── Pelvis (olive inner-shirt belt) ───────────────────────────────────────
+        const pelvisH = 0.10, pelvisW = 0.36, pelvisD = 0.22;
 
-        // ── Head (chibi proportions) ───────────────────────────────────────────────
-        const headW = clamp(0.32 + (curiosity - 1) * 0.02, 0.28, 0.37);
-        const headH = clamp(0.30 + (sociality - 1) * 0.02, 0.27, 0.35);
-        const headD = headW * 0.88;
-        const neckGap    = 0.01;
-        const headCenterY = bodyTop + neckGap + headH / 2;
+        // ── Torso (lime jacket) ────────────────────────────────────────────────────
+        const torsoH = 0.22, torsoW = 0.42, torsoD = 0.24;
 
-        // ── Hair — big puffy pom (lime, same colour as jacket) ────────────────────
-        // Main puff block: much wider and taller than the head
-        const hairTopH = headH * 1.30;
-        const hairTopW = headW * 1.75;
-        const hairTopD = headD * 1.25;
-        const hairTopLocalY = headH / 2 + hairTopH / 2;
-        // Side curtain panels: hang below main puff to frame the face
-        const hairSideW = headW * 0.22;
-        const hairSideH = headH * 1.40;
-        const hairSideD = headD * 1.00;
-        const hairSideLocalX = headW / 2 + hairSideW * 0.60 + 0.005;
-        const hairSideLocalY = -headH * 0.10;
-        // Pink cap — hidden
-        const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001;
-        const hairCapLocalY = 0;
+        // ── Y centres (stacked from ground) ───────────────────────────────────────
+        const footCenterY   = footH  / 2;                                // 0.050
+        const shinCenterY   = footH  + shinH  / 2;                       // 0.190
+        const thighCenterY  = footH  + shinH  + thighH  / 2;             // 0.360
+        const pelvisCenterY = footH  + shinH  + thighH  + pelvisH / 2;   // 0.490
+        const bodyBottom    = footH  + shinH  + thighH  + pelvisH;       // 0.540
+        const torsoCenterY  = bodyBottom + torsoH / 2;                   // 0.650
+        const bodyTop       = bodyBottom + torsoH;                       // 0.760
+
+        // ── Arms (lime jacket sleeves + skin forearms) ────────────────────────────
+        const upperArmH = 0.18, upperArmW = 0.14, upperArmD = 0.14;
+        const forearmH  = 0.13, forearmW  = 0.12, forearmD  = 0.11;
+        const armSpacingX     = torsoW / 2 + upperArmW / 2 - 0.02;       // 0.260
+        const upperArmCenterY = bodyTop - upperArmH / 2 - 0.01;          // 0.660
+        const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;  // 0.505
+
+        // ── Head (squarish, clear chibi) ──────────────────────────────────────────
+        // headW intentionally close to torsoW so the jacket "hugs" the face width.
+        const headW = 0.36, headH = 0.30, headD = 0.32;
+        const neckGap     = 0.02;
+        const headCenterY = bodyTop + neckGap + headH / 2;               // 0.930
+
+        // ── Hair — ONE massive pom block: the dominant voxel art feature ──────────
+        // Width 2.1× head, depth 1.7× head.  Overlaps 8% into head top (natural).
+        const hairTopH = 0.46;
+        const hairTopW = 0.76;
+        const hairTopD = 0.54;
+        const hairTopLocalY = headH / 2 + hairTopH / 2 - hairTopH * 0.08; // 0.343
+        // Side panels hidden — one block only, no curtains breaking the silhouette
+        const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001, hairCapLocalY = 0;
+        const hairSideW = 0.001, hairSideH = 0.001, hairSideD = 0.001;
+        const hairSideLocalX = 0, hairSideLocalY = 0;
 
         // ── Halo — hidden ─────────────────────────────────────────────────────────
-        const haloW = 0.001, haloH = 0.001, haloD = 0.001;
-        const haloLocalY = 0;
+        const haloW = 0.001, haloH = 0.001, haloD = 0.001, haloLocalY = 0;
 
-        // ── Eyes — simple dark squares ────────────────────────────────────────────
-        const eyeW = clamp(headW * 0.22, 0.060, 0.080);
-        const eyeH = clamp(headH * 0.24, 0.064, 0.086);
-        const eyeD = 0.030;
-        const eyeLocalX = headW * 0.23;
-        const eyeLocalY = headH * 0.05;
+        // ── Eyes — big dark squares (chibi expressiveness) ────────────────────────
+        const eyeW = headW * 0.265;          // ~0.095
+        const eyeH = headH * 0.300;          // ~0.090
+        const eyeD = 0.028;
+        const eyeLocalX = headW * 0.228;     // ~0.082 — spaced apart
+        const eyeLocalY = headH * 0.080;     // ~0.024 — just above centre
         const eyeLocalZ = headD / 2 + eyeD / 2;
 
-        // ── Cheeks — hidden (orange feature handled by nose below) ────────────────
+        // ── Nose (orange block, centred — uses mouth/IM slot) ─────────────────────
+        const mouthW = headW * 0.170;        // ~0.061
+        const mouthH = headH * 0.190;        // ~0.057
+        const mouthD = 0.040;
+        const mouthY = eyeLocalY - eyeH * 0.80 - mouthH * 0.50;   // ~-0.038
+        const mouthLocalZ = headD / 2 + mouthD / 2;
+
+        // ── Cheeks, highlights, brows, wings — all hidden ─────────────────────────
         const cheekW = 0.001, cheekH = 0.001, cheekD = 0.001;
         const cheekLocalX = 0, cheekLocalY = 0, cheekLocalZ = headD / 2;
-
-        // ── Nose (uses mouth mesh/IM slot) — orange protrusion from face centre ───
-        const mouthW = headW * 0.17;
-        const mouthH = headH * 0.17;
-        const mouthD = 0.042;
-        const mouthY = -headH * 0.04;           // slightly below eye centre
-        const mouthLocalZ = headD / 2 + mouthD / 2;  // protrudes from front face
-
-        // ── Eye highlights — hidden ───────────────────────────────────────────────
         const eyeHLW = 0.001, eyeHLH = 0.001, eyeHLD = 0.001;
-        const eyeHLLocalX = eyeLocalX, eyeHLLocalY = eyeLocalY, eyeHLLocalZ = eyeLocalZ;
-
-        // ── Eyebrows — hidden ─────────────────────────────────────────────────────
+        const eyeHLLocalX = 0, eyeHLLocalY = 0, eyeHLLocalZ = headD / 2;
         const browW = 0.001, browH = 0.001, browD = 0.001;
-        const browLocalX = eyeLocalX, browLocalY = eyeLocalY + eyeH, browLocalZ = eyeLocalZ;
-
-        // ── Wings — hidden ────────────────────────────────────────────────────────
+        const browLocalX = 0, browLocalY = 0, browLocalZ = headD / 2;
         const wingZ = 0;
         const wingUpperW = 0.001, wingUpperH = 0.001, wingUpperD = 0.001;
         const wingUpperLocalX = 0, wingUpperLocalY = 0;
@@ -2316,46 +2308,34 @@ class Character {
         const wingLowerLocalX = 0, wingLowerLocalY = 0;
 
         // ── Misc ──────────────────────────────────────────────────────────────────
-        const shadowRadius = clamp(torsoW * 0.55 + 0.04, 0.18, 0.38);
+        const shadowRadius    = 0.28;
         const carriedItemSize = 0.26;
-        const carriedItemY = headCenterY + headH * 0.30;
-        const carriedItemZ = headD / 2 + 0.08;
+        const carriedItemY    = headCenterY + headH * 0.32;
+        const carriedItemZ    = headD / 2 + 0.08;
 
         return {
-            // Body
             torsoH, torsoW, torsoD, torsoCenterY, bodyBottom, bodyTop,
             pelvisH, pelvisW, pelvisD, pelvisCenterY,
-            // Legs
             thighH, thighW, thighD, thighCenterY,
             shinH, shinW, shinD, shinCenterY,
             footH, footW, footD, footCenterY,
             legSpacingX,
-            // Arms
             upperArmH, upperArmW, upperArmD, upperArmCenterY,
             forearmH, forearmW, forearmD, forearmCenterY,
             armSpacingX,
-            // Head
             headW, headH, headD, neckGap, headCenterY,
-            // Hair
             hairTopW, hairTopH, hairTopD, hairTopLocalY,
             hairCapW, hairCapH, hairCapD, hairCapLocalY,
             hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY,
-            // Halo
             haloW, haloH, haloD, haloLocalY,
-            // Face
             eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ,
             cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ,
-            // Nose (mouth slot)
             mouthW, mouthH, mouthD, mouthY, mouthLocalZ,
-            // Eye highlights (hidden)
             eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ,
-            // Eyebrows (hidden)
             browW, browH, browD, browLocalX, browLocalY, browLocalZ,
-            // Wings (hidden)
             wingZ,
             wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY,
             wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY,
-            // Misc
             shadowRadius, carriedItemSize, carriedItemY, carriedItemZ,
             // Legacy aliases
             bodyHeight: bodyTop,
@@ -6841,12 +6821,12 @@ class Character {
     }
 
     updateColorFromPersonality() {
-        // Jacket = lime/chartreuse yellow (photo-ref: same shade as hair)
-        if (this.bodyMaterial) this.bodyMaterial.color.setHex(0xc8d800);
-        // Skin: warm salmon-beige
+        // Vibrant lime/chartreuse — jacket and hair match exactly (photo ref)
+        if (this.bodyMaterial) this.bodyMaterial.color.setHex(0xd0e000);
+        // Warm peach skin
         if (this.skinMaterial) this.skinMaterial.color.setHex(0xf5b878);
-        // Hair = lime (matches jacket exactly)
-        if (this.hairMaterial) this.hairMaterial.color.setHex(0xc8d800);
+        // Hair = same lime as jacket
+        if (this.hairMaterial) this.hairMaterial.color.setHex(0xd0e000);
     }
 
     updateWorldPosFromGrid() {
