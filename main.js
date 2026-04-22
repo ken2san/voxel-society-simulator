@@ -203,7 +203,6 @@ async function init() {
         const centreCameraBtn = document.getElementById('centreCameraBtn');
         if (centreCameraBtn) {
             centreCameraBtn.addEventListener('click', () => {
-                window.selectedCharacterId = null;
                 focusCameraOnActiveDistrict();
             });
             centreCameraBtn.addEventListener('mouseenter', () => { centreCameraBtn.style.background = 'rgba(30,58,138,0.85)'; });
