@@ -115,7 +115,7 @@ export function createThreeSimulationIO() {
         head.add(halo);
 
         // --- Eyes (dark red flat boxes, children of head) ---
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x8b1010 });
+        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xcc1515 });
         const leftEye = new THREE.Mesh(
             new THREE.BoxGeometry(m.eyeW, m.eyeH, m.eyeD),
             eyeMaterial
@@ -334,8 +334,8 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
 
     // Fixed-colour (material colour only, no setColorAt)
     const iHalo      = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xf5c830 }));
-    const iLeftEye   = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x8b1010 }));
-    const iRightEye  = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x8b1010 }));
+    const iLeftEye   = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
+    const iRightEye  = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xcc1515 }));
     const iLeftCheek = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
     const iRightCheek= makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
     const iShadow    = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
@@ -502,4 +502,3 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         }
     };
 }
-

@@ -2225,61 +2225,62 @@ class Character {
         const curiosity  = traits.curiosity  ?? 1.0;
         const resilience = traits.resilience ?? 1.0;
 
-        // --- Body rows (stacked voxel robe) ---
-        const bodyRow1H = 0.22, bodyRow2H = 0.20, bodyRow3H = 0.18;
-        const bodyRow1W = clamp(0.38 + (resilience - 1) * 0.04, 0.32, 0.44);
-        const bodyRow2W = bodyRow1W - 0.04;
-        const bodyRow3W = bodyRow1W - 0.08;
-        const bodyDepth = bodyRow1W * 0.88;
-        const bodyRow1Y = bodyRow1H / 2;
-        const bodyRow2Y = bodyRow1H + bodyRow2H / 2;
-        const bodyRow3Y = bodyRow1H + bodyRow2H + bodyRow3H / 2;
-        const bodyTop   = bodyRow1H + bodyRow2H + bodyRow3H;
+        // --- Body rows: short + wide pyramid = fluffy chibi robe ---
+        // bodyTop=0.33 << headH=0.45 → head dominates (true chibi ratio)
+        const bodyRow1H = 0.12, bodyRow2H = 0.11, bodyRow3H = 0.10;  // total=0.33
+        const bodyRow1W = clamp(0.56 + (resilience - 1) * 0.04, 0.50, 0.62);
+        const bodyRow2W = bodyRow1W - 0.08;
+        const bodyRow3W = bodyRow1W - 0.16;
+        const bodyDepth = bodyRow1W * 0.76;
+        const bodyRow1Y = bodyRow1H / 2;                                      // 0.060
+        const bodyRow2Y = bodyRow1H + bodyRow2H / 2;                          // 0.175
+        const bodyRow3Y = bodyRow1H + bodyRow2H + bodyRow3H / 2;              // 0.280
+        const bodyTop   = bodyRow1H + bodyRow2H + bodyRow3H;                  // 0.330
 
-        // --- Head ---
-        const headW = clamp(0.36 + (curiosity - 1) * 0.04, 0.30, 0.42);
-        const headH = clamp(0.36 + (sociality - 1) * 0.04, 0.30, 0.42);
-        const headD = headW * 0.90;
+        // --- Head: large chibi cube, wider than body top row ---
+        const headW = clamp(0.44 + (curiosity - 1) * 0.03, 0.40, 0.50);
+        const headH = clamp(0.45 + (sociality - 1) * 0.03, 0.41, 0.51);
+        const headD = headW * 0.88;
         const neckGap = 0.02;
-        const headCenterY = bodyTop + neckGap + headH / 2;
+        const headCenterY = bodyTop + neckGap + headH / 2;  // ~0.575
 
-        // --- Hair (children of head) ---
-        const hairTopW = headW * 0.72, hairTopH = 0.10, hairTopD = headD * 0.72;
+        // --- Hair: thick orange, tall side tufts that extend beyond head ---
+        const hairTopW = headW * 0.92, hairTopH = 0.14, hairTopD = headD * 0.90;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
-        const hairSideH = clamp(headH * 0.58, 0.18, 0.26);
-        const hairSideW = 0.09, hairSideD = headD * 0.82;
+        const hairSideH = clamp(headH * 0.72, 0.28, 0.38);
+        const hairSideW = 0.13, hairSideD = headD * 0.88;
         const hairSideLocalX = headW / 2 + hairSideW / 2;
-        const hairSideLocalY = headH * 0.12;
+        const hairSideLocalY = headH * 0.16;
 
-        // --- Halo (child of head) ---
-        const haloW = headW * 1.28, haloH = 0.04, haloD = headD * 1.28;
-        const haloLocalY = headH / 2 + hairTopH + 0.10;
+        // --- Halo: wide flat disc, floating above hair ---
+        const haloW = headW * 1.35, haloH = 0.05, haloD = headD * 1.35;
+        const haloLocalY = headH / 2 + hairTopH + 0.09;
 
-        // --- Eyes (children of head) ---
-        const eyeW = clamp(headW * 0.28, 0.08, 0.14);
-        const eyeH = clamp(headH * 0.18, 0.06, 0.10);
+        // --- Eyes: big expressive squares ---
+        const eyeW = clamp(headW * 0.28, 0.10, 0.15);
+        const eyeH = clamp(headH * 0.22, 0.08, 0.12);
         const eyeD = 0.04;
         const eyeLocalX = headW * 0.22;
-        const eyeLocalY = headH * 0.08;
+        const eyeLocalY = headH * 0.07;
         const eyeLocalZ = headD / 2 + eyeD / 2;
 
-        // --- Cheeks (children of head) ---
-        const cheekW = headW * 0.24, cheekH = headH * 0.16, cheekD = 0.03;
-        const cheekLocalX = headW * 0.30;
-        const cheekLocalY = eyeLocalY - eyeH * 0.8 - cheekH * 0.5;
+        // --- Cheeks ---
+        const cheekW = headW * 0.26, cheekH = headH * 0.17, cheekD = 0.03;
+        const cheekLocalX = headW * 0.33;
+        const cheekLocalY = eyeLocalY - eyeH * 0.9 - cheekH * 0.5;
         const cheekLocalZ = headD / 2 + cheekD / 2;
 
-        // --- Wings (replace arms) ---
-        const wingW = 0.16, wingH = 0.13, wingD = bodyDepth * 0.60;
+        // --- Wings: broader white tabs ---
+        const wingW = 0.22, wingH = 0.18, wingD = bodyDepth * 0.50;
         const wingLocalX = bodyRow3W / 2 + wingW / 2;
         const wingLocalY = bodyRow3Y;
 
         // --- Shadow + carried item ---
-        const shadowRadius = clamp(bodyRow1W * 0.70 + 0.04, 0.20, 0.34);
-        const carriedItemSize = 0.34;
+        const shadowRadius = clamp(bodyRow1W * 0.58 + 0.04, 0.20, 0.40);
+        const carriedItemSize = 0.28;
         const carriedItemY = headCenterY + headH * 0.30;
-        const carriedItemZ = headD / 2 + 0.10;
-        const mouthY = -headH * 0.20;
+        const carriedItemZ = headD / 2 + 0.08;
+        const mouthY = -headH * 0.22;
 
         return {
             bodyRow1H, bodyRow2H, bodyRow3H,
@@ -2474,10 +2475,10 @@ class Character {
         this.updateColorFromPersonality();
         this.updateWorldPosFromGrid();
 
-        this._bodyRow1RestY = this.morphology ? this.morphology.bodyRow1Y : 0.11;
-        this._bodyRow2RestY = this.morphology ? this.morphology.bodyRow2Y : 0.32;
-        this._bodyRow3RestY = this.morphology ? this.morphology.bodyRow3Y : 0.51;
-        this._headRestY     = this.morphology ? this.morphology.headCenterY : 0.80;
+        this._bodyRow1RestY = this.morphology ? this.morphology.bodyRow1Y : 0.06;
+        this._bodyRow2RestY = this.morphology ? this.morphology.bodyRow2Y : 0.175;
+        this._bodyRow3RestY = this.morphology ? this.morphology.bodyRow3Y : 0.28;
+        this._headRestY     = this.morphology ? this.morphology.headCenterY : 0.575;
 
         // Hide individual body parts from the camera — InstancedMesh handles rendering.
         // Eyes and mouth (children of head) stay on layer 0 since they follow head rotation.
