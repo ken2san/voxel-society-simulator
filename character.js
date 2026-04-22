@@ -865,9 +865,9 @@ class Character {
                         this.inventory[0] = 'FRUIT_ITEM';
                         this.updateCarriedItemAppearance('FRUIT_ITEM');
                         this.carriedItemMesh.visible = true;
+                        this.showActionIcon('✅⛏️', 1.5);
                         this.log(`✅ Fruit item acquired! inventory=[${this.inventory[0]}] hunger=${this.needs.hunger.toFixed(1)}`);
                     } else if (blockType.name.includes('Stone')) {
-                        // 石は直接使用するか、道具作成に使用
                         this.showActionIcon('🗿💥', 2.0);
                         this.log('Destroyed stone block');
                     } else if (blockType.name.includes('Dirt')) {
@@ -879,17 +879,6 @@ class Character {
                     }
                 } else {
                     this.showActionIcon('✅⛏️', 1.5);
-                }
-
-                // 破壊したブロックの種類に基づいて異なるエフェクト
-                if (blockType) {
-                    if (blockType.name.includes('Stone')) {
-                        this.showActionIcon('🗿💥', 2.0);
-                    } else if (blockType.name.includes('Dirt')) {
-                        this.showActionIcon('🟫💨', 1.5);
-                    } else {
-                        this.showActionIcon('✅⛏️', 1.5);
-                    }
                 }
 
                 this.log('Successfully destroyed block', { x, y, z });
