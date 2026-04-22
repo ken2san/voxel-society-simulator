@@ -2264,20 +2264,22 @@ class Character {
         const headCenterY = bodyTop + neckGap + headH / 2;
 
         // ── Hair ──────────────────────────────────────────────────────────────────
-        // ONE flat slab — think beret/flat cap, no stacking, no side panels
-        const hairTopH = 0.07;  // hardcoded flat height (23% of headH — truly flat)
-        const hairTopW = headW * 1.18, hairTopD = headD * 1.12;
+        // One thick block cap wider than head — ref photo style (voxel game hat hair)
+        // Width: clearly overhangs head on all sides
+        // Height: ~75% of head height — substantial, reads as "hair cap" not hat/brim
+        const hairTopH = headH * 0.75;
+        const hairTopW = headW * 1.32, hairTopD = headD * 1.10;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
-        const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001;  // hidden (non-zero to avoid degenerate geometry)
+        // Everything else hidden — no stacking, no side panels
+        const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001;
         const hairCapLocalY = 0;
-        // No side panels — they cause the crown/construction-hat look
         const hairSideW = 0.001, hairSideH = 0.001, hairSideD = 0.001;
         const hairSideLocalX = 0, hairSideLocalY = 0;
 
         // ── Halo ──────────────────────────────────────────────────────────────────
-        // Thin ring with clear visible gap above the flat cap
-        const haloW = headW * 1.72, haloH = 0.04, haloD = headD * 1.72;
-        const haloLocalY = headH / 2 + hairTopH + 0.11;
+        // Thin ring floating clearly above the hair cap
+        const haloW = headW * 1.65, haloH = 0.04, haloD = headD * 1.65;
+        const haloLocalY = headH / 2 + hairTopH + 0.09;
 
         // ── Eyes + cheeks ─────────────────────────────────────────────────────────
         // Voxel art eyes: small 2-voxel-ish squares, dark with white highlight
