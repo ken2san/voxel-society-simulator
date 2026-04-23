@@ -4,11 +4,13 @@ import { VoxelCrowdRenderer } from './voxel-crowd-renderer.js';
 import {
     buildHouseWallGroup,
     buildHouseRoofGroup,
+    buildBedGroup,
 } from './house-voxel-renderer.js';
 import {
     buildWoodGroup,
     buildLeafGroup,
     buildFruitGroup,
+    buildStoneGroup,
 } from './tree-voxel-renderer.js';
 
 export function createThreeSimulationIO() {
@@ -26,6 +28,8 @@ export function createThreeSimulationIO() {
         if (type.isWoodBlock)  return buildWoodGroup(type, x, y, z, isVisible);
         if (type.isLeafBlock)  return buildLeafGroup(type, x, y, z, isVisible);
         if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
+        if (type.isStoneBlock) return buildStoneGroup(type, x, y, z, isVisible);
+        if (type.isBedBlock)   return buildBedGroup(type, x, y, z, isVisible);
 
         // ── Standard blocks ──────────────────────────────────────────────────
         let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);

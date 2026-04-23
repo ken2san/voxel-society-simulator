@@ -246,3 +246,88 @@ export function buildHouseRoofGroup(type, x, y, z, isVisible) {
     group.visible = isVisible;
     return group;
 }
+
+// ── BED block: voxel mattress with pillow and wooden frame ────────────────────
+// Bed sits low in the block (isBed: BoxGeometry height = 0.4u).
+// BVS=0.12, frame is 7 wide × 11 long × 3 tall; mattress fill above frame.
+// Total height: 3*BVS = 0.36u (frame) + 1 voxel padding → 0.48u from bottom → fits ✓
+const BVS = 0.12;
+const BVI = BVS * 0.93;
+
+// Colour constants
+const BED_FRAME  = [0x5d4037, 0x4e342e, 0x6d4c41];  // dark wood
+const BED_MATT   = [0xf5f5dc, 0xfdf5e6, 0xfffacd, 0xfaebd7]; // warm cream mattress
+const BED_SHEET  = [0xdce8f5, 0xc8ddf0, 0xbfd3ed];  // pale blue sheet
+const BED_PILLOW = [0xffffff, 0xf0f0f0, 0xf8f8f8];  // white pillow
+
+export function buildBedGroup(type, x, y, z, isVisible) {
+    const rng    = makeRng(x, y, z);
+    const voxels = [];
+
+    // Layout in voxel grid (grid coordinates):
+    //   X: -3..+3 (7 wide  = 7*BVS = 0.84u → centred)
+    //   Z: -5..+5 (11 long = 11*BVS = 1.32u → truncated to 1u, fits since BVS small)
+    //   Y: -4 = group centre offset to sit near block bottom
+    // group.position.y = y+0.5, so block bottom is at y+0.0 = group centre −0.5
+    // We want bed top ~0.38u → top voxel at group local Y = −0.12u → iy = −0.12/BVS ≈ −1
+
+    const WX = 3;   // half-width  in voxels
+    const LZ = 5;   // half-length in voxels
+    const BASE_Y = -4; // bottom of frame in voxel grid (−4*BVS = −0.48u from centre)
+
+    // Wooden frame: perimeter + floor, 2 voxels tall
+    for (let iy = BASE_Y; iy <= BASE_Y + 1; iy++) {
+        for (let ix = -WX; ix <= WX; ix++) {
+            for (let iz = -LZ; iz <= LZ; iz++) {
+                const onEdge = Math.abs(ix) === WX || Math.abs(iz) === LZ;
+                if (!onEdge) continue;
+                const col = BED_FRAME[Math.floor(rng() * BED_FRAME.length)];
+                voxels.push({ x: ix * BVS, y: iy * BVS, z: iz * BVS, color: col });
+            }
+        }
+    }
+
+    // Headboard: +2 voxels tall at z = +LZ end
+    for (let iy = BASE_Y + 2; iy <= BASE_Y + 4; iy++) {
+        for (let ix = -WX; ix <= WX; ix++) {
+            const col = BED_FRAME[Math.floor(rng() * BED_FRAME.length)];
+            voxels.push({ x: ix * BVS, y: iy * BVS, z: LZ * BVS, color: col });
+        }
+    }
+
+    // Mattress fill (inside frame, one layer above frame floor)
+    const MATT_Y = BASE_Y + 2;
+    for (let ix = -(WX-1); ix <= WX-1; ix++) {
+        for (let iz = -(LZ-1); iz <= LZ-1; iz++) {
+            // Bottom half: cream mattress
+            const mCol = BED_MATT[Math.floor(rng() * BED_MATT.length)];
+            voxels.push({ x: ix * BVS, y: MATT_Y * BVS, z: iz * BVS, color: mCol });
+            // Top layer: sheet (blue-tinted)
+            const sCol = iz < LZ - 2
+                ? BED_SHEET[Math.floor(rng() * BED_SHEET.length)]
+                : BED_MATT[Math.floor(rng() * BED_MATT.length)]; // foot: bare mattress
+            voxels.push({ x: ix * BVS, y: (MATT_Y + 1) * BVS, z: iz * BVS, color: sCol });
+        }
+    }
+
+    // Pillow: 3 wide × 2 deep, at head end (z = +LZ-1 to +LZ-2)
+    const PIL_Y = MATT_Y + 2;
+    for (let ix = -1; ix <= 1; ix++) {
+        for (let iz = LZ - 3; iz <= LZ - 1; iz++) {
+            const col = BED_PILLOW[Math.floor(rng() * BED_PILLOW.length)];
+            voxels.push({ x: ix * BVS, y: PIL_Y * BVS, z: iz * BVS, color: col });
+        }
+    }
+
+    const geo   = buildVoxelGeo(voxels, BVI);
+    const mat   = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mesh  = new THREE.Mesh(geo, mat);
+
+    const group = new THREE.Group();
+    group.add(mesh);
+    // Shift down so the bed sits at block bottom (same offset as original isBed yOffset=0.2)
+    group.position.set(x + 0.5, y + 0.2, z + 0.5);
+    group.visible = isVisible;
+    return group;
+}
+

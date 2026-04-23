@@ -1,12 +1,13 @@
 /**
  * tree-voxel-renderer.js
  *
- * Renders WOOD, LEAF, and FRUIT block types as voxelchar05-style mini-voxel meshes.
+ * Renders WOOD, LEAF, FRUIT, and STONE block types as voxelchar05-style mini-voxel meshes.
  * All blocks fit within the standard 1 game-unit cube.
  *
  * WOOD  → bark-textured cylindrical trunk slice   (WVS=0.14, R=2.5, 7 tall → 0.98u)
  * LEAF  → fuzzy green sphere cluster              (LVS=0.12, R=4.0        → 0.96u)
  * FRUIT → mini berry bush: stem + rounded crown   (FVS=0.10, R=3.5, cy=+1 → 0.90u)
+ * STONE → craggy surface boulder                  (SVS=0.13, R=3.8        → 0.99u)
  *
  * Geometry is built identically to house-voxel-renderer (merged BufferGeometry,
  * per-vertex RGB, face-brightness array). RNG is seeded per grid position for
@@ -27,6 +28,11 @@ const LEAF_COLORS = [0x2e7d32, 0x388e3c, 0x1b5e20, 0x43a047, 0x33691e, 0x558b2f]
 const FRUIT_BARK  = [0x6d4c41, 0x5d4037, 0x4e342e];
 const BERRY_COLORS = [0xe53935, 0xd32f2f, 0xc62828, 0xff7043, 0xf4511e];
 const BERRY_HL    = 0xff8a80;  // highlight voxel
+
+// Stone: grey palette with subtle variation + rare mineral streak
+const STONE_BASE  = [0x78909c, 0x607d8b, 0x90a4ae, 0x546e7a, 0x8fa5b5];
+const STONE_DARK  = [0x455a64, 0x37474f, 0x4a5f6e];
+const STONE_VEIN  = [0xb0bec5, 0xcfd8dc, 0xeceff1];  // quartz/feldspar highlight
 
 // ── Seeded RNG (xorshift, same as house-voxel-renderer) ───────────────────────
 function makeRng(x, y, z) {
@@ -215,4 +221,51 @@ export function buildFruitGroup(type, x, y, z, isVisible) {
     }
 
     return makeGroup(voxels, FVI, x, y, z, isVisible);
+}
+
+// ── STONE block: craggy surface boulder ──────────────────────────────────────
+// SVS=0.13, rough sphere R=3.8 with chipped faces, sits on block bottom half
+// Sphere bottom at -R = -3.8 voxels → -0.494u from centre → rock sits on ground ✓
+// Sphere top at +R = +0.494u from centre → 0.994u total → within 1u ✓
+// Rare vein (bright) voxels (~3%) for mineral sparkle
+const SVS = 0.13;
+const SVI = SVS * 0.93;
+
+export function buildStoneGroup(type, x, y, z, isVisible) {
+    const rng    = makeRng(x, y, z);
+    const voxels = [];
+    // Slight position variety – shift the boulder left/right/forward/back a little
+    const offX = (rng() - 0.5) * 0.12;
+    const offZ = (rng() - 0.5) * 0.12;
+
+    const R = 3.8;
+    // Squash the sphere slightly vertically (looks more rock-like, less ball-like)
+    const SY = 0.78;
+
+    for (let iy = -4; iy <= 4; iy++) {
+        for (let ix = -5; ix <= 5; ix++) {
+            for (let iz = -5; iz <= 5; iz++) {
+                const d = Math.sqrt(ix * ix + (iy / SY) * (iy / SY) + iz * iz);
+                if (d >= R) continue;
+
+                // Chip out ~8% of voxels for rough, craggy surface
+                if (d > R - 1.0 && rng() > 0.60) continue;
+                if (rng() > 0.95) continue;
+
+                let col;
+                if (rng() < 0.03) {
+                    // Mineral vein highlight
+                    col = STONE_VEIN[Math.floor(rng() * STONE_VEIN.length)];
+                } else if (d > R - 1.5) {
+                    // Outer shell: darker (shadow side exposed)
+                    col = STONE_DARK[Math.floor(rng() * STONE_DARK.length)];
+                } else {
+                    col = STONE_BASE[Math.floor(rng() * STONE_BASE.length)];
+                }
+                voxels.push({ x: ix * SVS + offX, y: iy * SVS, z: iz * SVS + offZ, color: col });
+            }
+        }
+    }
+
+    return makeGroup(voxels, SVI, x, y, z, isVisible);
 }
