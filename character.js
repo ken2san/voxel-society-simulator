@@ -5,6 +5,7 @@ import { decideNextAction_rulebase } from './sim-core/AI_rulebase.js';
 import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
 import { getSimulationIO, gridToWorldPosition } from './sim-core/interfaces.js';
+import { getActiveSkin } from './character-skins.js';
 
 function simIO() {
     return getSimulationIO();
@@ -2217,6 +2218,11 @@ class Character {
    }
 
     createMorphologyProfile(sourceTraits = this.appearanceProfile || this.personality) {
+        const skin = getActiveSkin();
+        return skin ? skin.createMorphology(sourceTraits) : null;
+    }
+
+    _createMorphologyProfile_unused(sourceTraits) {
         const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
         const traits = sourceTraits || {};
         const bravery    = traits.bravery    ?? 1.0;
@@ -2539,6 +2545,8 @@ class Character {
         this._bodyRow4RestY  = _m ? _m.shinCenterY     : 0.175;  // shin
         this._bodyRow5RestY  = _m ? _m.footCenterY     : 0.045;  // foot
         this._headRestY      = _m ? _m.headCenterY     : 1.010;
+        this._armRestY       = _m ? _m.upperArmCenterY : 0.660;
+        this._forearmRestY   = _m ? _m.forearmCenterY  : 0.505;
 
         // Hide individual body parts from the camera — InstancedMesh handles rendering.
         // Eyes and mouth (children of head) stay on layer 0 since they follow head rotation.
@@ -6061,10 +6069,10 @@ class Character {
             if (this.rightShin)    this.rightShin.position.y    = (this._bodyRow4RestY ?? 0.175) + bob;
             if (this.leftFoot)     this.leftFoot.position.y     = (this._bodyRow5RestY ?? 0.045) + bob;
             if (this.rightFoot)    this.rightFoot.position.y    = (this._bodyRow5RestY ?? 0.045) + bob;
-            if (this.leftArm)      this.leftArm.position.y      = 0.665 + bob;
-            if (this.rightArm)     this.rightArm.position.y     = 0.665 + bob;
-            if (this.leftForearm)  this.leftForearm.position.y  = 0.525 + bob;
-            if (this.rightForearm) this.rightForearm.position.y = 0.525 + bob;
+            if (this.leftArm)      this.leftArm.position.y      = (this._armRestY     ?? 0.660) + bob;
+            if (this.rightArm)     this.rightArm.position.y     = (this._armRestY     ?? 0.660) + bob;
+            if (this.leftForearm)  this.leftForearm.position.y  = (this._forearmRestY ?? 0.505) + bob;
+            if (this.rightForearm) this.rightForearm.position.y = (this._forearmRestY ?? 0.505) + bob;
             const wiggle = Math.sin(this.bobTime * 0.7) * 0.08;
             this.head.position.y = (this._headRestY ?? 1.01) + bob * 0.7;
             this.mesh.rotation.z = wiggle * 0.5;
@@ -6101,10 +6109,10 @@ class Character {
             if (this.rightShin)  { this.rightShin.position.y  = (this._bodyRow4RestY ?? 0.175) + walkBob; this.rightShin.position.z   = -legSwing * 0.7; }
             if (this.leftFoot)   { this.leftFoot.position.y   = (this._bodyRow5RestY ?? 0.045) + walkBob; this.leftFoot.position.z    =  legSwing * 0.5; }
             if (this.rightFoot)  { this.rightFoot.position.y  = (this._bodyRow5RestY ?? 0.045) + walkBob; this.rightFoot.position.z   = -legSwing * 0.5; }
-            if (this.leftArm)      this.leftArm.position.y      = 0.665 + walkBob;
-            if (this.rightArm)     this.rightArm.position.y     = 0.665 + walkBob;
-            if (this.leftForearm)  this.leftForearm.position.y  = 0.525 + walkBob;
-            if (this.rightForearm) this.rightForearm.position.y = 0.525 + walkBob;
+            if (this.leftArm)      this.leftArm.position.y      = (this._armRestY     ?? 0.660) + walkBob;
+            if (this.rightArm)     this.rightArm.position.y     = (this._armRestY     ?? 0.660) + walkBob;
+            if (this.leftForearm)  this.leftForearm.position.y  = (this._forearmRestY ?? 0.505) + walkBob;
+            if (this.rightForearm) this.rightForearm.position.y = (this._forearmRestY ?? 0.505) + walkBob;
             this.head.position.y = (this._headRestY ?? 1.01) + Math.sin(this._stepPhase + 1) * 0.05;
             this.mesh.rotation.z = sway;
             // arms swing opposite phase + gentle spread
@@ -6127,10 +6135,10 @@ class Character {
             if (this.rightShin)   { this.rightShin.position.y  += ((this._bodyRow4RestY ?? 0.175) - this.rightShin.position.y)  * 0.2; this.rightShin.position.z  *= 0.80; }
             if (this.leftFoot)    { this.leftFoot.position.y   += ((this._bodyRow5RestY ?? 0.045) - this.leftFoot.position.y)   * 0.2; this.leftFoot.position.z   *= 0.80; }
             if (this.rightFoot)   { this.rightFoot.position.y  += ((this._bodyRow5RestY ?? 0.045) - this.rightFoot.position.y)  * 0.2; this.rightFoot.position.z  *= 0.80; }
-            if (this.leftArm)     this.leftArm.position.y      += (0.665 - this.leftArm.position.y)      * 0.2;
-            if (this.rightArm)    this.rightArm.position.y     += (0.665 - this.rightArm.position.y)     * 0.2;
-            if (this.leftForearm) this.leftForearm.position.y  += (0.525 - this.leftForearm.position.y)  * 0.2;
-            if (this.rightForearm)this.rightForearm.position.y += (0.525 - this.rightForearm.position.y) * 0.2;
+            if (this.leftArm)     this.leftArm.position.y      += ((this._armRestY     ?? 0.660) - this.leftArm.position.y)      * 0.2;
+            if (this.rightArm)    this.rightArm.position.y     += ((this._armRestY     ?? 0.660) - this.rightArm.position.y)     * 0.2;
+            if (this.leftForearm) this.leftForearm.position.y  += ((this._forearmRestY ?? 0.505) - this.leftForearm.position.y)  * 0.2;
+            if (this.rightForearm)this.rightForearm.position.y += ((this._forearmRestY ?? 0.505) - this.rightForearm.position.y) * 0.2;
             // Dampen wing rotations
             if (this.leftWingUpper)  this.leftWingUpper.rotation.z  *= 0.85;
             if (this.rightWingUpper) this.rightWingUpper.rotation.z *= 0.85;
@@ -6177,10 +6185,10 @@ class Character {
             if (this.rightShin)   this.rightShin.position.y   = (this._bodyRow4RestY ?? 0.175) + Math.abs(excitement);
             if (this.leftFoot)    this.leftFoot.position.y    = (this._bodyRow5RestY ?? 0.045) + Math.abs(excitement);
             if (this.rightFoot)   this.rightFoot.position.y   = (this._bodyRow5RestY ?? 0.045) + Math.abs(excitement);
-            if (this.leftArm)     this.leftArm.position.y     = 0.665 + Math.abs(excitement);
-            if (this.rightArm)    this.rightArm.position.y    = 0.665 + Math.abs(excitement);
-            if (this.leftForearm) this.leftForearm.position.y = 0.525 + Math.abs(excitement);
-            if (this.rightForearm)this.rightForearm.position.y= 0.525 + Math.abs(excitement);
+            if (this.leftArm)     this.leftArm.position.y     = (this._armRestY     ?? 0.660) + Math.abs(excitement);
+            if (this.rightArm)    this.rightArm.position.y    = (this._armRestY     ?? 0.660) + Math.abs(excitement);
+            if (this.leftForearm) this.leftForearm.position.y = (this._forearmRestY ?? 0.505) + Math.abs(excitement);
+            if (this.rightForearm)this.rightForearm.position.y= (this._forearmRestY ?? 0.505) + Math.abs(excitement);
             this.head.position.y = (this._headRestY ?? 1.01) + Math.abs(excitement) * 1.2;
             // Wing flutter when socializing
             if (this.leftWingUpper)  this.leftWingUpper.rotation.z  =  Math.sin(this.bobTime * 2.0) * 0.35 + 0.15;
@@ -6207,10 +6215,10 @@ class Character {
             if (this.rightShin)   this.rightShin.position.y   = (this._bodyRow4RestY ?? 0.175) + workBob;
             if (this.leftFoot)    this.leftFoot.position.y    = (this._bodyRow5RestY ?? 0.045) + workBob;
             if (this.rightFoot)   this.rightFoot.position.y   = (this._bodyRow5RestY ?? 0.045) + workBob;
-            if (this.leftArm)     this.leftArm.position.y     = 0.665 + workBob;
-            if (this.rightArm)    this.rightArm.position.y    = 0.665 + workBob;
-            if (this.leftForearm) this.leftForearm.position.y = 0.525 + workBob;
-            if (this.rightForearm)this.rightForearm.position.y= 0.525 + workBob;
+            if (this.leftArm)     this.leftArm.position.y     = (this._armRestY     ?? 0.660) + workBob;
+            if (this.rightArm)    this.rightArm.position.y    = (this._armRestY     ?? 0.660) + workBob;
+            if (this.leftForearm) this.leftForearm.position.y = (this._forearmRestY ?? 0.505) + workBob;
+            if (this.rightForearm)this.rightForearm.position.y= (this._forearmRestY ?? 0.505) + workBob;
             this.head.position.y = (this._headRestY ?? 1.01) + workBob;
             // Concentrated head tilt
             this.head.rotation.z = Math.sin(this.bobTime * 0.3) * 0.05;
@@ -6238,10 +6246,10 @@ class Character {
             if (this.rightShin)   this.rightShin.position.y   = (this._bodyRow4RestY ?? 0.175) - 0.03 + weakness;
             if (this.leftFoot)    this.leftFoot.position.y    = (this._bodyRow5RestY ?? 0.045) - 0.03 + weakness;
             if (this.rightFoot)   this.rightFoot.position.y   = (this._bodyRow5RestY ?? 0.045) - 0.03 + weakness;
-            if (this.leftArm)     this.leftArm.position.y     = 0.665 - 0.03 + weakness;
-            if (this.rightArm)    this.rightArm.position.y    = 0.665 - 0.03 + weakness;
-            if (this.leftForearm) this.leftForearm.position.y = 0.525 - 0.03 + weakness;
-            if (this.rightForearm)this.rightForearm.position.y= 0.525 - 0.03 + weakness;
+            if (this.leftArm)     this.leftArm.position.y     = (this._armRestY     ?? 0.660) - 0.03 + weakness;
+            if (this.rightArm)    this.rightArm.position.y    = (this._armRestY     ?? 0.660) - 0.03 + weakness;
+            if (this.leftForearm) this.leftForearm.position.y = (this._forearmRestY ?? 0.505) - 0.03 + weakness;
+            if (this.rightForearm)this.rightForearm.position.y= (this._forearmRestY ?? 0.505) - 0.03 + weakness;
             this.head.position.y = (this._headRestY ?? 1.01) - 0.03 + weakness;
             this.mesh.rotation.z = Math.sin(this.bobTime * 0.3) * 0.03; // Slight swaying
             if (!this.actionAnim.active) this.body.scale.y = 0.95; // Slightly compressed
@@ -6821,12 +6829,7 @@ class Character {
     }
 
     updateColorFromPersonality() {
-        // Vibrant lime/chartreuse — jacket and hair match exactly (photo ref)
-        if (this.bodyMaterial) this.bodyMaterial.color.setHex(0xd0e000);
-        // Warm peach skin
-        if (this.skinMaterial) this.skinMaterial.color.setHex(0xf5b878);
-        // Hair = same lime as jacket
-        if (this.hairMaterial) this.hairMaterial.color.setHex(0xd0e000);
+        getActiveSkin()?.applyColors(this);
     }
 
     updateWorldPosFromGrid() {

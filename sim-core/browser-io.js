@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getActiveSkin } from '../character-skins.js';
 
 export function createThreeSimulationIO() {
     const createMaterial = (options = {}) => new THREE.MeshLambertMaterial(options);
@@ -388,6 +389,8 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         update(characters) {
             const selectedId = (typeof window !== 'undefined' && window.selectedCharacterId != null)
                 ? String(window.selectedCharacterId) : '';
+            // Skin config — read once per frame, not per character
+            const _skinIM = getActiveSkin()?.im ?? {};
 
             let idx = 0;
             for (const char of characters) {
@@ -418,9 +421,16 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _write(iRightShin,  idx, char.rightShin,  _m4group, m.shinW,  m.shinH,  m.shinD);
                 _write(iLeftFoot,   idx, char.leftFoot,   _m4group, m.footW,  m.footH,  m.footD);
                 _write(iRightFoot,  idx, char.rightFoot,  _m4group, m.footW,  m.footH,  m.footD);
-                // — Wings —
-                _z(iLeftWingUpper,  idx); _z(iRightWingUpper, idx); // wings hidden
-                _z(iLeftWingLower,  idx); _z(iRightWingLower,  idx);
+                // — Wings (skin-dependent) —
+                if (_skinIM.showWings) {
+                    _write(iLeftWingUpper,  idx, char.leftWingUpper,  _m4group, m.wingUpperW, m.wingUpperH, m.wingUpperD);
+                    _write(iRightWingUpper, idx, char.rightWingUpper, _m4group, m.wingUpperW, m.wingUpperH, m.wingUpperD);
+                    _write(iLeftWingLower,  idx, char.leftWingLower,  _m4group, m.wingLowerW, m.wingLowerH, m.wingLowerD);
+                    _write(iRightWingLower, idx, char.rightWingLower, _m4group, m.wingLowerW, m.wingLowerH, m.wingLowerD);
+                } else {
+                    _z(iLeftWingUpper, idx); _z(iRightWingUpper, idx);
+                    _z(iLeftWingLower, idx); _z(iRightWingLower, idx);
+                }
 
                 // — Head —
                 char.head.updateMatrix();
@@ -433,14 +443,24 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 // — Head children —
                 _write(iHairTop,    idx, char.hairTop,    _m4head, m.hairTopW, m.hairTopH, m.hairTopD);
                 _z(iHairCapTop, idx); // hidden
-                _z(iHairSideL,  idx); // hidden — one clean pom only
+                _z(iHairSideL,  idx); // hidden
                 _z(iHairSideR,  idx); // hidden
-                _z(iHalo, idx); // hidden
+                // Halo (skin-dependent)
+                if (_skinIM.showHalo) {
+                    _write(iHalo, idx, char.halo, _m4head, m.haloW, m.haloH, m.haloD);
+                } else {
+                    _z(iHalo, idx);
+                }
                 _write(iLeftEye,    idx, char.leftEye,    _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
                 _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
                 _write(iRightCheek, idx, char.rightCheek, _m4head, m.cheekW, m.cheekH, m.cheekD);
-                _write(iMouth,      idx, char.mouth,      _m4head, m.mouthW, m.mouthH, m.mouthD); // nose
+                // Nose/mouth (skin-dependent)
+                if (_skinIM.showNose) {
+                    _write(iMouth, idx, char.mouth, _m4head, m.mouthW, m.mouthH, m.mouthD);
+                } else {
+                    _z(iMouth, idx);
+                }
                 _write(iLeftEyeHL,  idx, char.leftEyeHL,  _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
                 _write(iRightEyeHL, idx, char.rightEyeHL, _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
                 _write(iLeftBrow,   idx, char.leftBrow,   _m4head, m.browW, m.browH, m.browD);
@@ -465,14 +485,14 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
                 _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xd0e000);
                 for (const im of _hairIMs) im.setColorAt(idx, _color);
 
-                // Pelvis — dark olive belt (inner shirt visible between jacket and pants)
-                _color.setHex(0x3d5000);
+                // Pelvis — skin-configurable (olive belt for chibi, white hem for angel)
+                _color.setHex(_skinIM.pelvisColor ?? 0x3d5000);
                 iPelvis.setColorAt(idx, _color);
-                // Pants — fixed dark brown
-                _color.setHex(0x6b3515);
+                // Pants — skin-configurable
+                _color.setHex(_skinIM.pantsColor ?? 0x6b3515);
                 for (const im of _pantsIMs) im.setColorAt(idx, _color);
-                // Feet — fixed black
-                _color.setHex(0x111111);
+                // Feet — skin-configurable
+                _color.setHex(_skinIM.feetColor ?? 0x111111);
                 for (const im of _feetIMs) im.setColorAt(idx, _color);
 
                 idx++;
