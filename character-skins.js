@@ -189,15 +189,15 @@ registerSkin({
         //   leftWing:   y=10    (direct child of angel root)
         //   headGroup:  y=15    (pivot), face sphere center at local y=3.5 → abs y=18.5
         //   haloGroup:  headGroup local y=12 → abs y=27
-        const VS = 0.055;
+        // VS = 0.042: uniform scale from 0.055 (factor ×0.764). headTop = 22.5*VS = 0.945 — fits in 1 block.
+        const VS = 0.042;
 
         // Feet: 1-voxel stump, legs at x=±1 (= ±VS) as in voxelchar01
         const footH = VS, footW = VS, footD = VS, legSpacingX = VS;
         // Shin + thigh + pelvis fill gap from foot-top (1*VS) to body-bottom (5*VS)
-        // 0.055+0.11+VS+VS = 0.275 = 5*VS ✓
-        const shinH  = 0.11,  shinW  = 0.10, shinD  = 0.10;
-        const thighH = VS,    thighW = 0.12, thighD = 0.11;
-        const pelvisH = VS,   pelvisW = 0.60, pelvisD = 0.32; // minimal pivot, wide skirt
+        const shinH  = 2*VS, shinW  = 2*VS, shinD  = 2*VS;
+        const thighH = VS,   thighW = 2*VS, thighD = 2*VS;
+        const pelvisH = VS,  pelvisW = 11*VS, pelvisD = 6*VS; // minimal pivot, wide skirt
 
         // bodyBottom = 5*VS = 0.275 (= voxelchar01 bodyGroup absolute y × VS)
         // torsoH = 9*VS = 0.495 (body box spans y=0..9 of bodyGroup = 9 units)
@@ -211,10 +211,10 @@ registerSkin({
         const bodyTop       = bodyBottom + torsoH;                 // 0.77 = 14*VS ✓
 
         // Arms (mostly hidden under dress)
-        const upperArmH = 0.18, upperArmW = 0.13, upperArmD = 0.13;
-        const forearmH  = 0.12, forearmW  = 0.11, forearmD  = 0.10;
-        const armSpacingX     = torsoW / 2 + upperArmW / 2 - 0.01;
-        const upperArmCenterY = bodyTop - upperArmH / 2 - 0.01;
+        const upperArmH = 3*VS, upperArmW = 2.5*VS, upperArmD = 2.5*VS;
+        const forearmH  = 2*VS, forearmW  = 2*VS,   forearmD  = 2*VS;
+        const armSpacingX     = torsoW / 2 + upperArmW / 2 - 0.5*VS;
+        const upperArmCenterY = bodyTop - upperArmH / 2 - 0.5*VS;
         const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;
 
         // Head: face sphere center at headGroup local y=3.5 → abs y=18.5 → 18.5*VS
@@ -225,7 +225,7 @@ registerSkin({
         const headCenterY = bodyTop + neckGap + headH / 2;         // 1.0175 = 18.5*VS ✓
 
         // Hair pom (IM mesh hidden when VoxelCrowdRenderer active; voxels in 'head')
-        const hairTopH = 0.34, hairTopW = 0.58, hairTopD = 0.46;
+        const hairTopH = 6*VS, hairTopW = 10*VS, hairTopD = 8*VS;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
         const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001, hairCapLocalY = 0;
         const hairSideW = 0.001, hairSideH = 0.001, hairSideD = 0.001;
@@ -233,13 +233,13 @@ registerSkin({
 
         // Halo: haloGroup at headGroup local y=12 → abs y=27 → 27*VS=1.485
         //   head-local: (27-18.5)*VS = 8.5*VS = 0.4675
-        const haloW = 0.52, haloH = 0.04, haloD = 0.52;
+        const haloW = 9.5*VS, haloH = VS, haloD = 9.5*VS;
         const haloLocalY = 8.5 * VS;                               // 0.4675
 
         // Eyes / cheeks (IM mesh hidden; face voxels in 'head')
-        const eyeW = headW * 0.24, eyeH = headH * 0.24, eyeD = 0.028;
+        const eyeW = headW * 0.24, eyeH = headH * 0.24, eyeD = 0.5*VS;
         const eyeLocalX = 2 * VS, eyeLocalY = 0, eyeLocalZ = headD / 2 + eyeD / 2;
-        const cheekW = headW * 0.22, cheekH = headH * 0.14, cheekD = 0.022;
+        const cheekW = headW * 0.22, cheekH = headH * 0.14, cheekD = 0.5*VS;
         const cheekLocalX = 3 * VS, cheekLocalY = -0.5 * VS, cheekLocalZ = headD / 2 + cheekD / 2;
         const mouthW = 0.001, mouthH = 0.001, mouthD = 0.001, mouthY = 0, mouthLocalZ = headD / 2;
         const eyeHLW = 0.001, eyeHLH = 0.001, eyeHLD = 0.001;
@@ -257,8 +257,8 @@ registerSkin({
         const wingLowerLocalX = 2 * VS;
         const wingLowerLocalY = 10 * VS;
 
-        const shadowRadius = 0.34, carriedItemSize = 0.26;
-        const carriedItemY = headCenterY + headH * 0.32, carriedItemZ = headD / 2 + 0.08;
+        const shadowRadius = 6*VS, carriedItemSize = 5*VS;
+        const carriedItemY = headCenterY + headH * 0.32, carriedItemZ = headD / 2 + 2*VS;
         return _buildReturn({ footH, footW, footD, legSpacingX, shinH, shinW, shinD, thighH, thighW, thighD, pelvisH, pelvisW, pelvisD, torsoH, torsoW, torsoD, footCenterY, shinCenterY, thighCenterY, pelvisCenterY, bodyBottom, torsoCenterY, bodyTop, upperArmH, upperArmW, upperArmD, forearmH, forearmW, forearmD, armSpacingX, upperArmCenterY, forearmCenterY, headW, headH, headD, neckGap, headCenterY, hairTopW, hairTopH, hairTopD, hairTopLocalY, hairCapW, hairCapH, hairCapD, hairCapLocalY, hairSideH: hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY, haloW, haloH, haloD, haloLocalY, eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ, cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ, mouthW, mouthH, mouthD, mouthY, mouthLocalZ, eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ, browW, browH, browD, browLocalX, browLocalY, browLocalZ, wingZ, wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY, wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY, shadowRadius, carriedItemSize, carriedItemY, carriedItemZ });
     },
 
@@ -283,10 +283,10 @@ registerSkin({
     // All positions are in PART-LOCAL coordinates (relative to each part mesh center).
     // Scale: 1 voxcelchar01 grid unit × VS = our world unit.
     // Per-part origin offsets chosen to center the voxel cluster on the part pivot.
-    voxelSize: 0.055,
+    voxelSize: 0.042,
 
     collectVoxels() {
-        const VS  = 0.055;
+        const VS  = 0.042; // uniform scale from 0.055 — headTop = 22.5*VS = 0.945, fits within 1 block
         const vox = [];
         // push(grid_x, grid_y, grid_z, color, part)
         // coords are multiplied by VS so they match the sim's world scale
