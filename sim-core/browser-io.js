@@ -2,10 +2,8 @@ import * as THREE from 'three';
 import { getActiveSkin } from '../character-skins.js';
 import { VoxelCrowdRenderer } from './voxel-crowd-renderer.js';
 import {
-    buildHouseWallMesh,
-    buildStoneWallMesh,
+    buildHouseWallGroup,
     buildHouseRoofGroup,
-    buildDarkRoofGroup,
 } from './house-voxel-renderer.js';
 
 export function createThreeSimulationIO() {
@@ -16,10 +14,8 @@ export function createThreeSimulationIO() {
         const variantSeed = Math.abs((x * 73856093) ^ (y * 19349663) ^ (z * 83492791));
 
         // ── Voxel-style house blocks ─────────────────────────────────────────
-        if (type.isStoneWall) return buildStoneWallMesh(material, x, y, z, isVisible);
-        if (type.isHouseWall)  return buildHouseWallMesh(material, x, y, z, isVisible);
-        if (type.isDarkRoof)   return buildDarkRoofGroup(material, x, y, z, isVisible, variantSeed);
-        if (type.isHouseRoof)  return buildHouseRoofGroup(material, x, y, z, isVisible, variantSeed);
+        if (type.isHouseWall || type.isStoneWall) return buildHouseWallGroup(type, x, y, z, isVisible);
+        if (type.isHouseRoof || type.isDarkRoof)  return buildHouseRoofGroup(type, x, y, z, isVisible);
 
         // ── Standard blocks ──────────────────────────────────────────────────
         let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
