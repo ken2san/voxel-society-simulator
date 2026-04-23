@@ -424,10 +424,10 @@ const GOLEM_TYPES = {
 function _deriveGolemType(traits) {
     if (!traits) return 'forest';
     const scores = {
-        magma:   traits.bravery         ?? 1.0,
-        ice:     traits.resilience      ?? 1.0,
-        forest:  traits.diligence       ?? 1.0,
-        ancient: traits.curiosity       ?? 1.0,
+        magma:   traits.bravery ?? 1.0,
+        ice:     traits.resilience ?? 1.0,
+        forest:  ((traits.diligence ?? 1.0) + (traits.resourcefulness ?? 1.0)) / 2,
+        ancient: ((traits.curiosity ?? 1.0) + (traits.sociality ?? 1.0)) / 2,
     };
     return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
 }
