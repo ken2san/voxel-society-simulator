@@ -5812,12 +5812,13 @@ class Character {
         }
         const perfProfile = this.getVisualPerfProfile();
 
-        // Toggle individual mesh visibility for selected character vs InstancedMesh rendering
+        // When InstancedMesh renderer is active, always keep individual box parts on layer 31
+        // (hidden from camera). The instanced voxel renderer handles all visual output.
+        // Previously we toggled selected chars to layer 0, which showed plain rectangular boxes
+        // instead of the correct voxel silhouette. Selection is now indicated by a ground ring.
         if (typeof window !== 'undefined' && window._instancedCharRenderer) {
-            const nowSelected = perfProfile.isSelected;
-            if (nowSelected !== this._isSelectedForInstanced) {
-                this._isSelectedForInstanced = nowSelected;
-                const layer = nowSelected ? 0 : 31;
+            if (this._isSelectedForInstanced !== false) {
+                this._isSelectedForInstanced = false;
                 for (const part of [
                     this.body, this.pelvis,
                     this.leftThigh, this.rightThigh, this.leftShin, this.rightShin, this.leftFoot, this.rightFoot,
@@ -5828,7 +5829,7 @@ class Character {
                     this.mouth, this.leftEye, this.rightEye, this.leftEyeHL, this.rightEyeHL,
                     this.leftBrow, this.rightBrow, this.leftCheek, this.rightCheek,
                 ]) {
-                    if (part) part.layers.set(layer);
+                    if (part) part.layers.set(31);
                 }
             }
         }

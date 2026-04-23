@@ -182,7 +182,6 @@ export class VoxelCrowdRenderer {
 
         for (const char of characters) {
             if (!char || char.state === 'dead') continue;
-            if (String(char.id) === selId) continue;
             if (!char.mesh || !char.body || !char.head) continue;
 
             const prev = this._prevPos[slot];

@@ -54,6 +54,21 @@ export function setWorldObjects(objs) {
     if (scene && typeof window !== 'undefined') {
         window._instancedCharRenderer = simIO().createInstancedCharacterRenderer(scene, 300);
     }
+    // Selection ring: a flat circle on the ground that follows the selected character.
+    // Uses layer 0 so it's always visible; positioned each frame in animate().
+    if (scene && typeof window !== 'undefined') {
+        const ringGeo = new THREE.RingGeometry(0.30, 0.42, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffcc, side: THREE.DoubleSide,
+            transparent: true, opacity: 0.82, depthWrite: false
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.visible = false;
+        ring.renderOrder = 999;
+        scene.add(ring);
+        window._selectionRing = ring;
+    }
 }
 export const blockSize = 1;
 export const gridSize = 16;
@@ -1236,6 +1251,19 @@ export function animate() {
     // Sync instanced character renderer (batches body/head/arms/shadow into 5 draw calls)
     if (typeof window !== 'undefined' && window._instancedCharRenderer) {
         window._instancedCharRenderer.update(characters);
+    }
+
+    // Update selection ring position to follow the selected character
+    if (typeof window !== 'undefined' && window._selectionRing) {
+        const selId = String(window.selectedCharacterId ?? '');
+        const selChar = selId ? characters.find(c => c && String(c.id) === selId && c.mesh) : null;
+        if (selChar) {
+            const p = selChar.mesh.position;
+            window._selectionRing.position.set(p.x, p.y + 0.02, p.z);
+            window._selectionRing.visible = true;
+        } else {
+            window._selectionRing.visible = false;
+        }
     }
 
     // --- グループ再判定は人口が増えたら間引く ---
