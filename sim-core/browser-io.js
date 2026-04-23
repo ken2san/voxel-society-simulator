@@ -5,6 +5,11 @@ import {
     buildHouseWallGroup,
     buildHouseRoofGroup,
 } from './house-voxel-renderer.js';
+import {
+    buildWoodGroup,
+    buildLeafGroup,
+    buildFruitGroup,
+} from './tree-voxel-renderer.js';
 
 export function createThreeSimulationIO() {
     const createMaterial = (options = {}) => new THREE.MeshLambertMaterial(options);
@@ -16,6 +21,11 @@ export function createThreeSimulationIO() {
         // ── Voxel-style house blocks ─────────────────────────────────────────
         if (type.isHouseWall || type.isStoneWall) return buildHouseWallGroup(type, x, y, z, isVisible);
         if (type.isHouseRoof || type.isDarkRoof)  return buildHouseRoofGroup(type, x, y, z, isVisible);
+
+        // ── Voxel-style nature blocks ────────────────────────────────────────
+        if (type.isWoodBlock)  return buildWoodGroup(type, x, y, z, isVisible);
+        if (type.isLeafBlock)  return buildLeafGroup(type, x, y, z, isVisible);
+        if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
 
         // ── Standard blocks ──────────────────────────────────────────────────
         let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
