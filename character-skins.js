@@ -457,12 +457,14 @@ registerSkin({
         const bodyBottom    = footH + shinH + thighH + pelvisH;
         const torsoCenterY  = bodyBottom + torsoH / 2;
         const bodyTop       = bodyBottom + torsoH;
-        // Arms: thick columnar
-        const upperArmH = 6*VS, upperArmW = 3*VS, upperArmD = 3*VS;
-        const forearmH  = 4*VS, forearmW  = 3*VS, forearmD  = 3*VS;
-        const armSpacingX     = torsoW / 2 + upperArmW / 2 - VS;
-        const upperArmCenterY = bodyTop - upperArmH / 2 - VS;
-        const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;
+        // Arms: thick columnar, pivot AT THE SHOULDER (bodyTop).
+        // IM boxes are hidden (0.001) — voxel crowd renderer handles all visuals.
+        // Full arm (upper+forearm) hangs down as one unit; arm voxels go y=0..−10 in collectVoxels.
+        const upperArmH = 0.001, upperArmW = 0.001, upperArmD = 0.001; // IM hidden
+        const forearmH  = 0.001, forearmW  = 0.001, forearmD  = 0.001; // IM hidden
+        const armSpacingX     = torsoW / 2 + VS;   // arm inner edge flush with body edge (5*VS)
+        const upperArmCenterY = bodyTop;             // shoulder pivot — arm hangs down from here
+        const forearmCenterY  = bodyTop - 5*VS;     // midpoint of full arm (unused for IM)
         // Head: large rounded boulder
         const headW = 9*VS, headH = 8*VS, headD = 8*VS, neckGap = 0;
         const headCenterY = bodyTop + neckGap + headH / 2;
@@ -567,8 +569,11 @@ registerSkin({
         }
 
         // ── ARMS-LOCAL ──────────────────────────────────────────────────────
-        // Column arm: y -3 to 3, cross-section radius ~1.5
-        for (let y = -3; y <= 3; y++) {
+        // Full arm column: y=[0..−10] hanging from shoulder pivot (upperArmCenterY=bodyTop).
+        // Combines upper arm (y=[0..−6]) + forearm (y=[−6..−10]).
+        // forearmL / forearmR parts are NOT used — all voxels live in armL/armR so the
+        // entire arm swings as one pendulum unit when leftArm.rotation.x is animated.
+        for (let y = -10; y <= 0; y++) {
             for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
                 if (x*x + z*z > 2) continue;
                 if (Math.random() >= density) continue;
@@ -604,15 +609,7 @@ registerSkin({
             push(x, 0, z, isMoss ? rndMoss() : rndStone(), 'footR');
         }
 
-        // ── FOREARMS (same as arms, shorter) ────────────────────────────────
-        for (let y = -2; y <= 2; y++) {
-            for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
-                if (x*x + z*z > 2) continue;
-                if (Math.random() >= density) continue;
-                push(x, y, z, rndStone(), 'forearmL');
-                push(x, y, z, rndStone(), 'forearmR');
-            }
-        }
+        // forearmL / forearmR intentionally omitted — merged into armL/armR above.
 
         return vox;
     },
