@@ -5597,10 +5597,13 @@ class Character {
             while (this._bodyYaw < -Math.PI) this._bodyYaw += Math.PI * 2;
             this.body.rotation.y = this._bodyYaw;
             // Normalize delta so head always takes the short way around (no vertical loops)
-            let _hDelta = this._bodyYaw - this.head.rotation.y;
-            while (_hDelta > Math.PI)  _hDelta -= Math.PI * 2;
-            while (_hDelta < -Math.PI) _hDelta += Math.PI * 2;
-            this.head.rotation.y += _hDelta * 0.35;
+            // Skip head turn from movement when lookTarget is active — look-at takes priority
+            if (!this._lookTargetPos) {
+                let _hDelta = this._bodyYaw - this.head.rotation.y;
+                while (_hDelta > Math.PI)  _hDelta -= Math.PI * 2;
+                while (_hDelta < -Math.PI) _hDelta += Math.PI * 2;
+                this.head.rotation.y += _hDelta * 0.35;
+            }
         }
     // apply speed multiplier for slight variation
     const aging = this.getAgingProfile ? this.getAgingProfile() : { mobilityMul: 1.0 };
@@ -6124,6 +6127,8 @@ class Character {
             this.mesh.rotation.z *= 0.85;
             this.leftArm.rotation.x  *= 0.85;
             this.rightArm.rotation.x *= 0.85;
+            this.leftArm.rotation.y  *= 0.85;
+            this.rightArm.rotation.y *= 0.85;
             this.body.position.y += ((this._bodyRow1RestY ?? 0.630) - this.body.position.y) * 0.2;
             if (this.pelvis)      this.pelvis.position.y      += ((this._bodyRow2RestY ?? 0.445) - this.pelvis.position.y)      * 0.2;
             if (this.leftThigh)   { this.leftThigh.position.y  += ((this._bodyRow3RestY ?? 0.325) - this.leftThigh.position.y)  * 0.2; this.leftThigh.position.z  *= 0.80; }
@@ -6340,6 +6345,14 @@ class Character {
         if (this.head) {
             while (this.head.rotation.y > Math.PI)  this.head.rotation.y -= Math.PI * 2;
             while (this.head.rotation.y < -Math.PI) this.head.rotation.y += Math.PI * 2;
+        }
+        // Normalize arm rotations to prevent gesture += accumulation from causing full spins
+        for (const arm of [this.leftArm, this.rightArm]) {
+            if (!arm) continue;
+            while (arm.rotation.y > Math.PI)  arm.rotation.y -= Math.PI * 2;
+            while (arm.rotation.y < -Math.PI) arm.rotation.y += Math.PI * 2;
+            while (arm.rotation.x > Math.PI)  arm.rotation.x -= Math.PI * 2;
+            while (arm.rotation.x < -Math.PI) arm.rotation.x += Math.PI * 2;
         }
     }
 
