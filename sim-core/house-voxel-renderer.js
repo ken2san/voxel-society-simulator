@@ -12,15 +12,17 @@
 
 import * as THREE from 'three';
 
-// ── Wall: 6×5×6 voxel grid → 1.32 × 1.10 × 1.32 units (extends beyond 1-unit block)
-const WG   = 6;          // wall grid width & depth
+// ── Wall: 5×5×5 voxel grid → 0.91 × 0.91 × 0.91 units (fits within 1-unit block)
+// span = (WG-1)*WS + WI = 4*0.185 + 0.172 = 0.912u < 1.0u ✓
+const WG   = 5;          // wall grid width & depth
 const WGH  = 5;          // wall grid height
-const WS   = 0.22;       // wall voxel grid spacing
+const WS   = 0.185;      // wall voxel grid spacing
 const WI   = WS * 0.93;  // wall voxel inner size (7% hairline mortar)
 
-// ── Roof: 4-step pyramid, base 7 wide → 1.54 units (overhangs wall, RG must be odd)
-const RG   = 7;
-const RS   = 0.22;
+// ── Roof: gabled 5-wide → 0.986u (hairline overhang, eave effect)
+// span = (RG-1)*RS + RI = 4*0.20 + 0.186 = 0.986u ≈ 1.0u ✓
+const RG   = 5;
+const RS   = 0.20;
 const RI   = RS * 0.93;
 
 // ── Color palettes (voxelchar04-style) ───────────────────────────────────────
@@ -119,18 +121,17 @@ function buildVoxelGeo(voxels, innerSize) {
 }
 
 // ── Wall builder ──────────────────────────────────────────────────────────────
-// 6×5×6 hollow shell (1.32 × 1.10 × 1.32 units).
-// White/cream base with ~12% random brick-red accents (voxelchar04-style).
+// 5×5×5 hollow shell (0.91u, fits within 1 game unit).
 //
-// Front face (iz=0) features:
-//   iy=4: full wall row (top)
-//   iy=3: wall + door lintel accent above opening
-//   iy=2: door opening (ix=1,2) + window glow (ix=4)
-//   iy=1: door opening (ix=1,2) + window glow (ix=4)
-//   iy=0: full wall row (threshold)
+// Front face (iz=0) layout, ix=0..4 left→right, iy=0..4 bottom→top:
+//   iy=4: W  W  W  W  W   (top)
+//   iy=3: W  F  F  W  W   F=door lintel accent
+//   iy=2: W  _  _  Wn W   _=door opening, Wn=window glow
+//   iy=1: W  _  _  Wn W   _=door opening, Wn=window glow
+//   iy=0: W  W  W  W  W   (threshold)
 export function buildHouseWallGroup(type, x, y, z, isVisible) {
     const houseType = type.isStoneWall ? 'stone' : 'wood';
-    const pal       = WALL_PALETTE[houseType];   // { base: [...], brick }
+    const pal       = WALL_PALETTE[houseType];
     const doorCol   = DOOR_COLOR[houseType];
     const winCol    = WINDOW_COLOR[houseType];
     const rng       = makeRng(x, y, z);
@@ -142,12 +143,12 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
                 // Hollow shell
                 if (ix > 0 && ix < WG-1 && iy > 0 && iy < WGH-1 && iz > 0 && iz < WG-1) continue;
 
-                // Door opening: front face, center 2 cols, rows 1-2
+                // Door opening: front face, ix=1,2, iy=1,2
                 if (iz === 0 && ix >= 1 && ix <= 2 && iy >= 1 && iy <= 2) continue;
 
                 // Feature voxels on front face
                 const isDoorLintel = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
-                const isWindow     = iz === 0 && ix >= 4 && iy >= 1 && iy <= 2;
+                const isWindow     = iz === 0 && ix === 3 && iy >= 1 && iy <= 2;
 
                 let color;
                 if (isDoorLintel) {
@@ -155,7 +156,6 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
                 } else if (isWindow) {
                     color = winCol;
                 } else {
-                    // White base + 12% brick accent
                     const r = rng();
                     color = r < 0.12 ? pal.brick : pal.base[Math.floor(rng() * pal.base.length)];
                 }
@@ -182,33 +182,25 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
 }
 
 // ── Roof builder ──────────────────────────────────────────────────────────────
-// GABLED ROOF (voxelchar04-style): tapers in X only, full depth in Z.
-// 4 layers from bottom:
-//   layer 0: 7 wide × 7 deep  (base, eave)
-//   layer 1: 5 wide × 7 deep
-//   layer 2: 3 wide × 7 deep
-//   layer 3: 1 wide × 7 deep  (ridge line running front-to-back)
-// Dark navy checkerboard (voxelchar04: 0x2c3e50 / 0x1a252f).
-// Chimney: 2×2 grey stack sits on the ridge near one end.
+// GABLED ROOF: tapers in X only (5→3→1), full depth in Z.
+// Total width 0.986u ≈ 1u (hairline eave overhang beyond 0.91u wall).
 export function buildHouseRoofGroup(type, x, y, z, isVisible) {
     const houseType    = type.isDarkRoof ? 'stone' : 'wood';
     const [col0, col1] = ROOF_PALETTE[houseType];
     const chimCol      = CHIMNEY_COLOR[houseType];
 
-    const STEPS = 4;
-    const BASE_W = RG;          // 7 — width at base (X)
-    const DEPTH  = RG;          // 7 — full depth (Z, unchanged per layer)
+    const STEPS  = (RG + 1) / 2;   // = 3  (RG=5, must be odd)
+    const DEPTH  = RG;              // 5 — full Z depth per layer
     const voxels = [];
 
-    // Gabled layers
+    // Gabled layers: width 5 → 3 → 1
     for (let layer = 0; layer < STEPS; layer++) {
-        const w    = BASE_W - layer * 2;          // 7 → 5 → 3 → 1
+        const w    = RG - layer * 2;
         const py   = (layer - (STEPS - 1) / 2) * RS;
         const xOff = (w - 1) / 2;
         const zOff = (DEPTH - 1) / 2;
         for (let ix = 0; ix < w; ix++) {
             for (let iz = 0; iz < DEPTH; iz++) {
-                // Checkerboard on X+Z+layer (matching voxelchar04: (x+z+y)%2)
                 const color = ((ix + iz + layer) % 2 === 0) ? col0 : col1;
                 voxels.push({
                     x: (ix - xOff) * RS,
@@ -220,9 +212,9 @@ export function buildHouseRoofGroup(type, x, y, z, isVisible) {
         }
     }
 
-    // Chimney: 2×2 grey, on the ridge (layer 3 = top), offset to one end
-    const ridgeY = ((STEPS - 1) - (STEPS - 1) / 2) * RS;  // = 1.5 * RS
-    const chimZc = ((DEPTH - 1) / 2 - 1.5) * RS;          // near +Z end of ridge
+    // Chimney: 2×2 grey, on the ridge (top layer), near +Z end
+    const ridgeY = ((STEPS - 1) - (STEPS - 1) / 2) * RS;
+    const chimZc = ((DEPTH - 1) / 2 - 1) * RS;
     for (let cy = 0; cy < 3; cy++) {
         for (let cx = 0; cx < 2; cx++) {
             for (let cz = 0; cz < 2; cz++) {
