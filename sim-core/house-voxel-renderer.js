@@ -23,26 +23,31 @@ const RG   = 7;
 const RS   = 0.22;
 const RI   = RS * 0.93;
 
-// ── Color palettes ────────────────────────────────────────────────────────────
+// ── Color palettes (voxelchar04-style) ───────────────────────────────────────
+// Wall: white/cream base + ~12% brick accent
 const WALL_PALETTE = {
-    wood:  [0xf0daa8, 0xdcc070, 0xc8a850, 0xa88038, 0xe8cc90, 0xb49060],
-    stone: [0xc0d0d8, 0x8fa8b8, 0x607888, 0x3e5060, 0xa0bcc8, 0x506878],
+    wood:  { base: [0xecf0f1, 0xe8e0d4, 0xf5f0e8, 0xddd8cc], brick: 0xc0392b },
+    stone: { base: [0xa0b4c4, 0x8a9aa8, 0xb4c4d4, 0x7a8a98], brick: 0x607868 },
 };
+// Roof: dark navy checkerboard (voxelchar04: 0x2c3e50 / 0x1a252f)
 const ROOF_PALETTE = {
-    wood:  [0xa06030, 0x4a2c18],
-    stone: [0x6a7e90, 0x283040],
+    wood:  [0x2c3e50, 0x1a252f],
+    stone: [0x3a4a5a, 0x25333e],
 };
+// Chimney: medium grey (voxelchar04: 0x95a5a6)
 const CHIMNEY_COLOR = {
-    wood:  0x3a2010,
-    stone: 0x20303e,
+    wood:  0x95a5a6,
+    stone: 0x607888,
 };
+// Door: grey slab (voxelchar04: 0x7f8c8d)
 const DOOR_COLOR = {
-    wood:  0x4a2810,
-    stone: 0x243040,
+    wood:  0x7f8c8d,
+    stone: 0x354050,
 };
+// Window: warm yellow glow (voxelchar04: 0xf1c40f)
 const WINDOW_COLOR = {
-    wood:  0xffee88,   // warm glow
-    stone: 0xc8e8ff,   // cool blue-white
+    wood:  0xf1c40f,
+    stone: 0xc8e8ff,
 };
 
 // Per-face brightness (+X, -X, +Y, -Y, +Z, -Z)
@@ -114,17 +119,18 @@ function buildVoxelGeo(voxels, innerSize) {
 }
 
 // ── Wall builder ──────────────────────────────────────────────────────────────
-// 6×5×6 hollow shell, extends 0.16 units beyond the 1-unit game block.
+// 6×5×6 hollow shell (1.32 × 1.10 × 1.32 units).
+// White/cream base with ~12% random brick-red accents (voxelchar04-style).
 //
-// Front face (iz=0) layout, ix=0..5 left→right, iy=0..4 bottom→top:
-//   iy=4: W  W  W  W  W  W
-//   iy=3: W  F  F  W  W  W    F=lintel
-//   iy=2: W  _  _  W  Wn W    _=door opening, Wn=window
-//   iy=1: W  _  _  P  Wn W    P=door post accent
-//   iy=0: W  W  W  W  W  W    threshold (no opening at floor)
+// Front face (iz=0) features:
+//   iy=4: full wall row (top)
+//   iy=3: wall + door lintel accent above opening
+//   iy=2: door opening (ix=1,2) + window glow (ix=4)
+//   iy=1: door opening (ix=1,2) + window glow (ix=4)
+//   iy=0: full wall row (threshold)
 export function buildHouseWallGroup(type, x, y, z, isVisible) {
     const houseType = type.isStoneWall ? 'stone' : 'wood';
-    const palette   = WALL_PALETTE[houseType];
+    const pal       = WALL_PALETTE[houseType];   // { base: [...], brick }
     const doorCol   = DOOR_COLOR[houseType];
     const winCol    = WINDOW_COLOR[houseType];
     const rng       = makeRng(x, y, z);
@@ -133,20 +139,26 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
     for (let ix = 0; ix < WG; ix++) {
         for (let iy = 0; iy < WGH; iy++) {
             for (let iz = 0; iz < WG; iz++) {
-                // Hollow shell: skip fully interior voxels
+                // Hollow shell
                 if (ix > 0 && ix < WG-1 && iy > 0 && iy < WGH-1 && iz > 0 && iz < WG-1) continue;
 
-                // Door opening: front face (iz=0), ix=1,2 (center-left), iy=1,2
+                // Door opening: front face, center 2 cols, rows 1-2
                 if (iz === 0 && ix >= 1 && ix <= 2 && iy >= 1 && iy <= 2) continue;
 
-                // Determine accent type on front face
+                // Feature voxels on front face
                 const isDoorLintel = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
-                const isDoorPost   = iz === 0 && ix === 3 && iy >= 1 && iy <= 2;
-                const isWindow     = iz === 0 && ix === 4 && iy >= 1 && iy <= 2;
+                const isWindow     = iz === 0 && ix >= 4 && iy >= 1 && iy <= 2;
 
-                const color = isDoorLintel || isDoorPost ? doorCol
-                            : isWindow                   ? winCol
-                            : palette[Math.floor(rng() * palette.length)];
+                let color;
+                if (isDoorLintel) {
+                    color = doorCol;
+                } else if (isWindow) {
+                    color = winCol;
+                } else {
+                    // White base + 12% brick accent
+                    const r = rng();
+                    color = r < 0.12 ? pal.brick : pal.base[Math.floor(rng() * pal.base.length)];
+                }
 
                 voxels.push({
                     x: (ix - (WG - 1) / 2) * WS,
@@ -170,40 +182,54 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
 }
 
 // ── Roof builder ──────────────────────────────────────────────────────────────
-// 4-step pyramid (7→5→3→1 wide) + 2×2 chimney stack offset to +X+Z corner.
-// Total width 1.54 overhangs the 1.32-wide wall.
+// GABLED ROOF (voxelchar04-style): tapers in X only, full depth in Z.
+// 4 layers from bottom:
+//   layer 0: 7 wide × 7 deep  (base, eave)
+//   layer 1: 5 wide × 7 deep
+//   layer 2: 3 wide × 7 deep
+//   layer 3: 1 wide × 7 deep  (ridge line running front-to-back)
+// Dark navy checkerboard (voxelchar04: 0x2c3e50 / 0x1a252f).
+// Chimney: 2×2 grey stack sits on the ridge near one end.
 export function buildHouseRoofGroup(type, x, y, z, isVisible) {
-    const houseType  = type.isDarkRoof ? 'stone' : 'wood';
+    const houseType    = type.isDarkRoof ? 'stone' : 'wood';
     const [col0, col1] = ROOF_PALETTE[houseType];
     const chimCol      = CHIMNEY_COLOR[houseType];
 
-    const STEPS = (RG + 1) / 2;  // = 4  (requires odd RG)
+    const STEPS = 4;
+    const BASE_W = RG;          // 7 — width at base (X)
+    const DEPTH  = RG;          // 7 — full depth (Z, unchanged per layer)
     const voxels = [];
 
-    // Pyramid
+    // Gabled layers
     for (let layer = 0; layer < STEPS; layer++) {
-        const size   = RG - layer * 2;
-        const py     = (layer - (STEPS - 1) / 2) * RS;
-        const offset = (size - 1) / 2;
-        for (let ix = 0; ix < size; ix++) {
-            for (let iz = 0; iz < size; iz++) {
+        const w    = BASE_W - layer * 2;          // 7 → 5 → 3 → 1
+        const py   = (layer - (STEPS - 1) / 2) * RS;
+        const xOff = (w - 1) / 2;
+        const zOff = (DEPTH - 1) / 2;
+        for (let ix = 0; ix < w; ix++) {
+            for (let iz = 0; iz < DEPTH; iz++) {
+                // Checkerboard on X+Z+layer (matching voxelchar04: (x+z+y)%2)
                 const color = ((ix + iz + layer) % 2 === 0) ? col0 : col1;
-                voxels.push({ x: (ix - offset) * RS, y: py, z: (iz - offset) * RS, color });
+                voxels.push({
+                    x: (ix - xOff) * RS,
+                    y: py,
+                    z: (iz - zOff) * RS,
+                    color,
+                });
             }
         }
     }
 
-    // Chimney: 2×2 stack, offset toward +X +Z corner, rising above pyramid peak
-    const peakY  = ((STEPS - 1) - (STEPS - 1) / 2) * RS;  // top pyramid layer y
-    const chimOX = RS * 1.2;
-    const chimOZ = RS * 1.2;
+    // Chimney: 2×2 grey, on the ridge (layer 3 = top), offset to one end
+    const ridgeY = ((STEPS - 1) - (STEPS - 1) / 2) * RS;  // = 1.5 * RS
+    const chimZc = ((DEPTH - 1) / 2 - 1.5) * RS;          // near +Z end of ridge
     for (let cy = 0; cy < 3; cy++) {
         for (let cx = 0; cx < 2; cx++) {
             for (let cz = 0; cz < 2; cz++) {
                 voxels.push({
-                    x: chimOX + (cx - 0.5) * RS,
-                    y: peakY  + (cy + 1)   * RS,
-                    z: chimOZ + (cz - 0.5) * RS,
+                    x: (cx - 0.5) * RS,
+                    y: ridgeY + (cy + 1) * RS,
+                    z: chimZc  + (cz - 0.5) * RS,
                     color: chimCol,
                 });
             }
