@@ -13,10 +13,10 @@
 import * as THREE from 'three';
 
 const VS       = 0.235;        // grid spacing: 4 × 0.235 ≈ 0.94 per block
-const VS_INNER = VS * 0.78;    // actual voxel size (22% gap = visible mortar)
+const VS_INNER = VS * 0.96;    // actual voxel size (4% gap = hairline mortar, no see-through)
 const GRID     = 4;
 
-// ── Color palettes (wide range for visible contrast) ─────────────────────────
+// ── Color palettes ───────────────────────────────────────────────────────────────
 const WALL_PALETTE = {
     wood:  [0xf0daa8, 0xdcc070, 0xc8a850, 0xa88038, 0xe8cc90, 0xb49060],
     stone: [0xc0d0d8, 0x8fa8b8, 0x607888, 0x3e5060, 0xa0bcc8, 0x506878],
@@ -24,6 +24,11 @@ const WALL_PALETTE = {
 const ROOF_PALETTE = {
     wood:  [0xa06030, 0x4a2c18],
     stone: [0x6a7e90, 0x283040],
+};
+// Door frame: dark contrasting accent on the front face
+const DOOR_FRAME = {
+    wood:  0x4a2810,   // dark timber
+    stone: 0x243040,   // dark slate
 };
 
 // Per-face brightness multipliers: top bright, bottom dark, sides varied
@@ -95,12 +100,20 @@ function buildVoxelGeo(voxels) {
 }
 
 // ── Wall builder ──────────────────────────────────────────────────────────────
-// 4×4×4 hollow shell: only voxels on the outer surface of the cube.
-// Uses seeded RNG for deterministic colour variation.
+// 4×4×4 outer shell with a door opening on the −Z face (iz=0).
+//
+// Front face (iz=0) layout (iy 0=bottom, 3=top):
+//   [ W  .  .  W ]  iy=3  (top: full)
+//   [ W  F  F  W ]  iy=2  (lintel + side posts)
+//   [ P  _  _  P ]  iy=1  (door side posts; _ = opening)
+//   [ P  _  _  P ]  iy=0  (door side posts; _ = opening)
+//
+//  W=wall, F=door-frame accent, P=post accent, _=door opening (no voxel)
 export function buildHouseWallGroup(type, x, y, z, isVisible) {
-    const houseType = type.isStoneWall ? 'stone' : 'wood';
-    const palette   = WALL_PALETTE[houseType];
-    const rng       = makeRng(x, y, z);
+    const houseType  = type.isStoneWall ? 'stone' : 'wood';
+    const palette    = WALL_PALETTE[houseType];
+    const frameColor = DOOR_FRAME[houseType];
+    const rng        = makeRng(x, y, z);
 
     const voxels = [];
     for (let ix = 0; ix < GRID; ix++) {
@@ -108,7 +121,20 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
             for (let iz = 0; iz < GRID; iz++) {
                 // Only outer shell
                 if (ix > 0 && ix < GRID-1 && iy > 0 && iy < GRID-1 && iz > 0 && iz < GRID-1) continue;
-                const color = palette[Math.floor(rng() * palette.length)];
+
+                // Door opening: front face, inner 2 columns, lower 2 rows
+                if (iz === 0 && ix >= 1 && ix <= 2 && iy <= 1) continue;
+
+                // Door frame voxels on front face: lintel (iy=2, inner) + side posts (iy≤2, outer cols)
+                const isFrame = iz === 0 && (
+                    (iy === 2 && ix >= 1 && ix <= 2) ||   // lintel above door
+                    (iy <= 2 && (ix === 0 || ix === 3))   // door-side posts
+                );
+
+                const color = isFrame
+                    ? frameColor
+                    : palette[Math.floor(rng() * palette.length)];
+
                 voxels.push({
                     x: (ix - 1.5) * VS,
                     y: (iy - 1.5) * VS,
