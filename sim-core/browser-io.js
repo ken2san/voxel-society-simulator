@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getActiveSkin } from '../character-skins.js';
+import { VoxelCrowdRenderer } from './voxel-crowd-renderer.js';
 
 export function createThreeSimulationIO() {
     const createMaterial = (options = {}) => new THREE.MeshLambertMaterial(options);
@@ -267,6 +268,10 @@ export function createThreeSimulationIO() {
             return target.set(obj?.position?.x || 0, obj?.position?.y || 0, obj?.position?.z || 0);
         },
         createInstancedCharacterRenderer(scene, maxCount = 200) {
+            const skin = getActiveSkin();
+            if (skin && typeof skin.collectVoxels === 'function') {
+                return new VoxelCrowdRenderer(scene, maxCount);
+            }
             return createInstancedCharacterRenderer(scene, maxCount);
         }
     };

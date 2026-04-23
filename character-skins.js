@@ -257,4 +257,141 @@ registerSkin({
         pantsColor:    0xfcfcfc, // legs hidden under dress
         feetColor:     0xffe0bd, // skin stumps
     },
+
+    // ── Voxel geometry definition (for VoxelCrowdRenderer) ───────────────
+    // All positions are in PART-LOCAL coordinates (relative to each part mesh center).
+    // VoxelCrowdRenderer maps part names → character mesh pivots and applies the
+    // part's world matrix as the instance matrix.  The geometry encodes all voxel
+    // offsets from that pivot.
+    voxelSize: 0.055,
+
+    collectVoxels() {
+        const VS  = 0.055;
+        const vox = [];
+        const add = (x, y, z, color, part) => vox.push({ x, y, z, color, part });
+        const d3  = (dx, dy, dz) => Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        const C = {
+            hair:   0xf5a662,
+            skin:   0xffe0bd,
+            eye:    0x660000,
+            cheek:  0xffb2bc,
+            dress:  0xf0f0ff,
+            halo:   0xffd700,
+            ribbon: 0xdb5a6b,
+        };
+
+        // ── HEAD-LOCAL (relative to head mesh center at (0,0,0)) ──────────
+        // head: headW=0.34, headH=0.30, headD=0.30
+
+        // Face: skin-coloured sphere (r=0.17), with eye-socket cutouts
+        for (let xi=-3;xi<=3;xi++) for (let yi=-3;yi<=3;yi++) for (let zi=-3;zi<=3;zi++) {
+            const x=xi*VS, y=yi*VS, z=zi*VS;
+            if (d3(x,y,z) < 0.17) {
+                if (z > 0.09 && Math.abs(x) > 0.04 && Math.abs(x) < 0.13 && y > -0.01 && y < 0.12) continue;
+                add(x, y, z, C.skin, 'head');
+            }
+        }
+
+        // Hair: orange sphere shell centred at (0, 0.07, 0), inner r=0.17, outer r=0.30
+        // Front-face window kept open so eyes are visible
+        for (let xi=-5;xi<=5;xi++) for (let yi=-3;yi<=7;yi++) for (let zi=-5;zi<=5;zi++) {
+            const x=xi*VS, y=yi*VS, z=zi*VS;
+            const d = d3(x, y-0.07, z);
+            if (d >= 0.17 && d < 0.30) {
+                if (z > 0.09 && y > -0.03 && y < 0.14 && Math.abs(x) < 0.11) continue;
+                add(x, y, z, C.hair, 'head');
+            }
+        }
+
+        // Ribbon headband: ring at y=0.13 between face and hair (r 0.13–0.27)
+        for (let xi=-5;xi<=5;xi++) for (let zi=-5;zi<=5;zi++) {
+            const x=xi*VS, z=zi*VS, r=d3(x,0,z);
+            if (r >= 0.13 && r < 0.27) add(x, 0.13, z, C.ribbon, 'head');
+        }
+
+        // Eyes (dark red — 2 voxels each, just in front of face surface)
+        const ez = 0.17;
+        add(-0.08, 0.04, ez, C.eye, 'head'); add(-0.08, 0.09, ez, C.eye, 'head');
+        add( 0.08, 0.04, ez, C.eye, 'head'); add( 0.08, 0.09, ez, C.eye, 'head');
+
+        // Cheeks (pink blush)
+        add(-0.12, -0.02, 0.14, C.cheek, 'head');
+        add( 0.12, -0.02, 0.14, C.cheek, 'head');
+
+        // ── HALO-LOCAL (relative to halo mesh center, child of head) ─────
+        // haloLocalY=0.57 above head center → ring of 24 gold voxels at r=0.22
+        for (let i = 0; i < 24; i++) {
+            const a = (i / 24) * Math.PI * 2;
+            add(Math.cos(a) * 0.22, 0, Math.sin(a) * 0.22, C.halo, 'halo');
+        }
+
+        // ── BODY-LOCAL (relative to torso mesh center) ────────────────────
+        // torso: 0.44 × 0.26 × 0.24  →  fill 9 × 5 × 5 grid
+        for (let xi=-4;xi<=4;xi++) for (let yi=-2;yi<=2;yi++) for (let zi=-2;zi<=2;zi++) {
+            add(xi*VS, yi*VS, zi*VS, C.dress, 'body');
+        }
+
+        // ── PELVIS-LOCAL (relative to pelvis mesh center) ─────────────────
+        // Wide skirt hem: two flat circles at y=-0.04 and y=0  (pelvisW/2=0.28)
+        for (let xi=-5;xi<=5;xi++) for (let zi=-5;zi<=5;zi++) {
+            const x=xi*VS, z=zi*VS;
+            if (d3(x,0,z) < 0.27) {
+                add(x, -0.04, z, C.dress, 'pelvis');
+                add(x,  0.00, z, C.dress, 'pelvis');
+            }
+        }
+
+        // ── ARM-LOCAL (relative to upper arm mesh centers, left + right) ──
+        // Dress sleeves: upperArmW=0.13, upperArmH=0.18, upperArmD=0.13
+        for (let yi=-2;yi<=2;yi++) for (let xi=-1;xi<=1;xi++) for (let zi=-1;zi<=1;zi++) {
+            add(xi*VS, yi*VS, zi*VS, C.dress, 'armL');
+            add(xi*VS, yi*VS, zi*VS, C.dress, 'armR');
+        }
+
+        // ── FOREARM-LOCAL (relative to forearm mesh centers) ──────────────
+        // Skin forearms: forearmW=0.11, forearmH=0.12, forearmD=0.10
+        for (let yi=-1;yi<=2;yi++) for (let xi=-1;xi<=1;xi++) for (let zi=-1;zi<=1;zi++) {
+            add(xi*VS, yi*VS, zi*VS, C.skin, 'forearmL');
+            add(xi*VS, yi*VS, zi*VS, C.skin, 'forearmR');
+        }
+
+        // ── WING-LOCAL (relative to wing mesh centers, behind torso) ──────
+        // Triangular upper wings (wider at top, tapering down)
+        for (let yi=-2;yi<=2;yi++) {
+            const halfX = 0.14 * (1 - Math.max(0, -yi) * 0.12);
+            for (let xi=-3;xi<=3;xi++) {
+                if (Math.abs(xi*VS) <= halfX + VS*0.5) {
+                    add(xi*VS, yi*VS, 0, C.dress, 'wingUL');
+                    add(xi*VS, yi*VS, 0, C.dress, 'wingUR');
+                }
+            }
+        }
+        // Smaller lower wings
+        for (let yi=-2;yi<=1;yi++) {
+            const halfX = 0.11 * (1 - Math.max(0, -yi) * 0.18);
+            for (let xi=-2;xi<=2;xi++) {
+                if (Math.abs(xi*VS) <= halfX + VS*0.5) {
+                    add(xi*VS, yi*VS, 0, C.dress, 'wingLL');
+                    add(xi*VS, yi*VS, 0, C.dress, 'wingLR');
+                }
+            }
+        }
+
+        // ── LEGS (minimal — hidden inside dress) ──────────────────────────
+        for (let yi=-1;yi<=1;yi++) {
+            add(0, yi*VS, 0, C.dress, 'legL');
+            add(0, yi*VS, 0, C.dress, 'legR');
+        }
+
+        // ── SHINS & FEET (skin — peeking below dress hem) ─────────────────
+        add(0, 0, 0, C.skin, 'shinL');
+        add(0, 0, 0, C.skin, 'shinR');
+        for (let xi=-1;xi<=1;xi++) for (let zi=-1;zi<=1;zi++) {
+            add(xi*VS, 0, zi*VS, C.skin, 'footL');
+            add(xi*VS, 0, zi*VS, C.skin, 'footR');
+        }
+
+        return vox;
+    },
 });
