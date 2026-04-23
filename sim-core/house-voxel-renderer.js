@@ -12,18 +12,22 @@
 
 import * as THREE from 'three';
 
-const VS   = 0.235;   // mini-voxel size
-const GRID = 4;       // voxels per axis per block
+const VS       = 0.235;        // grid spacing: 4 × 0.235 ≈ 0.94 per block
+const VS_INNER = VS * 0.78;    // actual voxel size (22% gap = visible mortar)
+const GRID     = 4;
 
-// ── Color palettes ────────────────────────────────────────────────────────────
+// ── Color palettes (wide range for visible contrast) ─────────────────────────
 const WALL_PALETTE = {
-    wood:  [0xd8c39a, 0xc9b38a, 0xcfb990, 0xe0cba2, 0xb8a070],
-    stone: [0x7b8a94, 0x6e7d87, 0x8a9aa4, 0x5e6d78, 0x8fa0ac],
+    wood:  [0xf0daa8, 0xdcc070, 0xc8a850, 0xa88038, 0xe8cc90, 0xb49060],
+    stone: [0xc0d0d8, 0x8fa8b8, 0x607888, 0x3e5060, 0xa0bcc8, 0x506878],
 };
 const ROOF_PALETTE = {
-    wood:  [0x6b4a2f, 0x5a3d26],   // checkerboard pair
-    stone: [0x46515e, 0x3a444f],
+    wood:  [0xa06030, 0x4a2c18],
+    stone: [0x6a7e90, 0x283040],
 };
+
+// Per-face brightness multipliers: top bright, bottom dark, sides varied
+const _FB = [0.90, 0.80, 1.30, 0.45, 1.00, 0.75];  // matches _FD order
 
 // ── Deterministic per-block RNG (xorshift, seeded by position) ────────────────
 function makeRng(x, y, z) {
@@ -47,7 +51,7 @@ const _FI = [0,1,2,0,2,3];
 
 function buildVoxelGeo(voxels) {
     if (!voxels.length) return new THREE.BufferGeometry();
-    const hs = VS / 2;
+    const hs = VS_INNER / 2;   // smaller than grid spacing → visible mortar gaps
     const n  = voxels.length;
     const pos  = new Float32Array(n * 24 * 3);
     const nrm  = new Float32Array(n * 24 * 3);
@@ -61,14 +65,18 @@ function buildVoxelGeo(voxels) {
         const cb = ( c        & 0xff) / 255;
         const vB = i * 24;
         for (let f = 0; f < 6; f++) {
-            const fd = _FD[f];
+            const fd  = _FD[f];
+            const bri = _FB[f];  // face brightness
+            const fr  = Math.min(1, cr * bri);
+            const fg  = Math.min(1, cg * bri);
+            const fb  = Math.min(1, cb * bri);
             for (let v = 0; v < 4; v++) {
                 const [fx, fy, fz] = fd.c[v];
                 const vi = vB + f * 4 + v;
                 const pi = vi * 3;
                 pos[pi]   = fx * hs + px;  pos[pi+1] = fy * hs + py;  pos[pi+2] = fz * hs + pz;
                 nrm[pi]   = fd.n[0];       nrm[pi+1] = fd.n[1];       nrm[pi+2] = fd.n[2];
-                col[pi]   = cr;            col[pi+1] = cg;             col[pi+2] = cb;
+                col[pi]   = fr;            col[pi+1] = fg;             col[pi+2] = fb;
             }
         }
         const iB = i * 36;
