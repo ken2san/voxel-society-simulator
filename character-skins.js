@@ -410,3 +410,180 @@ registerSkin({
         return vox;
     },
 });
+
+// ── Golem skin — forest stone golem, ported from voxelchar03.html ──────────────
+// Heavy, blocky proportions. Procedural stone/moss/core voxels per character.
+// VS = 0.058 keeps total height ~0.93, fitting within blockSize=1.
+registerSkin({
+    id: 'golem',
+    name: 'Forest Golem',
+
+    createMorphology(_traits) {
+        const VS = 0.058;
+        // Legs: 4 grid tall each
+        const footH = VS, footW = 3*VS, footD = 3*VS, legSpacingX = 2*VS;
+        const shinH  = 2*VS, shinW  = 3*VS, shinD = 3*VS;
+        const thighH = 2*VS, thighW = 3*VS, thighD = 3*VS;
+        // Pelvis: wide belt block
+        const pelvisH = 2*VS, pelvisW = 7*VS, pelvisD = 5*VS;
+        // Torso: massive block
+        const torsoH = 7*VS, torsoW = 8*VS, torsoD = 6*VS;
+        const footCenterY   = footH / 2;
+        const shinCenterY   = footH + shinH / 2;
+        const thighCenterY  = footH + shinH + thighH / 2;
+        const pelvisCenterY = footH + shinH + thighH + pelvisH / 2;
+        const bodyBottom    = footH + shinH + thighH + pelvisH;
+        const torsoCenterY  = bodyBottom + torsoH / 2;
+        const bodyTop       = bodyBottom + torsoH;
+        // Arms: thick columnar
+        const upperArmH = 6*VS, upperArmW = 3*VS, upperArmD = 3*VS;
+        const forearmH  = 4*VS, forearmW  = 3*VS, forearmD  = 3*VS;
+        const armSpacingX     = torsoW / 2 + upperArmW / 2 - VS;
+        const upperArmCenterY = bodyTop - upperArmH / 2 - VS;
+        const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;
+        // Head: large rounded boulder
+        const headW = 9*VS, headH = 8*VS, headD = 8*VS, neckGap = 0;
+        const headCenterY = bodyTop + neckGap + headH / 2;
+        // No hair, halo, wings
+        const hairTopW = 0.001, hairTopH = 0.001, hairTopD = 0.001, hairTopLocalY = 0;
+        const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001, hairCapLocalY = 0;
+        const hairSideW = 0.001, hairSideH = 0.001, hairSideD = 0.001;
+        const hairSideLocalX = 0, hairSideLocalY = 0;
+        const haloW = 0.001, haloH = 0.001, haloD = 0.001, haloLocalY = 0;
+        const wingZ = 0;
+        const wingUpperW = 0.001, wingUpperH = 0.001, wingUpperD = 0.001;
+        const wingUpperLocalX = 0, wingUpperLocalY = 0;
+        const wingLowerW = 0.001, wingLowerH = 0.001, wingLowerD = 0.001;
+        const wingLowerLocalX = 0, wingLowerLocalY = 0;
+        // Eyes (glowing core; actual voxels in collectVoxels, IM mesh hidden)
+        const eyeW = 0.001, eyeH = 0.001, eyeD = 0.001;
+        const eyeLocalX = 0, eyeLocalY = 0, eyeLocalZ = headD / 2;
+        const cheekW = 0.001, cheekH = 0.001, cheekD = 0.001;
+        const cheekLocalX = 0, cheekLocalY = 0, cheekLocalZ = headD / 2;
+        const mouthW = 0.001, mouthH = 0.001, mouthD = 0.001, mouthY = 0, mouthLocalZ = headD / 2;
+        const eyeHLW = 0.001, eyeHLH = 0.001, eyeHLD = 0.001;
+        const eyeHLLocalX = 0, eyeHLLocalY = 0, eyeHLLocalZ = headD / 2;
+        const browW = 0.001, browH = 0.001, browD = 0.001;
+        const browLocalX = 0, browLocalY = 0, browLocalZ = headD / 2;
+        const shadowRadius = 7*VS, carriedItemSize = 6*VS;
+        const carriedItemY = headCenterY + headH * 0.32, carriedItemZ = headD / 2 + 2*VS;
+        return _buildReturn({ footH, footW, footD, legSpacingX, shinH, shinW, shinD, thighH, thighW, thighD, pelvisH, pelvisW, pelvisD, torsoH, torsoW, torsoD, footCenterY, shinCenterY, thighCenterY, pelvisCenterY, bodyBottom, torsoCenterY, bodyTop, upperArmH, upperArmW, upperArmD, forearmH, forearmW, forearmD, armSpacingX, upperArmCenterY, forearmCenterY, headW, headH, headD, neckGap, headCenterY, hairTopW, hairTopH, hairTopD, hairTopLocalY, hairCapW, hairCapH, hairCapD, hairCapLocalY, hairSideH: hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY, haloW, haloH, haloD, haloLocalY, eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ, cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ, mouthW, mouthH, mouthD, mouthY, mouthLocalZ, eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ, browW, browH, browD, browLocalX, browLocalY, browLocalZ, wingZ, wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY, wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY, shadowRadius, carriedItemSize, carriedItemY, carriedItemZ });
+    },
+
+    applyColors(char) {
+        if (char.bodyMaterial) char.bodyMaterial.color.setHex(0x4a4e53); // dark stone
+        if (char.skinMaterial) char.skinMaterial.color.setHex(0x4a4e53);
+        if (char.hairMaterial) char.hairMaterial.color.setHex(0x355e3b);
+    },
+
+    im: {
+        showHalo:      false,
+        showWings:     false,
+        showHairSides: false,
+        showNose:      false,
+        pelvisColor:   0x3d4146,
+        pantsColor:    0x3d4146,
+        feetColor:     0x2f3236,
+    },
+
+    voxelSize: 0.058,
+
+    collectVoxels() {
+        const VS = 0.058;
+        const vox = [];
+        const push = (x, y, z, color, part) =>
+            vox.push({ x: x * VS, y: y * VS, z: z * VS, color, part });
+
+        const STONE  = [0x4a4e53, 0x5a5e63, 0x3d4146, 0x6b7075, 0x2f3236];
+        const MOSS   = [0x355e3b, 0x4a7c59, 0x2e4a2b];
+        const CORE   = 0x00ffcc;
+        const rndStone = () => STONE[Math.floor(Math.random() * STONE.length)];
+        const rndMoss  = () => MOSS [Math.floor(Math.random() * MOSS.length)];
+
+        // ── HEAD-LOCAL ─────────────────────────────────────────────────────
+        // Sphere radius 4.2 centered at (0,0,0) — pivot = face center
+        for (let x = -4; x <= 4; x++) for (let y = -4; y <= 4; y++) for (let z = -4; z <= 4; z++) {
+            if (Math.sqrt(x*x + y*y + z*z) >= 4.2) continue;
+            // Eye socket: hollow at z=4, x=±1.5→round, y=0
+            if (z === 4 && (x === -2 || x === 1) && (y === 0 || y === 1)) continue;
+            // Glowing core eyes
+            if (z === 3 && (x === -2 || x === 1) && (y === 0 || y === 1)) {
+                push(x, y, z, CORE, 'head'); continue;
+            }
+            // Top: moss creep
+            const isMoss = y > 1 ? (Math.random() > 0.45) : false;
+            // Weathering chip
+            if (Math.random() > 0.96) continue;
+            push(x, y, z, isMoss ? rndMoss() : rndStone(), 'head');
+        }
+
+        // ── BODY-LOCAL ─────────────────────────────────────────────────────
+        // Ellipsoid body centered at (0,0,0), half-axes (3, 3.5, 2.5)
+        for (let x = -3; x <= 3; x++) for (let y = -3; y <= 3; y++) for (let z = -2; z <= 2; z++) {
+            if ((x*x) / 9 + (y*y) / 12.25 + (z*z) / 6.25 >= 1) continue;
+            const isMoss = y >= 1 && Math.random() > 0.6;
+            if (Math.random() > 0.96) continue;
+            push(x, y, z, isMoss ? rndMoss() : rndStone(), 'body');
+        }
+
+        // Shoulder spikes
+        push(-3, 3, 0, rndStone(), 'body'); push(-3, 4, 0, rndStone(), 'body');
+        push( 3, 3, 0, rndStone(), 'body'); push( 3, 4, 0, rndStone(), 'body');
+
+        // ── PELVIS-LOCAL ────────────────────────────────────────────────────
+        for (let x = -3; x <= 3; x++) for (let y = -1; y <= 1; y++) for (let z = -2; z <= 2; z++) {
+            if (Math.random() > 0.97) continue;
+            push(x, y, z, rndStone(), 'pelvis');
+        }
+
+        // ── ARMS-LOCAL ──────────────────────────────────────────────────────
+        // Column arm: y -3 to 3, cross-section radius ~1.5
+        for (let y = -3; y <= 3; y++) {
+            for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+                if (x*x + z*z > 2) continue;
+                if (Math.random() > 0.97) continue;
+                push(x, y, z, rndStone(), 'armL');
+                push(x, y, z, rndStone(), 'armR');
+            }
+        }
+
+        // ── LEGS-LOCAL (thigh) ───────────────────────────────────────────────
+        for (let y = -1; y <= 1; y++) {
+            for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+                if (x*x + z*z > 2) continue;
+                push(x, y, z, rndStone(), 'legL');
+                push(x, y, z, rndStone(), 'legR');
+            }
+        }
+
+        // ── SHINS-LOCAL ──────────────────────────────────────────────────────
+        for (let y = -1; y <= 1; y++) {
+            for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+                if (x*x + z*z > 2) continue;
+                const isMoss = y === -1 && Math.random() > 0.5;
+                push(x, y, z, isMoss ? rndMoss() : rndStone(), 'shinL');
+                push(x, y, z, isMoss ? rndMoss() : rndStone(), 'shinR');
+            }
+        }
+
+        // ── FEET-LOCAL ───────────────────────────────────────────────────────
+        // Wide flat stumps 3×1×3
+        for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+            const isMoss = Math.random() > 0.5;
+            push(x, 0, z, isMoss ? rndMoss() : rndStone(), 'footL');
+            push(x, 0, z, isMoss ? rndMoss() : rndStone(), 'footR');
+        }
+
+        // ── FOREARMS (same as arms, shorter) ────────────────────────────────
+        for (let y = -2; y <= 2; y++) {
+            for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+                if (x*x + z*z > 2) continue;
+                if (Math.random() > 0.97) continue;
+                push(x, y, z, rndStone(), 'forearmL');
+                push(x, y, z, rndStone(), 'forearmR');
+            }
+        }
+
+        return vox;
+    },
+});
