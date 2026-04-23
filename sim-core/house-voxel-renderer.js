@@ -12,11 +12,18 @@
 
 import * as THREE from 'three';
 
-const VS       = 0.235;        // grid spacing: 4 × 0.235 ≈ 0.94 per block
-const VS_INNER = VS * 0.96;    // actual voxel size (4% gap = hairline mortar, no see-through)
-const GRID     = 4;
+// ── Wall: 6×5×6 voxel grid → 1.32 × 1.10 × 1.32 units (extends beyond 1-unit block)
+const WG   = 6;          // wall grid width & depth
+const WGH  = 5;          // wall grid height
+const WS   = 0.22;       // wall voxel grid spacing
+const WI   = WS * 0.93;  // wall voxel inner size (7% hairline mortar)
 
-// ── Color palettes ───────────────────────────────────────────────────────────────
+// ── Roof: 4-step pyramid, base 7 wide → 1.54 units (overhangs wall, RG must be odd)
+const RG   = 7;
+const RS   = 0.22;
+const RI   = RS * 0.93;
+
+// ── Color palettes ────────────────────────────────────────────────────────────
 const WALL_PALETTE = {
     wood:  [0xf0daa8, 0xdcc070, 0xc8a850, 0xa88038, 0xe8cc90, 0xb49060],
     stone: [0xc0d0d8, 0x8fa8b8, 0x607888, 0x3e5060, 0xa0bcc8, 0x506878],
@@ -25,14 +32,21 @@ const ROOF_PALETTE = {
     wood:  [0xa06030, 0x4a2c18],
     stone: [0x6a7e90, 0x283040],
 };
-// Door frame: dark contrasting accent on the front face
-const DOOR_FRAME = {
-    wood:  0x4a2810,   // dark timber
-    stone: 0x243040,   // dark slate
+const CHIMNEY_COLOR = {
+    wood:  0x3a2010,
+    stone: 0x20303e,
+};
+const DOOR_COLOR = {
+    wood:  0x4a2810,
+    stone: 0x243040,
+};
+const WINDOW_COLOR = {
+    wood:  0xffee88,   // warm glow
+    stone: 0xc8e8ff,   // cool blue-white
 };
 
-// Per-face brightness multipliers: top bright, bottom dark, sides varied
-const _FB = [0.90, 0.80, 1.30, 0.45, 1.00, 0.75];  // matches _FD order
+// Per-face brightness (+X, -X, +Y, -Y, +Z, -Z)
+const _FB = [0.88, 0.78, 1.30, 0.40, 1.00, 0.70];
 
 // ── Deterministic per-block RNG (xorshift, seeded by position) ────────────────
 function makeRng(x, y, z) {
@@ -54,9 +68,9 @@ const _FD = [
 ];
 const _FI = [0,1,2,0,2,3];
 
-function buildVoxelGeo(voxels) {
+function buildVoxelGeo(voxels, innerSize) {
     if (!voxels.length) return new THREE.BufferGeometry();
-    const hs = VS_INNER / 2;   // smaller than grid spacing → visible mortar gaps
+    const hs = innerSize / 2;
     const n  = voxels.length;
     const pos  = new Float32Array(n * 24 * 3);
     const nrm  = new Float32Array(n * 24 * 3);
@@ -100,52 +114,51 @@ function buildVoxelGeo(voxels) {
 }
 
 // ── Wall builder ──────────────────────────────────────────────────────────────
-// 4×4×4 outer shell with a door opening on the −Z face (iz=0).
+// 6×5×6 hollow shell, extends 0.16 units beyond the 1-unit game block.
 //
-// Front face (iz=0) layout (iy 0=bottom, 3=top):
-//   [ W  .  .  W ]  iy=3  (top: full)
-//   [ W  F  F  W ]  iy=2  (lintel + side posts)
-//   [ P  _  _  P ]  iy=1  (door side posts; _ = opening)
-//   [ P  _  _  P ]  iy=0  (door side posts; _ = opening)
-//
-//  W=wall, F=door-frame accent, P=post accent, _=door opening (no voxel)
+// Front face (iz=0) layout, ix=0..5 left→right, iy=0..4 bottom→top:
+//   iy=4: W  W  W  W  W  W
+//   iy=3: W  F  F  W  W  W    F=lintel
+//   iy=2: W  _  _  W  Wn W    _=door opening, Wn=window
+//   iy=1: W  _  _  P  Wn W    P=door post accent
+//   iy=0: W  W  W  W  W  W    threshold (no opening at floor)
 export function buildHouseWallGroup(type, x, y, z, isVisible) {
-    const houseType  = type.isStoneWall ? 'stone' : 'wood';
-    const palette    = WALL_PALETTE[houseType];
-    const frameColor = DOOR_FRAME[houseType];
-    const rng        = makeRng(x, y, z);
+    const houseType = type.isStoneWall ? 'stone' : 'wood';
+    const palette   = WALL_PALETTE[houseType];
+    const doorCol   = DOOR_COLOR[houseType];
+    const winCol    = WINDOW_COLOR[houseType];
+    const rng       = makeRng(x, y, z);
 
     const voxels = [];
-    for (let ix = 0; ix < GRID; ix++) {
-        for (let iy = 0; iy < GRID; iy++) {
-            for (let iz = 0; iz < GRID; iz++) {
-                // Only outer shell
-                if (ix > 0 && ix < GRID-1 && iy > 0 && iy < GRID-1 && iz > 0 && iz < GRID-1) continue;
+    for (let ix = 0; ix < WG; ix++) {
+        for (let iy = 0; iy < WGH; iy++) {
+            for (let iz = 0; iz < WG; iz++) {
+                // Hollow shell: skip fully interior voxels
+                if (ix > 0 && ix < WG-1 && iy > 0 && iy < WGH-1 && iz > 0 && iz < WG-1) continue;
 
-                // Door opening: front face, inner 2 columns, lower 2 rows
-                if (iz === 0 && ix >= 1 && ix <= 2 && iy <= 1) continue;
+                // Door opening: front face (iz=0), ix=1,2 (center-left), iy=1,2
+                if (iz === 0 && ix >= 1 && ix <= 2 && iy >= 1 && iy <= 2) continue;
 
-                // Door frame voxels on front face: lintel (iy=2, inner) + side posts (iy≤2, outer cols)
-                const isFrame = iz === 0 && (
-                    (iy === 2 && ix >= 1 && ix <= 2) ||   // lintel above door
-                    (iy <= 2 && (ix === 0 || ix === 3))   // door-side posts
-                );
+                // Determine accent type on front face
+                const isDoorLintel = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
+                const isDoorPost   = iz === 0 && ix === 3 && iy >= 1 && iy <= 2;
+                const isWindow     = iz === 0 && ix === 4 && iy >= 1 && iy <= 2;
 
-                const color = isFrame
-                    ? frameColor
-                    : palette[Math.floor(rng() * palette.length)];
+                const color = isDoorLintel || isDoorPost ? doorCol
+                            : isWindow                   ? winCol
+                            : palette[Math.floor(rng() * palette.length)];
 
                 voxels.push({
-                    x: (ix - 1.5) * VS,
-                    y: (iy - 1.5) * VS,
-                    z: (iz - 1.5) * VS,
+                    x: (ix - (WG - 1) / 2) * WS,
+                    y: (iy - (WGH - 1) / 2) * WS,
+                    z: (iz - (WG - 1) / 2) * WS,
                     color,
                 });
             }
         }
     }
 
-    const geo  = buildVoxelGeo(voxels);
+    const geo  = buildVoxelGeo(voxels, WI);
     const mat  = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mesh = new THREE.Mesh(geo, mat);
 
@@ -157,31 +170,47 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
 }
 
 // ── Roof builder ──────────────────────────────────────────────────────────────
-// 4-step pyramid: layers 4×4, 3×3, 2×2, 1×1 bottom-to-top.
-// Checkerboard (ix+iz+layer)%2 between the 2 palette colours.
+// 4-step pyramid (7→5→3→1 wide) + 2×2 chimney stack offset to +X+Z corner.
+// Total width 1.54 overhangs the 1.32-wide wall.
 export function buildHouseRoofGroup(type, x, y, z, isVisible) {
-    const houseType = type.isDarkRoof ? 'stone' : 'wood';
+    const houseType  = type.isDarkRoof ? 'stone' : 'wood';
     const [col0, col1] = ROOF_PALETTE[houseType];
+    const chimCol      = CHIMNEY_COLOR[houseType];
 
+    const STEPS = (RG + 1) / 2;  // = 4  (requires odd RG)
     const voxels = [];
-    for (let layer = 0; layer < GRID; layer++) {
-        const size   = GRID - layer;          // 4 → 3 → 2 → 1
-        const py     = (layer - 1.5) * VS;    // evenly spaced in 1-unit block
+
+    // Pyramid
+    for (let layer = 0; layer < STEPS; layer++) {
+        const size   = RG - layer * 2;
+        const py     = (layer - (STEPS - 1) / 2) * RS;
         const offset = (size - 1) / 2;
         for (let ix = 0; ix < size; ix++) {
             for (let iz = 0; iz < size; iz++) {
                 const color = ((ix + iz + layer) % 2 === 0) ? col0 : col1;
+                voxels.push({ x: (ix - offset) * RS, y: py, z: (iz - offset) * RS, color });
+            }
+        }
+    }
+
+    // Chimney: 2×2 stack, offset toward +X +Z corner, rising above pyramid peak
+    const peakY  = ((STEPS - 1) - (STEPS - 1) / 2) * RS;  // top pyramid layer y
+    const chimOX = RS * 1.2;
+    const chimOZ = RS * 1.2;
+    for (let cy = 0; cy < 3; cy++) {
+        for (let cx = 0; cx < 2; cx++) {
+            for (let cz = 0; cz < 2; cz++) {
                 voxels.push({
-                    x: (ix - offset) * VS,
-                    y: py,
-                    z: (iz - offset) * VS,
-                    color,
+                    x: chimOX + (cx - 0.5) * RS,
+                    y: peakY  + (cy + 1)   * RS,
+                    z: chimOZ + (cz - 0.5) * RS,
+                    color: chimCol,
                 });
             }
         }
     }
 
-    const geo  = buildVoxelGeo(voxels);
+    const geo  = buildVoxelGeo(voxels, RI);
     const mat  = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mesh = new THREE.Mesh(geo, mat);
 
