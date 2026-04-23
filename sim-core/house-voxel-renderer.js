@@ -25,6 +25,14 @@ const RG   = 5;
 const RS   = 0.20;
 const RI   = RS * 0.93;
 
+// Roof Y offset: shift roof group down so its bottom voxel sits flush on the wall top.
+// wallTop (from wall group centre) = (WGH-1)/2*WS + WI/2
+// roofBot (from roof group centre) = -(STEPS-1)/2*RS - RI/2  where STEPS=(RG+1)/2
+// gap to close = 1.0 (adjacent grid cells) + roofBot - wallTop  → shift by negative of that
+const ROOF_Y_SHIFT = (WGH - 1) / 2 * WS + WI / 2   // wall top rel. to wall centre  = 0.456
+                   + (RG  - 1) / 4 * RS + RI / 2   // negated roof bottom           = 0.293
+                   - 1.0;                           // one grid-unit gap             = -0.251
+
 // ── Color palettes (voxelchar04-style) ───────────────────────────────────────
 // Wall: white/cream base + ~12% brick accent
 const WALL_PALETTE = {
@@ -234,7 +242,7 @@ export function buildHouseRoofGroup(type, x, y, z, isVisible) {
 
     const group = new THREE.Group();
     group.add(mesh);
-    group.position.set(x + 0.5, y + 0.5, z + 0.5);
+    group.position.set(x + 0.5, y + 0.5 + ROOF_Y_SHIFT, z + 0.5);
     group.visible = isVisible;
     return group;
 }
