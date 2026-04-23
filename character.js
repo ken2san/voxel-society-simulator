@@ -6320,6 +6320,49 @@ class Character {
                 this.mesh.rotation.z += gesturePose.lean;
             }
         }
+
+        // ── Golem life-stage visuals ────────────────────────────────────────
+        // Only apply when the active skin is 'golem'.
+        if (typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem' && this.mesh) {
+            const skin = getActiveSkin();
+            if (skin && skin.id === 'golem') {
+                const aging = this.getAgingProfile ? this.getAgingProfile() : null;
+                const stage = aging ? aging.stage : 'adult';
+                const lifeRatio = aging ? aging.lifeRatio : 0.5;
+
+                // Target overall mesh scale per stage
+                const targetScale = stage === 'child'  ? 0.52
+                                  : stage === 'young'  ? 0.78
+                                  : stage === 'adult'  ? 1.00
+                                  : /* elder */          0.88; // slightly shrunken
+
+                // Smooth lerp toward target scale (avoid pop on stage transition)
+                if (!this._golemScaleX) this._golemScaleX = targetScale;
+                this._golemScaleX += (targetScale - this._golemScaleX) * Math.min(1, deltaTime * 1.5);
+                this.mesh.scale.setScalar(this._golemScaleX);
+
+                // Elder: progressive forward hunch (body leans, head droops)
+                if (stage === 'elder' && this.body && this.head) {
+                    const hunch = Math.max(0, (lifeRatio - 0.72) / 0.28); // 0→1 across elder span
+                    const smoothHunch = hunch * hunch * (3 - 2 * hunch);
+                    this.body.rotation.x  = smoothHunch * 0.25;  // lean forward
+                    this.head.rotation.x += smoothHunch * 0.20;  // extra nod down
+                    this.mesh.rotation.z  = smoothHunch * 0.08;  // subtle lean
+                } else if (stage === 'child') {
+                    // Child: extra bounce amplitude — override bobTime scale
+                    this._childBounceMul = 1.4;
+                } else {
+                    this._childBounceMul = 1.0;
+                    if (stage !== 'elder' && this.body) this.body.rotation.x *= 0.9; // restore
+                }
+            }
+        }
+
+        // Normalize head.rotation.y to [-π, π] each frame to prevent unbounded accumulation
+        if (this.head) {
+            while (this.head.rotation.y > Math.PI)  this.head.rotation.y -= Math.PI * 2;
+            while (this.head.rotation.y < -Math.PI) this.head.rotation.y += Math.PI * 2;
+        }
     }
 
 

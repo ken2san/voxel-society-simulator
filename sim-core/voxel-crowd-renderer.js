@@ -227,6 +227,28 @@ export class VoxelCrowdRenderer {
         }
         this._shadowIM.count = this._max;
         this._shadowIM.instanceMatrix.needsUpdate = true;
+
+        // ── Golem core-eye pulse (only when golem skin active) ───────────────
+        // Animates the material color of any InstancedMesh whose hex matches CORE (0x00ffcc).
+        if (typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem') {
+            const t = performance.now() / 1000;
+            // Two overlapping pulses for organic feel
+            const pulse = 0.55 + 0.45 * Math.sin(t * 2.2) * Math.sin(t * 0.7 + 1.3);
+            const r = Math.round(0 + 0   * pulse);
+            const g = Math.round(180 + 75 * pulse);
+            const b = Math.round(160 + 95 * pulse);
+            const pulsedHex = (r << 16) | (g << 8) | b;
+            for (const { im } of this._groups) {
+                if (im.material && im.material.color) {
+                    const c = im.material.color;
+                    // Only touch the teal core material (approx 0x00ffcc ± tolerance)
+                    const h = c.getHex();
+                    if ((h & 0xff0000) === 0 && (h & 0x00ff00) >= 0x00aa00 && (h & 0x0000ff) >= 0x0088) {
+                        c.setHex(pulsedHex);
+                    }
+                }
+            }
+        }
     }
 
     // ── Write one character's part matrices ─────────────────────────────────
