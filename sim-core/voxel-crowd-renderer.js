@@ -58,26 +58,16 @@ function mergeBoxes(positions, vs) {
     }
     const hs = vs / 2;
 
-    // 24 vertices per box face (4 per face × 6 faces)
-    // prettier-ignore
-    const BASE_POS = [
-        // +X           // -X           // +Y           // -Y           // +Z           // -Z
-         hs, hs,-hs,   -hs, hs, hs,   -hs, hs, hs,   -hs,-hs,-hs,    hs, hs, hs,   -hs, hs,-hs,
-         hs,-hs,-hs,   -hs,-hs, hs,    hs, hs, hs,    hs,-hs,-hs,    hs,-hs, hs,   -hs,-hs,-hs,
-         hs, hs, hs,   -hs, hs,-hs,   -hs, hs,-hs,   -hs,-hs, hs,   -hs, hs, hs,    hs, hs,-hs,
-         hs,-hs, hs,   -hs,-hs,-hs,    hs, hs,-hs,    hs,-hs, hs,   -hs,-hs, hs,    hs,-hs,-hs,
+    // 6 faces × 4 vertices. Vertices are CCW when seen from outside.
+    const FACES = [
+        { n: [ 1, 0, 0], c: [[ hs,-hs,-hs], [ hs, hs,-hs], [ hs, hs, hs], [ hs,-hs, hs]] },
+        { n: [-1, 0, 0], c: [[-hs,-hs, hs], [-hs, hs, hs], [-hs, hs,-hs], [-hs,-hs,-hs]] },
+        { n: [ 0, 1, 0], c: [[-hs, hs,-hs], [-hs, hs, hs], [ hs, hs, hs], [ hs, hs,-hs]] },
+        { n: [ 0,-1, 0], c: [[-hs,-hs, hs], [-hs,-hs,-hs], [ hs,-hs,-hs], [ hs,-hs, hs]] },
+        { n: [ 0, 0, 1], c: [[-hs,-hs, hs], [ hs,-hs, hs], [ hs, hs, hs], [-hs, hs, hs]] },
+        { n: [ 0, 0,-1], c: [[ hs,-hs,-hs], [-hs,-hs,-hs], [-hs, hs,-hs], [ hs, hs,-hs]] },
     ];
-    // prettier-ignore
-    const BASE_NORM = [
-        1,0,0, 1,0,0, 1,0,0, 1,0,0,
-       -1,0,0,-1,0,0,-1,0,0,-1,0,0,
-        0,1,0, 0,1,0, 0,1,0, 0,1,0,
-        0,-1,0,0,-1,0,0,-1,0,0,-1,0,
-        0,0,1, 0,0,1, 0,0,1, 0,0,1,
-        0,0,-1,0,0,-1,0,0,-1,0,0,-1,
-    ];
-    // Two CCW triangles per face (vertices 0-3 per face)
-    const FACE_IDX = [0,1,2, 1,3,2];
+    const FACE_IDX = [0, 1, 2, 0, 2, 3];
 
     const n       = positions.length;
     const posArr  = new Float32Array(n * 24 * 3);
@@ -88,22 +78,25 @@ function mergeBoxes(positions, vs) {
         const { x: px, y: py, z: pz } = positions[i];
         const vBase = i * 24;
 
-        for (let v = 0; v < 24; v++) {
-            const pi = (vBase + v) * 3;
-            posArr[pi]     = BASE_POS[v * 3]     + px;
-            posArr[pi + 1] = BASE_POS[v * 3 + 1] + py;
-            posArr[pi + 2] = BASE_POS[v * 3 + 2] + pz;
-            normArr[pi]     = BASE_NORM[v * 3];
-            normArr[pi + 1] = BASE_NORM[v * 3 + 1];
-            normArr[pi + 2] = BASE_NORM[v * 3 + 2];
+        for (let f = 0; f < 6; f++) {
+            const face = FACES[f];
+            for (let v = 0; v < 4; v++) {
+                const p = face.c[v];
+                const vi = vBase + f * 4 + v;
+                const pi = vi * 3;
+                posArr[pi]     = p[0] + px;
+                posArr[pi + 1] = p[1] + py;
+                posArr[pi + 2] = p[2] + pz;
+                normArr[pi]     = face.n[0];
+                normArr[pi + 1] = face.n[1];
+                normArr[pi + 2] = face.n[2];
+            }
         }
 
         const iBase = i * 36;
         for (let f = 0; f < 6; f++) {
             const vFaceBase = vBase + f * 4;
-            for (let fi = 0; fi < 6; fi++) {
-                idxArr[iBase + f * 6 + fi] = vFaceBase + FACE_IDX[fi];
-            }
+            for (let fi = 0; fi < 6; fi++) idxArr[iBase + f * 6 + fi] = vFaceBase + FACE_IDX[fi];
         }
     }
 
