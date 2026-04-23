@@ -5594,7 +5594,11 @@ class Character {
             const turn = Math.max(-maxTurn, Math.min(maxTurn, delta));
             this._bodyYaw += turn;
             this.body.rotation.y = this._bodyYaw;
-            this.head.rotation.y += (this._bodyYaw - this.head.rotation.y) * 0.35;
+            // Normalize delta so head always takes the short way around (no vertical loops)
+            let _hDelta = this._bodyYaw - this.head.rotation.y;
+            while (_hDelta > Math.PI)  _hDelta -= Math.PI * 2;
+            while (_hDelta < -Math.PI) _hDelta += Math.PI * 2;
+            this.head.rotation.y += _hDelta * 0.35;
         }
     // apply speed multiplier for slight variation
     const aging = this.getAgingProfile ? this.getAgingProfile() : { mobilityMul: 1.0 };
@@ -5939,7 +5943,14 @@ class Character {
                 const lookMul = (typeof window !== 'undefined' && window.lookLerpMultiplier) ? window.lookLerpMultiplier : 1.0;
                 const lerp = (this._lookLerp || 0.12) * Math.min(2.0, Math.max(0.1, lookMul));
                 current = current + (desired - current) * lerp;
-                this.head.rotation.y = current;
+                // Clamp head yaw to ±1.2 rad (~70°) relative to body — prevents unnatural spins
+                const _maxHeadTurn = 1.2;
+                const _bodyY = this._bodyYaw !== undefined ? this._bodyYaw : (this.body ? this.body.rotation.y : 0);
+                let _relYaw = current - _bodyY;
+                while (_relYaw > Math.PI)  _relYaw -= Math.PI * 2;
+                while (_relYaw < -Math.PI) _relYaw += Math.PI * 2;
+                _relYaw = Math.max(-_maxHeadTurn, Math.min(_maxHeadTurn, _relYaw));
+                this.head.rotation.y = _bodyY + _relYaw;
 
                 // Head pitch: look up/down based on vertical component
                 const maxPitch = 0.45; // radians (~26deg)
@@ -6150,6 +6161,8 @@ class Character {
             if (this.rightWingLower) this.rightWingLower.rotation.z *= 0.85;
             this.head.position.y += ((this._headRestY ?? 1.01) - this.head.position.y) * 0.2;
             this.head.rotation.z *= 0.85;
+            // Gently return head pitch to neutral when not actively looking
+            if (!this._lookTargetPos) this.head.rotation.x *= 0.85;
         }
 
         // Action squash/stretch
