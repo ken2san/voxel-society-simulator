@@ -8,6 +8,9 @@ import { createThreeSimulationIO } from './sim-core/browser-io.js';
 
 // --- Global variables, Three.js initialization, UI events, loops, etc. ---
 
+// Activate angel voxel skin (must be set before setWorldObjects() creates the renderer)
+window.ACTIVE_SKIN_ID = 'angel';
+
 setSimulationIO(createThreeSimulationIO());
 refreshRenderResources();
 
