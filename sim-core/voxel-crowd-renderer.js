@@ -146,27 +146,32 @@ export class VoxelCrowdRenderer {
         const skin = getActiveSkin();
         if (!skin?.collectVoxels) return;
 
-        const voxels = skin.collectVoxels();
-        const vs     = skin.voxelSize ?? 0.055;
+        const vs    = skin.voxelSize ?? 0.055;
+        const types = skin.typeVariants ?? [null];  // null = single shared palette
 
-        // Group by (color, part)
-        const byKey = new Map();
-        for (const { x, y, z, color, part } of voxels) {
-            const k = `${color}|${part}`;
-            if (!byKey.has(k)) byKey.set(k, { color, part, positions: [] });
-            byKey.get(k).positions.push({ x, y, z });
-        }
+        for (const typeKey of types) {
+            const voxels = skin.collectVoxels(typeKey);
 
-        for (const { color, part, positions } of byKey.values()) {
-            const geo = mergeBoxes(positions, vs);
-            const mat = new THREE.MeshLambertMaterial({ color });
-            const im  = new THREE.InstancedMesh(geo, mat, this._max);
-            im.frustumCulled = false;
-            im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-            for (let i = 0; i < this._max; i++) im.setMatrixAt(i, ZERO_M4);
-            im.instanceMatrix.needsUpdate = true;
-            this._scene.add(im);
-            this._groups.push({ part, im });
+            // Group by (color, part)
+            const byKey = new Map();
+            for (const { x, y, z, color, part } of voxels) {
+                const k = `${color}|${part}`;
+                if (!byKey.has(k)) byKey.set(k, { color, part, positions: [] });
+                byKey.get(k).positions.push({ x, y, z });
+            }
+
+            for (const { color, part, positions } of byKey.values()) {
+                const geo = mergeBoxes(positions, vs);
+                const mat = new THREE.MeshLambertMaterial({ color });
+                const im  = new THREE.InstancedMesh(geo, mat, this._max);
+                im.frustumCulled = false;
+                im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+                for (let i = 0; i < this._max; i++) im.setMatrixAt(i, ZERO_M4);
+                im.instanceMatrix.needsUpdate = true;
+                this._scene.add(im);
+                const isCore = skin.coreColors?.has(color) ?? false;
+                this._groups.push({ part, im, typeKey, coreBaseHex: isCore ? color : null });
+            }
         }
     }
 
@@ -228,24 +233,23 @@ export class VoxelCrowdRenderer {
         this._shadowIM.instanceMatrix.needsUpdate = true;
 
         // ── Golem core-eye pulse (only when golem skin active) ───────────────
-        // Animates the material color of any InstancedMesh whose hex matches CORE (0x00ffcc).
+        // Pulses any IM group tagged as a core (eyes/inner glow) for any golem type.
         if (typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem') {
             const t = performance.now() / 1000;
             // Two overlapping pulses for organic feel
             const pulse = 0.55 + 0.45 * Math.sin(t * 2.2) * Math.sin(t * 0.7 + 1.3);
-            const r = Math.round(0 + 0   * pulse);
-            const g = Math.round(180 + 75 * pulse);
-            const b = Math.round(160 + 95 * pulse);
-            const pulsedHex = (r << 16) | (g << 8) | b;
-            for (const { im } of this._groups) {
-                if (im.material && im.material.color) {
-                    const c = im.material.color;
-                    // Only touch the teal core material (approx 0x00ffcc ± tolerance)
-                    const h = c.getHex();
-                    if ((h & 0xff0000) === 0 && (h & 0x00ff00) >= 0x00aa00 && (h & 0x0000ff) >= 0x0088) {
-                        c.setHex(pulsedHex);
-                    }
-                }
+            for (const grp of this._groups) {
+                if (!grp.coreBaseHex) continue;
+                const base = grp.coreBaseHex;
+                const br = (base >> 16) & 0xff;
+                const bg = (base >> 8)  & 0xff;
+                const bb =  base        & 0xff;
+                // Pulse between 45% and 115% of the type's base core color
+                const f  = 0.45 + 0.70 * pulse;
+                const pr = Math.min(255, Math.round(br * f));
+                const pg = Math.min(255, Math.round(bg * f));
+                const pb = Math.min(255, Math.round(bb * f));
+                grp.im.material.color.setHex((pr << 16) | (pg << 8) | pb);
             }
         }
     }
@@ -262,7 +266,14 @@ export class VoxelCrowdRenderer {
 
         const d = this._d;
 
-        for (const { part, im } of this._groups) {
+        for (const { part, im, typeKey } of this._groups) {
+            // Type filter: skip IM groups that don't belong to this character's golem type.
+            // typeKey === null means the skin has no type variants (e.g. angel/chibi).
+            if (typeKey !== null && typeKey !== undefined && (char._golemType ?? 'forest') !== typeKey) {
+                im.setMatrixAt(slot, ZERO_M4);
+                continue;
+            }
+
             const getMesh = PART_MESH[part];
             const partMesh = getMesh ? getMesh(char) : null;
 

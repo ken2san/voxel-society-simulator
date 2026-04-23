@@ -411,8 +411,30 @@ registerSkin({
     },
 });
 
-// ── Golem skin — forest stone golem, ported from voxelchar03.html ──────────────
-// Heavy, blocky proportions. Procedural stone/moss/core voxels per character.
+// ── Golem type palettes (personality → visual type) ───────────────────────────
+// Trait mapping: bravery→MAGMA, resilience→ICE, diligence+resourcefulness→FOREST,
+//                curiosity+sociality→ANCIENT
+const GOLEM_TYPES = {
+    magma:   { stone: [0x221111, 0x1a0a0a, 0x331a1a, 0x3d1a10, 0x28100a], accent: [0xff4500, 0xff8c00, 0xcc3000], core: 0xff2200, density: 0.85 },
+    ice:     { stone: [0xe0f7fa, 0xb2ebf2, 0x81d4fa, 0xcfe8f5, 0xd4ecf7], accent: [0xffffff, 0xe1f5fe, 0x90caf9], core: 0x00ffff, density: 0.98 },
+    forest:  { stone: [0x4a4e53, 0x5a5e63, 0x3d4146, 0x6b7075, 0x2f3236], accent: [0x355e3b, 0x4a7c59, 0x2e4a2b], core: 0x00ffcc, density: 0.92 },
+    ancient: { stone: [0xf5f5f5, 0xe0e0e0, 0x9e9e9e, 0xd4d4d4, 0xb8b8b8], accent: [0xffd700, 0xdaa520, 0xf0b800], core: 0xfff000, density: 0.99 },
+};
+
+function _deriveGolemType(traits) {
+    if (!traits) return 'forest';
+    const scores = {
+        magma:   traits.bravery ?? 1.0,
+        ice:     traits.resilience ?? 1.0,
+        forest:  ((traits.diligence ?? 1.0) + (traits.resourcefulness ?? 1.0)) / 2,
+        ancient: ((traits.curiosity ?? 1.0) + (traits.sociality ?? 1.0)) / 2,
+    };
+    return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// ── Golem skin — personality-typed stone golem, ported from voxelchar03.html ──
+// Heavy, blocky proportions. Procedural stone/core voxels per golem type.
+// 4 types: MAGMA (bravery), ICE (resilience), FOREST (diligence), ANCIENT (curiosity).
 // VS = 0.058 keeps total height ~0.93, fitting within blockSize=1.
 registerSkin({
     id: 'golem',
@@ -471,10 +493,16 @@ registerSkin({
     },
 
     applyColors(char) {
-        if (char.bodyMaterial) char.bodyMaterial.color.setHex(0x4a4e53); // dark stone
-        if (char.skinMaterial) char.skinMaterial.color.setHex(0x4a4e53);
-        if (char.hairMaterial) char.hairMaterial.color.setHex(0x355e3b);
+        const typeKey = _deriveGolemType(char.personality || {});
+        char._golemType = typeKey;
+        const t = GOLEM_TYPES[typeKey];
+        if (char.bodyMaterial) char.bodyMaterial.color.setHex(t.stone[0]);
+        if (char.skinMaterial) char.skinMaterial.color.setHex(t.stone[0]);
+        if (char.hairMaterial) char.hairMaterial.color.setHex(t.accent[0]);
     },
+
+    typeVariants: ['magma', 'ice', 'forest', 'ancient'],
+    coreColors: new Set([0xff2200, 0x00ffff, 0x00ffcc, 0xfff000]),
 
     im: {
         showHalo:      false,
@@ -488,15 +516,17 @@ registerSkin({
 
     voxelSize: 0.058,
 
-    collectVoxels() {
+    collectVoxels(typeKey = 'forest') {
         const VS = 0.058;
         const vox = [];
         const push = (x, y, z, color, part) =>
             vox.push({ x: x * VS, y: y * VS, z: z * VS, color, part });
 
-        const STONE  = [0x4a4e53, 0x5a5e63, 0x3d4146, 0x6b7075, 0x2f3236];
-        const MOSS   = [0x355e3b, 0x4a7c59, 0x2e4a2b];
-        const CORE   = 0x00ffcc;
+        const t       = GOLEM_TYPES[typeKey] ?? GOLEM_TYPES.forest;
+        const STONE   = t.stone;
+        const MOSS    = t.accent;
+        const CORE    = t.core;
+        const density = t.density ?? 0.92;
         const rndStone = () => STONE[Math.floor(Math.random() * STONE.length)];
         const rndMoss  = () => MOSS [Math.floor(Math.random() * MOSS.length)];
 
@@ -510,10 +540,10 @@ registerSkin({
             if (z === 3 && (x === -2 || x === 1) && (y === 0 || y === 1)) {
                 push(x, y, z, CORE, 'head'); continue;
             }
-            // Top: moss creep
+            // Top: accent creep (moss for FOREST, crystal/lava/gold for other types)
             const isMoss = y > 1 ? (Math.random() > 0.45) : false;
-            // Weathering chip
-            if (Math.random() > 0.96) continue;
+            // Weathering chip (density controls roughness)
+            if (Math.random() >= density) continue;
             push(x, y, z, isMoss ? rndMoss() : rndStone(), 'head');
         }
 
@@ -522,7 +552,7 @@ registerSkin({
         for (let x = -3; x <= 3; x++) for (let y = -3; y <= 3; y++) for (let z = -2; z <= 2; z++) {
             if ((x*x) / 9 + (y*y) / 12.25 + (z*z) / 6.25 >= 1) continue;
             const isMoss = y >= 1 && Math.random() > 0.6;
-            if (Math.random() > 0.96) continue;
+            if (Math.random() >= density) continue;
             push(x, y, z, isMoss ? rndMoss() : rndStone(), 'body');
         }
 
@@ -532,7 +562,7 @@ registerSkin({
 
         // ── PELVIS-LOCAL ────────────────────────────────────────────────────
         for (let x = -3; x <= 3; x++) for (let y = -1; y <= 1; y++) for (let z = -2; z <= 2; z++) {
-            if (Math.random() > 0.97) continue;
+            if (Math.random() >= density) continue;
             push(x, y, z, rndStone(), 'pelvis');
         }
 
@@ -541,7 +571,7 @@ registerSkin({
         for (let y = -3; y <= 3; y++) {
             for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
                 if (x*x + z*z > 2) continue;
-                if (Math.random() > 0.97) continue;
+                if (Math.random() >= density) continue;
                 push(x, y, z, rndStone(), 'armL');
                 push(x, y, z, rndStone(), 'armR');
             }
@@ -578,7 +608,7 @@ registerSkin({
         for (let y = -2; y <= 2; y++) {
             for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
                 if (x*x + z*z > 2) continue;
-                if (Math.random() > 0.97) continue;
+                if (Math.random() >= density) continue;
                 push(x, y, z, rndStone(), 'forearmL');
                 push(x, y, z, rndStone(), 'forearmR');
             }
