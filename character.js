@@ -5595,11 +5595,14 @@ class Character {
             // Normalize _bodyYaw to [-π, π] to prevent float accumulation over time
             while (this._bodyYaw > Math.PI)  this._bodyYaw -= Math.PI * 2;
             while (this._bodyYaw < -Math.PI) this._bodyYaw += Math.PI * 2;
-            this.body.rotation.y = this._bodyYaw;
+            // Rotate the ROOT mesh so ALL parts (arms, legs, voxels) face the direction.
+            // voxelcharcreator.html does the same: group.rotation.y = facing angle.
+            this.mesh.rotation.y = this._bodyYaw;
             // Normalize delta so head always takes the short way around (no vertical loops)
             // Skip head turn from movement when lookTarget is active — look-at takes priority
             if (!this._lookTargetPos) {
-                let _hDelta = this._bodyYaw - this.head.rotation.y;
+                // head.rotation.y is now mesh-LOCAL space → converge toward 0 (straight ahead)
+                let _hDelta = -this.head.rotation.y;
                 while (_hDelta > Math.PI)  _hDelta -= Math.PI * 2;
                 while (_hDelta < -Math.PI) _hDelta += Math.PI * 2;
                 this.head.rotation.y += _hDelta * 0.35;
@@ -5926,7 +5929,8 @@ class Character {
                 while (_desiredRel > Math.PI)  _desiredRel -= Math.PI * 2;
                 while (_desiredRel < -Math.PI) _desiredRel += Math.PI * 2;
                 _desiredRel = Math.max(-_maxHeadTurn, Math.min(_maxHeadTurn, _desiredRel));
-                desired = _bodyY + _desiredRel;
+                // head.rotation.y is in mesh-LOCAL space; drive it toward _desiredRel (the local offset)
+                desired = _desiredRel;
                 // Short-arc lerp from current head.rotation.y toward clamped desired
                 let current = this.head.rotation.y;
                 let _lookDelta = desired - current;
