@@ -5593,6 +5593,9 @@ class Character {
             const maxTurn = Math.max(0.05, maxTurnRate * deltaTime);
             const turn = Math.max(-maxTurn, Math.min(maxTurn, delta));
             this._bodyYaw += turn;
+            // Normalize _bodyYaw to [-π, π] to prevent float accumulation over time
+            while (this._bodyYaw > Math.PI)  this._bodyYaw -= Math.PI * 2;
+            while (this._bodyYaw < -Math.PI) this._bodyYaw += Math.PI * 2;
             this.body.rotation.y = this._bodyYaw;
             // Normalize delta so head always takes the short way around (no vertical loops)
             let _hDelta = this._bodyYaw - this.head.rotation.y;
@@ -5934,23 +5937,24 @@ class Character {
             const dir = worldTarget.clone().sub(headWorldPos);
             if (dir.lengthSq() > 0.0001) {
                 let desired = Math.atan2(dir.x, dir.z);
-                // lerp angle
+                // Clamp desired to ±1.2 rad relative to body FIRST, then lerp
+                // (clamping after lerp caused snap-jumps when body turned sharply)
+                const _maxHeadTurn = 1.2;
+                const _bodyY = this._bodyYaw !== undefined ? this._bodyYaw : (this.body ? this.body.rotation.y : 0);
+                let _desiredRel = desired - _bodyY;
+                while (_desiredRel > Math.PI)  _desiredRel -= Math.PI * 2;
+                while (_desiredRel < -Math.PI) _desiredRel += Math.PI * 2;
+                _desiredRel = Math.max(-_maxHeadTurn, Math.min(_maxHeadTurn, _desiredRel));
+                desired = _bodyY + _desiredRel;
+                // Short-arc lerp from current head.rotation.y toward clamped desired
                 let current = this.head.rotation.y;
-                // normalize
-                while (desired - current > Math.PI) desired -= Math.PI * 2;
-                while (current - desired > Math.PI) desired += Math.PI * 2;
+                let _lookDelta = desired - current;
+                while (_lookDelta > Math.PI)  _lookDelta -= Math.PI * 2;
+                while (_lookDelta < -Math.PI) _lookDelta += Math.PI * 2;
                 // apply look lerp multiplier (live-tunable)
                 const lookMul = (typeof window !== 'undefined' && window.lookLerpMultiplier) ? window.lookLerpMultiplier : 1.0;
                 const lerp = (this._lookLerp || 0.12) * Math.min(2.0, Math.max(0.1, lookMul));
-                current = current + (desired - current) * lerp;
-                // Clamp head yaw to ±1.2 rad (~70°) relative to body — prevents unnatural spins
-                const _maxHeadTurn = 1.2;
-                const _bodyY = this._bodyYaw !== undefined ? this._bodyYaw : (this.body ? this.body.rotation.y : 0);
-                let _relYaw = current - _bodyY;
-                while (_relYaw > Math.PI)  _relYaw -= Math.PI * 2;
-                while (_relYaw < -Math.PI) _relYaw += Math.PI * 2;
-                _relYaw = Math.max(-_maxHeadTurn, Math.min(_maxHeadTurn, _relYaw));
-                this.head.rotation.y = _bodyY + _relYaw;
+                this.head.rotation.y = current + _lookDelta * lerp;
 
                 // Head pitch: look up/down based on vertical component
                 const maxPitch = 0.45; // radians (~26deg)
