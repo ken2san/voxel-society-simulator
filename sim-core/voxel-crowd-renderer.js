@@ -115,7 +115,7 @@ export class VoxelCrowdRenderer {
         this._groups   = [];  // [{part, im}]
         this._slotMap  = new Map();  // charId → slotIdx
         this._prevPos  = Array.from({ length: maxCount },
-            () => ({ x: NaN, z: NaN, state: '__none' }));
+            () => ({ x: NaN, z: NaN, state: '__none', headRotY: NaN }));
 
         // Pre-allocated reusable objects — never allocate in the hot path
         this._d   = new THREE.Object3D();
@@ -189,18 +189,21 @@ export class VoxelCrowdRenderer {
             const px   = char.mesh.position.x;
             const pz   = char.mesh.position.z;
             const st   = char.state;
+            const hry  = char.head.rotation.y;
 
-            // Detect dirty: position changed, state changed, or actively animating
+            // Detect dirty: position changed, state changed, actively animating,
+            // or head yaw changed (idle glance rotates head even in non-anim states)
             const isDirty = !this._slotMap.has(char.id)
                 || this._slotMap.get(char.id) !== slot
                 || px !== prev.x || pz !== prev.z
                 || st !== prev.state
-                || ANIM_STATES.has(st);
+                || ANIM_STATES.has(st)
+                || Math.abs(hry - prev.headRotY) > 0.01;
 
             if (isDirty) toUpdate.push({ char, slot });
 
             this._slotMap.set(char.id, slot);
-            prev.x = px; prev.z = pz; prev.state = st;
+            prev.x = px; prev.z = pz; prev.state = st; prev.headRotY = hry;
             slot++;
         }
 
