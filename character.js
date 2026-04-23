@@ -2559,7 +2559,9 @@ class Character {
                 this.leftArm, this.rightArm, this.leftForearm, this.rightForearm,
                 this.leftWingUpper, this.rightWingUpper, this.leftWingLower, this.rightWingLower,
                 this.head, this.shadowMesh,
-                this.mouth, this.leftEyeHL, this.rightEyeHL, this.leftBrow, this.rightBrow,
+                this.halo, this.hairTop, this.hairCapTop, this.hairSideL, this.hairSideR,
+                this.mouth, this.leftEye, this.rightEye, this.leftEyeHL, this.rightEyeHL,
+                this.leftBrow, this.rightBrow, this.leftCheek, this.rightCheek,
             ]) {
                 if (part) part.layers.set(31);
             }
@@ -5815,7 +5817,9 @@ class Character {
                     this.leftArm, this.rightArm, this.leftForearm, this.rightForearm,
                     this.leftWingUpper, this.rightWingUpper, this.leftWingLower, this.rightWingLower,
                     this.head, this.shadowMesh,
-                    this.mouth, this.leftEyeHL, this.rightEyeHL, this.leftBrow, this.rightBrow,
+                    this.halo, this.hairTop, this.hairCapTop, this.hairSideL, this.hairSideR,
+                    this.mouth, this.leftEye, this.rightEye, this.leftEyeHL, this.rightEyeHL,
+                    this.leftBrow, this.rightBrow, this.leftCheek, this.rightCheek,
                 ]) {
                     if (part) part.layers.set(layer);
                 }
