@@ -182,61 +182,81 @@ registerSkin({
     name: 'Angel',
 
     createMorphology(_traits) {
-        // Feet — skin-coloured stumps below dress
-        const footH = 0.10, footW = 0.16, footD = 0.18, legSpacingX = 0.07;
-        // Legs — narrow, hidden under dress
-        const shinH  = 0.12, shinW  = 0.13, shinD  = 0.12;
-        const thighH = 0.14, thighW = 0.14, thighD = 0.13;
-        // Dress: pelvis = wide hem, torso = bodice (tapers up)
-        const pelvisH = 0.12, pelvisW = 0.56, pelvisD = 0.28;
-        const torsoH  = 0.26, torsoW  = 0.44, torsoD  = 0.24;
+        // All pivot Y positions derived directly from voxelchar01.html grid coords × VS.
+        // voxelchar01 structure (absolute Y in angel-space, grid units):
+        //   leg stumps: y=0..1  (direct children of angel root)
+        //   bodyGroup:  y=5     (pivot), body spans y=0..9 local → abs y=5..14
+        //   leftWing:   y=10    (direct child of angel root)
+        //   headGroup:  y=15    (pivot), face sphere center at local y=3.5 → abs y=18.5
+        //   haloGroup:  headGroup local y=12 → abs y=27
+        const VS = 0.055;
+
+        // Feet: 1-voxel stump, legs at x=±1 (= ±VS) as in voxelchar01
+        const footH = VS, footW = VS, footD = VS, legSpacingX = VS;
+        // Shin + thigh + pelvis fill gap from foot-top (1*VS) to body-bottom (5*VS)
+        // 0.055+0.11+VS+VS = 0.275 = 5*VS ✓
+        const shinH  = 0.11,  shinW  = 0.10, shinD  = 0.10;
+        const thighH = VS,    thighW = 0.12, thighD = 0.11;
+        const pelvisH = VS,   pelvisW = 0.60, pelvisD = 0.32; // minimal pivot, wide skirt
+
+        // bodyBottom = 5*VS = 0.275 (= voxelchar01 bodyGroup absolute y × VS)
+        // torsoH = 9*VS = 0.495 (body box spans y=0..9 of bodyGroup = 9 units)
+        const torsoH = 9 * VS, torsoW = 4 * VS, torsoD = 4 * VS;
         const footCenterY   = footH / 2;
         const shinCenterY   = footH + shinH / 2;
         const thighCenterY  = footH + shinH + thighH / 2;
         const pelvisCenterY = footH + shinH + thighH + pelvisH / 2;
-        const bodyBottom    = footH + shinH + thighH + pelvisH;
-        const torsoCenterY  = bodyBottom + torsoH / 2;
-        const bodyTop       = bodyBottom + torsoH;
-        // Arms — white sleeves + skin forearms
+        const bodyBottom    = footH + shinH + thighH + pelvisH;    // 0.275 = 5*VS ✓
+        const torsoCenterY  = bodyBottom + torsoH / 2;             // 0.5225 = 9.5*VS ✓
+        const bodyTop       = bodyBottom + torsoH;                 // 0.77 = 14*VS ✓
+
+        // Arms (mostly hidden under dress)
         const upperArmH = 0.18, upperArmW = 0.13, upperArmD = 0.13;
         const forearmH  = 0.12, forearmW  = 0.11, forearmD  = 0.10;
-        const armSpacingX     = torsoW / 2 + upperArmW / 2 - 0.015;
+        const armSpacingX     = torsoW / 2 + upperArmW / 2 - 0.01;
         const upperArmCenterY = bodyTop - upperArmH / 2 - 0.01;
         const forearmCenterY  = upperArmCenterY - upperArmH / 2 - forearmH / 2;
-        // Head
-        const headW = 0.34, headH = 0.30, headD = 0.30, neckGap = 0.02;
-        const headCenterY = bodyTop + neckGap + headH / 2;
-        // Hair — orange pom (same shape logic as chibi but smaller — halo is the crown feature)
+
+        // Head: face sphere center at headGroup local y=3.5 → abs y=18.5 → 18.5*VS
+        //   headCenterY = bodyTop + neckGap + headH/2 must equal 18.5*VS = 1.0175
+        //   → neckGap = 0.5*VS, headH = 8*VS gives: 0.77+0.0275+0.22 = 1.0175 ✓
+        const headW = 8 * VS, headH = 8 * VS, headD = 7 * VS;
+        const neckGap = 0.5 * VS;
+        const headCenterY = bodyTop + neckGap + headH / 2;         // 1.0175 = 18.5*VS ✓
+
+        // Hair pom (IM mesh hidden when VoxelCrowdRenderer active; voxels in 'head')
         const hairTopH = 0.34, hairTopW = 0.58, hairTopD = 0.46;
         const hairTopLocalY = headH / 2 + hairTopH / 2;
         const hairCapW = 0.001, hairCapH = 0.001, hairCapD = 0.001, hairCapLocalY = 0;
         const hairSideW = 0.001, hairSideH = 0.001, hairSideD = 0.001;
         const hairSideLocalX = 0, hairSideLocalY = 0;
-        // Halo — gold ring floating above hair (IM: thin flat slab)
+
+        // Halo: haloGroup at headGroup local y=12 → abs y=27 → 27*VS=1.485
+        //   head-local: (27-18.5)*VS = 8.5*VS = 0.4675
         const haloW = 0.52, haloH = 0.04, haloD = 0.52;
-        const haloLocalY = headH / 2 + hairTopH + 0.08; // well above pom
-        // Eyes — dark red (from voxcelchar01: 0x880000)
-        const eyeW = headW * 0.24, eyeH = headH * 0.28, eyeD = 0.028;
-        const eyeLocalX = headW * 0.230, eyeLocalY = headH * 0.080, eyeLocalZ = headD / 2 + eyeD / 2;
-        // Cheeks — pink blush (from voxcelchar01: 0xffb2bc ≈ IM material 0xf0a0a0)
+        const haloLocalY = 8.5 * VS;                               // 0.4675
+
+        // Eyes / cheeks (IM mesh hidden; face voxels in 'head')
+        const eyeW = headW * 0.24, eyeH = headH * 0.24, eyeD = 0.028;
+        const eyeLocalX = 2 * VS, eyeLocalY = 0, eyeLocalZ = headD / 2 + eyeD / 2;
         const cheekW = headW * 0.22, cheekH = headH * 0.14, cheekD = 0.022;
-        const cheekLocalX = headW * 0.32;
-        const cheekLocalY = eyeLocalY - eyeH * 0.80 - cheekH * 0.50;
-        const cheekLocalZ = headD / 2 + cheekD / 2;
-        // Nose — hidden (angel face has cheeks instead)
+        const cheekLocalX = 3 * VS, cheekLocalY = -0.5 * VS, cheekLocalZ = headD / 2 + cheekD / 2;
         const mouthW = 0.001, mouthH = 0.001, mouthD = 0.001, mouthY = 0, mouthLocalZ = headD / 2;
         const eyeHLW = 0.001, eyeHLH = 0.001, eyeHLD = 0.001;
         const eyeHLLocalX = 0, eyeHLLocalY = 0, eyeHLLocalZ = headD / 2;
         const browW = 0.001, browH = 0.001, browD = 0.001;
         const browLocalX = 0, browLocalY = 0, browLocalZ = headD / 2;
-        // Wings — large white panels behind torso
-        const wingZ = -(torsoD / 2 + 0.02);
-        const wingUpperW = 0.34, wingUpperH = 0.28, wingUpperD = 0.08;
-        const wingUpperLocalX = torsoW / 2 + wingUpperW / 2 - 0.06;
-        const wingUpperLocalY = torsoCenterY + torsoH * 0.15;
-        const wingLowerW = 0.28, wingLowerH = 0.22, wingLowerD = 0.08;
-        const wingLowerLocalX = torsoW / 2 + wingLowerW / 2 - 0.04;
-        const wingLowerLocalY = torsoCenterY - torsoH * 0.10;
+
+        // Wings: leftWing.position.set(-2, 10, -2) in voxelchar01
+        //   wingUpperLocalX = 2*VS, wingUpperLocalY = 10*VS = 0.55, wingZ = -2*VS
+        const wingZ = -2 * VS;
+        const wingUpperW = 8 * VS, wingUpperH = 8 * VS, wingUpperD = VS;
+        const wingUpperLocalX = 2 * VS;
+        const wingUpperLocalY = 10 * VS;                           // 0.55 = abs y=10 ✓
+        const wingLowerW = 5 * VS, wingLowerH = 5 * VS, wingLowerD = VS;
+        const wingLowerLocalX = 2 * VS;
+        const wingLowerLocalY = 10 * VS;
+
         const shadowRadius = 0.34, carriedItemSize = 0.26;
         const carriedItemY = headCenterY + headH * 0.32, carriedItemZ = headD / 2 + 0.08;
         return _buildReturn({ footH, footW, footD, legSpacingX, shinH, shinW, shinD, thighH, thighW, thighD, pelvisH, pelvisW, pelvisD, torsoH, torsoW, torsoD, footCenterY, shinCenterY, thighCenterY, pelvisCenterY, bodyBottom, torsoCenterY, bodyTop, upperArmH, upperArmW, upperArmD, forearmH, forearmW, forearmD, armSpacingX, upperArmCenterY, forearmCenterY, headW, headH, headD, neckGap, headCenterY, hairTopW, hairTopH, hairTopD, hairTopLocalY, hairCapW, hairCapH, hairCapD, hairCapLocalY, hairSideH: hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY, haloW, haloH, haloD, haloLocalY, eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ, cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ, mouthW, mouthH, mouthD, mouthY, mouthLocalZ, eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ, browW, browH, browD, browLocalX, browLocalY, browLocalZ, wingZ, wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY, wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY, shadowRadius, carriedItemSize, carriedItemY, carriedItemZ });
@@ -328,22 +348,28 @@ registerSkin({
             push(Math.cos(a) * 6, 0, Math.sin(a) * 6, C.halo, 'halo');
         }
 
-        // ── BODY-LOCAL (torso) ──────────────────────────────────────────────
-        // voxcelchar01: x=-2..1, y=0..9, z=-2..1 → center (-0.5, 4.5, -0.5)
+        // ── BODY-LOCAL (torso + skirt) ─────────────────────────────────────
+        // Both torso and skirt are children of voxelchar01's bodyGroup (y=5 abs).
+        // body pivot = torsoCenterY = 9.5*VS = 4.5 units from bodyGroup bottom.
+        // local y = (bodyGroup_local_y - 4.5) × VS.
+
+        // Torso core: 4×10×4 box (x=-2..1, y=0..9, z=-2..1 of bodyGroup)
         for (let x=-2; x<=1; x++) for (let y=0; y<10; y++) for (let z=-2; z<=1; z++) {
             push(x + 0.5, y - 4.5, z + 0.5, C.dress, 'body');
         }
 
-        // ── PELVIS-LOCAL (skirt) ────────────────────────────────────────────
-        // voxcelchar01: 3 ring layers at y=0, 2, 4 → center y=2
+        // Skirt rings: 3 ring layers at bodyGroup y=0, 2, 4
+        // moved to 'body' part so they align with the torso (same bodyGroup origin)
         for (let layer = 0; layer < 3; layer++) {
             const r = 4 + layer;
-            const h = layer * 2;
+            const h = layer * 2;  // bodyGroup-local y: 0, 2, 4
             for (let x = -r; x <= r; x++) for (let z = -r; z <= r; z++) {
                 const d = Math.sqrt(x*x + z*z);
-                if (d <= r && d > r - 2) push(x, h - 2, z, C.dress, 'pelvis');
+                if (d <= r && d > r - 2) push(x, h - 4.5, z, C.dress, 'body');
             }
         }
+
+        // ── PELVIS-LOCAL — empty (skirt merged into body above) ────────────
 
         // ── WING-LOCAL ──────────────────────────────────────────────────────
         // voxcelchar01: right-triangle, i=0..7, j=0..7-i
@@ -370,13 +396,16 @@ registerSkin({
             push(x, y, 0, C.skin, 'forearmR');
         }
 
-        // ── LEGS / SHINS / FEET: minimal (hidden under dress) ───────────────
+        // ── LEGS / SHINS / FEET: match voxelchar01 exactly ─────────────────
+        // voxelchar01 legs: addVoxel(±1, 0, 0) and addVoxel(±1, 1, 0) directly on angel.
+        // foot pivot = (±legSpacingX, footCenterY=VS/2) → foot-local y = angel_y - 0.5
+        push(0, -0.5, 0, C.skin, 'footL');   // angel y=0 → local y=-VS/2
+        push(0,  0.5, 0, C.skin, 'footL');   // angel y=1 → local y=+VS/2
+        push(0, -0.5, 0, C.skin, 'footR');
+        push(0,  0.5, 0, C.skin, 'footR');
+        // shin/thigh: single marker voxel (hidden under dress)
         push(0, 0, 0, C.skin, 'legL');   push(0, 0, 0, C.skin, 'legR');
         push(0, 0, 0, C.skin, 'shinL');  push(0, 0, 0, C.skin, 'shinR');
-        for (let x=-1; x<=1; x++) for (let z=-1; z<=1; z++) {
-            push(x, 0, z, C.skin, 'footL');
-            push(x, 0, z, C.skin, 'footR');
-        }
 
         return vox;
     },
