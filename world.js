@@ -1524,6 +1524,7 @@ export function animate() {
         const seasonalMultiplier = window.currentSeasonInfo ? window.currentSeasonInfo.multiplier : 1;
         const rate = baseRate * seasonalMultiplier;
 
+        let _fruitAdded = 0;
         for (let x = 0; x < gridSize; x++) {
             for (let z = 0; z < gridSize; z++) {
                 if (Math.random() >= rate) continue;
@@ -1537,9 +1538,11 @@ export function animate() {
                 const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
                     !worldData.has(`${x+dx},${fruitY},${z+dz}`));
                 if (!hasPassableNeighbor) continue;
-                addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
+                addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT, false); // skip per-block minimap refresh
+                _fruitAdded++;
             }
         }
+        if (_fruitAdded > 0) drawMinimap(); // single redraw after all fruit placed
         animate.lastFruitRegenTime = 0;
     }
 
