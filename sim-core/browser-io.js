@@ -1,42 +1,37 @@
 import * as THREE from 'three';
 import { getActiveSkin } from '../character-skins.js';
 import { VoxelCrowdRenderer } from './voxel-crowd-renderer.js';
+import {
+    buildHouseWallMesh,
+    buildStoneWallMesh,
+    buildHouseRoofGroup,
+    buildDarkRoofGroup,
+} from './house-voxel-renderer.js';
 
 export function createThreeSimulationIO() {
     const createMaterial = (options = {}) => new THREE.MeshLambertMaterial(options);
     const createEdgeMaterial = (options = {}) => new THREE.LineBasicMaterial(options);
 
     function createBlockVisual({ x = 0, y = 0, z = 0, type = {}, blockSize = 1, material, edgeMaterial, isVisible = true }) {
-        let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         const variantSeed = Math.abs((x * 73856093) ^ (y * 19349663) ^ (z * 83492791));
 
+        // ── Voxel-style house blocks ─────────────────────────────────────────
+        if (type.isStoneWall) return buildStoneWallMesh(material, x, y, z, isVisible);
+        if (type.isHouseWall)  return buildHouseWallMesh(material, x, y, z, isVisible);
+        if (type.isDarkRoof)   return buildDarkRoofGroup(material, x, y, z, isVisible, variantSeed);
+        if (type.isHouseRoof)  return buildHouseRoofGroup(material, x, y, z, isVisible, variantSeed);
+
+        // ── Standard blocks ──────────────────────────────────────────────────
+        let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         if (type.isBed) {
             geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
-        } else if (type.isStoneWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.92, blockSize * 1.08, blockSize * 0.92);
-        } else if (type.isHouseWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize * 1.02, blockSize * 0.9);
-        } else if (type.isDarkRoof) {
-            const longX = (variantSeed % 2) === 0;
-            geometry = new THREE.BoxGeometry(
-                blockSize * (longX ? 1.45 : 1.15),
-                blockSize * 0.22,
-                blockSize * (longX ? 1.15 : 1.45)
-            );
-        } else if (type.isHouseRoof) {
-            const roofHeight = [0.72, 0.84, 0.96][variantSeed % 3];
-            geometry = new THREE.ConeGeometry(blockSize * 0.8, blockSize * roofHeight, 4);
         }
 
         const block = new THREE.Mesh(geometry, material);
         let yOffset = 0.5;
         if (type.isBed) yOffset = 0.2;
-        else if (type.isDarkRoof) yOffset = blockSize * 0.11;
-        else if (type.isHouseRoof) yOffset = 0.4;
 
         block.position.set(x + 0.5, y + yOffset, z + 0.5);
-        if (type.isHouseRoof) block.rotation.y = Math.PI / 4 + ((variantSeed % 4) * (Math.PI / 2));
-        if (type.isDarkRoof) block.rotation.y = ((variantSeed % 2) * (Math.PI / 2));
         if (edgeMaterial) {
             const edges = new THREE.LineSegments(new THREE.EdgesGeometry(block.geometry), edgeMaterial);
             block.add(edges);
