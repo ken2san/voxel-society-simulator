@@ -2550,8 +2550,7 @@ class Character {
 
         // Hide individual body parts from the camera — InstancedMesh handles rendering.
         // Eyes and mouth (children of head) stay on layer 0 since they follow head rotation.
-        // Selected characters are toggled back to layer 0 in updateAnimations().
-        this._isSelectedForInstanced = false;
+        // Selection indicator is a ground ring (world.js _selectionRing), not individual Box meshes.
         if (typeof window !== 'undefined' && window._instancedCharRenderer) {
             for (const part of [
                 this.body, this.pelvis,
@@ -5811,28 +5810,6 @@ class Character {
             this.resetVisualEffects();
         }
         const perfProfile = this.getVisualPerfProfile();
-
-        // When InstancedMesh renderer is active, always keep individual box parts on layer 31
-        // (hidden from camera). The instanced voxel renderer handles all visual output.
-        // Previously we toggled selected chars to layer 0, which showed plain rectangular boxes
-        // instead of the correct voxel silhouette. Selection is now indicated by a ground ring.
-        if (typeof window !== 'undefined' && window._instancedCharRenderer) {
-            if (this._isSelectedForInstanced !== false) {
-                this._isSelectedForInstanced = false;
-                for (const part of [
-                    this.body, this.pelvis,
-                    this.leftThigh, this.rightThigh, this.leftShin, this.rightShin, this.leftFoot, this.rightFoot,
-                    this.leftArm, this.rightArm, this.leftForearm, this.rightForearm,
-                    this.leftWingUpper, this.rightWingUpper, this.leftWingLower, this.rightWingLower,
-                    this.head, this.shadowMesh,
-                    this.halo, this.hairTop, this.hairCapTop, this.hairSideL, this.hairSideR,
-                    this.mouth, this.leftEye, this.rightEye, this.leftEyeHL, this.rightEyeHL,
-                    this.leftBrow, this.rightBrow, this.leftCheek, this.rightCheek,
-                ]) {
-                    if (part) part.layers.set(31);
-                }
-            }
-        }
 
         if (perfProfile.minAnimStep > 0) {
             // Stagger initial accumulator to avoid thundering herd (all chars firing same frame)
