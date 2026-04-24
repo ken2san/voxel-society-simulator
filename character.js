@@ -5855,6 +5855,38 @@ class Character {
         }
         const perfProfile = this.getVisualPerfProfile();
 
+        // Dig animation override — must run BEFORE the throttle guard so the arms
+        // animate the same frame the block is removed, not after the next throttle window.
+        if ((this._digAnimTimer || 0) > 0 && this.body) {
+            this._digAnimTimer -= deltaTime;
+            if (!this._digPhase) this._digPhase = 0;
+            this._digPhase += deltaTime * 5.0;
+            const digSwing = Math.sin(this._digPhase);
+            const _tgt = this._digAnimTarget || (this.action && this.action.target) || null;
+            const _tgtDy = _tgt ? (_tgt.y - this.gridPos.y) : 0;
+            if (_tgtDy < 0) {
+                this.leftArm.rotation.x  =  0.60 + digSwing * 0.60;
+                this.rightArm.rotation.x =  0.60 + digSwing * 0.60;
+                if (this.leftForearm)  this.leftForearm.rotation.x  = 0.25 + digSwing * 0.30;
+                if (this.rightForearm) this.rightForearm.rotation.x = 0.25 + digSwing * 0.30;
+                this.body.rotation.x =  0.35 + digSwing * 0.20;
+                this.head.rotation.x =  0.30 - digSwing * 0.08;
+            } else {
+                this.leftArm.rotation.x  = -0.65 - digSwing * 0.80;
+                this.rightArm.rotation.x = -0.65 - digSwing * 0.80;
+                if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.45 : 0;
+                if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.45 : 0;
+                this.body.rotation.x = digSwing > 0 ? digSwing * 0.30 : 0;
+                this.head.rotation.x = -0.18 + digSwing * 0.08;
+            }
+            this.bobTime += deltaTime * 5;
+            const digBob = Math.abs(digSwing) * 0.025;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.630) + digBob;
+            if (this.pelvis) this.pelvis.position.y = (this._bodyRow2RestY ?? 0.445) + digBob;
+            if (!this.actionAnim.active) this.body.scale.y = 1.0;
+            return; // skip throttle and state-based animation while digging
+        }
+
         if (perfProfile.minAnimStep > 0) {
             // Stagger initial accumulator to avoid thundering herd (all chars firing same frame)
             if (!this._animStepSeeded) {
@@ -6105,38 +6137,6 @@ class Character {
         }
 
         // --- Body animation: more charming/expressive ---
-        // Dig animation override: fires regardless of state when _digAnimTimer > 0
-        // (set by destroyBlock() each tick so the animation works even if state
-        //  isn't 'working' yet, e.g. during arrival delay or rescue digs)
-        if ((this._digAnimTimer || 0) > 0) {
-            this._digAnimTimer -= deltaTime;
-            if (!this._digPhase) this._digPhase = 0;
-            this._digPhase += deltaTime * 5.0;
-            const digSwing = Math.sin(this._digPhase);
-            const _tgt = this._digAnimTarget || (this.action && this.action.target) || null;
-            const _tgtDy = _tgt ? (_tgt.y - this.gridPos.y) : 0;
-            if (_tgtDy < 0) {
-                this.leftArm.rotation.x  =  0.60 + digSwing * 0.60;
-                this.rightArm.rotation.x =  0.60 + digSwing * 0.60;
-                if (this.leftForearm)  this.leftForearm.rotation.x  = 0.25 + digSwing * 0.30;
-                if (this.rightForearm) this.rightForearm.rotation.x = 0.25 + digSwing * 0.30;
-                this.body.rotation.x =  0.35 + digSwing * 0.20;
-                this.head.rotation.x =  0.30 - digSwing * 0.08;
-            } else {
-                this.leftArm.rotation.x  = -0.65 - digSwing * 0.80;
-                this.rightArm.rotation.x = -0.65 - digSwing * 0.80;
-                if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.45 : 0;
-                if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.45 : 0;
-                this.body.rotation.x = digSwing > 0 ? digSwing * 0.30 : 0;
-                this.head.rotation.x = -0.18 + digSwing * 0.08;
-            }
-            this.bobTime += deltaTime * 5;
-            const digBob = Math.abs(digSwing) * 0.025;
-            this.body.position.y = (this._bodyRow1RestY ?? 0.630) + digBob;
-            if (this.pelvis) this.pelvis.position.y = (this._bodyRow2RestY ?? 0.445) + digBob;
-            if (!this.actionAnim.active) this.body.scale.y = 1.0;
-            return; // skip state-based animation while digging
-        }
         if (this.state === 'idle') {
             // Ethereal idle float
             this.bobTime += deltaTime * 1.8;
@@ -6457,6 +6457,13 @@ class Character {
             if (this.mesh) {
                 this.mesh.rotation.z += gesturePose.lean;
             }
+        }
+
+        // ── Golem: suppress head pitch from all state animations above ─────────
+        // Must run after the state animation blocks (which set head.rotation.x)
+        // and before the life-stage block (which intentionally adds elder hunch).
+        if (typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem' && this.head) {
+            this.head.rotation.x = 0;
         }
 
         // ── Golem life-stage visuals ────────────────────────────────────────
