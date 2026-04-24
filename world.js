@@ -729,8 +729,8 @@ export const visualBlocks = new Map();
 export let worldChangeCounter = 0;
 export const BLOCK_TYPES = {
     AIR:   { id: 0, name: 'Air' },
-    GRASS: { id: 1, name: 'Grass', color: 0x4CAF50, diggable: true },
-    DIRT:  { id: 2, name: 'Dirt', color: 0x966c4a, diggable: true },
+    GRASS: { id: 1, name: 'Grass', color: 0x4CAF50, diggable: true, isGrassBlock: true },
+    DIRT:  { id: 2, name: 'Dirt', color: 0x966c4a, diggable: true, isDirtBlock: true },
     STONE: { id: 3, name: 'Stone', color: 0x888888, diggable: true, isStoneBlock: true },
     FRUIT: { id: 4, name: 'Fruit', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM', isFruitBlock: true },
     WOOD:  { id: 5, name: 'Wood', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG', isWoodBlock: true },
@@ -1167,12 +1167,44 @@ export function updateWorldLighting() {
     const dayIntensity = Math.sin(timeOfDay * Math.PI);
     if (directionalLight) directionalLight.intensity = Math.max(0, dayIntensity) * 0.8;
     if (ambientLight) ambientLight.intensity = 0.3 + Math.max(0, dayIntensity) * 0.6;
+
     const io = simIO();
-    // Reuse module-level Color objects to avoid per-frame GC allocation
+
+    // ── Seasonal sky / ambient colour ─────────────────────────────────────────
+    // 4 season anchor colours indexed 0=Spring, 1=Summer, 2=Autumn, 3=Winter.
+    // phase from window.currentSeasonInfo (0–1 over full cycle) is split into
+    // 4 equal segments; we lerp smoothly between adjacent seasons.
+    const SEASON_SKY = [0xb4d4f0, 0x6bc5ff, 0xe09040, 0xb0c8de];  // Spring→Summer→Autumn→Winter
+    const SEASON_AMB = [0xfff4fa, 0xfff8e8, 0xffe8c0, 0xeaf0ff];  // ambient tint per season
+
+    if (!updateWorldLighting._s0) {
+        updateWorldLighting._s0 = io.createColor(0);
+        updateWorldLighting._s1 = io.createColor(0);
+        updateWorldLighting._seasonSky = io.createColor(0);
+        updateWorldLighting._seasonAmb = io.createColor(0);
+    }
+    const phase = (typeof window !== 'undefined' && window.currentSeasonInfo)
+        ? window.currentSeasonInfo.phase : 0;
+    const si = Math.floor(phase * 4) % 4;
+    const t  = (phase * 4) % 1.0;
+    const ni = (si + 1) % 4;
+
+    updateWorldLighting._s0.set(SEASON_SKY[si]);
+    updateWorldLighting._s1.set(SEASON_SKY[ni]);
+    updateWorldLighting._seasonSky.lerpColors(updateWorldLighting._s0, updateWorldLighting._s1, t);
+
+    updateWorldLighting._s0.set(SEASON_AMB[si]);
+    updateWorldLighting._s1.set(SEASON_AMB[ni]);
+    updateWorldLighting._seasonAmb.lerpColors(updateWorldLighting._s0, updateWorldLighting._s1, t);
+
+    if (ambientLight) ambientLight.color.copy(updateWorldLighting._seasonAmb);
+    if (directionalLight) directionalLight.color.copy(updateWorldLighting._seasonAmb);
+
+    // ── Sky background (lerp between night and seasonal day sky) ─────────────
     if (!updateWorldLighting._nightColor) updateWorldLighting._nightColor = io.createColor(0x0a0a2a);
-    if (!updateWorldLighting._dayColor) updateWorldLighting._dayColor = io.createColor(0x87CEEB);
     const nightColor = updateWorldLighting._nightColor;
-    const dayColor = updateWorldLighting._dayColor;
+    const dayColor   = updateWorldLighting._seasonSky;  // seasonal sky replaces static 0x87CEEB
+
     if (scene) {
         if (!scene.background) scene.background = io.createColor(0x87CEEB);
         if (typeof scene.background?.lerpColors === 'function') {

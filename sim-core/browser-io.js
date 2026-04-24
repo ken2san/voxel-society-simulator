@@ -11,6 +11,8 @@ import {
     buildLeafGroup,
     buildFruitGroup,
     buildStoneGroup,
+    buildGrassGroup,
+    buildDirtGroup,
 } from './tree-voxel-renderer.js';
 
 export function createThreeSimulationIO() {
@@ -32,6 +34,8 @@ export function createThreeSimulationIO() {
             if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
             if (type.isStoneBlock) return buildStoneGroup(type, x, y, z, isVisible);
             if (type.isBedBlock)   return buildBedGroup(type, x, y, z, isVisible);
+            if (type.isGrassBlock) return buildGrassGroup(type, x, y, z, isVisible);
+            if (type.isDirtBlock)  return buildDirtGroup(type, x, y, z, isVisible);
         }
 
         // ── Standard blocks ──────────────────────────────────────────────────
