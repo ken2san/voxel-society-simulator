@@ -4076,6 +4076,8 @@ class Character {
         }
         if (surrounded && breakable) {
             // Use reservation-based removal to avoid races
+            this._digAnimTimer = 0.5;
+            this._digAnimTarget = { x: breakable.x, y: breakable.y, z: breakable.z };
             this.reserveAndRemoveBlock(breakable.x, breakable.y, breakable.z);
             this.log('Break out: forcibly removed block to escape enclosure (reserved)', breakable);
         }
@@ -5437,6 +5439,8 @@ class Character {
                         // 掘ったら落下する場合は下まで落ちる
                         while (fallY > 0 && !worldData.has(`${x},${fallY-1},${z}`)) fallY--;
                         if (this.isSafeToFallOrDig(x, fallY, z)) {
+                            this._digAnimTimer = 0.5;
+                            this._digAnimTarget = { x, y, z };
                             // use reservation-based removal and only treat as success if it actually removed
                             const removed = this.reserveAndRemoveBlock(x, y, z, { allowBottomRescue: true });
                             if (removed) {
@@ -5482,6 +5486,8 @@ class Character {
                         const x = this.gridPos.x + randDir.dx;
                         const y = this.gridPos.y + randDir.dy;
                         const z = this.gridPos.z + randDir.dz;
+                        this._digAnimTimer = 0.5;
+                        this._digAnimTarget = { x, y, z };
                         // use reservation-based removal and only treat as success if actually removed
                         const removed = this.reserveAndRemoveBlock(x, y, z, { allowBottomRescue: true });
                         if (removed) {
@@ -5741,6 +5747,8 @@ class Character {
             this._cornerStuckTimer += deltaTime;
             if (this._cornerStuckTimer > 1.5 && wallPos) {
                 // 強制的に壁を壊して脱出
+                this._digAnimTimer = 0.5;
+                this._digAnimTarget = { x: wallPos.x, y: wallPos.y, z: wallPos.z };
                 // use reservation-based removal for wall break
                 const removed = this.reserveAndRemoveBlock(wallPos.x, wallPos.y, wallPos.z);
                 if (removed) {
@@ -5972,13 +5980,19 @@ class Character {
                 this.head.rotation.y = current + _lookDelta * lerp;
 
                 // Head pitch: look up/down based on vertical component
-                const maxPitch = 0.45; // radians (~26deg)
-                const horizDist = Math.sqrt(dir.x * dir.x + dir.z * dir.z) + 1e-6;
-                let desiredPitch = -Math.atan2(dir.y, horizDist) * 0.8; // invert for natural tilt
-                desiredPitch = Math.max(-maxPitch, Math.min(maxPitch, desiredPitch));
-                // lerp pitch a bit slower
+                // Suppress for golem — boulder head tilts unnaturally with look-at pitch
                 const pitchLerp = 0.06 * Math.min(2.0, Math.max(0.2, lookMul));
-                this.head.rotation.x += (desiredPitch - this.head.rotation.x) * pitchLerp;
+                const _isGolem = typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem';
+                if (_isGolem) {
+                    // Gently restore head to neutral vertical angle
+                    this.head.rotation.x += (0 - this.head.rotation.x) * pitchLerp;
+                } else {
+                    const maxPitch = 0.45; // radians (~26deg)
+                    const horizDist = Math.sqrt(dir.x * dir.x + dir.z * dir.z) + 1e-6;
+                    let desiredPitch = -Math.atan2(dir.y, horizDist) * 0.8; // invert for natural tilt
+                    desiredPitch = Math.max(-maxPitch, Math.min(maxPitch, desiredPitch));
+                    this.head.rotation.x += (desiredPitch - this.head.rotation.x) * pitchLerp;
+                }
 
                 // Eye micro-tracking: lazy-init base positions, then offset slightly toward target
                 try {
@@ -7338,6 +7352,8 @@ class Character {
                     const toBreak = breakableBlocks[0];
 
                     // Reservation-based removal
+                    this._digAnimTimer = 0.5;
+                    this._digAnimTarget = { x: toBreak.x, y: toBreak.y, z: toBreak.z };
                     this.reserveAndRemoveBlock(toBreak.x, toBreak.y, toBreak.z);
                     this._cornerStuckTimer = 0;
                     this.log('Rescued from corner: removed block (reserved)', toBreak);
@@ -7352,6 +7368,8 @@ class Character {
             // 段階1: 最適なブロックを破壊
             if (this._enclosureTimer > 1.5 && stuckInfo.breakable) {
                 // Reservation-based removal to avoid races
+                this._digAnimTimer = 0.5;
+                this._digAnimTarget = { x: stuckInfo.breakable.x, y: stuckInfo.breakable.y, z: stuckInfo.breakable.z };
                 this.reserveAndRemoveBlock(stuckInfo.breakable.x, stuckInfo.breakable.y, stuckInfo.breakable.z);
                 this._enclosureTimer = 0;
                 this.log('Rescued from enclosure: removed priority block (reserved)', stuckInfo.breakable);

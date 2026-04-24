@@ -199,13 +199,15 @@ export class VoxelCrowdRenderer {
             const hry  = char.head.rotation.y;
 
             // Detect dirty: position changed, state changed, actively animating,
-            // or head yaw changed (idle glance rotates head even in non-anim states)
+            // or head yaw changed (idle glance rotates head even in non-anim states),
+            // or dig animation is running (rescue digs can fire outside working state)
             const isDirty = !this._slotMap.has(char.id)
                 || this._slotMap.get(char.id) !== slot
                 || px !== prev.x || pz !== prev.z
                 || st !== prev.state
                 || ANIM_STATES.has(st)
-                || Math.abs(hry - prev.headRotY) > 0.01;
+                || Math.abs(hry - prev.headRotY) > 0.01
+                || (char._digAnimTimer || 0) > 0;
 
             if (isDirty) toUpdate.push({ char, slot });
 
