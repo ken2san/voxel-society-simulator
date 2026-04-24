@@ -1118,8 +1118,8 @@ function _updateSpecialEntity(entity, shouldShow, dt) {
         const spd = roam.speed * dt;
         entity.position.x += (dx / dist) * spd;
         entity.position.z += (dz / dist) * spd;
-        // Face the direction of travel
-        entity.rotation.y = Math.atan2(-dx, -dz);
+        // Face the direction of travel (both models are built facing +Z)
+        entity.rotation.y = Math.atan2(dx, dz);
     }
 
     // Hover: float above the ground tile directly below

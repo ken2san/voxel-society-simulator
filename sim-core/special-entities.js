@@ -141,6 +141,7 @@ export function buildAngelGroup() {
 
 // ── Reaper ────────────────────────────────────────────────────────────────────
 // Palette matches sandbox voxelchar02: black robe, bone skull, red eyes, silver scythe.
+// Proportions: body 8v tall, headGroup at 5.5 S, hood 6v + 3-step peak ≈ 22 S total.
 export function buildReaperGroup() {
     const root = new THREE.Group();
 
@@ -151,8 +152,8 @@ export function buildReaperGroup() {
     const HANDLE = 0x4a1a1a;
     const BLADE  = 0xcccccc;
 
-    // ── Robe body ─────────────────────────────────────────────────────────────
-    const body = box(5, 12, 3, ROBE);
+    // ── Robe body (8 voxels tall, spans −4 S … +4 S) ─────────────────────────
+    const body = box(5, 8, 3, ROBE);
     body.position.y = 0;
     root.add(body);
 
@@ -160,76 +161,76 @@ export function buildReaperGroup() {
     for (let xi = -2; xi <= 2; xi++) {
         if (Math.random() > 0.4) {
             const shred = box(1, 1.5, 2.5, ROBE);
-            shred.position.set(xi * S, -7 * S, 0);
+            shred.position.set(xi * S, -5 * S, 0);
             root.add(shred);
         }
     }
 
     // Belt (dark red band)
     const belt = box(6, 1.2, 3.5, BELT);
-    belt.position.y = -1 * S;
+    belt.position.y = -0.5 * S;
     root.add(belt);
 
     // Belt tie (dangling)
-    const tie = box(1.5, 4, 0.8, BELT);
-    tie.position.set(-2 * S, -4 * S, 1.8 * S);
+    const tie = box(1.5, 3, 0.8, BELT);
+    tie.position.set(-2 * S, -3 * S, 1.8 * S);
     root.add(tie);
 
-    // ── Head group ────────────────────────────────────────────────────────────
+    // ── Head group (5.5 S above root; body top is at 4 S) ─────────────────────
     const headGroup = new THREE.Group();
-    headGroup.position.y = 8 * S;
+    headGroup.position.y = 5.5 * S;
     root.add(headGroup);
 
-    // Hood (outer robe shell)
-    const hood = box(7, 9, 5, ROBE);
+    // Hood (outer robe shell — 6 voxels tall)
+    const hood = box(6, 6, 4, ROBE);
     hood.position.y = 0;
     headGroup.add(hood);
 
-    // Hood peak (pointed top)
-    for (let step = 0; step < 4; step++) {
-        const w = 7 - step * 1.5;
-        const d = 5 - step;
+    // Hood peak (pointed top — 3 narrowing steps)
+    for (let step = 0; step < 3; step++) {
+        const w = 5.5 - step * 1.5;   // 5.5 → 4.0 → 2.5
+        const d = 3.5 - step;          // 3.5 → 2.5 → 1.5
         const peak = box(w, 2, d, ROBE);
-        peak.position.y = (5 + step * 2) * S;
+        peak.position.y = (3.5 + step * 2) * S;
         headGroup.add(peak);
     }
 
     // Skull face (bone, set into front of hood)
-    const skull = box(5, 5.5, 3, BONE);
-    skull.position.set(0, -1.5 * S, 1.8 * S);
+    const skull = box(4, 4.5, 2.5, BONE);
+    skull.position.set(0, -1 * S, 1.7 * S);
     headGroup.add(skull);
 
     // Cheekbones
-    for (const ex of [-2.3, 2.3]) {
+    for (const ex of [-2, 2]) {
         const cheek = box(1.5, 1, 1, BONE);
-        cheek.position.set(ex * S, -2.5 * S, 2.2 * S);
+        cheek.position.set(ex * S, -1.8 * S, 2.1 * S);
         headGroup.add(cheek);
     }
 
     // Eyes (red, unlit — always glow)
     for (const ex of [-1.4, 1.4]) {
         const eye = box(1.4, 1.4, 0.4, EYE, true);
-        eye.position.set(ex * S, -0.5 * S, 3.1 * S);
+        eye.position.set(ex * S, -0.2 * S, 2.8 * S);
         headGroup.add(eye);
     }
 
-    // ── Scythe (held at right side, arm+handle+blade) ─────────────────────────
+    // ── Scythe (held at right side) ───────────────────────────────────────────
     const scytheGroup = new THREE.Group();
-    scytheGroup.position.set(3.5 * S, 3 * S, 0);
+    scytheGroup.position.set(3.5 * S, 1.5 * S, 0);
     root.add(scytheGroup);
 
-    // Handle (long vertical pole)
+    // Handle (14 voxels tall — proportionate to character height)
     const handle = new THREE.Mesh(
-        new THREE.BoxGeometry(0.9 * S, 20 * S, 0.9 * S),
+        new THREE.BoxGeometry(0.9 * S, 14 * S, 0.9 * S),
         new THREE.MeshLambertMaterial({ color: HANDLE }),
     );
-    handle.position.y = 2 * S;
+    handle.position.y = 1 * S;
     scytheGroup.add(handle);
 
-    // Blade (curved via angled box series — matches sandbox bladeCurve style)
+    // Blade (curved arc along upper handle)
     const bladePts = [
-        [0.5, 12, 1], [1.5, 12.5, 1], [2.5, 12.3, 1], [3.5, 11.5, 1],
-        [4.2, 10.2, 1], [4.5, 8.8, 1], [4.2, 7.5, 1], [3.2, 6.8, 1],
+        [0.5, 7.0, 1], [1.5, 7.5, 1], [2.5, 7.3, 1], [3.2, 6.7, 1],
+        [3.8, 5.7, 1], [4.0, 4.5, 1], [3.8, 3.5, 1], [2.8, 2.8, 1],
     ];
     const bladeMat = new THREE.MeshLambertMaterial({ color: BLADE, roughness: 0.3, metalness: 0.7 });
     for (const [bx, by] of bladePts) {
@@ -237,9 +238,9 @@ export function buildReaperGroup() {
         bv.position.set(bx * S, by * S, 0);
         scytheGroup.add(bv);
     }
-    // Blade inner edge (thinner highlight)
+    // Blade inner edge (silver highlight)
     const bladePtsInner = [
-        [1, 12.3, 0.6], [2, 12.1, 0.6], [3, 11.2, 0.6], [3.8, 9.8, 0.6],
+        [1, 7.3, 0.6], [2, 7.0, 0.6], [3, 6.2, 0.6], [3.6, 5.0, 0.6],
     ];
     for (const [bx, by] of bladePtsInner) {
         const bv = new THREE.Mesh(new THREE.BoxGeometry(S, S, 0.3 * S), new THREE.MeshBasicMaterial({ color: 0xffffff }));
