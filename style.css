@@ -87,49 +87,69 @@
   border-bottom: 2.5px solid #3b82f6;
 }
 
-/* ── Mobile layout fixes (covers iPhone, iPad, iPad Pro up to 1280px) ───── */
+/* ── Mobile layout: canvas-as-background + bottom-sheet panels ───────────── */
 @media (max-width: 1280px) {
-  #mobile-hud          { display: flex; }
+  #mobile-hud           { display: flex; }
   #mobile-accordion-bar { display: flex; }
 
-  /* Body: scrollable flex-column, leave room for fixed HUD bar */
+  /* Body: full-viewport, no scroll — canvas IS the background */
   body {
+    overflow: hidden !important;
+    height: 100dvh !important;
     padding: 0 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    justify-content: flex-start !important;
-    align-items: stretch !important;
-    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   h1              { display: none !important; }
   #debug-launcher { display: none !important; }
   #resource-gen-settings { display: none !important; }
 
-  /* Canvas: keep 4:3 ratio (same as PC 800×600), width fills screen */
-  #gameCanvas {
-    height: auto !important;
-    aspect-ratio: 4 / 3;
-    border-radius: 0 !important;
-  }
-
+  /* Canvas container fills entire viewport (behind HUD via z-index) */
   #game-container {
+    position: fixed !important;
+    inset: 0 !important;
     left: 0 !important;
-    margin-bottom: 0 !important;
+    margin: 0 !important;
     max-width: 100% !important;
+    width: 100% !important;
+    z-index: 0 !important;
   }
 
-  /* Strip card decoration so canvas is edge-to-edge */
+  /* Strip card decoration, fill parent height */
   #game-container .card {
     padding: 0 !important;
     border-radius: 0 !important;
     border: none !important;
     box-shadow: none !important;
     max-width: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
   }
 
-  /* Minimap: smaller, stays in top-right corner of canvas */
+  /* Canvas fills the fixed container — Three.js onWindowResize reads clientWidth/Height */
+  #gameCanvas {
+    width: 100% !important;
+    height: 100% !important;
+    aspect-ratio: unset !important;
+    border-radius: 0 !important;
+  }
+
+  /* Hide the canvas-embedded Centre button (HUD has 🎯 already) */
+  #centreCameraBtn { display: none !important; }
+
+  /* Remove vignette border-radius on full-screen canvas */
+  #game-container::before { border-radius: 0 !important; }
+
+  /* Minimap: smaller, stays in top-right corner */
   #minimapCanvas { width: 64px !important; height: 64px !important; }
+
+  /* Accordion tab bar: fixed just above HUD */
+  #mobile-accordion-bar {
+    position: fixed !important;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 150 !important;
+  }
 }
 /* --- Voxel Society Simulator Styles --- */
 #gameCanvas { width: 100%; height: 65vh; background-color: rgba(255,255,255,0.01); }
