@@ -55,32 +55,81 @@
   text-align: center;
 }
 
-/* ── Mobile layout fixes (covers iPhone, iPad, iPad Pro up to 1280px) ─────── */
+/* ── Mobile accordion bar (shown on mobile only) ────────────────────── */
+#mobile-accordion-bar {
+  display: none; /* hidden on desktop */
+  width: 100%;
+  background: rgba(15, 23, 42, 0.96);
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.m-acc-btn {
+  flex: 1;
+  padding: 11px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-acc-btn:last-child { border-right: none; }
+.m-acc-btn:active     { background: rgba(59, 130, 246, 0.12); }
+.m-acc-btn.active {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.1);
+  border-bottom: 2.5px solid #3b82f6;
+}
+
+/* ── Mobile layout fixes (covers iPhone, iPad, iPad Pro up to 1280px) ───── */
 @media (max-width: 1280px) {
-  #mobile-hud { display: flex; }
+  #mobile-hud          { display: flex; }
+  #mobile-accordion-bar { display: flex; }
 
-  /* Remove desktop sidebar offset */
-  #game-container { left: 0 !important; }
+  /* Body: scrollable flex-column, leave room for fixed HUD bar */
+  body {
+    padding: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+  }
 
-  /* Collapse resource settings — not needed on touch devices */
+  h1              { display: none !important; }
+  #debug-launcher { display: none !important; }
   #resource-gen-settings { display: none !important; }
 
-  /* Hide title and debug launcher — reclaim vertical space */
-  h1 { display: none !important; }
-  #debug-launcher { display: none !important; }
+  /* Canvas: keep 4:3 ratio (same as PC 800×600), width fills screen */
+  #gameCanvas {
+    height: auto !important;
+    aspect-ratio: 4 / 3;
+    border-radius: 0 !important;
+  }
 
-  /* Remove body padding that compresses the canvas */
-  body { padding: 0 !important; }
+  #game-container {
+    left: 0 !important;
+    margin-bottom: 0 !important;
+    max-width: 100% !important;
+  }
 
-  /* Canvas fills viewport minus the mobile HUD bar (56px) */
-  #gameCanvas { height: calc(100dvh - 56px) !important; }
+  /* Strip card decoration so canvas is edge-to-edge */
+  #game-container .card {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+  }
 
-  /* Strip card padding/border so canvas edge-to-edge */
-  #game-container { margin-bottom: 0 !important; }
-  #game-container .card { padding: 0 !important; border-radius: 0 !important; border: none !important; box-shadow: none !important; }
-
-  /* Minimap — smaller and pushed up above the HUD bar */
-  #minimapCanvas { width: 72px !important; height: 72px !important; }
+  /* Minimap: smaller, stays in top-right corner of canvas */
+  #minimapCanvas { width: 64px !important; height: 64px !important; }
 }
 /* --- Voxel Society Simulator Styles --- */
 #gameCanvas { width: 100%; height: 65vh; background-color: rgba(255,255,255,0.01); }

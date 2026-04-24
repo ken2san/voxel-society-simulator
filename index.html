@@ -86,8 +86,6 @@
     <script type="module" src="sidebar.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
-    <div id="sidebar-left" class="sidebar-bg"></div>
-    <div id="sidebar-right" class="sidebar-bg-right"></div>
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
 
     <!-- Debug launcher -->
@@ -227,6 +225,17 @@
             <button id="centreCameraBtn" title="Reset camera to world centre" style="position:absolute;bottom:24px;left:24px;z-index:10;padding:6px 16px;border-radius:999px;background:rgba(15,23,42,0.72);color:#e2e8f0;font-size:0.82em;font-weight:700;border:1.5px solid rgba(148,163,184,0.45);cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,0.28);letter-spacing:0.03em;transition:background 0.15s;">🎯 Centre</button>
         </div>
     </div>
+
+    <!-- Mobile accordion bar (hidden on desktop) -->
+    <div id="mobile-accordion-bar">
+        <button class="m-acc-btn" id="m-acc-left-btn">👥 Characters</button>
+        <button class="m-acc-btn" id="m-acc-right-btn">🔍 Detail</button>
+    </div>
+
+    <!-- Sidebars: fixed panels on desktop, collapsible panels on mobile -->
+    <div id="sidebar-left" class="sidebar-bg"></div>
+    <div id="sidebar-right" class="sidebar-bg-right"></div>
+
     <div id="messageBox" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-8 rounded-2xl shadow-2xl z-50" data-aos="fade-in" data-aos-delay="300">
         <p id="messageText" class="text-xl font-bold mb-6"></p>
         <button id="messageBoxCloseBtn" class="btn w-full px-6 py-3 font-bold transition-all duration-200">Close</button>
@@ -307,6 +316,25 @@
                     }
                 });
             }
+
+            // ── Accordion panels ──────────────────────────────────────────
+            var accLeftBtn  = document.getElementById('m-acc-left-btn');
+            var accRightBtn = document.getElementById('m-acc-right-btn');
+            var accLeft     = document.getElementById('sidebar-left');
+            var accRight    = document.getElementById('sidebar-right');
+
+            function mAccToggle(panel, btn) {
+                var willOpen = !panel.classList.contains('mobile-open');
+                [accLeft, accRight].forEach(function (p) { p && p.classList.remove('mobile-open'); });
+                [accLeftBtn, accRightBtn].forEach(function (b) { b && b.classList.remove('active'); });
+                if (willOpen) {
+                    panel.classList.add('mobile-open');
+                    btn.classList.add('active');
+                    panel.scrollTop = 0;
+                }
+            }
+            if (accLeftBtn && accLeft)   accLeftBtn.addEventListener('click',  function () { mAccToggle(accLeft,  accLeftBtn); });
+            if (accRightBtn && accRight) accRightBtn.addEventListener('click', function () { mAccToggle(accRight, accRightBtn); });
         });
     })();
     </script>

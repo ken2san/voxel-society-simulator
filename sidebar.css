@@ -420,13 +420,34 @@
   z-index: 100;
 }
 
-/* ── Hide sidebars on touch/tablet viewports so the canvas is visible ── */
+/* ── On touch/tablet viewports: sidebars become collapsible in-flow panels ── */
 @media (max-width: 1280px) {
   #sidebar-left,
   #sidebar-right,
   .sidebar-bg,
   .sidebar-bg-right {
-    display: none !important;
+    position: static !important;
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    transition: max-height 0.35s ease !important;
+  }
+
+  /* Expanded state */
+  #sidebar-left.mobile-open,
+  .sidebar-bg.mobile-open,
+  #sidebar-right.mobile-open,
+  .sidebar-bg-right.mobile-open {
+    max-height: 65vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-top: 1.5px solid rgba(148, 163, 184, 0.18) !important;
   }
 }
 
