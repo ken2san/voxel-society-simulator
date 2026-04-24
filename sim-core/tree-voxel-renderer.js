@@ -389,30 +389,114 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
     const group = new THREE.Group();
     group.add(mesh);
     blades.forEach(b => group.add(b));
-    // ── Step ledges: thin slab where this block is one step above a lower neighbor ──
+    // ── Voxel stair steps (terrace/moss style) ──────────────────────────────────
     if (typeof hasBlock === 'function') {
-        // SH: ledge height, SD: ledge depth (outward), EPS: z-fight avoidance gap
-        const SH = 0.35, SD = 0.16, EPS = 0.006;
-        const sc = GRASS_SIDE[1];
-        const stepMat = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(((sc>>16)&0xff)/255*0.65, ((sc>>8)&0xff)/255*0.65, (sc&0xff)/255*0.65)
-        });
-        // py: bottom of slab is at local -0.5+EPS to avoid z-fight with lower block top
-        // px/pz: inner face is at ±0.5+EPS to avoid z-fight with current block face
-        const W = 1.0 - EPS * 2; // slightly narrower to avoid corner z-fighting
-        const pyC = -0.5 + EPS + SH / 2;
-        const stepDirs = [
-            { dx:  1, dz:  0, gw: SD, gh: SH, gd: W, px:  0.5 + EPS + SD/2, py: pyC, pz: 0 },
-            { dx: -1, dz:  0, gw: SD, gh: SH, gd: W, px: -0.5 - EPS - SD/2, py: pyC, pz: 0 },
-            { dx:  0, dz:  1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz:  0.5 + EPS + SD/2 },
-            { dx:  0, dz: -1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz: -0.5 - EPS - SD/2 },
+        // 3 stair rows: top (cap) → mid → base, going outward & downward
+        // { yBot: local bottom Y, yH: height, depth: outward depth }
+        const ROWS = [
+            { yBot: -0.5 + 0.52, yH: 0.20, depth: 0.18 },  // cap   – tiny lip at top
+            { yBot: -0.5 + 0.26, yH: 0.26, depth: 0.30 },  // mid   – main step body
+            { yBot: -0.5 + 0.00, yH: 0.26, depth: 0.44 },  // base  – wide footing
         ];
-        for (const { dx, dz, gw, gh, gd, px, py, pz } of stepDirs) {
+        const N   = 4;                          // segments along edge width
+        const SEG = 1.0 / N;                    // 0.25u per segment
+        const VW  = SEG * 0.88;                 // mini-voxel width (gap between segments)
+        const SKIP = 0.38;                      // probability to omit a segment
+        const EPS  = 0.004;
+
+        const stepVoxels = [];
+        const stepDirs = [
+            { dx:  1, dz:  0, axis: 'x' },
+            { dx: -1, dz:  0, axis: 'x' },
+            { dx:  0, dz:  1, axis: 'z' },
+            { dx:  0, dz: -1, axis: 'z' },
+        ];
+
+        for (const { dx, dz, axis } of stepDirs) {
             if (!hasBlock(x + dx, y, z + dz) && hasBlock(x + dx, y - 1, z + dz)) {
-                const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(gw, gh, gd), stepMat);
-                stepMesh.position.set(px, py, pz);
-                group.add(stepMesh);
+                for (let ri = 0; ri < ROWS.length; ri++) {
+                    const { yBot, yH, depth } = ROWS[ri];
+                    const rowRng = makeRng(x * 3 + dx * 97, y * 5 + ri * 31, z * 7 + dz * 53 + ri);
+                    for (let si = 0; si < N; si++) {
+                        if (rowRng() < SKIP) continue;
+                        // color: pick from GRASS_SIDE, darken toward base
+                        const bri  = 0.62 + ri * 0.04;
+                        const base = GRASS_SIDE[Math.floor(rowRng() * GRASS_SIDE.length)];
+                        const color = (
+                            (Math.min(255, ((base >> 16) & 0xff) * bri | 0) << 16) |
+                            (Math.min(255, ((base >>  8) & 0xff) * bri | 0) <<  8) |
+                            (Math.min(255,  (base        & 0xff) * bri | 0))
+                        );
+                        // Centre of this segment along the edge width (local -0.5 … +0.5)
+                        const wC = -0.5 + (si + 0.5) * SEG;
+                        // Centre of the mini-voxel outward and vertically
+                        const yC  = yBot + yH / 2;
+                        const outC = 0.5 + EPS + depth / 2;  // outward centre from block face
+                        let vx, vy, vz, vw, vh, vd;
+                        vy = yC;
+                        if (axis === 'x') {
+                            vx = dx > 0 ?  outC : -outC;
+                            vz = wC;
+                            vw = depth; vh = yH; vd = VW;
+                        } else {
+                            vz = dz > 0 ?  outC : -outC;
+                            vx = wC;
+                            vw = VW; vh = yH; vd = depth;
+                        }
+                        // buildVoxelGeo uses a cube of `innerSize`; we need a box.
+                        // Encode as stretched voxel: push 8 separate unit-voxels at
+                        // precise positions to form the box shape.
+                        // Simpler: just push one entry with adjusted size via a scaled
+                        // sub-group – but buildVoxelGeo only does cubes.
+                        // Instead collect as { x, y, z, color, w, h, d } and emit below.
+                        stepVoxels.push({ vx, vy, vz, vw, vh, vd, color });
+                    }
+                }
             }
+        }
+
+        if (stepVoxels.length > 0) {
+            // Build merged geometry manually (boxes of varying size)
+            const nV = stepVoxels.length;
+            const posA = new Float32Array(nV * 24 * 3);
+            const nrmA = new Float32Array(nV * 24 * 3);
+            const colA = new Float32Array(nV * 24 * 3);
+            const idxA = new Uint32Array(nV * 36);
+
+            for (let i = 0; i < nV; i++) {
+                const { vx, vy, vz, vw, vh, vd, color } = stepVoxels[i];
+                const hw = vw / 2, hh = vh / 2, hd = vd / 2;
+                const cr = ((color >> 16) & 0xff) / 255;
+                const cg = ((color >>  8) & 0xff) / 255;
+                const cb = ( color        & 0xff) / 255;
+                const vB = i * 24;
+                for (let f = 0; f < 6; f++) {
+                    const fd  = _FD[f];
+                    const bri = _FB[f];
+                    for (let v = 0; v < 4; v++) {
+                        const [fx, fy, fz] = fd.c[v];
+                        const vi = vB + f * 4 + v;
+                        const pi = vi * 3;
+                        posA[pi]   = fx * hw + vx;  posA[pi+1] = fy * hh + vy;  posA[pi+2] = fz * hd + vz;
+                        nrmA[pi]   = fd.n[0];        nrmA[pi+1] = fd.n[1];        nrmA[pi+2] = fd.n[2];
+                        colA[pi]   = Math.min(1, cr * bri);
+                        colA[pi+1] = Math.min(1, cg * bri);
+                        colA[pi+2] = Math.min(1, cb * bri);
+                    }
+                }
+                const iB = i * 36;
+                for (let f = 0; f < 6; f++) {
+                    const vFB = vB + f * 4;
+                    for (let k = 0; k < 6; k++) idxA[iB + f*6 + k] = vFB + _FI[k];
+                }
+            }
+            const stepGeo = new THREE.BufferGeometry();
+            stepGeo.setAttribute('position', new THREE.BufferAttribute(posA, 3));
+            stepGeo.setAttribute('normal',   new THREE.BufferAttribute(nrmA, 3));
+            stepGeo.setAttribute('color',    new THREE.BufferAttribute(colA, 3));
+            stepGeo.setIndex(new THREE.BufferAttribute(idxA, 1));
+            const stepMat  = new THREE.MeshLambertMaterial({ vertexColors: true });
+            group.add(new THREE.Mesh(stepGeo, stepMat));
         }
     }
     group.position.set(x + 0.5, y + 0.5, z + 0.5);
@@ -473,27 +557,100 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
     const mesh  = new THREE.Mesh(geo, mat);
     const group = new THREE.Group();
     group.add(mesh);
-    // ── Step ledges ──
+    // ── Voxel stair steps (terrace/moss style) ──────────────────────────────────
     if (typeof hasBlock === 'function') {
-        const SH = 0.35, SD = 0.16, EPS = 0.006;
-        const sc = DIRT_BASE[0];
-        const stepMat = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(((sc>>16)&0xff)/255*0.60, ((sc>>8)&0xff)/255*0.60, (sc&0xff)/255*0.60)
-        });
-        const W = 1.0 - EPS * 2;
-        const pyC = -0.5 + EPS + SH / 2;
-        const stepDirs = [
-            { dx:  1, dz:  0, gw: SD, gh: SH, gd: W, px:  0.5 + EPS + SD/2, py: pyC, pz: 0 },
-            { dx: -1, dz:  0, gw: SD, gh: SH, gd: W, px: -0.5 - EPS - SD/2, py: pyC, pz: 0 },
-            { dx:  0, dz:  1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz:  0.5 + EPS + SD/2 },
-            { dx:  0, dz: -1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz: -0.5 - EPS - SD/2 },
+        const ROWS = [
+            { yBot: -0.5 + 0.52, yH: 0.20, depth: 0.18 },
+            { yBot: -0.5 + 0.26, yH: 0.26, depth: 0.30 },
+            { yBot: -0.5 + 0.00, yH: 0.26, depth: 0.44 },
         ];
-        for (const { dx, dz, gw, gh, gd, px, py, pz } of stepDirs) {
+        const N   = 4;
+        const SEG = 1.0 / N;
+        const VW  = SEG * 0.88;
+        const SKIP = 0.38;
+        const EPS  = 0.004;
+
+        const stepVoxels = [];
+        const stepDirs = [
+            { dx:  1, dz:  0, axis: 'x' },
+            { dx: -1, dz:  0, axis: 'x' },
+            { dx:  0, dz:  1, axis: 'z' },
+            { dx:  0, dz: -1, axis: 'z' },
+        ];
+
+        for (const { dx, dz, axis } of stepDirs) {
             if (!hasBlock(x + dx, y, z + dz) && hasBlock(x + dx, y - 1, z + dz)) {
-                const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(gw, gh, gd), stepMat);
-                stepMesh.position.set(px, py, pz);
-                group.add(stepMesh);
+                for (let ri = 0; ri < ROWS.length; ri++) {
+                    const { yBot, yH, depth } = ROWS[ri];
+                    const rowRng = makeRng(x * 3 + dx * 97, y * 5 + ri * 31, z * 7 + dz * 53 + ri);
+                    for (let si = 0; si < N; si++) {
+                        if (rowRng() < SKIP) continue;
+                        const bri  = 0.60 + ri * 0.04;
+                        const base = DIRT_BASE[Math.floor(rowRng() * DIRT_BASE.length)];
+                        const color = (
+                            (Math.min(255, ((base >> 16) & 0xff) * bri | 0) << 16) |
+                            (Math.min(255, ((base >>  8) & 0xff) * bri | 0) <<  8) |
+                            (Math.min(255,  (base        & 0xff) * bri | 0))
+                        );
+                        const wC   = -0.5 + (si + 0.5) * SEG;
+                        const yC   = yBot + yH / 2;
+                        const outC = 0.5 + EPS + depth / 2;
+                        let vx, vy, vz, vw, vh, vd;
+                        vy = yC;
+                        if (axis === 'x') {
+                            vx = dx > 0 ?  outC : -outC;
+                            vz = wC;
+                            vw = depth; vh = yH; vd = VW;
+                        } else {
+                            vz = dz > 0 ?  outC : -outC;
+                            vx = wC;
+                            vw = VW; vh = yH; vd = depth;
+                        }
+                        stepVoxels.push({ vx, vy, vz, vw, vh, vd, color });
+                    }
+                }
             }
+        }
+
+        if (stepVoxels.length > 0) {
+            const nV = stepVoxels.length;
+            const posA = new Float32Array(nV * 24 * 3);
+            const nrmA = new Float32Array(nV * 24 * 3);
+            const colA = new Float32Array(nV * 24 * 3);
+            const idxA = new Uint32Array(nV * 36);
+            for (let i = 0; i < nV; i++) {
+                const { vx, vy, vz, vw, vh, vd, color } = stepVoxels[i];
+                const hw = vw / 2, hh = vh / 2, hd = vd / 2;
+                const cr = ((color >> 16) & 0xff) / 255;
+                const cg = ((color >>  8) & 0xff) / 255;
+                const cb = ( color        & 0xff) / 255;
+                const vB = i * 24;
+                for (let f = 0; f < 6; f++) {
+                    const fd  = _FD[f];
+                    const bri = _FB[f];
+                    for (let v = 0; v < 4; v++) {
+                        const [fx, fy, fz] = fd.c[v];
+                        const vi = vB + f * 4 + v;
+                        const pi = vi * 3;
+                        posA[pi]   = fx * hw + vx;  posA[pi+1] = fy * hh + vy;  posA[pi+2] = fz * hd + vz;
+                        nrmA[pi]   = fd.n[0];        nrmA[pi+1] = fd.n[1];        nrmA[pi+2] = fd.n[2];
+                        colA[pi]   = Math.min(1, cr * bri);
+                        colA[pi+1] = Math.min(1, cg * bri);
+                        colA[pi+2] = Math.min(1, cb * bri);
+                    }
+                }
+                const iB = i * 36;
+                for (let f = 0; f < 6; f++) {
+                    const vFB = vB + f * 4;
+                    for (let k = 0; k < 6; k++) idxA[iB + f*6 + k] = vFB + _FI[k];
+                }
+            }
+            const stepGeo = new THREE.BufferGeometry();
+            stepGeo.setAttribute('position', new THREE.BufferAttribute(posA, 3));
+            stepGeo.setAttribute('normal',   new THREE.BufferAttribute(nrmA, 3));
+            stepGeo.setAttribute('color',    new THREE.BufferAttribute(colA, 3));
+            stepGeo.setIndex(new THREE.BufferAttribute(idxA, 1));
+            group.add(new THREE.Mesh(stepGeo, new THREE.MeshLambertMaterial({ vertexColors: true })));
         }
     }
     group.position.set(x + 0.5, y + 0.5, z + 0.5);
