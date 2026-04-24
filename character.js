@@ -2433,7 +2433,7 @@ class Character {
         if (this.hairSideR)  this.hairSideR.position.set(  m.hairSideLocalX, m.hairSideLocalY, 0);
         if (this.halo)       this.halo.position.set(0, m.haloLocalY, 0);
         // Util
-        if (this.carriedItemMesh) this.carriedItemMesh.position.set(0, m.carriedItemY, m.carriedItemZ);
+        if (this.carriedItemMesh) this.carriedItemMesh.position.set(m.carriedItemX ?? 0, m.carriedItemY, m.carriedItemZ);
         if (this.shadowMesh) simIO().updateShadowGeometry(this.shadowMesh, m.shadowRadius);
     }
 
@@ -6504,6 +6504,35 @@ class Character {
                 } else {
                     this._childBounceMul = 1.0;
                     if (stage !== 'elder' && this.body) this.body.rotation.x *= 0.9; // restore
+                }
+            }
+        }
+
+        // ── Non-golem life-stage visuals (scale + elder hunch) ───────────────
+        // Mirrors the golem block above but applies to all other skins so that
+        // child / young / adult / elder are visually distinct regardless of skin.
+        if (typeof window !== 'undefined' && window.ACTIVE_SKIN_ID !== 'golem' && this.mesh) {
+            const aging = this.getAgingProfile ? this.getAgingProfile() : null;
+            if (aging) {
+                const { stage, lifeRatio } = aging;
+                const targetScale = stage === 'child'  ? 0.72
+                                  : stage === 'young'  ? 0.90
+                                  : stage === 'adult'  ? 1.00
+                                  : /* elder */          0.92;
+
+                if (!this._humanScaleX) this._humanScaleX = targetScale;
+                this._humanScaleX += (targetScale - this._humanScaleX) * Math.min(1, deltaTime * 1.5);
+                this.mesh.scale.setScalar(this._humanScaleX);
+
+                if (stage === 'elder' && this.body) {
+                    const hunch = Math.max(0, (lifeRatio - 0.72) / 0.28);
+                    const smoothHunch = hunch * hunch * (3 - 2 * hunch);
+                    this.body.rotation.x  = smoothHunch * 0.20;
+                    if (this.head) this.head.rotation.x += smoothHunch * 0.15;
+                    this.mesh.rotation.z  = smoothHunch * 0.06;
+                } else {
+                    if (this.body) this.body.rotation.x *= 0.9;
+                    this.mesh.rotation.z *= 0.9;
                 }
             }
         }

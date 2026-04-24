@@ -89,6 +89,7 @@ function _buildReturn(p) {
         wingLowerW: p.wingLowerW, wingLowerH: p.wingLowerH, wingLowerD: p.wingLowerD,
         wingLowerLocalX: p.wingLowerLocalX, wingLowerLocalY: p.wingLowerLocalY,
         shadowRadius: p.shadowRadius, carriedItemSize: p.carriedItemSize,
+        carriedItemX: p.carriedItemX ?? 0,
         carriedItemY: p.carriedItemY, carriedItemZ: p.carriedItemZ,
         // Legacy aliases
         bodyHeight: p.bodyTop,
@@ -490,8 +491,12 @@ registerSkin({
         const browW = 0.001, browH = 0.001, browD = 0.001;
         const browLocalX = 0, browLocalY = 0, browLocalZ = headD / 2;
         const shadowRadius = 7*VS, carriedItemSize = 6*VS;
-        const carriedItemY = headCenterY + headH * 0.32, carriedItemZ = headD / 2 + 2*VS;
-        return _buildReturn({ footH, footW, footD, legSpacingX, shinH, shinW, shinD, thighH, thighW, thighD, pelvisH, pelvisW, pelvisD, torsoH, torsoW, torsoD, footCenterY, shinCenterY, thighCenterY, pelvisCenterY, bodyBottom, torsoCenterY, bodyTop, upperArmH, upperArmW, upperArmD, forearmH, forearmW, forearmD, armSpacingX, upperArmCenterY, forearmCenterY, headW, headH, headD, neckGap, headCenterY, hairTopW, hairTopH, hairTopD, hairTopLocalY, hairCapW, hairCapH, hairCapD, hairCapLocalY, hairSideH: hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY, haloW, haloH, haloD, haloLocalY, eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ, cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ, mouthW, mouthH, mouthD, mouthY, mouthLocalZ, eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ, browW, browH, browD, browLocalX, browLocalY, browLocalZ, wingZ, wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY, wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY, shadowRadius, carriedItemSize, carriedItemY, carriedItemZ });
+        // Hand position: right arm hangs from bodyTop, tip at y=bodyTop-10*VS
+        // Item centre at bodyTop-9*VS (hand mid), offset to right arm X
+        const carriedItemX = armSpacingX;                 // +5*VS ≈ +0.29 (right side)
+        const carriedItemY = bodyTop - 9 * VS;            // 5*VS ≈ 0.29 (hand level)
+        const carriedItemZ = torsoD / 2 + 2 * VS;        // just outside torso front
+        return _buildReturn({ footH, footW, footD, legSpacingX, shinH, shinW, shinD, thighH, thighW, thighD, pelvisH, pelvisW, pelvisD, torsoH, torsoW, torsoD, footCenterY, shinCenterY, thighCenterY, pelvisCenterY, bodyBottom, torsoCenterY, bodyTop, upperArmH, upperArmW, upperArmD, forearmH, forearmW, forearmD, armSpacingX, upperArmCenterY, forearmCenterY, headW, headH, headD, neckGap, headCenterY, hairTopW, hairTopH, hairTopD, hairTopLocalY, hairCapW, hairCapH, hairCapD, hairCapLocalY, hairSideH: hairSideH, hairSideW, hairSideD, hairSideLocalX, hairSideLocalY, haloW, haloH, haloD, haloLocalY, eyeW, eyeH, eyeD, eyeLocalX, eyeLocalY, eyeLocalZ, cheekW, cheekH, cheekD, cheekLocalX, cheekLocalY, cheekLocalZ, mouthW, mouthH, mouthD, mouthY, mouthLocalZ, eyeHLW, eyeHLH, eyeHLD, eyeHLLocalX, eyeHLLocalY, eyeHLLocalZ, browW, browH, browD, browLocalX, browLocalY, browLocalZ, wingZ, wingUpperW, wingUpperH, wingUpperD, wingUpperLocalX, wingUpperLocalY, wingLowerW, wingLowerH, wingLowerD, wingLowerLocalX, wingLowerLocalY, shadowRadius, carriedItemSize, carriedItemX, carriedItemY, carriedItemZ });
     },
 
     applyColors(char) {
