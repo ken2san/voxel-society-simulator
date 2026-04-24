@@ -6971,16 +6971,21 @@ class Character {
 
     // --- 汎用スタック判定（改良版：パフォーマンス最適化付き）---
     isStuck() {
-        // キャッシュで頻繁なチェックを避ける
-        if (!this._stuckCheckTimer) this._stuckCheckTimer = 0;
-        if (this._stuckCheckTimer < 0.5) return this._lastStuckInfo;
-        this._stuckCheckTimer = 0;
-
-        // 空中スタック（優先度高）
+        // 空中スタックは常に即時チェック（キャッシュをバイパス）
         if (!worldData.has(`${this.gridPos.x},${this.gridPos.y-1},${this.gridPos.z}`)) {
             this._lastStuckInfo = { type: 'air', pos: { ...this.gridPos } };
             return this._lastStuckInfo;
         }
+
+        // キャラが地面にいる場合、古い'air'キャッシュをクリアする
+        if (this._lastStuckInfo && this._lastStuckInfo.type === 'air') {
+            this._lastStuckInfo = null;
+        }
+
+        // キャッシュで頻繁なチェックを避ける
+        if (!this._stuckCheckTimer) this._stuckCheckTimer = 0;
+        if (this._stuckCheckTimer < 0.5) return this._lastStuckInfo;
+        this._stuckCheckTimer = 0;
         // 移動スタック: 同じ位置に長時間いる場合
         if (!this._positionHistory) this._positionHistory = [];
         const currentPosKey = `${this.gridPos.x},${this.gridPos.y},${this.gridPos.z}`;
@@ -7083,7 +7088,7 @@ class Character {
         // 空中スタック救助（既存＋改良）
         if (stuckInfo.type === 'air') {
             this._airTime = (this._airTime || 0) + deltaTime;
-            if (this._airTime > 0.8) { // より早く救助
+            if (this._airTime > 0.3) { // 即時救助
                 let fallY = this.gridPos.y - 1;
                 while (fallY > 0 && !worldData.has(`${this.gridPos.x},${fallY-1},${this.gridPos.z}`)) {
                     fallY--;
@@ -7164,16 +7169,7 @@ class Character {
                     }
                 }
 
-                // 上方向への脱出
-                const upKey = `${this.gridPos.x},${this.gridPos.y+1},${this.gridPos.z}`;
-                if (!worldData.has(upKey)) {
-                    escapeOptions.push({
-                        x: this.gridPos.x, y: this.gridPos.y+1, z: this.gridPos.z,
-                        priority: 3, type: 'jump'
-                    });
-                }
-
-                // 最優先オプションで脱出
+                // 最優先オプションで脱出（水平移動のみ、上への無根拠ジャンプは除外）
                 if (escapeOptions.length > 0) {
                     escapeOptions.sort((a, b) => a.priority - b.priority);
                     const escape = escapeOptions[0];
