@@ -1062,6 +1062,7 @@ function placeCampfires() {
 
         const cf = buildCampfireGroup(placed.length * 2.1);
         cf.position.set(x + 0.5, gy + 1.0, z + 0.5);
+        cf.userData.gridPos = { x, y: gy, z };  // used for district visibility
         cf.visible = false;  // animate() controls visibility
         scene.add(cf);
         campfireObjects.push(cf);
@@ -1484,9 +1485,11 @@ export function animate() {
         }
         const activeCount = animate._campfireCount || 0;
 
-        // Update each campfire's visibility (day/night + population threshold)
+        // Update each campfire's visibility (day/night + population threshold + district)
         for (let i = 0; i < campfireObjects.length; i++) {
-            campfireObjects[i].visible = _shouldBurn && i < activeCount;
+            const cf = campfireObjects[i];
+            const inDistrict = !cf.userData.gridPos || isGridPositionInActiveDistrict(cf.userData.gridPos);
+            cf.visible = _shouldBurn && i < activeCount && inDistrict;
         }
         // Animate only the burning visible fires
         if (_shouldBurn) {
