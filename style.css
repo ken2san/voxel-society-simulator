@@ -88,7 +88,8 @@
 }
 
 /* ── Mobile layout: canvas-as-background + bottom-sheet panels ───────────── */
-@media (max-width: 1280px) {
+/* Covers: iPhone, iPad, iPad Pro 11" landscape (1194px), iPad Pro 12.9"/13" landscape (1366px) */
+@media (max-width: 1400px) {
   #mobile-hud           { display: flex; }
   #mobile-accordion-bar { display: flex; }
 

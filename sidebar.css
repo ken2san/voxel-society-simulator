@@ -421,7 +421,7 @@
 }
 
 /* ── On touch/tablet viewports: sidebars become bottom-sheet overlays ─────── */
-@media (max-width: 1280px) {
+@media (max-width: 1400px) {
   #sidebar-left,
   #sidebar-right,
   .sidebar-bg,
