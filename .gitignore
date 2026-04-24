@@ -39,6 +39,9 @@ coverage/
 # Backup files
 bak_*
 
+# Local sandbox: prototype HTMLs, perf tests, scratch files
+sandbox/
+
 # Local dev scripts and debug output
 run_and_report.sh
 out.txt
