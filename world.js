@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
+import { createSnowSystem } from './sim-core/snow-system.js';
 
 // Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
@@ -1293,11 +1294,28 @@ export function animate() {
     requestAnimationFrame(animate);
     const _frameStart = performance.now();
     const deltaTime = Math.min(clock.getDelta(), 0.1); // cap at 100ms to prevent tab-backgrounding spikes
+
+    // ── Lazy-init snow system (created once, tied to scene lifetime) ──────────
+    if (!animate._snow && scene) {
+        animate._snow = createSnowSystem(scene);
+    }
+
+    // ── Snow update helper (called both when paused and running) ──────────────
+    function _updateSnow(dt) {
+        if (!animate._snow) return;
+        const si   = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
+        const ph   = si ? si.phase     : 0;
+        const amp  = si ? si.amplitude : 0;
+        const fx   = !(typeof window !== 'undefined' && window.showEffects === false);
+        animate._snow.update(dt, ph, amp, fx);
+    }
+
     // simulationRunningがtrueのときだけ進行
     if (typeof window !== 'undefined' && window.simulationRunning === false) {
         // 停止中もワールドの描画・UI更新は継続
         updateWorldLighting();
         updateAmbientWorldEffects();
+        _updateSnow(deltaTime);
         if (controls) controls.update();
         renderer.render(scene, camera);
         return;
@@ -1306,6 +1324,7 @@ export function animate() {
     if (typeof window !== 'undefined') window._simTick = (window._simTick || 0) + 1; // used by findClosestFood result cache
     updateWorldLighting();
     updateAmbientWorldEffects();
+    _updateSnow(deltaTime);
     const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
     refreshDistrictSummaryCache(characters);
     if (typeof window !== 'undefined') {
