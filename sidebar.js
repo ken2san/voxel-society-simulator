@@ -505,7 +505,7 @@ function renderCharacterDetail() {
 
     // ── Sound toggle + volume slider ──────────────────────────────────────────
     if (window.soundEnabled === undefined) window.soundEnabled = false;
-    if (window.soundVolume  === undefined) window.soundVolume  = 0.45;
+    if (window.soundVolume  === undefined) window.soundVolume  = 0.65;
     const soundToggleRow = document.createElement('div');
     soundToggleRow.style.display = 'flex';
     soundToggleRow.style.alignItems = 'center';
@@ -521,6 +521,11 @@ function renderCharacterDetail() {
     soundToggle.style.cursor = 'pointer';
     soundToggle.addEventListener('change', e => {
         window.soundEnabled = !!e.target.checked;
+        if (!window.soundEnabled) {
+            import('./sim-core/sound-system.js').then(m => {
+                if (typeof m.stopAmbience === 'function') m.stopAmbience();
+            }).catch(() => {});
+        }
     });
     soundToggleRow.appendChild(soundToggle);
     // Volume slider (inline, same row as checkbox)

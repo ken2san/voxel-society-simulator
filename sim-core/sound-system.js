@@ -36,10 +36,10 @@ function _getCtx() {
     return _ctx;
 }
 
-/** Read current volume from window.soundVolume (0-1), default 0.45 */
+/** Read current volume from window.soundVolume (0-1), default 0.65 */
 function _getVolume() {
     const v = (typeof window !== 'undefined' && window.soundVolume !== undefined)
-        ? Number(window.soundVolume) : 0.45;
+        ? Number(window.soundVolume) : 0.65;
     return Math.max(0, Math.min(1, v));
 }
 
@@ -183,4 +183,163 @@ function _playDawn(ctx) {
     _osc(ctx, 'sine', 330, t,        t + 0.5, 0.16, 440);
     _osc(ctx, 'sine', 440, t + 0.18, t + 0.7, 0.14, 550);
     _osc(ctx, 'sine', 550, t + 0.36, t + 0.9, 0.12, 660);
+}
+
+// ─── Ambient sound system ────────────────────────────────────────────────────
+// Persistent looping wind + periodic bird/cricket schedulers.
+// All ambient nodes route through their own gain nodes (not _masterGain directly)
+// so they can be cross-faded independently.
+
+let _ambWindSrc   = null;   // BufferSource (looping)
+let _ambWindGain  = null;   // GainNode for wind layer
+let _ambBirdGain  = null;   // GainNode for bird layer
+let _ambCricketGain = null; // GainNode for cricket layer
+let _ambActive    = false;  // whether ambient loop is running
+let _ambBirdTimer = null;
+let _ambCricketTimer = null;
+let _ambLastUpdate = -Infinity; // time of last updateAmbience call (ms)
+
+/** Create a looping wind noise source routed to destGain */
+function _startWind(ctx, destGain) {
+    const sr = ctx.sampleRate;
+    const bufLen = sr * 4; // 4-second buffer, looped
+    const buf = ctx.createBuffer(1, bufLen, sr);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 350;
+    lp.Q.value = 0.7;
+
+    src.connect(lp);
+    lp.connect(destGain);
+    src.start();
+    return src;
+}
+
+/** Schedule one bird chirp, then reschedule after a random delay */
+function _scheduleBird(ctx) {
+    if (!_ambActive || !_ambBirdGain) return;
+    const t = ctx.currentTime;
+    const freq = 1200 + Math.random() * 900;
+    // Short two-note chirp
+    _oscTo(_ambBirdGain, ctx, 'sine', freq,        t,        t + 0.07, 0.18, freq * 1.5);
+    if (Math.random() > 0.45) {
+        _oscTo(_ambBirdGain, ctx, 'sine', freq * 1.3, t + 0.05, t + 0.14, 0.12, freq * 1.9);
+    }
+    const delay = 1200 + Math.random() * 3200;
+    _ambBirdTimer = setTimeout(() => _scheduleBird(ctx), delay);
+}
+
+/** Schedule one cricket pulse (rapid stridulation), then reschedule */
+function _scheduleCricket(ctx) {
+    if (!_ambActive || !_ambCricketGain) return;
+    const t = ctx.currentTime;
+    const freq = 3100 + Math.random() * 500;
+    for (let i = 0; i < 4; i++) {
+        _oscTo(_ambCricketGain, ctx, 'sine', freq, t + i * 0.048, t + i * 0.048 + 0.038, 0.10);
+    }
+    const delay = 700 + Math.random() * 1100;
+    _ambCricketTimer = setTimeout(() => _scheduleCricket(ctx), delay);
+}
+
+/** Like _osc but routes to an explicit destNode instead of _masterGain */
+function _oscTo(dest, ctx, type, freq, startT, endT, gainVal, freqEnd = null) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gainVal, startT);
+    g.gain.exponentialRampToValueAtTime(0.0001, endT);
+    g.connect(dest);
+
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, startT);
+    if (freqEnd !== null) o.frequency.exponentialRampToValueAtTime(freqEnd, endT);
+    o.connect(g);
+    o.start(startT);
+    o.stop(endT + 0.01);
+}
+
+/** Initialise ambient nodes (called once, after AudioContext is ready) */
+function _initAmbience(ctx) {
+    _ambWindGain = ctx.createGain();
+    _ambWindGain.gain.value = 0.08;
+    _ambWindGain.connect(_masterGain);
+    _ambWindSrc = _startWind(ctx, _ambWindGain);
+
+    _ambBirdGain = ctx.createGain();
+    _ambBirdGain.gain.value = 0;
+    _ambBirdGain.connect(_masterGain);
+
+    _ambCricketGain = ctx.createGain();
+    _ambCricketGain.gain.value = 0;
+    _ambCricketGain.connect(_masterGain);
+
+    _ambActive = true;
+    _scheduleBird(ctx);
+    _scheduleCricket(ctx);
+}
+
+/** Stop all ambient sound and release nodes */
+export function stopAmbience() {
+    _ambActive = false;
+    clearTimeout(_ambBirdTimer);
+    clearTimeout(_ambCricketTimer);
+    _ambBirdTimer = null;
+    _ambCricketTimer = null;
+    if (_ambWindSrc) { try { _ambWindSrc.stop(); } catch (_) {} _ambWindSrc = null; }
+    _ambWindGain = _ambBirdGain = _ambCricketGain = null;
+}
+
+/**
+ * Update ambient mix to match current world state.
+ * Should be called ~once per second from world.js animate().
+ *
+ * @param {boolean} isNight       true = night half of day cycle
+ * @param {number}  seasonPhase   0-1 over full season cycle (0=Spring…0.75=Winter)
+ */
+export function updateAmbience(isNight, seasonPhase) {
+    if (typeof window === 'undefined' || window.soundEnabled !== true) {
+        if (_ambActive) stopAmbience();
+        return;
+    }
+
+    // Throttle: once per second in wall-clock time
+    const now = performance.now();
+    if (now - _ambLastUpdate < 1000) return;
+    _ambLastUpdate = now;
+
+    const ctx = _getCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+    if (!_ambActive || !_ambWindGain) _initAmbience(ctx);
+
+    const t = ctx.currentTime;
+    const quarter = Math.floor(Math.min(seasonPhase, 0.9999) * 4); // 0=Spring,1=Summer,2=Autumn,3=Winter
+    const isWinter = quarter === 3;
+    const isAutumn = quarter === 2;
+    const isSummer = quarter === 1;
+
+    // Wind: louder in autumn/winter
+    const windTarget = isWinter ? 0.20 : isAutumn ? 0.13 : 0.06;
+    _ambWindGain.gain.setTargetAtTime(windTarget, t, 4.0);
+
+    // Birds: daytime only, spring/summer present, autumn faint, winter off
+    let birdTarget = 0;
+    if (!isNight && !isWinter) birdTarget = isSummer ? 0.85 : isAutumn ? 0.35 : 0.70;
+    _ambBirdGain.gain.setTargetAtTime(birdTarget, t, 3.0);
+
+    // Crickets: night only, spring/summer present, autumn faint, winter off
+    let cricketTarget = 0;
+    if (isNight && !isWinter) cricketTarget = isSummer ? 0.80 : isAutumn ? 0.30 : 0.60;
+    _ambCricketGain.gain.setTargetAtTime(cricketTarget, t, 3.0);
+
+    // Ensure schedulers are alive (they self-cancel if _ambActive was false)
+    if (!_ambBirdTimer)   _scheduleBird(ctx);
+    if (!_ambCricketTimer) _scheduleCricket(ctx);
 }
