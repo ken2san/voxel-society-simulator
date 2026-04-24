@@ -144,6 +144,15 @@ class Character {
             }
         }
         // 完了共通処理
+        // 旧ベッドを削除（引っ越し・建て替えで古いBEDが残らないように）
+        if (this.homePosition) {
+            const oldKey = `${this.homePosition.x},${this.homePosition.y},${this.homePosition.z}`;
+            const oldBlock = worldData.get(oldKey);
+            if (oldBlock && (typeof oldBlock === 'number' ? oldBlock : oldBlock.id) === BLOCK_TYPES.BED.id) {
+                removeBlock(this.homePosition.x, this.homePosition.y, this.homePosition.z);
+                this.log('Removed old bed at', this.homePosition);
+            }
+        }
         this.homePosition = pos;
         this.provisionalHome = null;
         if (type === 'wood' || type === 'stone') {

@@ -575,6 +575,14 @@ export function decideNextAction_rulebase(character, isNight) {
                 const belowKey = `${currentPos.x},${currentPos.y-1},${currentPos.z}`;
                 if (worldData.has(belowKey)) {
                     character.log('🏠 Emergency: Creating home at current position (no movement needed)');
+                    // 旧ベッドを削除
+                    if (character.homePosition) {
+                        const oldKey = `${character.homePosition.x},${character.homePosition.y},${character.homePosition.z}`;
+                        const oldBlock = worldData.get(oldKey);
+                        if (oldBlock && (typeof oldBlock === 'number' ? oldBlock : oldBlock.id) === BLOCK_TYPES.BED.id) {
+                            removeBlock(character.homePosition.x, character.homePosition.y, character.homePosition.z);
+                        }
+                    }
                     character.homePosition = currentPos;
                     character.provisionalHome = null;
                     character._provisionalHomeCount = 0;
