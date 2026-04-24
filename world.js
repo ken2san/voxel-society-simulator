@@ -993,16 +993,38 @@ function placeCampfires() {
 
     const cx = Math.floor(gridSize / 2);
     const cz = Math.floor(gridSize / 2);
-    // Search outward from centre for a clear, solid-ground spot
-    const offsets = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[2,0],[-2,0],[0,2],[0,-2],[1,1],[-1,1],[1,-1],[-1,-1]];
+
+    // Helper: walk down from maxHeight to find the topmost GRASS or DIRT block.
+    // Returns -1 if none found (avoids landing on trees, roofs, etc.)
+    const GROUND_IDS = new Set([BLOCK_TYPES.GRASS.id, BLOCK_TYPES.DIRT.id]);
+    function findSolidGround(x, z) {
+        for (let y = maxHeight - 1; y >= 0; y--) {
+            const id = worldData.get(`${x},${y},${z}`);
+            if (id !== undefined && GROUND_IDS.has(id)) return y;
+        }
+        return -1;
+    }
+
+    // Spiral outward from centre — try up to ~5 grid units
+    const offsets = [
+        [0,0],[1,0],[-1,0],[0,1],[0,-1],
+        [2,0],[-2,0],[0,2],[0,-2],
+        [1,1],[-1,1],[1,-1],[-1,-1],
+        [3,0],[-3,0],[0,3],[0,-3],
+        [2,1],[-2,1],[2,-1],[-2,-1],
+        [1,2],[-1,2],[1,-2],[-1,-2],
+        [4,0],[-4,0],[0,4],[0,-4],
+        [3,1],[-3,1],[3,-1],[-3,-1],
+        [5,0],[-5,0],[0,5],[0,-5],
+    ];
     let placed = 0;
     for (const [dx, dz] of offsets) {
         if (placed >= 1) break;
         const x = cx + dx, z = cz + dz;
         if (x < 1 || x >= gridSize - 1 || z < 1 || z >= gridSize - 1) continue;
-        const gy = findGroundY(x, z);
-        if (!worldData.has(`${x},${gy},${z}`))    continue;  // no ground block
-        if (worldData.has(`${x},${gy + 1},${z}`)) continue;  // above is occupied
+        const gy = findSolidGround(x, z);
+        if (gy < 0) continue;                              // no grass/dirt here
+        if (worldData.has(`${x},${gy + 1},${z}`)) continue; // something above ground
         const cf = buildCampfireGroup(placed * 2.1);
         cf.position.set(x + 0.5, gy + 1.0, z + 0.5);
         scene.add(cf);
