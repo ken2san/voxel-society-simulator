@@ -87,22 +87,23 @@ export function buildAngelGroup() {
     hairTop.position.y = 5.5 * S;
     headGroup.add(hairTop);
 
-    // Hair sides (fall down — 6 deep in Z so visible from side)
-    const hairSideL = box(2, 5.5, 6, HAIR);
-    hairSideL.position.set(-4.5 * S, 0, 0);
+    // Hair sides (fall down — 6 deep in Z; center raised so they bridge up to hairTop)
+    // hairTop bottom = 4.25*S; sides must reach there → center=2*S, h=7 → top=5.5*S ✓
+    const hairSideL = box(2, 7, 6, HAIR);
+    hairSideL.position.set(-4.5 * S, 2 * S, 0);
     headGroup.add(hairSideL);
-    const hairSideR = box(2, 5.5, 6, HAIR);
-    hairSideR.position.set(4.5 * S, 0, 0);
+    const hairSideR = box(2, 7, 6, HAIR);
+    hairSideR.position.set(4.5 * S, 2 * S, 0);
     headGroup.add(hairSideR);
 
     // Hair back (visible from side and rear)
     const hairBack = box(7, 7, 2, HAIR);
-    hairBack.position.set(0, 0.5 * S, -4 * S);
+    hairBack.position.set(0, 2 * S, -4 * S);
     headGroup.add(hairBack);
 
-    // Ribbon / headband (sandbox: row y=7..8)
+    // Ribbon / headband (sandbox: mid-head, not top of face)
     const ribbon = box(9, 1.5, 1, RIBBON);
-    ribbon.position.y = 4.5 * S;
+    ribbon.position.y = 2 * S;
     headGroup.add(ribbon);
 
     // Cheeks (sandbox: pink, outside lower face)
@@ -120,8 +121,10 @@ export function buildAngelGroup() {
     }
 
     // ── Halo (rotates independently) ──────────────────────────────────────────
+    // sandbox: face top y=7, halo y=12 → 5 units above face top.
+    // Here face top=4.5*S + 4*S gap = 8.5*S  (hairTop top=6.75*S + clearance)
     const haloGroup = new THREE.Group();
-    haloGroup.position.y = 6.5 * S;
+    haloGroup.position.y = 8.5 * S;
     headGroup.add(haloGroup);
 
     for (let i = 0; i < 14; i++) {
@@ -161,7 +164,7 @@ export function buildAngelGroup() {
     // ── Animation ─────────────────────────────────────────────────────────────
     root.userData.updateAnim = (t) => {
         haloGroup.rotation.y = t * 0.65;
-        haloGroup.position.y = 6.5 * S + Math.sin(t * 2.2) * 0.25 * S;
+        haloGroup.position.y = 8.5 * S + Math.sin(t * 2.2) * 0.25 * S;
         leftWing.rotation.y  =  0.30 + Math.sin(t * 3.2) * 0.38;
         rightWing.rotation.y = -0.30 - Math.sin(t * 3.2) * 0.38;
         headGroup.rotation.z = Math.sin(t * 0.75) * 0.06;
