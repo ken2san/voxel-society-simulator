@@ -155,8 +155,9 @@ export function buildWoodGroup(type, x, y, z, isVisible) {
 const LVS = 0.12;
 const LVI = LVS * 0.93;
 
-// Fruit dot colours for seasonal overlay (orange, red, amber tones)
-const FRUIT_DOT_COLORS = [0xff6b35, 0xe53935, 0xff8c00, 0xffb74d, 0xd84315];
+// Autumn foliage dot colours for LEAF overlay (golden/amber — reads as colour-changing leaves,
+// NOT fruit; keeps visual distinction from FRUIT blocks whose berries are vivid red/orange)
+const AUTUMN_DOT_COLORS = [0xf9c846, 0xe8a020, 0xd4691e, 0xb85c10, 0xffd54f];
 
 export function buildLeafGroup(type, x, y, z, isVisible) {
     const rng    = makeRng(x, y, z);
@@ -182,17 +183,18 @@ export function buildLeafGroup(type, x, y, z, isVisible) {
 
     const group = makeGroup(voxels, LVI, x, y, z, isVisible);
 
-    // ── Seasonal fruit overlay: sparse orange/red dots in lower outer canopy ──
-    // Shown in Summer + Autumn; toggled by updateAmbientWorldEffects in world.js
+    // ── Autumn foliage overlay: very sparse golden/amber dots across full canopy ──
+    // Shown ONLY in Autumn; golden tones read as leaf-colour-change, not fruit.
+    // FRUIT blocks (vivid red berries, Summer+Autumn) remain the only "fruit" signal.
     const frng = makeRng(x ^ 0x5a3, y ^ 0x1f7, z ^ 0xb2d);
     const fruitVoxels = [];
-    for (let iy = -4; iy <= 0; iy++) {
+    for (let iy = -4; iy <= 3; iy++) {
         for (let ix = -4; ix <= 4; ix++) {
             for (let iz = -4; iz <= 4; iz++) {
                 const d = Math.sqrt(ix * ix + iy * iy + iz * iz);
-                if (d < R - 2.0 || d >= R) continue;   // outer shell only
-                if (frng() > 0.07) continue;            // ~7% density
-                const col = FRUIT_DOT_COLORS[Math.floor(frng() * FRUIT_DOT_COLORS.length)];
+                if (d >= R) continue;
+                if (frng() > 0.045) continue;           // ~4.5% — just a tint, not dominant
+                const col = AUTUMN_DOT_COLORS[Math.floor(frng() * AUTUMN_DOT_COLORS.length)];
                 fruitVoxels.push({ x: ix * LVS, y: iy * LVS, z: iz * LVS, color: col });
             }
         }

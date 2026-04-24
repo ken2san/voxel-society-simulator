@@ -892,12 +892,12 @@ function updateAmbientWorldEffects() {
             } else {
                 resetAmbientBlock(block);
             }
-            // Seasonal fruit overlay: visible in Summer + Autumn
+            // Autumn foliage overlay: visible only in Autumn (golden tint, not fruit)
             if (block.userData.fruitOverlay) {
                 const _sn = (typeof window !== 'undefined' && window.currentSeasonInfo)
                     ? window.currentSeasonInfo.name : '';
                 block.userData.fruitOverlay.visible =
-                    (_sn === 'Summer' || _sn === 'Autumn') && block.visible !== false;
+                    _sn === 'Autumn' && block.visible !== false;
             }
             continue;
         }
