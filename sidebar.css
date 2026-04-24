@@ -420,6 +420,16 @@
   z-index: 100;
 }
 
+/* ── Hide sidebars on narrow viewports so the canvas is visible ── */
+@media (max-width: 900px) {
+  #sidebar-left,
+  #sidebar-right,
+  .sidebar-bg,
+  .sidebar-bg-right {
+    display: none !important;
+  }
+}
+
 /* 右サイドバー（画面右に固定・縦長） */
 .sidebar-bg-right,
 #sidebar-right {
