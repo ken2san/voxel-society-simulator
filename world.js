@@ -980,8 +980,9 @@ export function rebuildAllBlockVisuals() {
 }
 
 // ── Campfire placement ────────────────────────────────────────────────────────
-// Places 1-2 decorative campfires near the world centre (not worldData blocks).
-// Called at the end of generateTerrain() so scene + worldData are ready.
+// Places 1 decorative campfire near the housing cluster (not a worldData block).
+// Called at end of generateTerrain(). Campfire starts hidden; animate() toggles
+// visibility via dayIntensity so it only burns dusk-to-dawn.
 function placeCampfires() {
     // Clean up any previous campfires (world regeneration)
     for (const cf of campfireObjects) {
@@ -989,14 +990,13 @@ function placeCampfires() {
         cf.traverse(o => { try { o.geometry?.dispose?.(); o.material?.dispose?.(); } catch (_) {} });
     }
     campfireObjects = [];
+    animate._campfireActive = false;  // reset lifecycle flag on every world gen
     if (!scene) return;
 
-    const cx = Math.floor(gridSize / 2);
-    const cz = Math.floor(gridSize / 2);
-
-    // Helper: walk down from maxHeight to find the topmost GRASS or DIRT block.
-    // Returns -1 if none found (avoids landing on trees, roofs, etc.)
+    // ── Helpers ────────────────────────────────────────────────────────────────
     const GROUND_IDS = new Set([BLOCK_TYPES.GRASS.id, BLOCK_TYPES.DIRT.id]);
+
+    // Walk down to find the topmost GRASS or DIRT block (avoids tree tops/roofs).
     function findSolidGround(x, z) {
         for (let y = maxHeight - 1; y >= 0; y--) {
             const id = worldData.get(`${x},${y},${z}`);
@@ -1005,28 +1005,55 @@ function placeCampfires() {
         return -1;
     }
 
-    // Spiral outward from centre — try up to ~5 grid units
-    const offsets = [
-        [0,0],[1,0],[-1,0],[0,1],[0,-1],
-        [2,0],[-2,0],[0,2],[0,-2],
-        [1,1],[-1,1],[1,-1],[-1,-1],
-        [3,0],[-3,0],[0,3],[0,-3],
-        [2,1],[-2,1],[2,-1],[-2,-1],
-        [1,2],[-1,2],[1,-2],[-1,-2],
-        [4,0],[-4,0],[0,4],[0,-4],
-        [3,1],[-3,1],[3,-1],[-3,-1],
-        [5,0],[-5,0],[0,5],[0,-5],
-    ];
+    // ── Search origin: centroid of all HOUSE_WALL blocks ──────────────────────
+    // Biases placement toward the inhabited village centre rather than the
+    // geometric world centre, which is often out in the open terrain.
+    let hx = 0, hz = 0, hCount = 0;
+    for (const [key, id] of worldData) {
+        if (id !== BLOCK_TYPES.HOUSE_WALL.id) continue;
+        const parts = key.split(',');
+        hx += Number(parts[0]);
+        hz += Number(parts[2]);
+        hCount++;
+    }
+    const cx = hCount > 0 ? Math.round(hx / hCount) : Math.floor(gridSize / 2);
+    const cz = hCount > 0 ? Math.round(hz / hCount) : Math.floor(gridSize / 2);
+
+    // ── Spiral candidate list (up to radius 8) ────────────────────────────────
+    const offsets = [];
+    for (let r = 0; r <= 8; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dz = -r; dz <= r; dz++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) === r) offsets.push([dx, dz]);
+            }
+        }
+    }
+
+    // ── Placement: GRASS/DIRT ground, flat neighbourhood, 2-block clearance ───
+    const CARDINALS = [[1,0],[-1,0],[0,1],[0,-1]];
     let placed = 0;
     for (const [dx, dz] of offsets) {
         if (placed >= 1) break;
         const x = cx + dx, z = cz + dz;
         if (x < 1 || x >= gridSize - 1 || z < 1 || z >= gridSize - 1) continue;
+
         const gy = findSolidGround(x, z);
-        if (gy < 0) continue;                              // no grass/dirt here
-        if (worldData.has(`${x},${gy + 1},${z}`)) continue; // something above ground
+        if (gy < 0) continue;                                // no grass/dirt here
+
+        // 2-block head clearance
+        if (worldData.has(`${x},${gy + 1},${z}`)) continue;
+        if (worldData.has(`${x},${gy + 2},${z}`)) continue;
+
+        // Flat check: all 4 cardinal neighbours must be grass/dirt within ±1 Y
+        const isFlat = CARDINALS.every(([ndx, ndz]) => {
+            const ng = findSolidGround(x + ndx, z + ndz);
+            return ng >= 0 && Math.abs(ng - gy) <= 1;
+        });
+        if (!isFlat) continue;
+
         const cf = buildCampfireGroup(placed * 2.1);
         cf.position.set(x + 0.5, gy + 1.0, z + 0.5);
+        cf.visible = false;  // hidden until dusk (animate() controls this)
         scene.add(cf);
         campfireObjects.push(cf);
         placed++;
@@ -1365,9 +1392,22 @@ export function animate() {
         animate._snow = createSnowSystem(scene);
     }
 
-    // ── Update campfire flicker ───────────────────────────────────────────────
-    for (const cf of campfireObjects) {
-        if (cf.userData.updateFire) cf.userData.updateFire(worldTime);
+    // ── Campfire lifecycle: appear at dusk, disappear at dawn ─────────────────
+    // dayIntensity = sin(timeOfDay * π): peaks at noon (1.0), zero at midnight (0.0).
+    // Threshold 0.55 ≈ ~80% of day elapsed (dusk) or ~20% (dawn) — natural twilight.
+    if (campfireObjects.length > 0) {
+        const _cfTod  = (worldTime % getDayDuration()) / getDayDuration();
+        const _cfDayI = Math.sin(_cfTod * Math.PI);
+        const _shouldBurn = _cfDayI < 0.55;  // true during dusk → midnight → dawn
+        if (_shouldBurn !== animate._campfireActive) {
+            animate._campfireActive = _shouldBurn;
+            for (const cf of campfireObjects) cf.visible = _shouldBurn;
+        }
+        if (animate._campfireActive) {
+            for (const cf of campfireObjects) {
+                if (cf.userData.updateFire) cf.userData.updateFire(worldTime);
+            }
+        }
     }
 
     // ── Snow update helper (called both when paused and running) ──────────────
