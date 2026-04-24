@@ -310,7 +310,7 @@ function renderCharacterDetail() {
         maxAffinity:                        100,
         reproductionCooldownSeconds:        8,
         fruitRegenIntervalSeconds:          60,
-        seasonCycleSeconds:                 120,
+        seasonCycleSeconds:                 4,
         seasonAmplitude:                    0.6,
         initialAgeMaxRatio:                 0.38,
         traitAffinityCapReduction:          0.6,
@@ -1965,26 +1965,26 @@ function renderCharacterDetail() {
     fruitRegenVal.disabled = paramDisabled;
 
     // --- Season Cycle Length Slider ---
-    if (sidebarParams.seasonCycleSeconds === undefined) sidebarParams.seasonCycleSeconds = 120;
+    if (sidebarParams.seasonCycleSeconds === undefined) sidebarParams.seasonCycleSeconds = 4;
     const seasonCycleRow = document.createElement('div');
     seasonCycleRow.style.display = 'flex';
     seasonCycleRow.style.alignItems = 'center';
     seasonCycleRow.style.gap = '10px';
     const seasonCycleLabel = document.createElement('span');
-    seasonCycleLabel.textContent = '🌱 Season Cycle (s):';
+    seasonCycleLabel.textContent = '🌱 Season Cycle (days):';
     seasonCycleLabel.style.flex = '1';
     const seasonCycleInput = document.createElement('input');
     seasonCycleInput.type = 'range';
-    seasonCycleInput.min = 30;
-    seasonCycleInput.max = 600;
-    seasonCycleInput.step = 10;
+    seasonCycleInput.min = 1;
+    seasonCycleInput.max = 20;
+    seasonCycleInput.step = 1;
     seasonCycleInput.value = sidebarParams.seasonCycleSeconds;
     seasonCycleInput.style.flex = '2';
     const seasonCycleVal = document.createElement('input');
     seasonCycleVal.type = 'number';
-    seasonCycleVal.min = 30;
-    seasonCycleVal.max = 600;
-    seasonCycleVal.step = 10;
+    seasonCycleVal.min = 1;
+    seasonCycleVal.max = 20;
+    seasonCycleVal.step = 1;
     seasonCycleVal.value = sidebarParams.seasonCycleSeconds;
     seasonCycleVal.style.width = '60px';
     seasonCycleRow.appendChild(seasonCycleLabel);

@@ -1371,18 +1371,18 @@ export function animate() {
         animate.lastGroupDetectTime = 0;
     }
 
-    // --- 季節時計：シム経過時間を加算 ---
-    if (!animate.simTime) animate.simTime = 0;
-    animate.simTime += deltaTime;
-    // 毎秒程度の頻度でサイドバー向け季節情報を更新（再生tick待ちでは遅すぎるため）
+    // --- 季節時計：日数ベースで計算（worldTime / DAY_DURATION = 経過日数） ---
+    // seasonCycleSeconds は「1サイクルあたりの日数」として扱う（デフォルト4日）。
+    // これにより昼夜サイクルと季節が自然に連動する（1季節 = 1日 etc）。
     if (!animate.lastSeasonUIUpdate) animate.lastSeasonUIUpdate = 0;
     animate.lastSeasonUIUpdate += deltaTime;
     if (animate.lastSeasonUIUpdate >= 1.0) {
         animate.lastSeasonUIUpdate = 0;
-        const _cycleSec = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0) ? window.seasonCycleSeconds : 120;
+        const _cycleDays = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0) ? window.seasonCycleSeconds : 4;
         const _amp = (typeof window !== 'undefined' && window.seasonAmplitude !== undefined) ? Math.min(1, Math.max(0, window.seasonAmplitude)) : 0.6;
-        const _mul = 1 + _amp * Math.sin(2 * Math.PI * animate.simTime / _cycleSec);
-        const _phase = (animate.simTime % _cycleSec) / _cycleSec;
+        const _daysElapsed = worldTime / DAY_DURATION;
+        const _mul = 1 + _amp * Math.sin(2 * Math.PI * _daysElapsed / _cycleDays);
+        const _phase = (_daysElapsed % _cycleDays) / _cycleDays;
         let _name, _icon;
         if (_phase < 0.25)       { _name = 'Spring'; _icon = '🌸'; }
         else if (_phase < 0.50)  { _name = 'Summer'; _icon = '☀️'; }
@@ -1447,7 +1447,7 @@ export function animate() {
             const _starving = _alv.filter(c => (c._starvationTimer || 0) > 0).length;
             const _starvRate = _pop > 0 ? _starving / _pop : 0;
             const _prevStarv = animate._lastChronStarving !== undefined ? animate._lastChronStarving : 0;
-            const _simNow = animate.simTime || 0;
+            const _simNow = worldTime;
             if (_starvRate > 0.4 && _prevStarv <= 0.4) {
                 // Escalate: shortage → famine
                 window.logChronicleEvent('☠️', `Famine — ${_starving}/${_pop} starving`, 'famine');
