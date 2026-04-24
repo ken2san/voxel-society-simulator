@@ -28,12 +28,25 @@ function _getCtx() {
     try {
         _ctx = new (window.AudioContext || window.webkitAudioContext)();
         _masterGain = _ctx.createGain();
-        _masterGain.gain.value = 0.18; // low master volume
+        _masterGain.gain.value = _getVolume();
         _masterGain.connect(_ctx.destination);
     } catch (_) {
         _ctx = null;
     }
     return _ctx;
+}
+
+/** Read current volume from window.soundVolume (0-1), default 0.45 */
+function _getVolume() {
+    const v = (typeof window !== 'undefined' && window.soundVolume !== undefined)
+        ? Number(window.soundVolume) : 0.45;
+    return Math.max(0, Math.min(1, v));
+}
+
+/** Called by sidebar slider to update master gain in real time */
+export function setSoundVolume(v) {
+    if (typeof window !== 'undefined') window.soundVolume = v;
+    if (_masterGain) _masterGain.gain.value = Math.max(0, Math.min(1, v));
 }
 
 // Per-sound cooldown map (ms timestamps of last play)

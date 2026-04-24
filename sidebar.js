@@ -503,8 +503,9 @@ function renderCharacterDetail() {
     voxelDetailRow.dataset.label = 'Voxel Detail';
     tabPanels[0].appendChild(voxelDetailRow);
 
-    // ── Sound toggle ──────────────────────────────────────────────────────────
+    // ── Sound toggle + volume slider ──────────────────────────────────────────
     if (window.soundEnabled === undefined) window.soundEnabled = false;
+    if (window.soundVolume  === undefined) window.soundVolume  = 0.45;
     const soundToggleRow = document.createElement('div');
     soundToggleRow.style.display = 'flex';
     soundToggleRow.style.alignItems = 'center';
@@ -522,6 +523,21 @@ function renderCharacterDetail() {
         window.soundEnabled = !!e.target.checked;
     });
     soundToggleRow.appendChild(soundToggle);
+    // Volume slider (inline, same row as checkbox)
+    const soundVolSlider = document.createElement('input');
+    soundVolSlider.type = 'range';
+    soundVolSlider.min = '0';
+    soundVolSlider.max = '1';
+    soundVolSlider.step = '0.05';
+    soundVolSlider.value = String(window.soundVolume);
+    soundVolSlider.style.flex = '1';
+    soundVolSlider.style.accentColor = '#7bb3f0';
+    soundVolSlider.addEventListener('input', e => {
+        import('./sim-core/sound-system.js').then(m => {
+            if (typeof m.setSoundVolume === 'function') m.setSoundVolume(Number(e.target.value));
+        }).catch(() => { window.soundVolume = Number(e.target.value); });
+    });
+    soundToggleRow.appendChild(soundVolSlider);
     soundToggleRow.dataset.label = 'Sound';
     tabPanels[0].appendChild(soundToggleRow);
 
