@@ -188,6 +188,9 @@ export class VoxelCrowdRenderer {
         for (const char of characters) {
             if (!char || char.state === 'dead') continue;
             if (!char.mesh || !char.body || !char.head) continue;
+            // Skip characters hidden by district visibility — avoids rendering
+            // other-district characters and their shadows into the InstancedMesh.
+            if (!char.mesh.visible) continue;
 
             const prev = this._prevPos[slot];
             const px   = char.mesh.position.x;
