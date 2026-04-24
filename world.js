@@ -4,6 +4,7 @@ import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
+import { buildAngelGroup, buildReaperGroup } from './sim-core/special-entities.js';
 
 // Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
@@ -35,6 +36,13 @@ export function removeAllCharacterObjects() {
 let scene, camera, renderer, controls, ambientLight, directionalLight;
 let gameCanvas, minimapCanvas, minimapCtx;
 let campfireObjects = [];  // decorative campfires (not worldData blocks)
+
+// ── Special entities (angel + reaper) ────────────────────────────────────────
+// Angel roams when child count ≥ CHILD_THRESHOLD.
+// Reaper roams when elder count ≥ ELDER_THRESHOLD.
+const CHILD_THRESHOLD = 10;
+const ELDER_THRESHOLD = 10;
+let specialEntities = { angel: null, reaper: null };
 export { scene, camera, renderer, controls, ambientLight, directionalLight, gameCanvas, minimapCanvas, minimapCtx };
 
 function simIO() {
@@ -1061,6 +1069,70 @@ function placeCampfires() {
     }
 }
 
+// ── Special entity: create & hide; animate() controls visibility + roaming ────────
+function placeSpecialEntities() {
+    for (const e of Object.values(specialEntities)) {
+        if (!e) continue;
+        scene?.remove?.(e);
+        e.traverse(o => { try { o.geometry?.dispose?.(); o.material?.dispose?.(); } catch (_) {} });
+    }
+    specialEntities = { angel: null, reaper: null };
+    animate._specialTimer = 0;
+    animate._childCount   = 0;
+    animate._elderCount   = 0;
+    if (!scene) return;
+
+    const mid = gridSize / 2;
+    const angel = buildAngelGroup();
+    angel.position.set(mid + 0.5, 4, mid + 3.5);
+    angel.visible = false;
+    scene.add(angel);
+    specialEntities.angel = angel;
+
+    const reaper = buildReaperGroup();
+    reaper.position.set(mid - 2.5, 4, mid + 0.5);
+    reaper.visible = false;
+    scene.add(reaper);
+    specialEntities.reaper = reaper;
+}
+
+// Module-scope helper called each frame for each special entity.
+// Handles show/hide, wandering, hover-height, and custom animation.
+function _updateSpecialEntity(entity, shouldShow, dt) {
+    if (!entity) return;
+    entity.visible = shouldShow;
+    if (!shouldShow) return;
+
+    const roam = entity.userData.roam;
+    const px = entity.position.x;
+    const pz = entity.position.z;
+    const dx = roam.tx + 0.5 - px;
+    const dz = roam.tz + 0.5 - pz;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist < 0.5) {
+        // Arrived — pick a new random target within the world
+        roam.tx = 2 + Math.random() * (gridSize - 4);
+        roam.tz = 2 + Math.random() * (gridSize - 4);
+    } else {
+        const spd = roam.speed * dt;
+        entity.position.x += (dx / dist) * spd;
+        entity.position.z += (dz / dist) * spd;
+        // Face the direction of travel
+        entity.rotation.y = Math.atan2(-dx, -dz);
+    }
+
+    // Hover: float above the ground tile directly below
+    const gx = Math.max(0, Math.min(gridSize - 1, Math.floor(entity.position.x)));
+    const gz = Math.max(0, Math.min(gridSize - 1, Math.floor(entity.position.z)));
+    const gy = findGroundY(gx, gz);
+    const baseY  = (gy >= 0 ? gy : 3) + 1.6;
+    const floatY = baseY + Math.sin(worldTime * 1.5 + roam.phase) * 0.20;
+    entity.position.y += (floatY - entity.position.y) * Math.min(1.0, dt * 3.0);
+
+    if (entity.userData.updateAnim) entity.userData.updateAnim(worldTime);
+}
+
 export function generateTerrain() {
     PerlinNoise.seed(Math.random);
     const terrainScale = 12;
@@ -1116,6 +1188,7 @@ export function generateTerrain() {
     }}
     drawMinimap();
     placeCampfires();
+    placeSpecialEntities();
 }
 export function addBlock(x, y, z, type, updateMinimap = true) {
     const key = `${x},${y},${z}`;
@@ -1421,6 +1494,26 @@ export function animate() {
                 if (campfireObjects[i]?.userData?.updateFire) campfireObjects[i].userData.updateFire(worldTime);
             }
         }
+    }
+
+    // ── Special entities: angel (child ≥ 10) + reaper (elder ≥ 10) ──────────
+    // Population counts are re-evaluated every ~2.5 s to avoid per-frame iteration.
+    if (specialEntities.angel || specialEntities.reaper) {
+        animate._specialTimer = (animate._specialTimer || 0) + deltaTime;
+        if (animate._specialTimer >= 2.5) {
+            animate._specialTimer = 0;
+            let childCount = 0, elderCount = 0;
+            for (const c of characters) {
+                if (!c || c.state === 'dead') continue;
+                const stage = c.getLifeStage ? c.getLifeStage() : (c.isChild ? 'child' : 'adult');
+                if (stage === 'child') childCount++;
+                if (stage === 'elder') elderCount++;
+            }
+            animate._childCount = childCount;
+            animate._elderCount = elderCount;
+        }
+        _updateSpecialEntity(specialEntities.angel,  (animate._childCount || 0) >= CHILD_THRESHOLD, deltaTime);
+        _updateSpecialEntity(specialEntities.reaper, (animate._elderCount || 0) >= ELDER_THRESHOLD, deltaTime);
     }
 
     // ── Snow update helper (called both when paused and running) ──────────────
