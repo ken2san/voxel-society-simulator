@@ -419,9 +419,10 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
                     const rowRng = makeRng(x * 3 + dx * 97, y * 5 + ri * 31, z * 7 + dz * 53 + ri);
                     for (let si = 0; si < N; si++) {
                         if (rowRng() < SKIP) continue;
-                        // color: pick from GRASS_SIDE, darken toward base
-                        const bri  = 0.62 + ri * 0.04;
-                        const base = GRASS_SIDE[Math.floor(rowRng() * GRASS_SIDE.length)];
+                        // cap (ri=0): green grass overhang; mid/base: dirt earth
+                        const bri  = 0.72 - ri * 0.06;
+                        const pal  = ri === 0 ? GRASS_BLADE : DIRT_BASE;
+                        const base = pal[Math.floor(rowRng() * pal.length)];
                         const color = (
                             (Math.min(255, ((base >> 16) & 0xff) * bri | 0) << 16) |
                             (Math.min(255, ((base >>  8) & 0xff) * bri | 0) <<  8) |
@@ -443,12 +444,6 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
                             vx = wC;
                             vw = VW; vh = yH; vd = depth;
                         }
-                        // buildVoxelGeo uses a cube of `innerSize`; we need a box.
-                        // Encode as stretched voxel: push 8 separate unit-voxels at
-                        // precise positions to form the box shape.
-                        // Simpler: just push one entry with adjusted size via a scaled
-                        // sub-group – but buildVoxelGeo only does cubes.
-                        // Instead collect as { x, y, z, color, w, h, d } and emit below.
                         stepVoxels.push({ vx, vy, vz, vw, vh, vd, color });
                     }
                 }
