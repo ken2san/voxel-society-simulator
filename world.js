@@ -961,6 +961,7 @@ export function rebuildAllBlockVisuals() {
         const newBlock = io.createBlockVisual({
             x, y, z, type, blockSize, material, edgeMaterial,
             isVisible: isGridPositionInActiveDistrict({ x, y, z }),
+            hasBlock: (bx, by, bz) => worldData.has(`${bx},${by},${bz}`),
         });
 
         if (newBlock) {
@@ -1047,7 +1048,8 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
         blockSize,
         material,
         edgeMaterial,
-        isVisible: isGridPositionInActiveDistrict({ x, y, z })
+        isVisible: isGridPositionInActiveDistrict({ x, y, z }),
+        hasBlock: (bx, by, bz) => worldData.has(`${bx},${by},${bz}`),
     });
 
     if (block) {

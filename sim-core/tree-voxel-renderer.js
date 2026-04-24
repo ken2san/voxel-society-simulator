@@ -285,7 +285,7 @@ export function buildStoneGroup(type, x, y, z, isVisible) {
 // Per-vertex face colours: top=green, sides=tan/brown, bottom=dark.
 // Grass blades: 2 crossing quads (1u tall, 0.6u wide) placed near top.
 // RNG-seeded colours ensure no two adjacent blocks look identical.
-export function buildGrassGroup(type, x, y, z, isVisible) {
+export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
     const rng = makeRng(x, y, z);
 
     // ── Box geometry with per-face vertex colours ──
@@ -389,6 +389,27 @@ export function buildGrassGroup(type, x, y, z, isVisible) {
     const group = new THREE.Group();
     group.add(mesh);
     blades.forEach(b => group.add(b));
+    // ── Step ledges: thin slab where this block is one step above a lower neighbor ──
+    if (typeof hasBlock === 'function') {
+        const SH = 0.18, SD = 0.09;
+        const sc = GRASS_SIDE[1];
+        const stepMat = new THREE.MeshLambertMaterial({
+            color: new THREE.Color(((sc>>16)&0xff)/255*0.60, ((sc>>8)&0xff)/255*0.60, (sc&0xff)/255*0.60)
+        });
+        const stepDirs = [
+            { dx:  1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px:  0.5+SD/2, py: -0.5+SH/2, pz: 0 },
+            { dx: -1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px: -0.5-SD/2, py: -0.5+SH/2, pz: 0 },
+            { dx:  0, dz:  1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz:  0.5+SD/2 },
+            { dx:  0, dz: -1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz: -0.5-SD/2 },
+        ];
+        for (const { dx, dz, gw, gh, gd, px, py, pz } of stepDirs) {
+            if (!hasBlock(x + dx, y, z + dz) && hasBlock(x + dx, y - 1, z + dz)) {
+                const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(gw, gh, gd), stepMat);
+                stepMesh.position.set(px, py, pz);
+                group.add(stepMesh);
+            }
+        }
+    }
     group.position.set(x + 0.5, y + 0.5, z + 0.5);
     group.visible = isVisible;
     return group;
@@ -397,7 +418,7 @@ export function buildGrassGroup(type, x, y, z, isVisible) {
 // ── DIRT block: vertex-coloured box with soil striation ───────────────────────
 // Single box mesh, no extra geometry. Side/top faces get slightly randomised
 // warm brown colours; darker horizontal "striation" bands at top and sides.
-export function buildDirtGroup(type, x, y, z, isVisible) {
+export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
     const rng = makeRng(x, y, z);
 
     const FACE_COLORS = [
@@ -447,6 +468,27 @@ export function buildDirtGroup(type, x, y, z, isVisible) {
     const mesh  = new THREE.Mesh(geo, mat);
     const group = new THREE.Group();
     group.add(mesh);
+    // ── Step ledges ──
+    if (typeof hasBlock === 'function') {
+        const SH = 0.18, SD = 0.09;
+        const sc = DIRT_BASE[0];
+        const stepMat = new THREE.MeshLambertMaterial({
+            color: new THREE.Color(((sc>>16)&0xff)/255*0.55, ((sc>>8)&0xff)/255*0.55, (sc&0xff)/255*0.55)
+        });
+        const stepDirs = [
+            { dx:  1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px:  0.5+SD/2, py: -0.5+SH/2, pz: 0 },
+            { dx: -1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px: -0.5-SD/2, py: -0.5+SH/2, pz: 0 },
+            { dx:  0, dz:  1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz:  0.5+SD/2 },
+            { dx:  0, dz: -1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz: -0.5-SD/2 },
+        ];
+        for (const { dx, dz, gw, gh, gd, px, py, pz } of stepDirs) {
+            if (!hasBlock(x + dx, y, z + dz) && hasBlock(x + dx, y - 1, z + dz)) {
+                const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(gw, gh, gd), stepMat);
+                stepMesh.position.set(px, py, pz);
+                group.add(stepMesh);
+            }
+        }
+    }
     group.position.set(x + 0.5, y + 0.5, z + 0.5);
     group.visible = isVisible;
     return group;

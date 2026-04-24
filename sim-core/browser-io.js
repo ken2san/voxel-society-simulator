@@ -19,7 +19,7 @@ export function createThreeSimulationIO() {
     const createMaterial = (options = {}) => new THREE.MeshLambertMaterial(options);
     const createEdgeMaterial = (options = {}) => new THREE.LineBasicMaterial(options);
 
-    function createBlockVisual({ x = 0, y = 0, z = 0, type = {}, blockSize = 1, material, edgeMaterial, isVisible = true }) {
+    function createBlockVisual({ x = 0, y = 0, z = 0, type = {}, blockSize = 1, material, edgeMaterial, isVisible = true, hasBlock }) {
         const variantSeed = Math.abs((x * 73856093) ^ (y * 19349663) ^ (z * 83492791));
         const detailMode = typeof window !== 'undefined' ? window.voxelDetailMode !== false : true;
 
@@ -34,8 +34,8 @@ export function createThreeSimulationIO() {
             if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
             if (type.isStoneBlock) return buildStoneGroup(type, x, y, z, isVisible);
             if (type.isBedBlock)   return buildBedGroup(type, x, y, z, isVisible);
-            if (type.isGrassBlock) return buildGrassGroup(type, x, y, z, isVisible);
-            if (type.isDirtBlock)  return buildDirtGroup(type, x, y, z, isVisible);
+            if (type.isGrassBlock) return buildGrassGroup(type, x, y, z, isVisible, hasBlock);
+            if (type.isDirtBlock)  return buildDirtGroup(type, x, y, z, isVisible, hasBlock);
         }
 
         // ── Standard blocks ──────────────────────────────────────────────────
