@@ -420,8 +420,8 @@
   z-index: 100;
 }
 
-/* ── Hide sidebars on narrow viewports so the canvas is visible ── */
-@media (max-width: 900px) {
+/* ── Hide sidebars on touch/tablet viewports so the canvas is visible ── */
+@media (max-width: 1280px) {
   #sidebar-left,
   #sidebar-right,
   .sidebar-bg,

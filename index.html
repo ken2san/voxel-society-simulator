@@ -91,7 +91,7 @@
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
 
     <!-- Debug launcher -->
-    <div class="mb-3 text-center max-w-2xl mx-auto">
+    <div id="debug-launcher" class="mb-3 text-center max-w-2xl mx-auto">
         <div class="inline-flex items-center gap-2 bg-gray-800 bg-opacity-60 p-2 rounded-xl shadow">
             <button id="debugPanelOpenBtn" class="btn btn-info btn-md debug-action-btn">Open Debug Panel</button>
         </div>
@@ -237,6 +237,78 @@
             AOS.init({ once: true });
         });
         // All game logic is now in game.js
+    </script>
+
+    <!-- ── Mobile floating HUD (hidden on desktop via CSS) ───────────────── -->
+    <div id="mobile-hud" aria-label="Mobile controls">
+        <button id="m-hud-start" class="m-hud-btn m-hud-start">▶ Start</button>
+        <div class="m-hud-info">
+            <span id="m-hud-season">🌸 Spring</span>
+            <span id="m-hud-pop">👥 –</span>
+        </div>
+        <button id="m-hud-centre" class="m-hud-btn m-hud-icon" title="Centre camera">🎯</button>
+    </div>
+
+    <script>
+    // ── Mobile HUD wiring (non-module, runs after sidebar.js has booted) ──
+    (function () {
+        const SEASON_ICONS = { Spring: '🌸', Summer: '☀️', Autumn: '🍂', Winter: '❄️' };
+
+        window.__syncMobileHud = function () {
+            const btn = document.getElementById('m-hud-start');
+            if (!btn) return;
+            if (window.__simStarting) {
+                btn.textContent = '⏳ Starting…';
+                btn.disabled = true;
+                btn.className = 'm-hud-btn m-hud-start m-hud-busy';
+            } else if (window.simulationRunning) {
+                btn.textContent = '⏹ Finish';
+                btn.disabled = false;
+                btn.className = 'm-hud-btn m-hud-finish';
+            } else {
+                btn.textContent = '▶ Start';
+                btn.disabled = false;
+                btn.className = 'm-hud-btn m-hud-start';
+            }
+        };
+
+        // Poll season + population every 800ms
+        setInterval(function () {
+            var si = window.currentSeasonInfo;
+            var seasonEl = document.getElementById('m-hud-season');
+            if (seasonEl && si) {
+                seasonEl.textContent = (SEASON_ICONS[si.name] || '🌍') + ' ' + si.name;
+            }
+            var popEl = document.getElementById('m-hud-pop');
+            if (popEl && Array.isArray(window.characters)) {
+                var alive = window.characters.filter(function (c) { return c && c.state !== 'dead'; }).length;
+                popEl.textContent = '👥 ' + alive;
+            }
+            window.__syncMobileHud();
+        }, 800);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var startBtn = document.getElementById('m-hud-start');
+            if (startBtn) {
+                startBtn.addEventListener('click', function () {
+                    if (typeof window.__simToggle === 'function') {
+                        window.__simToggle();
+                    }
+                });
+            }
+            var centreBtn = document.getElementById('m-hud-centre');
+            if (centreBtn) {
+                centreBtn.addEventListener('click', function () {
+                    if (typeof window.focusCameraOnActiveDistrict === 'function') {
+                        window.focusCameraOnActiveDistrict();
+                    } else {
+                        var cb = document.getElementById('centreCameraBtn');
+                        if (cb) cb.click();
+                    }
+                });
+            }
+        });
+    })();
     </script>
 </body>
 </html>
