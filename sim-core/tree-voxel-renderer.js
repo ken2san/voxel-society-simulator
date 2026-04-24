@@ -391,18 +391,23 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
     blades.forEach(b => group.add(b));
     // ── Voxel stair steps (terrace/moss style) ──────────────────────────────────
     if (typeof hasBlock === 'function') {
-        // 3 stair rows: top (cap) → mid → base, going outward & downward
-        // { yBot: local bottom Y, yH: height, depth: outward depth }
         const ROWS = [
-            { yBot: -0.5 + 0.52, yH: 0.20, depth: 0.18 },  // cap   – tiny lip at top
-            { yBot: -0.5 + 0.26, yH: 0.26, depth: 0.30 },  // mid   – main step body
-            { yBot: -0.5 + 0.00, yH: 0.26, depth: 0.44 },  // base  – wide footing
+            { yBot: -0.5 + 0.52, yH: 0.20, depth: 0.18 },  // cap
+            { yBot: -0.5 + 0.26, yH: 0.26, depth: 0.30 },  // mid
+            { yBot: -0.5 + 0.00, yH: 0.26, depth: 0.44 },  // base
         ];
-        const N   = 4;                          // segments along edge width
-        const SEG = 1.0 / N;                    // 0.25u per segment
-        const VW  = SEG * 0.88;                 // mini-voxel width (gap between segments)
-        const SKIP = 0.38;                      // probability to omit a segment
+        const N   = 4;
+        const SEG = 1.0 / N;
+        const VW  = SEG * 0.88;
+        // Per-row skip: cap=dense, mid=medium, base=sparse
+        const ROW_SKIP = [0.15, 0.38, 0.58];
         const EPS  = 0.004;
+
+        // Winter snow factor (0=no snow, 1=full snow)
+        const _sp = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo.phase : 0;
+        const _si4 = Math.floor(_sp * 4) % 4;
+        const _st  = (_sp * 4) % 1;
+        const winterF = _si4 === 3 ? 1 : _si4 === 2 ? Math.max(0, (_st - 0.5) * 2) : _si4 === 0 ? Math.max(0, 1 - _st * 2) : 0;
 
         const stepVoxels = [];
         const stepDirs = [
@@ -418,15 +423,20 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
                     const { yBot, yH, depth } = ROWS[ri];
                     const rowRng = makeRng(x * 3 + dx * 97, y * 5 + ri * 31, z * 7 + dz * 53 + ri);
                     for (let si = 0; si < N; si++) {
-                        if (rowRng() < SKIP) continue;
-                        // cap (ri=0): green grass overhang; mid/base: dirt earth
+                        if (rowRng() < ROW_SKIP[ri]) continue;
+                        // cap=green grass overhang, mid/base=dirt earth
                         const bri  = 0.72 - ri * 0.06;
                         const pal  = ri === 0 ? GRASS_BLADE : DIRT_BASE;
                         const base = pal[Math.floor(rowRng() * pal.length)];
+                        const br = ((base >> 16) & 0xff) * bri | 0;
+                        const bg = ((base >>  8) & 0xff) * bri | 0;
+                        const bb = ( base        & 0xff) * bri | 0;
+                        // Snow: cap→heavy white, mid→light dusting, base→none
+                        const snow = winterF * (ri === 0 ? 0.82 : ri === 1 ? 0.35 : 0.0);
                         const color = (
-                            (Math.min(255, ((base >> 16) & 0xff) * bri | 0) << 16) |
-                            (Math.min(255, ((base >>  8) & 0xff) * bri | 0) <<  8) |
-                            (Math.min(255,  (base        & 0xff) * bri | 0))
+                            (Math.min(255, br + ((232 - br) * snow | 0)) << 16) |
+                            (Math.min(255, bg + ((244 - bg) * snow | 0)) <<  8) |
+                            (Math.min(255, bb + ((255 - bb) * snow | 0)))
                         );
                         // Centre of this segment along the edge width (local -0.5 … +0.5)
                         const wC = -0.5 + (si + 0.5) * SEG;
@@ -562,8 +572,13 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
         const N   = 4;
         const SEG = 1.0 / N;
         const VW  = SEG * 0.88;
-        const SKIP = 0.38;
+        const ROW_SKIP = [0.20, 0.42, 0.60];
         const EPS  = 0.004;
+
+        const _sp = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo.phase : 0;
+        const _si4 = Math.floor(_sp * 4) % 4;
+        const _st  = (_sp * 4) % 1;
+        const winterF = _si4 === 3 ? 1 : _si4 === 2 ? Math.max(0, (_st - 0.5) * 2) : _si4 === 0 ? Math.max(0, 1 - _st * 2) : 0;
 
         const stepVoxels = [];
         const stepDirs = [
@@ -579,13 +594,18 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
                     const { yBot, yH, depth } = ROWS[ri];
                     const rowRng = makeRng(x * 3 + dx * 97, y * 5 + ri * 31, z * 7 + dz * 53 + ri);
                     for (let si = 0; si < N; si++) {
-                        if (rowRng() < SKIP) continue;
+                        if (rowRng() < ROW_SKIP[ri]) continue;
                         const bri  = 0.60 + ri * 0.04;
                         const base = DIRT_BASE[Math.floor(rowRng() * DIRT_BASE.length)];
+                        const br = ((base >> 16) & 0xff) * bri | 0;
+                        const bg = ((base >>  8) & 0xff) * bri | 0;
+                        const bb = ( base        & 0xff) * bri | 0;
+                        // Snow: cap only gets a dusting on bare dirt
+                        const snow = winterF * (ri === 0 ? 0.55 : ri === 1 ? 0.20 : 0.0);
                         const color = (
-                            (Math.min(255, ((base >> 16) & 0xff) * bri | 0) << 16) |
-                            (Math.min(255, ((base >>  8) & 0xff) * bri | 0) <<  8) |
-                            (Math.min(255,  (base        & 0xff) * bri | 0))
+                            (Math.min(255, br + ((232 - br) * snow | 0)) << 16) |
+                            (Math.min(255, bg + ((244 - bg) * snow | 0)) <<  8) |
+                            (Math.min(255, bb + ((255 - bb) * snow | 0)))
                         );
                         const wC   = -0.5 + (si + 0.5) * SEG;
                         const yC   = yBot + yH / 2;

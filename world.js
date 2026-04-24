@@ -1400,6 +1400,12 @@ export function animate() {
         else                     { _name = 'Winter'; _icon = '❄️'; }
         window.currentSeasonInfo = { name: _name, icon: _icon, multiplier: Math.max(0, _mul), amplitude: _amp, phase: _phase };
 
+        // Rebuild terrain voxels when season changes (snow on step edges etc.)
+        if (animate._lastSeasonName !== _name) {
+            animate._lastSeasonName = _name;
+            if (window.voxelDetailMode !== false) rebuildAllBlockVisuals();
+        }
+
         // --- Society Chronicle event hooks (always active) ---
         if (typeof window.logChronicleEvent === 'function' && Array.isArray(window.characters)) {
             const _alv = window.characters.filter(c => c && c.state !== 'dead');
