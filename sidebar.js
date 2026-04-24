@@ -2527,6 +2527,8 @@ function renderCharacterDetail() {
             toggleBtn.disabled = false;
         }
         syncPopulationCapacityUI(Number(sidebarParams.districtMode) || 1);
+        // Keep mobile HUD in sync
+        if (typeof window.__syncMobileHud === 'function') window.__syncMobileHud();
     }
 
     function finishSimulation() {
@@ -2740,6 +2742,9 @@ function renderCharacterDetail() {
     controlGroup.appendChild(toggleBtn);
     actionBar.appendChild(controlGroup);
     paramBox.insertBefore(actionBar, paramBox.firstChild);
+
+    // Expose toggle for mobile HUD button
+    window.__simToggle = function () { toggleBtn.click(); };
 
     // --- Run History panel (right sidebar, below Start/Finish, above parameter tabs) ---
     function buildRunHistoryPanel() {

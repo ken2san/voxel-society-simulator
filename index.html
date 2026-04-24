@@ -86,12 +86,10 @@
     <script type="module" src="sidebar.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
-    <div id="sidebar-left" class="sidebar-bg"></div>
-    <div id="sidebar-right" class="sidebar-bg-right"></div>
     <h1 class="mb-5 font-bold" data-aos="fade-down">Voxel Society Simulator</h1>
 
     <!-- Debug launcher -->
-    <div class="mb-3 text-center max-w-2xl mx-auto">
+    <div id="debug-launcher" class="mb-3 text-center max-w-2xl mx-auto">
         <div class="inline-flex items-center gap-2 bg-gray-800 bg-opacity-60 p-2 rounded-xl shadow">
             <button id="debugPanelOpenBtn" class="btn btn-info btn-md debug-action-btn">Open Debug Panel</button>
         </div>
@@ -156,7 +154,7 @@
     </div>
 
     <!-- Resource Generation Settings -->
-    <div class="mb-4 text-center max-w-6xl mx-auto">
+    <div id="resource-gen-settings" class="mb-4 text-center max-w-6xl mx-auto">
         <div class="bg-gray-800 bg-opacity-60 p-3 rounded-xl shadow">
             <h3 class="text-white font-semibold mb-3">Resource Generation Settings</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
@@ -227,6 +225,17 @@
             <button id="centreCameraBtn" title="Reset camera to world centre" style="position:absolute;bottom:24px;left:24px;z-index:10;padding:6px 16px;border-radius:999px;background:rgba(15,23,42,0.72);color:#e2e8f0;font-size:0.82em;font-weight:700;border:1.5px solid rgba(148,163,184,0.45);cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 2px 10px rgba(0,0,0,0.28);letter-spacing:0.03em;transition:background 0.15s;">🎯 Centre</button>
         </div>
     </div>
+
+    <!-- Mobile accordion bar (hidden on desktop) -->
+    <div id="mobile-accordion-bar">
+        <button class="m-acc-btn" id="m-acc-left-btn">👥 Characters</button>
+        <button class="m-acc-btn" id="m-acc-right-btn">🔍 Detail</button>
+    </div>
+
+    <!-- Sidebars: fixed panels on desktop, collapsible panels on mobile -->
+    <div id="sidebar-left" class="sidebar-bg"></div>
+    <div id="sidebar-right" class="sidebar-bg-right"></div>
+
     <div id="messageBox" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-8 rounded-2xl shadow-2xl z-50" data-aos="fade-in" data-aos-delay="300">
         <p id="messageText" class="text-xl font-bold mb-6"></p>
         <button id="messageBoxCloseBtn" class="btn w-full px-6 py-3 font-bold transition-all duration-200">Close</button>
@@ -237,6 +246,97 @@
             AOS.init({ once: true });
         });
         // All game logic is now in game.js
+    </script>
+
+    <!-- ── Mobile floating HUD (hidden on desktop via CSS) ───────────────── -->
+    <div id="mobile-hud" aria-label="Mobile controls">
+        <button id="m-hud-start" class="m-hud-btn m-hud-start">▶ Start</button>
+        <div class="m-hud-info">
+            <span id="m-hud-season">🌸 Spring</span>
+            <span id="m-hud-pop">👥 –</span>
+        </div>
+        <button id="m-hud-centre" class="m-hud-btn m-hud-icon" title="Centre camera">🎯</button>
+    </div>
+
+    <script>
+    // ── Mobile HUD wiring (non-module, runs after sidebar.js has booted) ──
+    (function () {
+        const SEASON_ICONS = { Spring: '🌸', Summer: '☀️', Autumn: '🍂', Winter: '❄️' };
+
+        window.__syncMobileHud = function () {
+            const btn = document.getElementById('m-hud-start');
+            if (!btn) return;
+            if (window.__simStarting) {
+                btn.textContent = '⏳ Starting…';
+                btn.disabled = true;
+                btn.className = 'm-hud-btn m-hud-start m-hud-busy';
+            } else if (window.simulationRunning) {
+                btn.textContent = '⏹ Finish';
+                btn.disabled = false;
+                btn.className = 'm-hud-btn m-hud-finish';
+            } else {
+                btn.textContent = '▶ Start';
+                btn.disabled = false;
+                btn.className = 'm-hud-btn m-hud-start';
+            }
+        };
+
+        // Poll season + population every 800ms
+        setInterval(function () {
+            var si = window.currentSeasonInfo;
+            var seasonEl = document.getElementById('m-hud-season');
+            if (seasonEl && si) {
+                seasonEl.textContent = (SEASON_ICONS[si.name] || '🌍') + ' ' + si.name;
+            }
+            var popEl = document.getElementById('m-hud-pop');
+            if (popEl && Array.isArray(window.characters)) {
+                var alive = window.characters.filter(function (c) { return c && c.state !== 'dead'; }).length;
+                popEl.textContent = '👥 ' + alive;
+            }
+            window.__syncMobileHud();
+        }, 800);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var startBtn = document.getElementById('m-hud-start');
+            if (startBtn) {
+                startBtn.addEventListener('click', function () {
+                    if (typeof window.__simToggle === 'function') {
+                        window.__simToggle();
+                    }
+                });
+            }
+            var centreBtn = document.getElementById('m-hud-centre');
+            if (centreBtn) {
+                centreBtn.addEventListener('click', function () {
+                    if (typeof window.focusCameraOnActiveDistrict === 'function') {
+                        window.focusCameraOnActiveDistrict();
+                    } else {
+                        var cb = document.getElementById('centreCameraBtn');
+                        if (cb) cb.click();
+                    }
+                });
+            }
+
+            // ── Accordion panels ──────────────────────────────────────────
+            var accLeftBtn  = document.getElementById('m-acc-left-btn');
+            var accRightBtn = document.getElementById('m-acc-right-btn');
+            var accLeft     = document.getElementById('sidebar-left');
+            var accRight    = document.getElementById('sidebar-right');
+
+            function mAccToggle(panel, btn) {
+                var willOpen = !panel.classList.contains('mobile-open');
+                [accLeft, accRight].forEach(function (p) { p && p.classList.remove('mobile-open'); });
+                [accLeftBtn, accRightBtn].forEach(function (b) { b && b.classList.remove('active'); });
+                if (willOpen) {
+                    panel.classList.add('mobile-open');
+                    btn.classList.add('active');
+                    panel.scrollTop = 0;
+                }
+            }
+            if (accLeftBtn && accLeft)   accLeftBtn.addEventListener('click',  function () { mAccToggle(accLeft,  accLeftBtn); });
+            if (accRightBtn && accRight) accRightBtn.addEventListener('click', function () { mAccToggle(accRight, accRightBtn); });
+        });
+    })();
     </script>
 </body>
 </html>

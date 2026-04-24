@@ -2,6 +2,156 @@
   position: relative;
   left: 40px;
 }
+
+/* ── Mobile floating HUD ─────────────────────────────────────────────────── */
+#mobile-hud {
+  display: none; /* hidden on desktop */
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 200;
+  height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(10, 16, 40, 0.90);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.m-hud-btn {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1.5px solid rgba(148, 163, 184, 0.3);
+  padding: 7px 16px;
+  cursor: pointer;
+  color: #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-hud-btn:disabled { opacity: 0.5; }
+
+.m-hud-start  { background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%); }
+.m-hud-finish { background: linear-gradient(90deg, #b91c1c 0%, #ef4444 100%); }
+.m-hud-busy   { background: linear-gradient(90deg, #374151 0%, #4b5563 100%); }
+.m-hud-icon   { background: rgba(30, 41, 59, 0.8); padding: 7px 12px; font-size: 18px; }
+
+.m-hud-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  line-height: 1.3;
+  flex: 1;
+  text-align: center;
+}
+
+/* ── Mobile accordion bar (shown on mobile only) ────────────────────── */
+#mobile-accordion-bar {
+  display: none; /* hidden on desktop */
+  width: 100%;
+  background: rgba(15, 23, 42, 0.96);
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.m-acc-btn {
+  flex: 1;
+  padding: 11px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-acc-btn:last-child { border-right: none; }
+.m-acc-btn:active     { background: rgba(59, 130, 246, 0.12); }
+.m-acc-btn.active {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.1);
+  border-bottom: 2.5px solid #3b82f6;
+}
+
+/* ── Mobile layout: canvas-as-background + bottom-sheet panels ───────────── */
+/* Covers: iPhone, iPad, iPad Pro 11" landscape (1194px), iPad Pro 12.9"/13" landscape (1366px) */
+@media (max-width: 1400px) {
+  #mobile-hud           { display: flex; }
+  #mobile-accordion-bar { display: flex; }
+
+  /* Body: full-viewport, no scroll — canvas IS the background */
+  body {
+    overflow: hidden !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+  }
+
+  h1              { display: none !important; }
+  #debug-launcher { display: none !important; }
+  #resource-gen-settings { display: none !important; }
+
+  /* Canvas container fills entire viewport (behind HUD via z-index) */
+  #game-container {
+    position: fixed !important;
+    inset: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    z-index: 0 !important;
+  }
+
+  /* Strip card decoration, fill parent height */
+  #game-container .card {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Canvas fills the fixed container — Three.js onWindowResize reads clientWidth/Height */
+  #gameCanvas {
+    width: 100% !important;
+    height: 100% !important;
+    aspect-ratio: unset !important;
+    border-radius: 0 !important;
+  }
+
+  /* Hide the canvas-embedded Centre button (HUD has 🎯 already) */
+  #centreCameraBtn { display: none !important; }
+
+  /* Remove vignette border-radius on full-screen canvas */
+  #game-container::before { border-radius: 0 !important; }
+
+  /* Minimap: smaller, stays in top-right corner */
+  #minimapCanvas { width: 64px !important; height: 64px !important; }
+
+  /* Accordion tab bar: fixed just above HUD */
+  #mobile-accordion-bar {
+    position: fixed !important;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 150 !important;
+  }
+}
 /* --- Voxel Society Simulator Styles --- */
 #gameCanvas { width: 100%; height: 65vh; background-color: rgba(255,255,255,0.01); }
 #minimapCanvas { width: 110px; height: 110px; background-color: #232946; border: 2.5px solid #3b82f6; border-radius: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
