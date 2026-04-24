@@ -70,6 +70,7 @@
       "pairReproductionCooldownSeconds": 24,
       "reproductionCooldownSeconds": 8,
       "fruitRegenIntervalSeconds": 60,
+      "dayDurationSeconds": 120,
       "seasonCycleSeconds": 4,
       "seasonAmplitude": 0.6,
       "initialAgeMaxRatio": 0.38,

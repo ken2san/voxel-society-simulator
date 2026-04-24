@@ -77,7 +77,13 @@ export const maxHeight = 10;
 export const clock = simIO().createClock();
 export const characters = [];
 export let worldTime = 0;
-export const DAY_DURATION = 120;
+export const DAY_DURATION = 120;  // fallback constant (use getDayDuration() at runtime)
+
+// Returns the current day duration in seconds, respecting the sidebar override.
+function getDayDuration() {
+    return (typeof window !== 'undefined' && window.dayDurationSeconds > 0)
+        ? window.dayDurationSeconds : DAY_DURATION;
+}
 export let nextCharacterId = 0;
 export function resetNextCharacterId() { nextCharacterId = 0; }
 export function resetFrameTimingAfterVisibilityChange() {
@@ -826,7 +832,8 @@ function updateAmbientWorldEffects() {
     }
 
     const time = Number(worldTime) || 0;
-    const dayPhase = (time % DAY_DURATION) / DAY_DURATION;
+    const _DD = getDayDuration();
+    const dayPhase = (time % _DD) / _DD;
     const isNight = dayPhase > 0.5;
     const nightBlend = isNight ? (0.45 + 0.55 * Math.sin((dayPhase - 0.5) * Math.PI)) : 0;
     const warmIntensity = enabled ? nightBlend * (0.1 + 0.06 * (0.5 + 0.5 * Math.sin(time * 2.1))) : 0;
@@ -1164,7 +1171,7 @@ export function toScreenPosition(obj, camera) {
     return simIO().toScreenPosition(obj, camera, renderer?.domElement);
 }
 export function updateWorldLighting() {
-    const timeOfDay = (worldTime % DAY_DURATION) / DAY_DURATION;
+    const timeOfDay = (worldTime % getDayDuration()) / getDayDuration();
     const dayIntensity = Math.sin(timeOfDay * Math.PI);
     if (directionalLight) directionalLight.intensity = Math.max(0, dayIntensity) * 0.8;
     if (ambientLight) ambientLight.intensity = 0.3 + Math.max(0, dayIntensity) * 0.6;
@@ -1325,7 +1332,8 @@ export function animate() {
     updateWorldLighting();
     updateAmbientWorldEffects();
     _updateSnow(deltaTime);
-    const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
+    const _dd = getDayDuration();
+    const isNight = (worldTime % _dd) > (_dd / 2);
     refreshDistrictSummaryCache(characters);
     if (typeof window !== 'undefined') {
         let activeCount = 0;
@@ -1380,7 +1388,7 @@ export function animate() {
         animate.lastSeasonUIUpdate = 0;
         const _cycleDays = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0) ? window.seasonCycleSeconds : 4;
         const _amp = (typeof window !== 'undefined' && window.seasonAmplitude !== undefined) ? Math.min(1, Math.max(0, window.seasonAmplitude)) : 0.6;
-        const _daysElapsed = worldTime / DAY_DURATION;
+        const _daysElapsed = worldTime / getDayDuration();
         const _mul = 1 + _amp * Math.sin(2 * Math.PI * _daysElapsed / _cycleDays);
         const _phase = (_daysElapsed % _cycleDays) / _cycleDays;
         let _name, _icon;

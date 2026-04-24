@@ -310,6 +310,7 @@ function renderCharacterDetail() {
         maxAffinity:                        100,
         reproductionCooldownSeconds:        8,
         fruitRegenIntervalSeconds:          60,
+        dayDurationSeconds:                 120,
         seasonCycleSeconds:                 4,
         seasonAmplitude:                    0.6,
         initialAgeMaxRatio:                 0.38,
@@ -1963,6 +1964,47 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(fruitRegenRow);
     fruitRegenInput.disabled = paramDisabled;
     fruitRegenVal.disabled = paramDisabled;
+
+    // --- Day Duration Slider ---
+    if (sidebarParams.dayDurationSeconds === undefined) sidebarParams.dayDurationSeconds = 120;
+    const dayDurRow = document.createElement('div');
+    dayDurRow.style.display = 'flex';
+    dayDurRow.style.alignItems = 'center';
+    dayDurRow.style.gap = '10px';
+    const dayDurLabel = document.createElement('span');
+    dayDurLabel.textContent = '☀️ Day Duration (s):';
+    dayDurLabel.style.flex = '1';
+    const dayDurInput = document.createElement('input');
+    dayDurInput.type = 'range';
+    dayDurInput.min = 10;
+    dayDurInput.max = 600;
+    dayDurInput.step = 10;
+    dayDurInput.value = sidebarParams.dayDurationSeconds;
+    dayDurInput.style.flex = '2';
+    const dayDurVal = document.createElement('input');
+    dayDurVal.type = 'number';
+    dayDurVal.min = 10;
+    dayDurVal.max = 600;
+    dayDurVal.step = 10;
+    dayDurVal.value = sidebarParams.dayDurationSeconds;
+    dayDurVal.style.width = '60px';
+    dayDurRow.appendChild(dayDurLabel);
+    dayDurRow.appendChild(dayDurInput);
+    dayDurRow.appendChild(dayDurVal);
+    dayDurInput.addEventListener('input', e => {
+        sidebarParams.dayDurationSeconds = parseInt(e.target.value);
+        dayDurVal.value = e.target.value;
+        window.dayDurationSeconds = parseInt(e.target.value);
+    });
+    dayDurVal.addEventListener('input', e => {
+        sidebarParams.dayDurationSeconds = parseInt(e.target.value);
+        dayDurInput.value = e.target.value;
+        window.dayDurationSeconds = parseInt(e.target.value);
+    });
+    dayDurRow.dataset.label = 'Day Duration';
+    tabPanels[2].appendChild(dayDurRow);
+    dayDurInput.disabled = paramDisabled;
+    dayDurVal.disabled = paramDisabled;
 
     // --- Season Cycle Length Slider ---
     if (sidebarParams.seasonCycleSeconds === undefined) sidebarParams.seasonCycleSeconds = 4;
