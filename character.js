@@ -872,6 +872,9 @@ class Character {
 
         if (blockId) {
             this._diggingProgress += 1;
+            // Keep dig animation alive for ~0.5 s after each tick regardless of state
+            this._digAnimTimer = 0.5;
+            this._digAnimTarget = { x, y, z }; // store so updateAnimations can compute direction
 
             // 段階的なアイコン表示とエフェクト
             const stages = ['⛏️', '💪⛏️', '💥⛏️', '🔥⛏️', '✨💎'];
@@ -4105,6 +4108,7 @@ class Character {
                 this.log(`Unhandled working action: ${this.action.type}`);
                 this.setIdleState({ clearAction: true });
             }
+            this.updateAnimations(deltaTime); // アニメーション（掘る動作など）を更新
             this.updateThoughtBubble(isNight, camera);
             return;
         }
@@ -6087,6 +6091,38 @@ class Character {
         }
 
         // --- Body animation: more charming/expressive ---
+        // Dig animation override: fires regardless of state when _digAnimTimer > 0
+        // (set by destroyBlock() each tick so the animation works even if state
+        //  isn't 'working' yet, e.g. during arrival delay or rescue digs)
+        if ((this._digAnimTimer || 0) > 0) {
+            this._digAnimTimer -= deltaTime;
+            if (!this._digPhase) this._digPhase = 0;
+            this._digPhase += deltaTime * 5.0;
+            const digSwing = Math.sin(this._digPhase);
+            const _tgt = this._digAnimTarget || (this.action && this.action.target) || null;
+            const _tgtDy = _tgt ? (_tgt.y - this.gridPos.y) : 0;
+            if (_tgtDy < 0) {
+                this.leftArm.rotation.x  =  0.60 + digSwing * 0.60;
+                this.rightArm.rotation.x =  0.60 + digSwing * 0.60;
+                if (this.leftForearm)  this.leftForearm.rotation.x  = 0.25 + digSwing * 0.30;
+                if (this.rightForearm) this.rightForearm.rotation.x = 0.25 + digSwing * 0.30;
+                this.body.rotation.x =  0.35 + digSwing * 0.20;
+                this.head.rotation.x =  0.30 - digSwing * 0.08;
+            } else {
+                this.leftArm.rotation.x  = -0.65 - digSwing * 0.80;
+                this.rightArm.rotation.x = -0.65 - digSwing * 0.80;
+                if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.45 : 0;
+                if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.45 : 0;
+                this.body.rotation.x = digSwing > 0 ? digSwing * 0.30 : 0;
+                this.head.rotation.x = -0.18 + digSwing * 0.08;
+            }
+            this.bobTime += deltaTime * 5;
+            const digBob = Math.abs(digSwing) * 0.025;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.630) + digBob;
+            if (this.pelvis) this.pelvis.position.y = (this._bodyRow2RestY ?? 0.445) + digBob;
+            if (!this.actionAnim.active) this.body.scale.y = 1.0;
+            return; // skip state-based animation while digging
+        }
         if (this.state === 'idle') {
             // Ethereal idle float
             this.bobTime += deltaTime * 1.8;
@@ -6152,6 +6188,34 @@ class Character {
             this.rightArm.rotation.y = -Math.sin(this._stepPhase * 0.5) * 0.15;
             // Head: expressive tilt
             this.head.rotation.z = Math.sin(this._stepPhase * 0.7) * 0.15;
+            // --- Climb / descend pose overlay ---
+            const _nextNode = this.path && this.path.length > 0 ? this.path[0] : null;
+            const _stepDy = _nextNode ? _nextNode.y - this.gridPos.y : 0;
+            if (_stepDy > 0) {
+                // Climbing: leading knee lifts, arms reach forward, body leans in
+                if (this.leftThigh)  this.leftThigh.rotation.x  =  0.70;
+                if (this.leftShin)   this.leftShin.rotation.x   = -0.40;
+                if (this.rightThigh) this.rightThigh.rotation.x = -0.30;
+                if (this.rightShin)  this.rightShin.rotation.x  =  0.15;
+                this.leftArm.rotation.x  = -0.55;
+                this.rightArm.rotation.x = -0.35;
+                this.body.rotation.x     =  0.22;
+            } else if (_stepDy < 0) {
+                // Descending: arms spread for balance, head dips toward step
+                this.leftArm.rotation.z  =  0.45;
+                this.rightArm.rotation.z = -0.45;
+                this.body.rotation.x     = -0.10;
+                this.head.rotation.x    +=  0.15;
+            } else {
+                // Flat movement: smoothly damp any residual climb rotations
+                if (this.leftThigh)  this.leftThigh.rotation.x  *= 0.75;
+                if (this.leftShin)   this.leftShin.rotation.x   *= 0.75;
+                if (this.rightThigh) this.rightThigh.rotation.x *= 0.75;
+                if (this.rightShin)  this.rightShin.rotation.x  *= 0.75;
+                this.leftArm.rotation.z  *= 0.75;
+                this.rightArm.rotation.z *= 0.75;
+                this.body.rotation.x     *= 0.75;
+            }
         } else {
             // Smoothly return to neutral pose
             this.mesh.rotation.z *= 0.85;
@@ -6159,6 +6223,13 @@ class Character {
             this.rightArm.rotation.x *= 0.85;
             this.leftArm.rotation.y  *= 0.85;
             this.rightArm.rotation.y *= 0.85;
+            this.leftArm.rotation.z  *= 0.85;
+            this.rightArm.rotation.z *= 0.85;
+            this.body.rotation.x     *= 0.85;
+            if (this.leftThigh)  this.leftThigh.rotation.x  *= 0.85;
+            if (this.rightThigh) this.rightThigh.rotation.x *= 0.85;
+            if (this.leftShin)   this.leftShin.rotation.x   *= 0.85;
+            if (this.rightShin)  this.rightShin.rotation.x  *= 0.85;
             this.body.position.y += ((this._bodyRow1RestY ?? 0.630) - this.body.position.y) * 0.2;
             if (this.pelvis)      this.pelvis.position.y      += ((this._bodyRow2RestY ?? 0.445) - this.pelvis.position.y)      * 0.2;
             if (this.leftThigh)   { this.leftThigh.position.y  += ((this._bodyRow3RestY ?? 0.325) - this.leftThigh.position.y)  * 0.2; this.leftThigh.position.z  *= 0.80; }
@@ -6238,8 +6309,47 @@ class Character {
             this.rightArm.rotation.x = Math.sin(this.bobTime * 1.2) * 0.30;
             if (!this.actionAnim.active) this.body.scale.y = 1.0;
         } else if (this.state === 'working') {
-            // Focused work animation
-            this.bobTime += deltaTime * 3;
+            // Dig animation fires when: (a) working state with dig action, OR
+            // (b) _digAnimTimer > 0 (handled above, before state machine)
+            const _isDigAction = this.action && (this.action.type === 'DESTROY_BLOCK' || this.action.type === 'CHOP_WOOD');
+            if (_isDigAction) {
+                if (this._digAnimTimer > 0) this._digAnimTimer -= deltaTime;
+                // Dig / break animation: rhythm varies by target direction
+                if (!this._digPhase) this._digPhase = 0;
+                this._digPhase += deltaTime * 5.0; // ~2.5 strikes per second
+                const digSwing = Math.sin(this._digPhase);
+                // Use stored dig target (set by destroyBlock) so direction stays correct
+                // even when called from non-working-state paths
+                const _tgt = this._digAnimTarget || (this.action && this.action.target) || null;
+                // dy < 0 → target is below (floor dig), dy === 0 → sideways, dy > 0 → overhead
+                const _tgtDy = _tgt ? (_tgt.y - this.gridPos.y) : 0;
+                if (_tgtDy < 0) {
+                    // Digging downward: arms swing down in front, body bends over
+                    this.leftArm.rotation.x  =  0.60 + digSwing * 0.60;
+                    this.rightArm.rotation.x =  0.60 + digSwing * 0.60;
+                    if (this.leftForearm)  this.leftForearm.rotation.x  = 0.25 + digSwing * 0.30;
+                    if (this.rightForearm) this.rightForearm.rotation.x = 0.25 + digSwing * 0.30;
+                    this.body.rotation.x =  0.35 + digSwing * 0.20;
+                    this.head.rotation.x =  0.30 - digSwing * 0.08;
+                } else {
+                    // Sideways / overhead strike: arms raise and thrust forward
+                    this.leftArm.rotation.x  = -0.65 - digSwing * 0.80;
+                    this.rightArm.rotation.x = -0.65 - digSwing * 0.80;
+                    if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.45 : 0;
+                    if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.45 : 0;
+                    this.body.rotation.x = digSwing > 0 ? digSwing * 0.30 : 0;
+                    this.head.rotation.x = -0.18 + digSwing * 0.08;
+                }
+                // Body bob common to all dig directions
+                this.bobTime += deltaTime * 5;
+                const digBob = Math.abs(digSwing) * 0.025;
+                this.body.position.y = (this._bodyRow1RestY ?? 0.630) + digBob;
+                if (this.pelvis) this.pelvis.position.y = (this._bodyRow2RestY ?? 0.445) + digBob;
+                if (!this.actionAnim.active) this.body.scale.y = 1.0;
+            } else {
+                this._digPhase = 0;
+                // Focused work animation
+                this.bobTime += deltaTime * 3;
             const workBob = Math.sin(this.bobTime) * 0.04;
             this.body.position.y = (this._bodyRow1RestY ?? 0.630) + workBob;
             if (this.pelvis)      this.pelvis.position.y      = (this._bodyRow2RestY ?? 0.445) + workBob;
@@ -6258,6 +6368,7 @@ class Character {
             this.head.rotation.z = Math.sin(this.bobTime * 0.3) * 0.05;
             this.head.rotation.x = -0.1; // Looking down
             if (!this.actionAnim.active) this.body.scale.y = 1.0;
+            } // end dig/work split
         } else if (this.action && (this.action.type === 'COLLECT_FOOD' || this.action.type === 'EAT')) {
             // Food gathering: body reaches up, head looks down
             if (!this.actionAnim.active) this.body.scale.y = 1.10; // Stretched reach
