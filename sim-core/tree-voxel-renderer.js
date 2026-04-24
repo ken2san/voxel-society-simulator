@@ -451,4 +451,3 @@ export function buildDirtGroup(type, x, y, z, isVisible) {
     group.visible = isVisible;
     return group;
 }
-
