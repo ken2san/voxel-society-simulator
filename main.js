@@ -621,6 +621,9 @@ async function regenerateWorld() {
     console.log('World regenerated with new resource settings');
 }
 
+// Expose regenerateWorld for mobile UI and console access
+window.regenerateWorld = regenerateWorld;
+
 // --- For debugging: Global function to check group status anytime ---
 window.logGroupStatus = function() {
     Character.detectGroupsAndElectLeaders(characters);

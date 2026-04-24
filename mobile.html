@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Voxel Society</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #0f172a;
+            overflow: hidden;
+            width: 100dvw;
+            height: 100dvh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+        }
+
+        /* ── Full-screen canvas ── */
+        #gameCanvas {
+            display: block;
+            width: 100dvw;
+            height: 100dvh;
+            background: #222;
+        }
+
+        /* ── Top HUD bar ── */
+        #hud-top {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            padding-top: max(10px, env(safe-area-inset-top));
+            background: linear-gradient(to bottom, rgba(10,15,35,0.82) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        #hud-top > * { pointer-events: auto; }
+
+        .hud-pill {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(15,23,42,0.72);
+            border: 1px solid rgba(148,163,184,0.25);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 999px;
+            padding: 5px 10px;
+            color: #e2e8f0;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .hud-pill .icon { font-size: 15px; }
+
+        /* ── Bottom control bar ── */
+        #hud-bottom {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 8px 16px;
+            padding-bottom: max(8px, env(safe-area-inset-bottom));
+            background: linear-gradient(to top, rgba(10,15,35,0.88) 0%, transparent 100%);
+        }
+
+        .ctrl-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            background: rgba(15,23,42,0.78);
+            border: 1px solid rgba(148,163,184,0.25);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 14px;
+            padding: 8px 14px;
+            color: #cbd5e1;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: background 0.12s;
+            min-width: 56px;
+        }
+
+        .ctrl-btn:active { background: rgba(30,45,70,0.92); }
+        .ctrl-btn .icon { font-size: 22px; line-height: 1; }
+
+        .ctrl-btn.active {
+            background: rgba(59,130,246,0.35);
+            border-color: rgba(96,165,250,0.6);
+            color: #93c5fd;
+        }
+
+        /* ── Minimap (bottom-right corner) ── */
+        #minimapCanvas {
+            position: fixed;
+            bottom: 70px;
+            right: 14px;
+            right: max(14px, env(safe-area-inset-right));
+            z-index: 25;
+            border-radius: 10px;
+            border: 1px solid rgba(148,163,184,0.3);
+            background: #111;
+            touch-action: none;
+        }
+
+        /* ── Settings drawer ── */
+        #settings-drawer {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 50;
+            background: linear-gradient(to top, rgba(12,18,42,0.98), rgba(15,23,58,0.97));
+            border-top: 1px solid rgba(148,163,184,0.22);
+            border-radius: 20px 20px 0 0;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 0 16px 16px;
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32,0.72,0,1);
+        }
+
+        #settings-drawer.open { transform: translateY(0); }
+
+        .drawer-handle {
+            width: 36px; height: 4px;
+            background: rgba(148,163,184,0.4);
+            border-radius: 2px;
+            margin: 12px auto 14px;
+        }
+
+        .drawer-title {
+            color: #e2e8f0;
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(148,163,184,0.1);
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 500;
+            gap: 12px;
+        }
+
+        .setting-row:last-child { border-bottom: none; }
+
+        .setting-row label { flex: 1; }
+
+        .setting-row input[type=range] {
+            flex: 1.5;
+            accent-color: #3b82f6;
+            height: 4px;
+        }
+
+        .setting-row .val {
+            width: 36px;
+            text-align: right;
+            color: #93c5fd;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        /* ── Overlay backdrop for drawer ── */
+        #drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 45;
+            background: rgba(0,0,0,0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s;
+        }
+
+        #drawer-backdrop.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* ── Loading overlay ── */
+        #loading {
+            position: fixed;
+            inset: 0;
+            z-index: 99;
+            background: #0f172a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            color: #e2e8f0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        #loading .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(148,163,184,0.2);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js",
+            "three/examples/jsm/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.178.0/examples/jsm/controls/OrbitControls.js"
+        }
+    }
+    </script>
+    <script type="module" src="mobile-main.js"></script>
+</head>
+<body>
+    <!-- Full-screen render target -->
+    <canvas id="gameCanvas"></canvas>
+    <canvas id="minimapCanvas" width="80" height="80"></canvas>
+
+    <!-- Top HUD -->
+    <div id="hud-top">
+        <div class="hud-pill" id="hud-season">
+            <span class="icon">🌸</span>
+            <span id="hud-season-name">Spring</span>
+        </div>
+
+        <div class="hud-pill" id="hud-pop">
+            <span class="icon">👥</span>
+            <span id="hud-pop-num">–</span>
+        </div>
+
+        <div class="hud-pill" id="hud-time">
+            <span class="icon" id="hud-time-icon">☀️</span>
+            <span id="hud-day-num">Day 1</span>
+        </div>
+    </div>
+
+    <!-- Bottom controls -->
+    <div id="hud-bottom">
+        <button class="ctrl-btn" id="btn-pause" aria-label="Pause">
+            <span class="icon" id="pause-icon">⏸</span>
+            <span id="pause-label">Pause</span>
+        </button>
+
+        <button class="ctrl-btn" id="btn-speed" aria-label="Speed">
+            <span class="icon">⚡</span>
+            <span id="speed-label">1×</span>
+        </button>
+
+        <button class="ctrl-btn" id="btn-centre" aria-label="Centre">
+            <span class="icon">🎯</span>
+            <span>Centre</span>
+        </button>
+
+        <button class="ctrl-btn" id="btn-settings" aria-label="Settings">
+            <span class="icon">⚙️</span>
+            <span>Settings</span>
+        </button>
+    </div>
+
+    <!-- Settings drawer -->
+    <div id="drawer-backdrop"></div>
+    <div id="settings-drawer" role="dialog" aria-label="Settings">
+        <div class="drawer-handle"></div>
+        <div class="drawer-title">Settings</div>
+
+        <div class="setting-row">
+            <label for="m-char-slider">👥 Characters</label>
+            <input type="range" id="m-char-slider" min="5" max="48" step="1" value="20">
+            <span class="val" id="m-char-val">20</span>
+        </div>
+
+        <div class="setting-row">
+            <label for="m-speed-slider">⏩ Sim Speed</label>
+            <input type="range" id="m-speed-slider" min="0.5" max="4" step="0.5" value="1">
+            <span class="val" id="m-speed-val">1×</span>
+        </div>
+
+        <div class="setting-row">
+            <label for="m-tree-slider">🌲 Trees</label>
+            <input type="range" id="m-tree-slider" min="0" max="1" step="0.05" value="0.35">
+            <span class="val" id="m-tree-val">35%</span>
+        </div>
+
+        <div class="setting-row">
+            <label for="m-fruit-slider">🍎 Fruit</label>
+            <input type="range" id="m-fruit-slider" min="0" max="1" step="0.05" value="0.30">
+            <span class="val" id="m-fruit-val">30%</span>
+        </div>
+
+        <div class="setting-row" style="padding-top:14px; border-bottom:none; justify-content:center; gap:12px;">
+            <button class="ctrl-btn" id="m-regen-btn" style="min-width:120px; border-radius:12px;">
+                <span class="icon">🔄</span>
+                <span>New World</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading screen -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <span>Loading world…</span>
+    </div>
+</body>
+</html>
