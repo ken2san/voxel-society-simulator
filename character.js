@@ -1974,14 +1974,15 @@ class Character {
         // Sample every ~0.25 voxel to prevent tunneling through thin corners.
         const samples = Math.max(1, Math.ceil(length / 0.25));
 
-        // Step-up: when moving upward by ~1 block, the diagonal segment sweeps through the
-        // "step block" (the solid tile we are climbing ONTO). Its column is the destination
-        // column at fromWorldPos.y — flag it so we can skip the body check for that tile.
-        const stepUpDy = toWorldPos.y - fromWorldPos.y;
-        const isStepUp = stepUpDy > 0.5;
-        const stepDestGx = isStepUp ? Math.floor(toWorldPos.x) : -1;
-        const stepDestGz = isStepUp ? Math.floor(toWorldPos.z) : -1;
-        const stepFromGy = isStepUp ? Math.floor(fromWorldPos.y) : -1;
+        // Step-up: when the next path node is 1 block higher than current gridPos,
+        // the interpolation arc sweeps through the step-surface block (solid floor we are
+        // climbing ONTO). Use path data — not per-frame dy which is always tiny — to exempt
+        // that one solid tile from the body check so movement is not falsely blocked.
+        const _nextNode = this.path && this.path.length > 0 ? this.path[0] : null;
+        const isStepUp = _nextNode !== null && _nextNode.y === this.gridPos.y + 1;
+        const stepDestGx = isStepUp ? _nextNode.x : -1;
+        const stepDestGz = isStepUp ? _nextNode.z : -1;
+        const stepFromGy = isStepUp ? this.gridPos.y : -1;
 
         for (let i = 1; i <= samples; i++) {
             const t = i / samples;
@@ -7110,8 +7111,7 @@ class Character {
                 // 強制的にランダムな方向に移動を試す
                 const directions = [
                     {dx:1, dy:0, dz:0}, {dx:-1, dy:0, dz:0},
-                    {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1},
-                    {dx:0, dy:1, dz:0} // 上方向も試す
+                    {dx:0, dy:0, dz:1}, {dx:0, dy:0, dz:-1}
                 ];
 
                 for (const dir of directions) {
@@ -7146,7 +7146,7 @@ class Character {
             if (this._cornerStuckTimer > 1.0) {
                 const escapeOptions = [];
 
-                // 水平方向の脱出オプション
+                // 水平方向の脱出オプション + 段差越え（隣ブロックの天面に乗る）
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dz = -1; dz <= 1; dz++) {
                         if (dx === 0 && dz === 0) continue;
@@ -7163,6 +7163,17 @@ class Character {
                                     x, y, z,
                                     priority: (Math.abs(dx) + Math.abs(dz) === 1) ? 1 : 2, // 直進方向を優先
                                     type: 'move'
+                                });
+                            }
+                        } else if (worldData.has(key) && !this.isOccupiedByOther(x, y + 1, z)) {
+                            // 隣が壁（ブロックあり）だが天面(y+1)が空いている → 段差越えオプション
+                            const above1 = `${x},${y+1},${z}`;
+                            const above2 = `${x},${y+2},${z}`;
+                            if (!worldData.has(above1) && !worldData.has(above2)) {
+                                escapeOptions.push({
+                                    x, y: y + 1, z,
+                                    priority: (Math.abs(dx) + Math.abs(dz) === 1) ? 1 : 2,
+                                    type: 'stepup'
                                 });
                             }
                         }
