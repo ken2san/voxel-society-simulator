@@ -5,6 +5,7 @@ import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
 import { buildAngelGroup, buildReaperGroup } from './sim-core/special-entities.js';
+import { playSound } from './sim-core/sound-system.js';
 
 // Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
@@ -1546,6 +1547,14 @@ export function animate() {
     _updateSnow(deltaTime);
     const _dd = getDayDuration();
     const isNight = (worldTime % _dd) > (_dd / 2);
+    // Day/night transition sounds
+    if (typeof window !== 'undefined') {
+        const _prevNight = window._prevIsNight;
+        if (_prevNight !== undefined && _prevNight !== isNight) {
+            playSound(isNight ? 'night' : 'dawn');
+        }
+        window._prevIsNight = isNight;
+    }
     refreshDistrictSummaryCache(characters);
     if (typeof window !== 'undefined') {
         let activeCount = 0;

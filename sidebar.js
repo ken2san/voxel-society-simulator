@@ -503,6 +503,28 @@ function renderCharacterDetail() {
     voxelDetailRow.dataset.label = 'Voxel Detail';
     tabPanels[0].appendChild(voxelDetailRow);
 
+    // ── Sound toggle ──────────────────────────────────────────────────────────
+    if (window.soundEnabled === undefined) window.soundEnabled = false;
+    const soundToggleRow = document.createElement('div');
+    soundToggleRow.style.display = 'flex';
+    soundToggleRow.style.alignItems = 'center';
+    soundToggleRow.style.gap = '10px';
+    const soundToggleLabel = document.createElement('span');
+    soundToggleLabel.textContent = '🔊 Sound:';
+    soundToggleLabel.style.width = '140px';
+    soundToggleRow.appendChild(soundToggleLabel);
+    const soundToggle = document.createElement('input');
+    soundToggle.type = 'checkbox';
+    soundToggle.checked = window.soundEnabled === true;
+    soundToggle.style.transform = 'scale(1.1)';
+    soundToggle.style.cursor = 'pointer';
+    soundToggle.addEventListener('change', e => {
+        window.soundEnabled = !!e.target.checked;
+    });
+    soundToggleRow.appendChild(soundToggle);
+    soundToggleRow.dataset.label = 'Sound';
+    tabPanels[0].appendChild(soundToggleRow);
+
 
     paramBox.style.borderRadius = '18px';
     paramBox.style.boxShadow = '0 2px 12px #b0c8e033';

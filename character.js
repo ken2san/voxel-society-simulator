@@ -6,6 +6,7 @@ import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
 import { getSimulationIO, gridToWorldPosition } from './sim-core/interfaces.js';
 import { getActiveSkin } from './character-skins.js';
+import { playSound } from './sim-core/sound-system.js';
 
 function simIO() {
     return getSimulationIO();
@@ -267,6 +268,7 @@ class Character {
                 // 社交状態に遷移
                 this.state = 'socializing';
                 this.triggerMicroGesture('chat', 0.95 + Math.random() * 0.25, 1.0);
+                playSound('social');
                 // パートナーも同時に社交状態にする
                 const partner = this.action.target;
                 if (partner && partner !== this) {
@@ -726,6 +728,7 @@ class Character {
                 this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                 if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
                 this.eatCount = (this.eatCount || 0) + 1;
+                playSound('eat');
                 this.triggerMicroGesture('savor', 0.9, inDanger ? 1.1 : 0.95);
                 this.log(`Meal complete! eatCount=${this.eatCount}, hunger=${this.needs.hunger.toFixed(1)}`);
 
@@ -875,6 +878,7 @@ class Character {
             // Keep dig animation alive for ~0.5 s after each tick regardless of state
             this._digAnimTimer = 0.5;
             this._digAnimTarget = { x, y, z }; // store so updateAnimations can compute direction
+            playSound('dig');
 
             // 段階的なアイコン表示とエフェクト
             const stages = ['⛏️', '💪⛏️', '💥⛏️', '🔥⛏️', '✨💎'];
@@ -4993,6 +4997,7 @@ class Character {
         Character.releaseReservationsByOwner(this.id);
         this.releaseReservedSidestep();
         this.state = 'dead';
+        playSound('death');
 
         // Death visual effect — CSS animation, zero per-frame cost
         try {
