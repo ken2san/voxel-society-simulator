@@ -928,6 +928,47 @@ export function refreshRenderResources() {
 
 refreshRenderResources();
 
+// ── Visual rebuild: recreate all block meshes (e.g. after voxelDetailMode toggle) ──────────
+// Iterates every key in visualBlocks, removes the old mesh from the scene,
+// calls createBlockVisual with the stored worldData type, and re-inserts.
+// worldData is NOT touched — only the Three.js side is rebuilt.
+export function rebuildAllBlockVisuals() {
+    const io = simIO();
+    const blockTypeById = new Map(Object.values(BLOCK_TYPES).map(t => [t.id, t]));
+
+    for (const [key, oldBlock] of visualBlocks.entries()) {
+        const blockId = worldData.get(key);
+        if (blockId === undefined || blockId === BLOCK_TYPES.AIR.id) continue;
+
+        // Remove old visual
+        io.removeVisual(scene, oldBlock);
+
+        const type = blockTypeById.get(typeof blockId === 'object' ? blockId.id : blockId);
+        if (!type) { visualBlocks.delete(key); continue; }
+
+        const [xStr, yStr, zStr] = key.split(',');
+        const x = Number(xStr), y = Number(yStr), z = Number(zStr);
+        const material = blockMaterials.get(type.id);
+
+        const newBlock = io.createBlockVisual({
+            x, y, z, type, blockSize, material, edgeMaterial,
+            isVisible: isGridPositionInActiveDistrict({ x, y, z }),
+        });
+
+        if (newBlock) {
+            if (!newBlock.userData) newBlock.userData = {};
+            newBlock.userData.worldKey = key;
+            newBlock.userData.blockTypeId = type.id;
+            setObjectDistrictVisibility(newBlock, { x, y, z });
+            visualBlocks.set(key, newBlock);
+            scene?.add?.(newBlock);
+        } else {
+            visualBlocks.delete(key);
+        }
+    }
+}
+
+
 export function generateTerrain() {
     PerlinNoise.seed(Math.random);
     const terrainScale = 12;

@@ -19,17 +19,20 @@ export function createThreeSimulationIO() {
 
     function createBlockVisual({ x = 0, y = 0, z = 0, type = {}, blockSize = 1, material, edgeMaterial, isVisible = true }) {
         const variantSeed = Math.abs((x * 73856093) ^ (y * 19349663) ^ (z * 83492791));
+        const detailMode = typeof window !== 'undefined' ? window.voxelDetailMode !== false : true;
 
         // ── Voxel-style house blocks ─────────────────────────────────────────
-        if (type.isHouseWall || type.isStoneWall) return buildHouseWallGroup(type, x, y, z, isVisible);
-        if (type.isHouseRoof || type.isDarkRoof)  return buildHouseRoofGroup(type, x, y, z, isVisible);
+        if (detailMode) {
+            if (type.isHouseWall || type.isStoneWall) return buildHouseWallGroup(type, x, y, z, isVisible);
+            if (type.isHouseRoof || type.isDarkRoof)  return buildHouseRoofGroup(type, x, y, z, isVisible);
 
-        // ── Voxel-style nature blocks ────────────────────────────────────────
-        if (type.isWoodBlock)  return buildWoodGroup(type, x, y, z, isVisible);
-        if (type.isLeafBlock)  return buildLeafGroup(type, x, y, z, isVisible);
-        if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
-        if (type.isStoneBlock) return buildStoneGroup(type, x, y, z, isVisible);
-        if (type.isBedBlock)   return buildBedGroup(type, x, y, z, isVisible);
+            // ── Voxel-style nature blocks ────────────────────────────────────
+            if (type.isWoodBlock)  return buildWoodGroup(type, x, y, z, isVisible);
+            if (type.isLeafBlock)  return buildLeafGroup(type, x, y, z, isVisible);
+            if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
+            if (type.isStoneBlock) return buildStoneGroup(type, x, y, z, isVisible);
+            if (type.isBedBlock)   return buildBedGroup(type, x, y, z, isVisible);
+        }
 
         // ── Standard blocks ──────────────────────────────────────────────────
         let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);

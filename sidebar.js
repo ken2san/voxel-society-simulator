@@ -474,7 +474,35 @@ function renderCharacterDetail() {
     effectsToggleRow.dataset.label = 'Effects';
     tabPanels[0].appendChild(effectsToggleRow);
 
-    paramBox.style.background = 'rgba(255,255,255,0.93)';
+    // ── Voxel Detail mode toggle ──────────────────────────────────────────────
+    if (window.voxelDetailMode === undefined) window.voxelDetailMode = true;
+    const voxelDetailRow = document.createElement('div');
+    voxelDetailRow.style.display = 'flex';
+    voxelDetailRow.style.alignItems = 'center';
+    voxelDetailRow.style.gap = '10px';
+    const voxelDetailLabel = document.createElement('span');
+    voxelDetailLabel.textContent = '🧱 Voxel Detail:';
+    voxelDetailLabel.style.width = '140px';
+    voxelDetailRow.appendChild(voxelDetailLabel);
+    const voxelDetailToggle = document.createElement('input');
+    voxelDetailToggle.type = 'checkbox';
+    voxelDetailToggle.checked = window.voxelDetailMode !== false;
+    voxelDetailToggle.style.transform = 'scale(1.1)';
+    voxelDetailToggle.style.cursor = 'pointer';
+    voxelDetailToggle.addEventListener('change', e => {
+        const enabled = !!e.target.checked;
+        window.voxelDetailMode = enabled;
+        import('./world.js').then(worldMod => {
+            if (typeof worldMod.rebuildAllBlockVisuals === 'function') {
+                worldMod.rebuildAllBlockVisuals();
+            }
+        }).catch(() => {});
+    });
+    voxelDetailRow.appendChild(voxelDetailToggle);
+    voxelDetailRow.dataset.label = 'Voxel Detail';
+    tabPanels[0].appendChild(voxelDetailRow);
+
+
     paramBox.style.borderRadius = '18px';
     paramBox.style.boxShadow = '0 2px 12px #b0c8e033';
     paramBox.style.padding = '18px 18px 14px 18px';
