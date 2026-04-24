@@ -1964,6 +1964,16 @@ class Character {
         const dir = segment.clone().normalize();
         // Sample every ~0.25 voxel to prevent tunneling through thin corners.
         const samples = Math.max(1, Math.ceil(length / 0.25));
+
+        // Step-up: when moving upward by ~1 block, the diagonal segment sweeps through the
+        // "step block" (the solid tile we are climbing ONTO). Its column is the destination
+        // column at fromWorldPos.y — flag it so we can skip the body check for that tile.
+        const stepUpDy = toWorldPos.y - fromWorldPos.y;
+        const isStepUp = stepUpDy > 0.5;
+        const stepDestGx = isStepUp ? Math.floor(toWorldPos.x) : -1;
+        const stepDestGz = isStepUp ? Math.floor(toWorldPos.z) : -1;
+        const stepFromGy = isStepUp ? Math.floor(fromWorldPos.y) : -1;
+
         for (let i = 1; i <= samples; i++) {
             const t = i / samples;
             const sample = fromWorldPos.clone().add(dir.clone().multiplyScalar(length * t));
@@ -1971,9 +1981,15 @@ class Character {
             const gy = Math.floor(sample.y);
             const gz = Math.floor(sample.z);
 
-            const bodyVal = worldData.get(`${gx},${gy},${gz}`);
-            if (!this.isBlockPassable(bodyVal)) {
-                return { canMove: false, reason: 'segment_blocked_by_solid', at: { x: gx, y: gy, z: gz } };
+            // During a step-up move, the block at the destination column at the origin Y
+            // is the step surface we are climbing ONTO — not a wall. Skip body check for it.
+            const isStepSurface = isStepUp && gx === stepDestGx && gz === stepDestGz && gy === stepFromGy;
+
+            if (!isStepSurface) {
+                const bodyVal = worldData.get(`${gx},${gy},${gz}`);
+                if (!this.isBlockPassable(bodyVal)) {
+                    return { canMove: false, reason: 'segment_blocked_by_solid', at: { x: gx, y: gy, z: gz } };
+                }
             }
 
             const headVal = worldData.get(`${gx},${gy + 1},${gz}`);
