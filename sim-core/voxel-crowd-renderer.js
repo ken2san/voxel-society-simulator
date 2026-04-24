@@ -309,7 +309,7 @@ export class VoxelCrowdRenderer {
         // Shadow
         const m = char.morphology;
         if (m) {
-            d.position.set(char.mesh.position.x, 0.01, char.mesh.position.z);
+            d.position.set(char.mesh.position.x, char.mesh.position.y + 0.01, char.mesh.position.z);
             d.rotation.set(-Math.PI / 2, 0, 0);
             d.scale.set(m.shadowRadius, m.shadowRadius, 1);
             d.updateMatrix();
