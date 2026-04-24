@@ -979,10 +979,12 @@ export function rebuildAllBlockVisuals() {
     }
 }
 
-// ── Campfire placement ────────────────────────────────────────────────────────
-// Places 1 decorative campfire near the housing cluster (not a worldData block).
-// Called at end of generateTerrain(). Campfire starts hidden; animate() toggles
-// visibility via dayIntensity so it only burns dusk-to-dawn.
+// Places decorative campfires near the housing cluster (not worldData blocks).
+// Pre-places up to MAX_CAMPFIRE_SPOTS spots; animate() shows only as many as
+// the current population warrants (1 per CHARS_PER_CAMPFIRE alive chars).
+const MAX_CAMPFIRE_SPOTS   = 4;   // absolute ceiling
+const CHARS_PER_CAMPFIRE   = 20;  // 1 campfire per this many alive characters
+const MIN_CAMPFIRE_SPACING = 3;   // minimum grid-unit separation between fires
 function placeCampfires() {
     // Clean up any previous campfires (world regeneration)
     for (const cf of campfireObjects) {
@@ -990,13 +992,13 @@ function placeCampfires() {
         cf.traverse(o => { try { o.geometry?.dispose?.(); o.material?.dispose?.(); } catch (_) {} });
     }
     campfireObjects = [];
-    animate._campfireActive = false;  // reset lifecycle flag on every world gen
+    animate._campfireActive = false;
+    animate._campfireCount  = 0;
+    animate._campfireAliveTimer = 0;
     if (!scene) return;
 
     // ── Helpers ────────────────────────────────────────────────────────────────
     const GROUND_IDS = new Set([BLOCK_TYPES.GRASS.id, BLOCK_TYPES.DIRT.id]);
-
-    // Walk down to find the topmost GRASS or DIRT block (avoids tree tops/roofs).
     function findSolidGround(x, z) {
         for (let y = maxHeight - 1; y >= 0; y--) {
             const id = worldData.get(`${x},${y},${z}`);
@@ -1005,9 +1007,7 @@ function placeCampfires() {
         return -1;
     }
 
-    // ── Search origin: centroid of all HOUSE_WALL blocks ──────────────────────
-    // Biases placement toward the inhabited village centre rather than the
-    // geometric world centre, which is often out in the open terrain.
+    // ── Search origin: centroid of HOUSE_WALL blocks (village centre) ──────────
     let hx = 0, hz = 0, hCount = 0;
     for (const [key, id] of worldData) {
         if (id !== BLOCK_TYPES.HOUSE_WALL.id) continue;
@@ -1019,9 +1019,9 @@ function placeCampfires() {
     const cx = hCount > 0 ? Math.round(hx / hCount) : Math.floor(gridSize / 2);
     const cz = hCount > 0 ? Math.round(hz / hCount) : Math.floor(gridSize / 2);
 
-    // ── Spiral candidate list (up to radius 8) ────────────────────────────────
+    // ── Spiral candidate list (radius 0..10) ──────────────────────────────────
     const offsets = [];
-    for (let r = 0; r <= 8; r++) {
+    for (let r = 0; r <= 10; r++) {
         for (let dx = -r; dx <= r; dx++) {
             for (let dz = -r; dz <= r; dz++) {
                 if (Math.max(Math.abs(dx), Math.abs(dz)) === r) offsets.push([dx, dz]);
@@ -1029,34 +1029,35 @@ function placeCampfires() {
         }
     }
 
-    // ── Placement: GRASS/DIRT ground, flat neighbourhood, 2-block clearance ───
+    // ── Placement: GRASS/DIRT, flat, 2-block clearance, min spacing ──────────
     const CARDINALS = [[1,0],[-1,0],[0,1],[0,-1]];
-    let placed = 0;
+    const placed = [];  // [{x, z}] for spacing check
     for (const [dx, dz] of offsets) {
-        if (placed >= 1) break;
+        if (placed.length >= MAX_CAMPFIRE_SPOTS) break;
         const x = cx + dx, z = cz + dz;
         if (x < 1 || x >= gridSize - 1 || z < 1 || z >= gridSize - 1) continue;
 
         const gy = findSolidGround(x, z);
-        if (gy < 0) continue;                                // no grass/dirt here
-
-        // 2-block head clearance
+        if (gy < 0) continue;
         if (worldData.has(`${x},${gy + 1},${z}`)) continue;
         if (worldData.has(`${x},${gy + 2},${z}`)) continue;
 
-        // Flat check: all 4 cardinal neighbours must be grass/dirt within ±1 Y
         const isFlat = CARDINALS.every(([ndx, ndz]) => {
             const ng = findSolidGround(x + ndx, z + ndz);
             return ng >= 0 && Math.abs(ng - gy) <= 1;
         });
         if (!isFlat) continue;
 
-        const cf = buildCampfireGroup(placed * 2.1);
+        // Minimum spacing from already-placed fires
+        const tooClose = placed.some(p => Math.abs(p.x - x) < MIN_CAMPFIRE_SPACING && Math.abs(p.z - z) < MIN_CAMPFIRE_SPACING);
+        if (tooClose) continue;
+
+        const cf = buildCampfireGroup(placed.length * 2.1);
         cf.position.set(x + 0.5, gy + 1.0, z + 0.5);
-        cf.visible = false;  // hidden until dusk (animate() controls this)
+        cf.visible = false;  // animate() controls visibility
         scene.add(cf);
         campfireObjects.push(cf);
-        placed++;
+        placed.push({ x, z });
     }
 }
 
@@ -1392,20 +1393,32 @@ export function animate() {
         animate._snow = createSnowSystem(scene);
     }
 
-    // ── Campfire lifecycle: appear at dusk, disappear at dawn ─────────────────
-    // dayIntensity = sin(timeOfDay * π): peaks at noon (1.0), zero at midnight (0.0).
-    // Threshold 0.55 ≈ ~80% of day elapsed (dusk) or ~20% (dawn) — natural twilight.
+    // ── Campfire lifecycle ────────────────────────────────────────────────────
+    // Visible count = min(spots, floor(aliveChars / CHARS_PER_CAMPFIRE)).
+    // Only active (dusk-to-dawn) fires flicker; count is re-evaluated every ~1s.
     if (campfireObjects.length > 0) {
         const _cfTod  = (worldTime % getDayDuration()) / getDayDuration();
         const _cfDayI = Math.sin(_cfTod * Math.PI);
-        const _shouldBurn = _cfDayI < 0.55;  // true during dusk → midnight → dawn
-        if (_shouldBurn !== animate._campfireActive) {
-            animate._campfireActive = _shouldBurn;
-            for (const cf of campfireObjects) cf.visible = _shouldBurn;
+        const _shouldBurn = _cfDayI < 0.55;  // true: dusk → midnight → dawn
+
+        // Re-count alive characters every ~1 second (not every frame)
+        animate._campfireAliveTimer = (animate._campfireAliveTimer || 0) + deltaTime;
+        if (animate._campfireAliveTimer >= 1.0 || animate._campfireCount === undefined) {
+            animate._campfireAliveTimer = 0;
+            let alive = 0;
+            for (const c of characters) { if (c && c.state !== 'dead') alive++; }
+            animate._campfireCount = Math.min(campfireObjects.length, Math.floor(alive / CHARS_PER_CAMPFIRE));
         }
-        if (animate._campfireActive) {
-            for (const cf of campfireObjects) {
-                if (cf.userData.updateFire) cf.userData.updateFire(worldTime);
+        const activeCount = animate._campfireCount || 0;
+
+        // Update each campfire's visibility (day/night + population threshold)
+        for (let i = 0; i < campfireObjects.length; i++) {
+            campfireObjects[i].visible = _shouldBurn && i < activeCount;
+        }
+        // Animate only the burning visible fires
+        if (_shouldBurn) {
+            for (let i = 0; i < activeCount; i++) {
+                if (campfireObjects[i]?.userData?.updateFire) campfireObjects[i].userData.updateFire(worldTime);
             }
         }
     }
