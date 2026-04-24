@@ -391,16 +391,21 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
     blades.forEach(b => group.add(b));
     // ── Step ledges: thin slab where this block is one step above a lower neighbor ──
     if (typeof hasBlock === 'function') {
-        const SH = 0.18, SD = 0.09;
+        // SH: ledge height, SD: ledge depth (outward), EPS: z-fight avoidance gap
+        const SH = 0.35, SD = 0.16, EPS = 0.006;
         const sc = GRASS_SIDE[1];
         const stepMat = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(((sc>>16)&0xff)/255*0.60, ((sc>>8)&0xff)/255*0.60, (sc&0xff)/255*0.60)
+            color: new THREE.Color(((sc>>16)&0xff)/255*0.65, ((sc>>8)&0xff)/255*0.65, (sc&0xff)/255*0.65)
         });
+        // py: bottom of slab is at local -0.5+EPS to avoid z-fight with lower block top
+        // px/pz: inner face is at ±0.5+EPS to avoid z-fight with current block face
+        const W = 1.0 - EPS * 2; // slightly narrower to avoid corner z-fighting
+        const pyC = -0.5 + EPS + SH / 2;
         const stepDirs = [
-            { dx:  1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px:  0.5+SD/2, py: -0.5+SH/2, pz: 0 },
-            { dx: -1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px: -0.5-SD/2, py: -0.5+SH/2, pz: 0 },
-            { dx:  0, dz:  1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz:  0.5+SD/2 },
-            { dx:  0, dz: -1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz: -0.5-SD/2 },
+            { dx:  1, dz:  0, gw: SD, gh: SH, gd: W, px:  0.5 + EPS + SD/2, py: pyC, pz: 0 },
+            { dx: -1, dz:  0, gw: SD, gh: SH, gd: W, px: -0.5 - EPS - SD/2, py: pyC, pz: 0 },
+            { dx:  0, dz:  1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz:  0.5 + EPS + SD/2 },
+            { dx:  0, dz: -1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz: -0.5 - EPS - SD/2 },
         ];
         for (const { dx, dz, gw, gh, gd, px, py, pz } of stepDirs) {
             if (!hasBlock(x + dx, y, z + dz) && hasBlock(x + dx, y - 1, z + dz)) {
@@ -470,16 +475,18 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
     group.add(mesh);
     // ── Step ledges ──
     if (typeof hasBlock === 'function') {
-        const SH = 0.18, SD = 0.09;
+        const SH = 0.35, SD = 0.16, EPS = 0.006;
         const sc = DIRT_BASE[0];
         const stepMat = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(((sc>>16)&0xff)/255*0.55, ((sc>>8)&0xff)/255*0.55, (sc&0xff)/255*0.55)
+            color: new THREE.Color(((sc>>16)&0xff)/255*0.60, ((sc>>8)&0xff)/255*0.60, (sc&0xff)/255*0.60)
         });
+        const W = 1.0 - EPS * 2;
+        const pyC = -0.5 + EPS + SH / 2;
         const stepDirs = [
-            { dx:  1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px:  0.5+SD/2, py: -0.5+SH/2, pz: 0 },
-            { dx: -1, dz:  0, gw: SD,  gh: SH, gd: 1.0, px: -0.5-SD/2, py: -0.5+SH/2, pz: 0 },
-            { dx:  0, dz:  1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz:  0.5+SD/2 },
-            { dx:  0, dz: -1, gw: 1.0, gh: SH, gd: SD,  px: 0, py: -0.5+SH/2, pz: -0.5-SD/2 },
+            { dx:  1, dz:  0, gw: SD, gh: SH, gd: W, px:  0.5 + EPS + SD/2, py: pyC, pz: 0 },
+            { dx: -1, dz:  0, gw: SD, gh: SH, gd: W, px: -0.5 - EPS - SD/2, py: pyC, pz: 0 },
+            { dx:  0, dz:  1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz:  0.5 + EPS + SD/2 },
+            { dx:  0, dz: -1, gw: W, gh: SH, gd: SD, px: 0, py: pyC, pz: -0.5 - EPS - SD/2 },
         ];
         for (const { dx, dz, gw, gh, gd, px, py, pz } of stepDirs) {
             if (!hasBlock(x + dx, y, z + dz) && hasBlock(x + dx, y - 1, z + dz)) {
