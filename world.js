@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
+import { createSnowSystem } from './sim-core/snow-system.js';
 
 // Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
@@ -54,6 +55,21 @@ export function setWorldObjects(objs) {
     if (scene && typeof window !== 'undefined') {
         window._instancedCharRenderer = simIO().createInstancedCharacterRenderer(scene, 300);
     }
+    // Selection ring: a flat circle on the ground that follows the selected character.
+    // Uses layer 0 so it's always visible; positioned each frame in animate().
+    if (scene && typeof window !== 'undefined') {
+        const ringGeo = new THREE.RingGeometry(0.30, 0.42, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffcc, side: THREE.DoubleSide,
+            transparent: true, opacity: 0.82, depthWrite: false
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.visible = false;
+        ring.renderOrder = 999;
+        scene.add(ring);
+        window._selectionRing = ring;
+    }
 }
 export const blockSize = 1;
 export const gridSize = 16;
@@ -61,7 +77,13 @@ export const maxHeight = 10;
 export const clock = simIO().createClock();
 export const characters = [];
 export let worldTime = 0;
-export const DAY_DURATION = 120;
+export const DAY_DURATION = 120;  // fallback constant (use getDayDuration() at runtime)
+
+// Returns the current day duration in seconds, respecting the sidebar override.
+function getDayDuration() {
+    return (typeof window !== 'undefined' && window.dayDurationSeconds > 0)
+        ? window.dayDurationSeconds : DAY_DURATION;
+}
 export let nextCharacterId = 0;
 export function resetNextCharacterId() { nextCharacterId = 0; }
 export function resetFrameTimingAfterVisibilityChange() {
@@ -714,13 +736,13 @@ export const visualBlocks = new Map();
 export let worldChangeCounter = 0;
 export const BLOCK_TYPES = {
     AIR:   { id: 0, name: 'Air' },
-    GRASS: { id: 1, name: 'Grass', color: 0x4CAF50, diggable: true },
-    DIRT:  { id: 2, name: 'Dirt', color: 0x966c4a, diggable: true },
-    STONE: { id: 3, name: 'Stone', color: 0x888888, diggable: true },
-    FRUIT: { id: 4, name: 'Fruit', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM' },
-    WOOD:  { id: 5, name: 'Wood', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG' },
-    LEAF:  { id: 6, name: 'Leaf', color: 0x228b22, diggable: true },
-    BED:   { id: 7, name: 'Bed', color: 0xffec8b, isBed: true },
+    GRASS: { id: 1, name: 'Grass', color: 0x4CAF50, diggable: true, isGrassBlock: true },
+    DIRT:  { id: 2, name: 'Dirt', color: 0x966c4a, diggable: true, isDirtBlock: true },
+    STONE: { id: 3, name: 'Stone', color: 0x888888, diggable: true, isStoneBlock: true },
+    FRUIT: { id: 4, name: 'Fruit', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM', isFruitBlock: true },
+    WOOD:  { id: 5, name: 'Wood', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG', isWoodBlock: true },
+    LEAF:  { id: 6, name: 'Leaf', color: 0x228b22, diggable: true, isLeafBlock: true },
+    BED:   { id: 7, name: 'Bed', color: 0xffec8b, isBed: true, isBedBlock: true },
     HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd8c39a, isHouseWall: true },
     HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x6b4a2f, isHouseRoof: true },
     STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x7b8a94, isHouseWall: true, isStoneWall: true },
@@ -810,7 +832,8 @@ function updateAmbientWorldEffects() {
     }
 
     const time = Number(worldTime) || 0;
-    const dayPhase = (time % DAY_DURATION) / DAY_DURATION;
+    const _DD = getDayDuration();
+    const dayPhase = (time % _DD) / _DD;
     const isNight = dayPhase > 0.5;
     const nightBlend = isNight ? (0.45 + 0.55 * Math.sin((dayPhase - 0.5) * Math.PI)) : 0;
     const warmIntensity = enabled ? nightBlend * (0.1 + 0.06 * (0.5 + 0.5 * Math.sin(time * 2.1))) : 0;
@@ -912,6 +935,47 @@ export function refreshRenderResources() {
 }
 
 refreshRenderResources();
+
+// ── Visual rebuild: recreate all block meshes (e.g. after voxelDetailMode toggle) ──────────
+// Iterates every key in visualBlocks, removes the old mesh from the scene,
+// calls createBlockVisual with the stored worldData type, and re-inserts.
+// worldData is NOT touched — only the Three.js side is rebuilt.
+export function rebuildAllBlockVisuals() {
+    const io = simIO();
+    const blockTypeById = new Map(Object.values(BLOCK_TYPES).map(t => [t.id, t]));
+
+    for (const [key, oldBlock] of visualBlocks.entries()) {
+        const blockId = worldData.get(key);
+        if (blockId === undefined || blockId === BLOCK_TYPES.AIR.id) continue;
+
+        // Remove old visual
+        io.removeVisual(scene, oldBlock);
+
+        const type = blockTypeById.get(typeof blockId === 'object' ? blockId.id : blockId);
+        if (!type) { visualBlocks.delete(key); continue; }
+
+        const [xStr, yStr, zStr] = key.split(',');
+        const x = Number(xStr), y = Number(yStr), z = Number(zStr);
+        const material = blockMaterials.get(type.id);
+
+        const newBlock = io.createBlockVisual({
+            x, y, z, type, blockSize, material, edgeMaterial,
+            isVisible: isGridPositionInActiveDistrict({ x, y, z }),
+        });
+
+        if (newBlock) {
+            if (!newBlock.userData) newBlock.userData = {};
+            newBlock.userData.worldKey = key;
+            newBlock.userData.blockTypeId = type.id;
+            setObjectDistrictVisibility(newBlock, { x, y, z });
+            visualBlocks.set(key, newBlock);
+            scene?.add?.(newBlock);
+        } else {
+            visualBlocks.delete(key);
+        }
+    }
+}
+
 
 export function generateTerrain() {
     PerlinNoise.seed(Math.random);
@@ -1107,16 +1171,48 @@ export function toScreenPosition(obj, camera) {
     return simIO().toScreenPosition(obj, camera, renderer?.domElement);
 }
 export function updateWorldLighting() {
-    const timeOfDay = (worldTime % DAY_DURATION) / DAY_DURATION;
+    const timeOfDay = (worldTime % getDayDuration()) / getDayDuration();
     const dayIntensity = Math.sin(timeOfDay * Math.PI);
     if (directionalLight) directionalLight.intensity = Math.max(0, dayIntensity) * 0.8;
     if (ambientLight) ambientLight.intensity = 0.3 + Math.max(0, dayIntensity) * 0.6;
+
     const io = simIO();
-    // Reuse module-level Color objects to avoid per-frame GC allocation
+
+    // ── Seasonal sky / ambient colour ─────────────────────────────────────────
+    // 4 season anchor colours indexed 0=Spring, 1=Summer, 2=Autumn, 3=Winter.
+    // phase from window.currentSeasonInfo (0–1 over full cycle) is split into
+    // 4 equal segments; we lerp smoothly between adjacent seasons.
+    const SEASON_SKY = [0xb4d4f0, 0x6bc5ff, 0xe09040, 0xb0c8de];  // Spring→Summer→Autumn→Winter
+    const SEASON_AMB = [0xfff4fa, 0xfff8e8, 0xffe8c0, 0xeaf0ff];  // ambient tint per season
+
+    if (!updateWorldLighting._s0) {
+        updateWorldLighting._s0 = io.createColor(0);
+        updateWorldLighting._s1 = io.createColor(0);
+        updateWorldLighting._seasonSky = io.createColor(0);
+        updateWorldLighting._seasonAmb = io.createColor(0);
+    }
+    const phase = (typeof window !== 'undefined' && window.currentSeasonInfo)
+        ? window.currentSeasonInfo.phase : 0;
+    const si = Math.floor(phase * 4) % 4;
+    const t  = (phase * 4) % 1.0;
+    const ni = (si + 1) % 4;
+
+    updateWorldLighting._s0.set(SEASON_SKY[si]);
+    updateWorldLighting._s1.set(SEASON_SKY[ni]);
+    updateWorldLighting._seasonSky.lerpColors(updateWorldLighting._s0, updateWorldLighting._s1, t);
+
+    updateWorldLighting._s0.set(SEASON_AMB[si]);
+    updateWorldLighting._s1.set(SEASON_AMB[ni]);
+    updateWorldLighting._seasonAmb.lerpColors(updateWorldLighting._s0, updateWorldLighting._s1, t);
+
+    if (ambientLight) ambientLight.color.copy(updateWorldLighting._seasonAmb);
+    if (directionalLight) directionalLight.color.copy(updateWorldLighting._seasonAmb);
+
+    // ── Sky background (lerp between night and seasonal day sky) ─────────────
     if (!updateWorldLighting._nightColor) updateWorldLighting._nightColor = io.createColor(0x0a0a2a);
-    if (!updateWorldLighting._dayColor) updateWorldLighting._dayColor = io.createColor(0x87CEEB);
     const nightColor = updateWorldLighting._nightColor;
-    const dayColor = updateWorldLighting._dayColor;
+    const dayColor   = updateWorldLighting._seasonSky;  // seasonal sky replaces static 0x87CEEB
+
     if (scene) {
         if (!scene.background) scene.background = io.createColor(0x87CEEB);
         if (typeof scene.background?.lerpColors === 'function') {
@@ -1205,11 +1301,28 @@ export function animate() {
     requestAnimationFrame(animate);
     const _frameStart = performance.now();
     const deltaTime = Math.min(clock.getDelta(), 0.1); // cap at 100ms to prevent tab-backgrounding spikes
+
+    // ── Lazy-init snow system (created once, tied to scene lifetime) ──────────
+    if (!animate._snow && scene) {
+        animate._snow = createSnowSystem(scene);
+    }
+
+    // ── Snow update helper (called both when paused and running) ──────────────
+    function _updateSnow(dt) {
+        if (!animate._snow) return;
+        const si   = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
+        const ph   = si ? si.phase     : 0;
+        const amp  = si ? si.amplitude : 0;
+        const fx   = !(typeof window !== 'undefined' && window.showEffects === false);
+        animate._snow.update(dt, ph, amp, fx);
+    }
+
     // simulationRunningがtrueのときだけ進行
     if (typeof window !== 'undefined' && window.simulationRunning === false) {
         // 停止中もワールドの描画・UI更新は継続
         updateWorldLighting();
         updateAmbientWorldEffects();
+        _updateSnow(deltaTime);
         if (controls) controls.update();
         renderer.render(scene, camera);
         return;
@@ -1218,7 +1331,9 @@ export function animate() {
     if (typeof window !== 'undefined') window._simTick = (window._simTick || 0) + 1; // used by findClosestFood result cache
     updateWorldLighting();
     updateAmbientWorldEffects();
-    const isNight = (worldTime % DAY_DURATION) > (DAY_DURATION / 2);
+    _updateSnow(deltaTime);
+    const _dd = getDayDuration();
+    const isNight = (worldTime % _dd) > (_dd / 2);
     refreshDistrictSummaryCache(characters);
     if (typeof window !== 'undefined') {
         let activeCount = 0;
@@ -1238,6 +1353,19 @@ export function animate() {
         window._instancedCharRenderer.update(characters);
     }
 
+    // Update selection ring position to follow the selected character
+    if (typeof window !== 'undefined' && window._selectionRing) {
+        const selId = String(window.selectedCharacterId ?? '');
+        const selChar = selId ? characters.find(c => c && String(c.id) === selId && c.mesh) : null;
+        if (selChar) {
+            const p = selChar.mesh.position;
+            window._selectionRing.position.set(p.x, p.y + 0.02, p.z);
+            window._selectionRing.visible = true;
+        } else {
+            window._selectionRing.visible = false;
+        }
+    }
+
     // --- グループ再判定は人口が増えたら間引く ---
     if (!animate.lastGroupDetectTime) animate.lastGroupDetectTime = 0;
     animate.lastGroupDetectTime += deltaTime;
@@ -1251,18 +1379,18 @@ export function animate() {
         animate.lastGroupDetectTime = 0;
     }
 
-    // --- 季節時計：シム経過時間を加算 ---
-    if (!animate.simTime) animate.simTime = 0;
-    animate.simTime += deltaTime;
-    // 毎秒程度の頻度でサイドバー向け季節情報を更新（再生tick待ちでは遅すぎるため）
+    // --- 季節時計：日数ベースで計算（worldTime / DAY_DURATION = 経過日数） ---
+    // seasonCycleSeconds は「1サイクルあたりの日数」として扱う（デフォルト4日）。
+    // これにより昼夜サイクルと季節が自然に連動する（1季節 = 1日 etc）。
     if (!animate.lastSeasonUIUpdate) animate.lastSeasonUIUpdate = 0;
     animate.lastSeasonUIUpdate += deltaTime;
     if (animate.lastSeasonUIUpdate >= 1.0) {
         animate.lastSeasonUIUpdate = 0;
-        const _cycleSec = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0) ? window.seasonCycleSeconds : 120;
+        const _cycleDays = (typeof window !== 'undefined' && window.seasonCycleSeconds > 0) ? window.seasonCycleSeconds : 4;
         const _amp = (typeof window !== 'undefined' && window.seasonAmplitude !== undefined) ? Math.min(1, Math.max(0, window.seasonAmplitude)) : 0.6;
-        const _mul = 1 + _amp * Math.sin(2 * Math.PI * animate.simTime / _cycleSec);
-        const _phase = (animate.simTime % _cycleSec) / _cycleSec;
+        const _daysElapsed = worldTime / getDayDuration();
+        const _mul = 1 + _amp * Math.sin(2 * Math.PI * _daysElapsed / _cycleDays);
+        const _phase = (_daysElapsed % _cycleDays) / _cycleDays;
         let _name, _icon;
         if (_phase < 0.25)       { _name = 'Spring'; _icon = '🌸'; }
         else if (_phase < 0.50)  { _name = 'Summer'; _icon = '☀️'; }
@@ -1327,7 +1455,7 @@ export function animate() {
             const _starving = _alv.filter(c => (c._starvationTimer || 0) > 0).length;
             const _starvRate = _pop > 0 ? _starving / _pop : 0;
             const _prevStarv = animate._lastChronStarving !== undefined ? animate._lastChronStarving : 0;
-            const _simNow = animate.simTime || 0;
+            const _simNow = worldTime;
             if (_starvRate > 0.4 && _prevStarv <= 0.4) {
                 // Escalate: shortage → famine
                 window.logChronicleEvent('☠️', `Famine — ${_starving}/${_pop} starving`, 'famine');
@@ -1496,6 +1624,7 @@ export function animate() {
         const seasonalMultiplier = window.currentSeasonInfo ? window.currentSeasonInfo.multiplier : 1;
         const rate = baseRate * seasonalMultiplier;
 
+        let _fruitAdded = 0;
         for (let x = 0; x < gridSize; x++) {
             for (let z = 0; z < gridSize; z++) {
                 if (Math.random() >= rate) continue;
@@ -1509,9 +1638,11 @@ export function animate() {
                 const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
                     !worldData.has(`${x+dx},${fruitY},${z+dz}`));
                 if (!hasPassableNeighbor) continue;
-                addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT);
+                addBlock(x, y + 1, z, BLOCK_TYPES.FRUIT, false); // skip per-block minimap refresh
+                _fruitAdded++;
             }
         }
+        if (_fruitAdded > 0) drawMinimap(); // single redraw after all fruit placed
         animate.lastFruitRegenTime = 0;
     }
 

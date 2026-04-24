@@ -1,40 +1,54 @@
 import * as THREE from 'three';
+import { getActiveSkin } from '../character-skins.js';
+import { VoxelCrowdRenderer } from './voxel-crowd-renderer.js';
+import {
+    buildHouseWallGroup,
+    buildHouseRoofGroup,
+    buildBedGroup,
+} from './house-voxel-renderer.js';
+import {
+    buildWoodGroup,
+    buildLeafGroup,
+    buildFruitGroup,
+    buildStoneGroup,
+    buildGrassGroup,
+    buildDirtGroup,
+} from './tree-voxel-renderer.js';
 
 export function createThreeSimulationIO() {
     const createMaterial = (options = {}) => new THREE.MeshLambertMaterial(options);
     const createEdgeMaterial = (options = {}) => new THREE.LineBasicMaterial(options);
 
     function createBlockVisual({ x = 0, y = 0, z = 0, type = {}, blockSize = 1, material, edgeMaterial, isVisible = true }) {
-        let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         const variantSeed = Math.abs((x * 73856093) ^ (y * 19349663) ^ (z * 83492791));
+        const detailMode = typeof window !== 'undefined' ? window.voxelDetailMode !== false : true;
 
+        // ── Voxel-style house blocks ─────────────────────────────────────────
+        if (detailMode) {
+            if (type.isHouseWall || type.isStoneWall) return buildHouseWallGroup(type, x, y, z, isVisible);
+            if (type.isHouseRoof || type.isDarkRoof)  return buildHouseRoofGroup(type, x, y, z, isVisible);
+
+            // ── Voxel-style nature blocks ────────────────────────────────────
+            if (type.isWoodBlock)  return buildWoodGroup(type, x, y, z, isVisible);
+            if (type.isLeafBlock)  return buildLeafGroup(type, x, y, z, isVisible);
+            if (type.isFruitBlock) return buildFruitGroup(type, x, y, z, isVisible);
+            if (type.isStoneBlock) return buildStoneGroup(type, x, y, z, isVisible);
+            if (type.isBedBlock)   return buildBedGroup(type, x, y, z, isVisible);
+            if (type.isGrassBlock) return buildGrassGroup(type, x, y, z, isVisible);
+            if (type.isDirtBlock)  return buildDirtGroup(type, x, y, z, isVisible);
+        }
+
+        // ── Standard blocks ──────────────────────────────────────────────────
+        let geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
         if (type.isBed) {
             geometry = new THREE.BoxGeometry(blockSize, blockSize * 0.4, blockSize);
-        } else if (type.isStoneWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.92, blockSize * 1.08, blockSize * 0.92);
-        } else if (type.isHouseWall) {
-            geometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize * 1.02, blockSize * 0.9);
-        } else if (type.isDarkRoof) {
-            const longX = (variantSeed % 2) === 0;
-            geometry = new THREE.BoxGeometry(
-                blockSize * (longX ? 1.45 : 1.15),
-                blockSize * 0.22,
-                blockSize * (longX ? 1.15 : 1.45)
-            );
-        } else if (type.isHouseRoof) {
-            const roofHeight = [0.72, 0.84, 0.96][variantSeed % 3];
-            geometry = new THREE.ConeGeometry(blockSize * 0.8, blockSize * roofHeight, 4);
         }
 
         const block = new THREE.Mesh(geometry, material);
         let yOffset = 0.5;
         if (type.isBed) yOffset = 0.2;
-        else if (type.isDarkRoof) yOffset = blockSize * 0.11;
-        else if (type.isHouseRoof) yOffset = 0.4;
 
         block.position.set(x + 0.5, y + yOffset, z + 0.5);
-        if (type.isHouseRoof) block.rotation.y = Math.PI / 4 + ((variantSeed % 4) * (Math.PI / 2));
-        if (type.isDarkRoof) block.rotation.y = ((variantSeed % 2) * (Math.PI / 2));
         if (edgeMaterial) {
             const edges = new THREE.LineSegments(new THREE.EdgesGeometry(block.geometry), edgeMaterial);
             block.add(edges);
@@ -49,46 +63,103 @@ export function createThreeSimulationIO() {
         mesh.name = 'Character_' + character.id;
         if (scene && typeof scene.add === 'function') scene.add(mesh);
 
-        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
-        bodyMaterial.gradientMap = null;
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(m.bodyTopRadius, m.bodyBottomRadius, m.bodyHeight, 8), bodyMaterial);
-        body.castShadow = true;
-        body.receiveShadow = true;
+        // Robe/cloth colour — personality tint applied via updateColorFromPersonality
+        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0xf0f0f4 });
+        // Skin colour
+        const skinMaterial = new THREE.MeshLambertMaterial({ color: 0xf5c89a });
+
+        function box(w, h, d, mat) {
+            const msh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            msh.castShadow = true;
+            return msh;
+        }
+
+        // ── Torso (stored as `body` for backward compat) ──
+        const body = box(m.torsoW, m.torsoH, m.torsoD, bodyMaterial);
         mesh.add(body);
 
-        const head = new THREE.Mesh(new THREE.CylinderGeometry(m.headRadiusTop, m.headRadiusBottom, m.headHeight, 8), bodyMaterial);
-        head.castShadow = true;
-        head.receiveShadow = true;
+        // ── Pelvis / hips ──
+        const pelvis = box(m.pelvisW, m.pelvisH, m.pelvisD, bodyMaterial);
+        mesh.add(pelvis);
+
+        // ── Legs: thigh → shin → foot (each as independent group child) ──
+        const leftThigh  = box(m.thighW, m.thighH, m.thighD, bodyMaterial);
+        const rightThigh = box(m.thighW, m.thighH, m.thighD, bodyMaterial);
+        const leftShin   = box(m.shinW,  m.shinH,  m.shinD,  skinMaterial);
+        const rightShin  = box(m.shinW,  m.shinH,  m.shinD,  skinMaterial);
+        const leftFoot   = box(m.footW,  m.footH,  m.footD,  bodyMaterial);
+        const rightFoot  = box(m.footW,  m.footH,  m.footD,  bodyMaterial);
+        mesh.add(leftThigh); mesh.add(rightThigh);
+        mesh.add(leftShin);  mesh.add(rightShin);
+        mesh.add(leftFoot);  mesh.add(rightFoot);
+
+        // ── Arms: upper arm (cloth) + forearm (skin) ──
+        const leftArm    = box(m.upperArmW, m.upperArmH, m.upperArmD, bodyMaterial);
+        const rightArm   = box(m.upperArmW, m.upperArmH, m.upperArmD, bodyMaterial);
+        const leftForearm  = box(m.forearmW, m.forearmH, m.forearmD, skinMaterial);
+        const rightForearm = box(m.forearmW, m.forearmH, m.forearmD, skinMaterial);
+        mesh.add(leftArm); mesh.add(rightArm);
+        mesh.add(leftForearm); mesh.add(rightForearm);
+
+        // ── Angel wings (4 panels behind the torso) ──
+        const wingMaterial = new THREE.MeshLambertMaterial({ color: 0xfafafa });
+        const leftWingUpper  = box(m.wingUpperW, m.wingUpperH, m.wingUpperD, wingMaterial);
+        const rightWingUpper = box(m.wingUpperW, m.wingUpperH, m.wingUpperD, wingMaterial);
+        const leftWingLower  = box(m.wingLowerW, m.wingLowerH, m.wingLowerD, wingMaterial);
+        const rightWingLower = box(m.wingLowerW, m.wingLowerH, m.wingLowerD, wingMaterial);
+        mesh.add(leftWingUpper); mesh.add(rightWingUpper);
+        mesh.add(leftWingLower); mesh.add(rightWingLower);
+
+        // ── Head (large chibi square, beige) ──
+        const head = box(m.headW, m.headH, m.headD, skinMaterial);
         mesh.add(head);
 
         const iconAnchor = new THREE.Object3D();
         head.add(iconAnchor);
 
-        const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
-        const eyeGeometry = new THREE.CylinderGeometry(m.eyeRadius, m.eyeRadius, 0.01, 6);
-        const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        leftEye.rotation.x = Math.PI / 2;
-        head.add(leftEye);
+        // ── Hair (children of head) ──
+        const hairMaterial = new THREE.MeshLambertMaterial({ color: 0xb8d400 }); // lime/chartreuse — photo ref
+        const hairCapMaterial = new THREE.MeshLambertMaterial({ color: 0xe05068 });
+        const hairTop    = box(m.hairTopW, m.hairTopH, m.hairTopD, hairMaterial);
+        const hairCapTop = box(m.hairCapW, m.hairCapH, m.hairCapD, hairCapMaterial);
+        const hairSideL  = box(m.hairSideW, m.hairSideH, m.hairSideD, hairMaterial);
+        const hairSideR  = box(m.hairSideW, m.hairSideH, m.hairSideD, hairMaterial);
+        head.add(hairTop); head.add(hairCapTop);
+        head.add(hairSideL); head.add(hairSideR);
 
-        const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        rightEye.rotation.x = Math.PI / 2;
-        head.add(rightEye);
+        // ── Halo (child of head) ──
+        const haloMaterial = new THREE.MeshLambertMaterial({ color: 0xf5c830 });
+        const halo = box(m.haloW, m.haloH, m.haloD, haloMaterial);
+        head.add(halo);
 
-        const mouthGeometry = new THREE.CylinderGeometry(m.mouthRadius, m.mouthRadius, 0.01, 6);
-        const mouth = new THREE.Mesh(mouthGeometry, eyeMaterial);
-        mouth.rotation.x = Math.PI / 2;
+        // ── Eyes + cheeks (children of head) ──
+        const eyeMaterial   = new THREE.MeshBasicMaterial({ color: 0x330a0a });
+        const cheekMaterial = new THREE.MeshBasicMaterial({ color: 0xe07840 }); // orange blush — photo ref
+        const leftEye    = box(m.eyeW, m.eyeH, m.eyeD, eyeMaterial);
+        const rightEye   = box(m.eyeW, m.eyeH, m.eyeD, eyeMaterial);
+        const leftCheek  = box(m.cheekW, m.cheekH, m.cheekD, cheekMaterial);
+        const rightCheek = box(m.cheekW, m.cheekH, m.cheekD, cheekMaterial);
+        head.add(leftEye); head.add(rightEye);
+        head.add(leftCheek); head.add(rightCheek);
+
+        // Mouth (cute smile)
+        const mouth = box(m.mouthW, m.mouthH, m.mouthD,
+            new THREE.MeshBasicMaterial({ color: 0xd05070 }));
         head.add(mouth);
 
-        const armMaterial = new THREE.MeshLambertMaterial({ color: 0xc68642 });
-        const armGeometry = new THREE.TorusGeometry(m.armLoopRadius, m.armThickness, 6, 10, Math.PI * 1.2);
-        const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-        leftArm.rotation.z = Math.PI / 2.2;
-        body.add(leftArm);
+        // Eye highlights (sparkle — small white dot upper-inner corner of each eye)
+        const eyeHLMat   = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const leftEyeHL  = box(m.eyeHLW, m.eyeHLH, m.eyeHLD, eyeHLMat);
+        const rightEyeHL = box(m.eyeHLW, m.eyeHLH, m.eyeHLD, eyeHLMat);
+        head.add(leftEyeHL); head.add(rightEyeHL);
 
-        const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-        rightArm.rotation.z = -Math.PI / 2.2;
-        body.add(rightArm);
+        // Eyebrows
+        const browMat   = new THREE.MeshBasicMaterial({ color: 0x6a3010 });
+        const leftBrow  = box(m.browW, m.browH, m.browD, browMat);
+        const rightBrow = box(m.browW, m.browH, m.browD, browMat);
+        head.add(leftBrow); head.add(rightBrow);
 
+        // ── Carried item + shadow ──
         const carriedItemMesh = new THREE.Mesh(
             new THREE.BoxGeometry(m.carriedItemSize, m.carriedItemSize, m.carriedItemSize),
             new THREE.MeshLambertMaterial({ color: 0x8B4513 })
@@ -126,21 +197,19 @@ export function createThreeSimulationIO() {
 
         return {
             mesh,
-            bodyMaterial,
-            body,
-            head,
-            iconAnchor,
-            eyeMaterial,
-            leftEye,
-            rightEye,
-            eyeMeshes: [leftEye, rightEye],
-            mouth,
-            leftArm,
-            rightArm,
-            carriedItemMesh,
-            shadowMesh,
-            thoughtBubble,
-            actionIconDiv,
+            bodyMaterial, skinMaterial, hairMaterial, hairCapMaterial,
+            body, pelvis,
+            leftThigh, rightThigh, leftShin, rightShin, leftFoot, rightFoot,
+            leftArm, rightArm, leftForearm, rightForearm,
+            leftWingUpper, rightWingUpper, leftWingLower, rightWingLower,
+            head, iconAnchor,
+            eyeMaterial, leftEye, rightEye, eyeMeshes: [leftEye, rightEye],
+            mouth, leftEyeHL, rightEyeHL, leftBrow, rightBrow,
+            leftCheek, rightCheek,
+            hairTop, hairCapTop, hairSideL, hairSideR,
+            halo,
+            carriedItemMesh, shadowMesh,
+            thoughtBubble, actionIconDiv,
         };
     }
 
@@ -211,29 +280,29 @@ export function createThreeSimulationIO() {
             return target.set(obj?.position?.x || 0, obj?.position?.y || 0, obj?.position?.z || 0);
         },
         createInstancedCharacterRenderer(scene, maxCount = 200) {
+            const skin = getActiveSkin();
+            if (skin && typeof skin.collectVoxels === 'function') {
+                return new VoxelCrowdRenderer(scene, maxCount);
+            }
             return createInstancedCharacterRenderer(scene, maxCount);
         }
     };
 }
 
 /**
- * InstancedMesh-based character renderer.
- * Renders body, head, arms, and shadow as batched GPU draw calls (one per part type)
- * instead of one draw call per character per part (~9× reduction in draw calls).
- *
- * Selected characters are excluded from InstancedMesh and use their individual Three.js
- * meshes (required for emissive selection glow). Parts are hidden via Layer 31.
+ * InstancedMesh-based voxel character renderer.
+ * 27 draw calls — humanoid angel: torso, pelvis, arms×4, legs×6, wings×4,
+ * head, hair×4, halo, eyes×2, cheeks×2, shadow.  N characters = same 27 draws.
  */
 export function createInstancedCharacterRenderer(scene, maxCount = 200) {
-    // --- Reusable math objects (avoid per-frame allocation) ---
-    const _m4group  = new THREE.Matrix4();
-    const _m4body   = new THREE.Matrix4();
-    const _m4world  = new THREE.Matrix4();
-    const _pos      = new THREE.Vector3();
-    const _quat     = new THREE.Quaternion();
-    const _scl      = new THREE.Vector3(); // throwaway decompose target
-    const _dummy    = new THREE.Object3D();
-    const _color    = new THREE.Color();
+    const _m4group = new THREE.Matrix4();
+    const _m4head  = new THREE.Matrix4();
+    const _m4world = new THREE.Matrix4();
+    const _pos     = new THREE.Vector3();
+    const _quat    = new THREE.Quaternion();
+    const _scl     = new THREE.Vector3();
+    const _dummy   = new THREE.Object3D();
+    const _color   = new THREE.Color();
 
     function makeIM(geo, mat) {
         const im = new THREE.InstancedMesh(geo, mat, maxCount);
@@ -244,118 +313,213 @@ export function createInstancedCharacterRenderer(scene, maxCount = 200) {
         return im;
     }
 
-    // Base geometries (normalized: bottomRadius=1, height=1, so per-instance scale encodes size)
-    // Average taper ratios derived from morphology formula ranges:
-    //   bodyTopRadius  ≈ 0.15–0.25, bodyBottomRadius ≈ 0.20–0.35  → top/bottom ≈ 0.76
-    //   headRadiusTop  ≈ 0.12–0.25, headRadiusBottom ≈ 0.14–0.28  → top/bottom ≈ 0.90
-    const bodyGeo   = new THREE.CylinderGeometry(0.76, 1.0, 1, 8);
-    const headGeo   = new THREE.CylinderGeometry(0.90, 1.0, 1, 8);
+    const boxGeo    = new THREE.BoxGeometry(1, 1, 1);
     const shadowGeo = new THREE.CircleGeometry(1, 16);
-    // TorusGeometry(radius, tube, radialSeg, tubularSeg, arc); tube=0.2 ≈ avg armThickness/armLoopRadius
-    const armGeo    = new THREE.TorusGeometry(1, 0.2, 6, 10, Math.PI * 1.2);
+    const mkWhite   = () => new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const mkSkin    = () => new THREE.MeshLambertMaterial({ color: 0xffffff }); // setColorAt with skin
 
-    // White base material so per-instance colour multiplies through correctly
-    const mkBodyMat = () => new THREE.MeshLambertMaterial({ color: 0xffffff });
-    const iBody     = makeIM(bodyGeo,   mkBodyMat());
-    const iHead     = makeIM(headGeo,   mkBodyMat());
-    const iLeftArm  = makeIM(armGeo,    mkBodyMat());
-    const iRightArm = makeIM(armGeo,    mkBodyMat());
-    const iShadow   = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
-        color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false
+    // — Robe/cloth colour (personality tint) —
+    const iTorso         = makeIM(boxGeo, mkWhite());
+    const iPelvis        = makeIM(boxGeo, mkWhite());
+    const iLeftUpperArm  = makeIM(boxGeo, mkWhite());
+    const iRightUpperArm = makeIM(boxGeo, mkWhite());
+    const iLeftThigh     = makeIM(boxGeo, mkWhite());
+    const iRightThigh    = makeIM(boxGeo, mkWhite());
+    const iLeftFoot      = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0x111111 })); // black shoes
+    const iRightFoot     = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0x111111 })); // black shoes
+    const iLeftWingUpper = makeIM(boxGeo, mkWhite());
+    const iRightWingUpper= makeIM(boxGeo, mkWhite());
+    const iLeftWingLower = makeIM(boxGeo, mkWhite());
+    const iRightWingLower= makeIM(boxGeo, mkWhite());
+
+    // — Skin colour (setColorAt with skinMaterial) —
+    const iHead          = makeIM(boxGeo, mkSkin());
+    const iLeftForearm   = makeIM(boxGeo, mkSkin());
+    const iRightForearm  = makeIM(boxGeo, mkSkin());
+    const iLeftShin      = makeIM(boxGeo, mkSkin());
+    const iRightShin     = makeIM(boxGeo, mkSkin());
+
+    // — Hair colour —
+    const iHairTop       = makeIM(boxGeo, mkWhite());
+    const iHairSideL     = makeIM(boxGeo, mkWhite());
+    const iHairSideR     = makeIM(boxGeo, mkWhite());
+
+    // — Fixed colour (material only, no setColorAt) —
+    const iHairCapTop    = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xe05068 }));
+    const iHalo          = makeIM(boxGeo, new THREE.MeshLambertMaterial({ color: 0xf5c830 }));
+    const iLeftEye       = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x330a0a }));
+    const iRightEye      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x330a0a }));
+    const iLeftCheek     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
+    const iRightCheek    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xf0a0a0 }));
+    // Face details: mouth + eye highlights + eyebrows
+    const iMouth         = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xe07840 })); // orange nose
+    const iLeftEyeHL     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const iRightEyeHL    = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const iLeftBrow      = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x6a3010 }));
+    const iRightBrow     = makeIM(boxGeo, new THREE.MeshBasicMaterial({ color: 0x6a3010 }));
+    const iShadow        = makeIM(shadowGeo, new THREE.MeshBasicMaterial({
+        color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false,
     }));
 
+    const _allIMs = [
+        iTorso, iPelvis,
+        iLeftUpperArm, iRightUpperArm, iLeftForearm, iRightForearm,
+        iLeftThigh, iRightThigh, iLeftShin, iRightShin, iLeftFoot, iRightFoot,
+        iLeftWingUpper, iRightWingUpper, iLeftWingLower, iRightWingLower,
+        iHead, iHairTop, iHairSideL, iHairSideR, iHairCapTop,
+        iHalo, iLeftEye, iRightEye, iLeftCheek, iRightCheek,
+        iMouth, iLeftEyeHL, iRightEyeHL, iLeftBrow, iRightBrow,
+        iShadow,
+    ];
+    // Cloth colour = bodyMaterial (jacket: torso + upper arms only)
+    const _robeIMs  = [iTorso, iLeftUpperArm, iRightUpperArm];
+    // Skin colour = skinMaterial (head + forearms/hands)
+    const _skinIMs  = [iHead, iLeftForearm, iRightForearm];
+    // Pants — fixed dark brown (pelvis separated for olive colour)
+    const _pantsIMs = [iLeftThigh, iRightThigh, iLeftShin, iRightShin];
+    // Feet — fixed black
+    const _feetIMs  = [iLeftFoot, iRightFoot];
+    // Hair colour = hairMaterial (top + sides — same lime as jacket)
+    const _hairIMs  = [iHairTop, iHairSideL, iHairSideR];
+
+    // Compute world matrix of a direct group child → load pos+quat into _dummy
+    function _fromChild(parentM4, child) {
+        child.updateMatrix();
+        _m4world.multiplyMatrices(parentM4, child.matrix);
+        _m4world.decompose(_pos, _quat, _scl);
+        _dummy.position.copy(_pos);
+        _dummy.quaternion.copy(_quat);
+    }
+    function _z(im, idx) {
+        _dummy.scale.setScalar(0); _dummy.updateMatrix(); im.setMatrixAt(idx, _dummy.matrix);
+    }
+    // Write a group-child part (pos+quat from parent, scale explicit)
+    function _write(im, idx, child, parentM4, sx, sy, sz) {
+        if (!child) { _z(im, idx); return; }
+        _fromChild(parentM4, child);
+        _dummy.scale.set(sx, sy, sz);
+        _dummy.updateMatrix();
+        im.setMatrixAt(idx, _dummy.matrix);
+    }
+
     return {
-        /** Call once per frame, after all char.update() calls, before renderer.render(). */
         update(characters) {
             const selectedId = (typeof window !== 'undefined' && window.selectedCharacterId != null)
                 ? String(window.selectedCharacterId) : '';
+            // Skin config — read once per frame, not per character
+            const _skinIM = getActiveSkin()?.im ?? {};
 
             let idx = 0;
             for (const char of characters) {
                 if (!char || char.state === 'dead') continue;
-                if (!char.body || !char.head || !char.leftArm || !char.rightArm || !char.mesh) continue;
-                // Selected character keeps individual mesh (needed for emissive glow)
+                if (!char.body || !char.head || !char.mesh) continue;
                 if (selectedId && String(char.id) === selectedId) continue;
                 const m = char.morphology;
                 if (!m) continue;
 
                 const group = char.mesh;
-
-                // Group world matrix (group is a root-level scene child → worldMatrix = local)
                 group.updateMatrix();
                 _m4group.compose(group.position, group.quaternion, group.scale);
 
-                // --- Body (direct child of group) ---
-                char.body.updateMatrix();
-                _m4body.multiplyMatrices(_m4group, char.body.matrix);
-                _m4body.decompose(_pos, _quat, _scl);
-                _dummy.position.copy(_pos);
-                _dummy.quaternion.copy(_quat);
-                _dummy.scale.set(m.bodyBottomRadius, m.bodyHeight, m.bodyBottomRadius);
-                _dummy.updateMatrix();
-                iBody.setMatrixAt(idx, _dummy.matrix);
+                // — Torso —
+                _write(iTorso, idx, char.body, _m4group, m.torsoW, m.torsoH, m.torsoD);
+                // — Pelvis —
+                _write(iPelvis, idx, char.pelvis, _m4group, m.pelvisW, m.pelvisH, m.pelvisD);
+                // — Upper arms —
+                _write(iLeftUpperArm,  idx, char.leftArm,  _m4group, m.upperArmW, m.upperArmH, m.upperArmD);
+                _write(iRightUpperArm, idx, char.rightArm, _m4group, m.upperArmW, m.upperArmH, m.upperArmD);
+                // — Forearms —
+                _write(iLeftForearm,  idx, char.leftForearm,  _m4group, m.forearmW, m.forearmH, m.forearmD);
+                _write(iRightForearm, idx, char.rightForearm, _m4group, m.forearmW, m.forearmH, m.forearmD);
+                // — Legs —
+                _write(iLeftThigh,  idx, char.leftThigh,  _m4group, m.thighW, m.thighH, m.thighD);
+                _write(iRightThigh, idx, char.rightThigh, _m4group, m.thighW, m.thighH, m.thighD);
+                _write(iLeftShin,   idx, char.leftShin,   _m4group, m.shinW,  m.shinH,  m.shinD);
+                _write(iRightShin,  idx, char.rightShin,  _m4group, m.shinW,  m.shinH,  m.shinD);
+                _write(iLeftFoot,   idx, char.leftFoot,   _m4group, m.footW,  m.footH,  m.footD);
+                _write(iRightFoot,  idx, char.rightFoot,  _m4group, m.footW,  m.footH,  m.footD);
+                // — Wings (skin-dependent) —
+                if (_skinIM.showWings) {
+                    _write(iLeftWingUpper,  idx, char.leftWingUpper,  _m4group, m.wingUpperW, m.wingUpperH, m.wingUpperD);
+                    _write(iRightWingUpper, idx, char.rightWingUpper, _m4group, m.wingUpperW, m.wingUpperH, m.wingUpperD);
+                    _write(iLeftWingLower,  idx, char.leftWingLower,  _m4group, m.wingLowerW, m.wingLowerH, m.wingLowerD);
+                    _write(iRightWingLower, idx, char.rightWingLower, _m4group, m.wingLowerW, m.wingLowerH, m.wingLowerD);
+                } else {
+                    _z(iLeftWingUpper, idx); _z(iRightWingUpper, idx);
+                    _z(iLeftWingLower, idx); _z(iRightWingLower, idx);
+                }
 
-                // --- Head (direct child of group) ---
+                // — Head —
                 char.head.updateMatrix();
-                _m4world.multiplyMatrices(_m4group, char.head.matrix);
-                _m4world.decompose(_pos, _quat, _scl);
-                _dummy.position.copy(_pos);
-                _dummy.quaternion.copy(_quat);
-                _dummy.scale.set(m.headRadiusBottom, m.headHeight, m.headRadiusBottom);
-                _dummy.updateMatrix();
-                iHead.setMatrixAt(idx, _dummy.matrix);
+                _m4head.multiplyMatrices(_m4group, char.head.matrix);
+                _m4head.decompose(_pos, _quat, _scl);
+                _dummy.position.copy(_pos); _dummy.quaternion.copy(_quat);
+                _dummy.scale.set(m.headW, m.headH, m.headD);
+                _dummy.updateMatrix(); iHead.setMatrixAt(idx, _dummy.matrix);
 
-                // --- Left arm (child of body) ---
-                char.leftArm.updateMatrix();
-                _m4world.multiplyMatrices(_m4body, char.leftArm.matrix);
-                _m4world.decompose(_pos, _quat, _scl);
-                _dummy.position.copy(_pos);
-                _dummy.quaternion.copy(_quat);
-                _dummy.scale.setScalar(m.armLoopRadius);
-                _dummy.updateMatrix();
-                iLeftArm.setMatrixAt(idx, _dummy.matrix);
+                // — Head children —
+                _write(iHairTop,    idx, char.hairTop,    _m4head, m.hairTopW, m.hairTopH, m.hairTopD);
+                _z(iHairCapTop, idx); // hidden
+                _z(iHairSideL,  idx); // hidden
+                _z(iHairSideR,  idx); // hidden
+                // Halo (skin-dependent)
+                if (_skinIM.showHalo) {
+                    _write(iHalo, idx, char.halo, _m4head, m.haloW, m.haloH, m.haloD);
+                } else {
+                    _z(iHalo, idx);
+                }
+                _write(iLeftEye,    idx, char.leftEye,    _m4head, m.eyeW, m.eyeH, m.eyeD);
+                _write(iRightEye,   idx, char.rightEye,   _m4head, m.eyeW, m.eyeH, m.eyeD);
+                _write(iLeftCheek,  idx, char.leftCheek,  _m4head, m.cheekW, m.cheekH, m.cheekD);
+                _write(iRightCheek, idx, char.rightCheek, _m4head, m.cheekW, m.cheekH, m.cheekD);
+                // Nose/mouth (skin-dependent)
+                if (_skinIM.showNose) {
+                    _write(iMouth, idx, char.mouth, _m4head, m.mouthW, m.mouthH, m.mouthD);
+                } else {
+                    _z(iMouth, idx);
+                }
+                _write(iLeftEyeHL,  idx, char.leftEyeHL,  _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
+                _write(iRightEyeHL, idx, char.rightEyeHL, _m4head, m.eyeHLW, m.eyeHLH, m.eyeHLD);
+                _write(iLeftBrow,   idx, char.leftBrow,   _m4head, m.browW, m.browH, m.browD);
+                _write(iRightBrow,  idx, char.rightBrow,  _m4head, m.browW, m.browH, m.browD);
 
-                // --- Right arm (child of body) ---
-                char.rightArm.updateMatrix();
-                _m4world.multiplyMatrices(_m4body, char.rightArm.matrix);
-                _m4world.decompose(_pos, _quat, _scl);
-                _dummy.position.copy(_pos);
-                _dummy.quaternion.copy(_quat);
-                _dummy.scale.setScalar(m.armLoopRadius);
-                _dummy.updateMatrix();
-                iRightArm.setMatrixAt(idx, _dummy.matrix);
-
-                // --- Shadow (flat circle at ground level, scale encodes radius + pulse) ---
+                // — Shadow —
                 const sr = m.shadowRadius * (char._shadowInstanceScale ?? 1.0);
                 _dummy.position.set(group.position.x, 0.01, group.position.z);
                 _dummy.rotation.set(-Math.PI / 2, 0, 0);
                 _dummy.scale.set(sr, sr, 1);
-                _dummy.updateMatrix();
-                iShadow.setMatrixAt(idx, _dummy.matrix);
+                _dummy.updateMatrix(); iShadow.setMatrixAt(idx, _dummy.matrix);
 
-                // --- Per-instance colour: body/head from personality, arms fixed brown ---
-                _color.copy(char.bodyMaterial.color);
-                iBody.setColorAt(idx, _color);
-                iHead.setColorAt(idx, _color);
-                _color.setHex(0xc68642);
-                iLeftArm.setColorAt(idx, _color);
-                iRightArm.setColorAt(idx, _color);
+                // — Per-instance colours —
+                const robeHex = char.bodyMaterial.color.getHex();
+                _color.setHex(robeHex);
+                for (const im of _robeIMs) im.setColorAt(idx, _color);
+
+                const skinHex = char.skinMaterial ? char.skinMaterial.color.getHex() : 0xf5c89a;
+                _color.setHex(skinHex);
+                for (const im of _skinIMs) im.setColorAt(idx, _color);
+
+                _color.setHex(char.hairMaterial ? char.hairMaterial.color.getHex() : 0xd0e000);
+                for (const im of _hairIMs) im.setColorAt(idx, _color);
+
+                // Pelvis — skin-configurable (olive belt for chibi, white hem for angel)
+                _color.setHex(_skinIM.pelvisColor ?? 0x3d5000);
+                iPelvis.setColorAt(idx, _color);
+                // Pants — skin-configurable
+                _color.setHex(_skinIM.pantsColor ?? 0x6b3515);
+                for (const im of _pantsIMs) im.setColorAt(idx, _color);
+                // Feet — skin-configurable
+                _color.setHex(_skinIM.feetColor ?? 0x111111);
+                for (const im of _feetIMs) im.setColorAt(idx, _color);
 
                 idx++;
             }
 
-            iBody.count = iHead.count = iLeftArm.count = iRightArm.count = iShadow.count = idx;
-
-            iBody.instanceMatrix.needsUpdate = true;
-            iHead.instanceMatrix.needsUpdate = true;
-            iLeftArm.instanceMatrix.needsUpdate = true;
-            iRightArm.instanceMatrix.needsUpdate = true;
-            iShadow.instanceMatrix.needsUpdate = true;
-
-            if (iBody.instanceColor)    iBody.instanceColor.needsUpdate = true;
-            if (iHead.instanceColor)    iHead.instanceColor.needsUpdate = true;
-            if (iLeftArm.instanceColor) iLeftArm.instanceColor.needsUpdate = true;
-            if (iRightArm.instanceColor)iRightArm.instanceColor.needsUpdate = true;
+            for (const im of _allIMs) im.count = idx;
+            for (const im of _allIMs) im.instanceMatrix.needsUpdate = true;
+            for (const im of [..._robeIMs, ..._skinIMs, ..._hairIMs, ..._pantsIMs, ..._feetIMs, iPelvis]) {
+                if (im.instanceColor) im.instanceColor.needsUpdate = true;
+            }
         }
     };
 }

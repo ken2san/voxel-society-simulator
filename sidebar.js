@@ -310,7 +310,8 @@ function renderCharacterDetail() {
         maxAffinity:                        100,
         reproductionCooldownSeconds:        8,
         fruitRegenIntervalSeconds:          60,
-        seasonCycleSeconds:                 120,
+        dayDurationSeconds:                 120,
+        seasonCycleSeconds:                 4,
         seasonAmplitude:                    0.6,
         initialAgeMaxRatio:                 0.38,
         traitAffinityCapReduction:          0.6,
@@ -474,7 +475,35 @@ function renderCharacterDetail() {
     effectsToggleRow.dataset.label = 'Effects';
     tabPanels[0].appendChild(effectsToggleRow);
 
-    paramBox.style.background = 'rgba(255,255,255,0.93)';
+    // ── Voxel Detail mode toggle ──────────────────────────────────────────────
+    if (window.voxelDetailMode === undefined) window.voxelDetailMode = true;
+    const voxelDetailRow = document.createElement('div');
+    voxelDetailRow.style.display = 'flex';
+    voxelDetailRow.style.alignItems = 'center';
+    voxelDetailRow.style.gap = '10px';
+    const voxelDetailLabel = document.createElement('span');
+    voxelDetailLabel.textContent = '🧱 Voxel Detail:';
+    voxelDetailLabel.style.width = '140px';
+    voxelDetailRow.appendChild(voxelDetailLabel);
+    const voxelDetailToggle = document.createElement('input');
+    voxelDetailToggle.type = 'checkbox';
+    voxelDetailToggle.checked = window.voxelDetailMode !== false;
+    voxelDetailToggle.style.transform = 'scale(1.1)';
+    voxelDetailToggle.style.cursor = 'pointer';
+    voxelDetailToggle.addEventListener('change', e => {
+        const enabled = !!e.target.checked;
+        window.voxelDetailMode = enabled;
+        import('./world.js').then(worldMod => {
+            if (typeof worldMod.rebuildAllBlockVisuals === 'function') {
+                worldMod.rebuildAllBlockVisuals();
+            }
+        }).catch(() => {});
+    });
+    voxelDetailRow.appendChild(voxelDetailToggle);
+    voxelDetailRow.dataset.label = 'Voxel Detail';
+    tabPanels[0].appendChild(voxelDetailRow);
+
+
     paramBox.style.borderRadius = '18px';
     paramBox.style.boxShadow = '0 2px 12px #b0c8e033';
     paramBox.style.padding = '18px 18px 14px 18px';
@@ -1936,27 +1965,68 @@ function renderCharacterDetail() {
     fruitRegenInput.disabled = paramDisabled;
     fruitRegenVal.disabled = paramDisabled;
 
+    // --- Day Duration Slider ---
+    if (sidebarParams.dayDurationSeconds === undefined) sidebarParams.dayDurationSeconds = 120;
+    const dayDurRow = document.createElement('div');
+    dayDurRow.style.display = 'flex';
+    dayDurRow.style.alignItems = 'center';
+    dayDurRow.style.gap = '10px';
+    const dayDurLabel = document.createElement('span');
+    dayDurLabel.textContent = '☀️ Day Duration (s):';
+    dayDurLabel.style.flex = '1';
+    const dayDurInput = document.createElement('input');
+    dayDurInput.type = 'range';
+    dayDurInput.min = 10;
+    dayDurInput.max = 600;
+    dayDurInput.step = 10;
+    dayDurInput.value = sidebarParams.dayDurationSeconds;
+    dayDurInput.style.flex = '2';
+    const dayDurVal = document.createElement('input');
+    dayDurVal.type = 'number';
+    dayDurVal.min = 10;
+    dayDurVal.max = 600;
+    dayDurVal.step = 10;
+    dayDurVal.value = sidebarParams.dayDurationSeconds;
+    dayDurVal.style.width = '60px';
+    dayDurRow.appendChild(dayDurLabel);
+    dayDurRow.appendChild(dayDurInput);
+    dayDurRow.appendChild(dayDurVal);
+    dayDurInput.addEventListener('input', e => {
+        sidebarParams.dayDurationSeconds = parseInt(e.target.value);
+        dayDurVal.value = e.target.value;
+        window.dayDurationSeconds = parseInt(e.target.value);
+    });
+    dayDurVal.addEventListener('input', e => {
+        sidebarParams.dayDurationSeconds = parseInt(e.target.value);
+        dayDurInput.value = e.target.value;
+        window.dayDurationSeconds = parseInt(e.target.value);
+    });
+    dayDurRow.dataset.label = 'Day Duration';
+    tabPanels[2].appendChild(dayDurRow);
+    dayDurInput.disabled = paramDisabled;
+    dayDurVal.disabled = paramDisabled;
+
     // --- Season Cycle Length Slider ---
-    if (sidebarParams.seasonCycleSeconds === undefined) sidebarParams.seasonCycleSeconds = 120;
+    if (sidebarParams.seasonCycleSeconds === undefined) sidebarParams.seasonCycleSeconds = 4;
     const seasonCycleRow = document.createElement('div');
     seasonCycleRow.style.display = 'flex';
     seasonCycleRow.style.alignItems = 'center';
     seasonCycleRow.style.gap = '10px';
     const seasonCycleLabel = document.createElement('span');
-    seasonCycleLabel.textContent = '🌱 Season Cycle (s):';
+    seasonCycleLabel.textContent = '🌱 Season Cycle (days):';
     seasonCycleLabel.style.flex = '1';
     const seasonCycleInput = document.createElement('input');
     seasonCycleInput.type = 'range';
-    seasonCycleInput.min = 30;
-    seasonCycleInput.max = 600;
-    seasonCycleInput.step = 10;
+    seasonCycleInput.min = 1;
+    seasonCycleInput.max = 20;
+    seasonCycleInput.step = 1;
     seasonCycleInput.value = sidebarParams.seasonCycleSeconds;
     seasonCycleInput.style.flex = '2';
     const seasonCycleVal = document.createElement('input');
     seasonCycleVal.type = 'number';
-    seasonCycleVal.min = 30;
-    seasonCycleVal.max = 600;
-    seasonCycleVal.step = 10;
+    seasonCycleVal.min = 1;
+    seasonCycleVal.max = 20;
+    seasonCycleVal.step = 1;
     seasonCycleVal.value = sidebarParams.seasonCycleSeconds;
     seasonCycleVal.style.width = '60px';
     seasonCycleRow.appendChild(seasonCycleLabel);

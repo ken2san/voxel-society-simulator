@@ -58,7 +58,7 @@ export function createVector3(x = 0, y = 0, z = 0) {
     };
 }
 
-export function gridToWorldPosition(pos, yOffset = 0.5) {
+export function gridToWorldPosition(pos, yOffset = 0) {
     return createVector3(
         (Number(pos?.x) || 0) + 0.5,
         (Number(pos?.y) || 0) + yOffset,

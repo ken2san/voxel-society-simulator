@@ -429,7 +429,8 @@ let prevDistrictState = new Map();
 for (let tick = 0; tick < options.ticks; tick++) {
     globalThis.window.characters = characters;
     globalThis.window._simTick = tick; // used by findClosestFood result cache
-    const isNight = (simTime % DAY_DURATION) > (DAY_DURATION / 2);
+    const _dd = (globalThis.window.dayDurationSeconds > 0) ? globalThis.window.dayDurationSeconds : DAY_DURATION;
+    const isNight = (simTime % _dd) > (_dd / 2);
     const currentChars = [...characters];
     for (const char of currentChars) {
         if (char && typeof char.update === 'function') {
@@ -444,10 +445,11 @@ for (let tick = 0; tick < options.ticks; tick++) {
     // as the browser animate() loop. Without this, CLI always uses full spawn rate
     // and misses winter scarcity that causes starvation deaths in the browser.
     {
-        const _cycleSec = (globalThis.window.seasonCycleSeconds > 0) ? globalThis.window.seasonCycleSeconds : 120;
+        const _cycleDays = (globalThis.window.seasonCycleSeconds > 0) ? globalThis.window.seasonCycleSeconds : 4;
         const _amp = Math.min(1, Math.max(0, globalThis.window.seasonAmplitude !== undefined ? globalThis.window.seasonAmplitude : 0.6));
-        const _mul = 1 + _amp * Math.sin(2 * Math.PI * simTime / _cycleSec);
-        const _phase = (simTime % _cycleSec) / _cycleSec;
+        const _daysElapsed = simTime / ((globalThis.window.dayDurationSeconds > 0) ? globalThis.window.dayDurationSeconds : DAY_DURATION);
+        const _mul = 1 + _amp * Math.sin(2 * Math.PI * _daysElapsed / _cycleDays);
+        const _phase = (_daysElapsed % _cycleDays) / _cycleDays;
         let _name, _icon;
         if (_phase < 0.25)      { _name = 'Spring'; _icon = '🌸'; }
         else if (_phase < 0.50) { _name = 'Summer'; _icon = '☀️'; }
