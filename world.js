@@ -4,6 +4,7 @@ import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
+import { buildWellGroup } from './sim-core/well-renderer.js';
 import { buildAngelGroup, buildReaperGroup } from './sim-core/special-entities.js';
 import { playSound, updateAmbience } from './sim-core/sound-system.js';
 
@@ -37,6 +38,7 @@ export function removeAllCharacterObjects() {
 let scene, camera, renderer, controls, ambientLight, directionalLight;
 let gameCanvas, minimapCanvas, minimapCtx;
 let campfireObjects = [];  // decorative campfires (not worldData blocks)
+let wellObject = null;     // single decorative village well
 
 // ── Special entities (angel + reaper) ────────────────────────────────────────
 // Angel roams when child count ≥ CHILD_THRESHOLD.
@@ -890,6 +892,13 @@ function updateAmbientWorldEffects() {
             } else {
                 resetAmbientBlock(block);
             }
+            // Seasonal fruit overlay: visible in Summer + Autumn
+            if (block.userData.fruitOverlay) {
+                const _sn = (typeof window !== 'undefined' && window.currentSeasonInfo)
+                    ? window.currentSeasonInfo.name : '';
+                block.userData.fruitOverlay.visible =
+                    (_sn === 'Summer' || _sn === 'Autumn') && block.visible !== false;
+            }
             continue;
         }
 
@@ -1071,6 +1080,76 @@ function placeCampfires() {
     }
 }
 
+// ── Village well: single permanent decoration near the housing cluster ────────
+function placeVillageWell() {
+    // Remove previous well (world regeneration)
+    if (wellObject) {
+        scene?.remove?.(wellObject);
+        wellObject.traverse(o => {
+            try { o.geometry?.dispose?.(); } catch (_) { /* ignore */ }
+            try { o.material?.dispose?.(); } catch (_) { /* ignore */ }
+        });
+        wellObject = null;
+    }
+    if (!scene) return;
+
+    // Find village centroid from HOUSE_WALL blocks
+    let hx = 0, hz = 0, hCount = 0;
+    for (const [key, id] of worldData) {
+        if (id !== BLOCK_TYPES.HOUSE_WALL.id) continue;
+        const parts = key.split(',');
+        hx += Number(parts[0]);
+        hz += Number(parts[2]);
+        hCount++;
+    }
+    if (hCount === 0) return;
+    const cx = Math.round(hx / hCount);
+    const cz = Math.round(hz / hCount);
+
+    // Spiral search for a flat, clear spot near the centre (radius ≤ 8)
+    const offsets = [];
+    for (let r = 1; r <= 8; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dz = -r; dz <= r; dz++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) === r) offsets.push([dx, dz]);
+            }
+        }
+    }
+
+    for (const [dx, dz] of offsets) {
+        const wx = cx + dx, wz = cz + dz;
+        if (wx < 1 || wx >= gridSize - 1 || wz < 1 || wz >= gridSize - 1) continue;
+        const gy = findSolidGround(wx, wz);
+        if (gy < 0) continue;
+        if (worldData.has(`${wx},${gy + 1},${wz}`)) continue;  // something occupies the space
+
+        // Needs at least 2 blocks of air above ground
+        if (worldData.has(`${wx},${gy + 2},${wz}`)) continue;
+
+        // Must be reasonably flat (neighbours ≤1 block difference)
+        const flat = [[1,0],[-1,0],[0,1],[0,-1]].every(([ndx, ndz]) => {
+            const ng = findSolidGround(wx + ndx, wz + ndz);
+            return ng >= 0 && Math.abs(ng - gy) <= 1;
+        });
+        if (!flat) continue;
+
+        // Min distance from campfires
+        const tooClose = campfireObjects.some(cf =>
+            cf.userData.gridPos &&
+            Math.abs(cf.userData.gridPos.x - wx) < 2 &&
+            Math.abs(cf.userData.gridPos.z - wz) < 2
+        );
+        if (tooClose) continue;
+
+        const well = buildWellGroup(dx * 7 + dz * 3);
+        well.position.set(wx + 0.5, gy + 1.0, wz + 0.5);
+        well.userData.gridPos = { x: wx, y: gy, z: wz };
+        scene.add(well);
+        wellObject = well;
+        break;
+    }
+}
+
 // ── Special entity: create & hide; animate() controls visibility + roaming ────────
 function placeSpecialEntities() {
     for (const e of Object.values(specialEntities)) {
@@ -1190,6 +1269,7 @@ export function generateTerrain() {
     }}
     drawMinimap();
     placeCampfires();
+    placeVillageWell();
     placeSpecialEntities();
 }
 export function addBlock(x, y, z, type, updateMinimap = true) {
@@ -1498,6 +1578,12 @@ export function animate() {
                 if (campfireObjects[i]?.userData?.updateFire) campfireObjects[i].userData.updateFire(worldTime);
             }
         }
+    }
+
+    // ── Village well: district visibility only (no animation) ────────────────
+    if (wellObject) {
+        const inDistrict = !wellObject.userData.gridPos || isGridPositionInActiveDistrict(wellObject.userData.gridPos);
+        wellObject.visible = inDistrict;
     }
 
     // ── Special entities: angel (child ≥ 10) + reaper (elder ≥ 10) ──────────
