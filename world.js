@@ -3,6 +3,7 @@ import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
+import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
 
 // Function to remove all character 3D objects from scene
 export function removeAllCharacterObjects() {
@@ -33,6 +34,7 @@ export function removeAllCharacterObjects() {
 
 let scene, camera, renderer, controls, ambientLight, directionalLight;
 let gameCanvas, minimapCanvas, minimapCtx;
+let campfireObjects = [];  // decorative campfires (not worldData blocks)
 export { scene, camera, renderer, controls, ambientLight, directionalLight, gameCanvas, minimapCanvas, minimapCtx };
 
 function simIO() {
@@ -977,6 +979,37 @@ export function rebuildAllBlockVisuals() {
     }
 }
 
+// ── Campfire placement ────────────────────────────────────────────────────────
+// Places 1-2 decorative campfires near the world centre (not worldData blocks).
+// Called at the end of generateTerrain() so scene + worldData are ready.
+function placeCampfires() {
+    // Clean up any previous campfires (world regeneration)
+    for (const cf of campfireObjects) {
+        scene?.remove?.(cf);
+        cf.traverse(o => { try { o.geometry?.dispose?.(); o.material?.dispose?.(); } catch (_) {} });
+    }
+    campfireObjects = [];
+    if (!scene) return;
+
+    const cx = Math.floor(gridSize / 2);
+    const cz = Math.floor(gridSize / 2);
+    // Search outward from centre for a clear, solid-ground spot
+    const offsets = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[2,0],[-2,0],[0,2],[0,-2],[1,1],[-1,1],[1,-1],[-1,-1]];
+    let placed = 0;
+    for (const [dx, dz] of offsets) {
+        if (placed >= 1) break;
+        const x = cx + dx, z = cz + dz;
+        if (x < 1 || x >= gridSize - 1 || z < 1 || z >= gridSize - 1) continue;
+        const gy = findGroundY(x, z);
+        if (!worldData.has(`${x},${gy},${z}`))    continue;  // no ground block
+        if (worldData.has(`${x},${gy + 1},${z}`)) continue;  // above is occupied
+        const cf = buildCampfireGroup(placed * 2.1);
+        cf.position.set(x + 0.5, gy + 1.0, z + 0.5);
+        scene.add(cf);
+        campfireObjects.push(cf);
+        placed++;
+    }
+}
 
 export function generateTerrain() {
     PerlinNoise.seed(Math.random);
@@ -1032,6 +1065,7 @@ export function generateTerrain() {
         }
     }}
     drawMinimap();
+    placeCampfires();
 }
 export function addBlock(x, y, z, type, updateMinimap = true) {
     const key = `${x},${y},${z}`;
@@ -1307,6 +1341,11 @@ export function animate() {
     // ── Lazy-init snow system (created once, tied to scene lifetime) ──────────
     if (!animate._snow && scene) {
         animate._snow = createSnowSystem(scene);
+    }
+
+    // ── Update campfire flicker ───────────────────────────────────────────────
+    for (const cf of campfireObjects) {
+        if (cf.userData.updateFire) cf.userData.updateFire(worldTime);
     }
 
     // ── Snow update helper (called both when paused and running) ──────────────

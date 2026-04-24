@@ -145,6 +145,7 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
     const rng       = makeRng(x, y, z);
 
     const voxels = [];
+    const winVoxels = [];  // window voxels rendered unlit (MeshBasicMaterial)
     for (let ix = 0; ix < WG; ix++) {
         for (let iy = 0; iy < WGH; iy++) {
             for (let iz = 0; iz < WG; iz++) {
@@ -158,22 +159,23 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
                 const isDoorLintel = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
                 const isWindow     = iz === 0 && ix === 3 && iy >= 1 && iy <= 2;
 
-                let color;
-                if (isDoorLintel) {
-                    color = doorCol;
-                } else if (isWindow) {
-                    color = winCol;
-                } else {
-                    const r = rng();
-                    color = r < 0.12 ? pal.brick : pal.base[Math.floor(rng() * pal.base.length)];
-                }
+                const vx = (ix - (WG - 1) / 2) * WS;
+                const vy = (iy - (WGH - 1) / 2) * WS;
+                const vz = (iz - (WG - 1) / 2) * WS;
 
-                voxels.push({
-                    x: (ix - (WG - 1) / 2) * WS,
-                    y: (iy - (WGH - 1) / 2) * WS,
-                    z: (iz - (WG - 1) / 2) * WS,
-                    color,
-                });
+                if (isWindow) {
+                    // Window goes into a separate unlit array so it always glows
+                    winVoxels.push({ x: vx, y: vy, z: vz, color: winCol });
+                } else {
+                    let color;
+                    if (isDoorLintel) {
+                        color = doorCol;
+                    } else {
+                        const r = rng();
+                        color = r < 0.12 ? pal.brick : pal.base[Math.floor(rng() * pal.base.length)];
+                    }
+                    voxels.push({ x: vx, y: vy, z: vz, color });
+                }
             }
         }
     }
@@ -184,6 +186,13 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
 
     const group = new THREE.Group();
     group.add(mesh);
+
+    // Window glow mesh: MeshBasicMaterial (unlit) so it stays bright at night
+    if (winVoxels.length > 0) {
+        const wGeo = buildVoxelGeo(winVoxels, WI);
+        const wMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+        group.add(new THREE.Mesh(wGeo, wMat));
+    }
     group.position.set(x + 0.5, y + 0.5, z + 0.5);
     group.visible = isVisible;
     return group;
