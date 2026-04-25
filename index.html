@@ -256,6 +256,7 @@
             <span id="m-hud-pop">👥 –</span>
         </div>
         <button id="m-hud-centre" class="m-hud-btn m-hud-icon" title="Centre camera">🎯</button>
+        <button id="m-hud-regen" class="m-hud-btn m-hud-regen" title="Regenerate World">🔄</button>
     </div>
 
     <script>
@@ -266,11 +267,13 @@
         window.__syncMobileHud = function () {
             const btn = document.getElementById('m-hud-start');
             if (!btn) return;
-            if (window.__simStarting) {
+            const busy = window.__simStarting;
+            const running = window.simulationRunning;
+            if (busy) {
                 btn.textContent = '⏳ Starting…';
                 btn.disabled = true;
                 btn.className = 'm-hud-btn m-hud-start m-hud-busy';
-            } else if (window.simulationRunning) {
+            } else if (running) {
                 btn.textContent = '⏹ Finish';
                 btn.disabled = false;
                 btn.className = 'm-hud-btn m-hud-finish';
@@ -279,6 +282,9 @@
                 btn.disabled = false;
                 btn.className = 'm-hud-btn m-hud-start';
             }
+            // Regenerate only available when sim is stopped
+            var regenBtn = document.getElementById('m-hud-regen');
+            if (regenBtn) regenBtn.disabled = !!(busy || running);
         };
 
         // Poll season + population every 800ms
@@ -313,6 +319,14 @@
                     } else {
                         var cb = document.getElementById('centreCameraBtn');
                         if (cb) cb.click();
+                    }
+                });
+            }
+            var regenBtn = document.getElementById('m-hud-regen');
+            if (regenBtn) {
+                regenBtn.addEventListener('click', function () {
+                    if (typeof window.regenerateWorld === 'function') {
+                        window.regenerateWorld();
                     }
                 });
             }

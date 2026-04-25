@@ -41,6 +41,9 @@
 .m-hud-finish { background: linear-gradient(90deg, #b91c1c 0%, #ef4444 100%); }
 .m-hud-busy   { background: linear-gradient(90deg, #374151 0%, #4b5563 100%); }
 .m-hud-icon   { background: rgba(30, 41, 59, 0.8); padding: 7px 12px; font-size: 18px; }
+.m-hud-regen  { background: rgba(30, 41, 59, 0.8); padding: 7px 12px; font-size: 18px;
+               border-color: rgba(251, 146, 60, 0.4); }
+.m-hud-regen:not(:disabled):active { background: rgba(124, 45, 18, 0.6); }
 
 .m-hud-info {
   display: flex;
