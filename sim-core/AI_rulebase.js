@@ -201,14 +201,14 @@ export function decideNextAction_rulebase(character, isNight) {
     // Shelter chance differs by rain type:
     //   heavy (土砂降り) — 70%: most characters run for cover
     //   drizzle (しっとり雨) — 25%: only timid characters bother going inside
-    // Golems are excluded: they are stone constructs, unaffected by rain.
     // Energy emergency already forced rest at priority 0, so characters here
     // have enough energy to walk home. The remaining % stay outside visibly,
     // preserving the homed-vs-homeless contrast that makes weather meaningful.
+    // Note: golems are stone creatures and are NOT absorbed into the house (see character.js),
+    // but they still walk to the doorstep and shelter against the wall — which looks right.
     if ((typeof window !== 'undefined' && window._isRaining)
         && character.homePosition
         && !character.isChild
-        && !(typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem')
         && character.needs.hunger > 20
         && character.needs.energy > (effectiveEnergyEmergency + 6)) {
         const _rainType = (typeof window !== 'undefined' && window._rainType) || 'heavy';
