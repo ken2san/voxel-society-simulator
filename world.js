@@ -1611,11 +1611,15 @@ export function animate() {
         const activeCount = animate._campfireCount || 0;
 
         // Update each campfire's visibility (day/night + population threshold + district)
+        const _campfirePositionsBuf = [];
         for (let i = 0; i < campfireObjects.length; i++) {
             const cf = campfireObjects[i];
             const inDistrict = !cf.userData.gridPos || isGridPositionInActiveDistrict(cf.userData.gridPos);
             cf.visible = _shouldBurn && i < activeCount && inDistrict;
+            if (cf.visible && cf.userData.gridPos) _campfirePositionsBuf.push(cf.userData.gridPos);
         }
+        // Expose for character cold-exposure checks
+        if (typeof window !== 'undefined') window._activeCampfirePositions = _campfirePositionsBuf;
         // Animate only the burning visible fires
         if (_shouldBurn) {
             for (let i = 0; i < activeCount; i++) {

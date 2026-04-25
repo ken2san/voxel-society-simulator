@@ -1209,6 +1209,23 @@ class Character {
                         };
                     }
                 }
+                // Danger memory: avoid tiles near known conflict/death sites (TTL 180s)
+                if (this._dangerMemory && this._dangerMemory.size > 0) {
+                    const _now = Date.now();
+                    const _danger = Array.from(this._dangerMemory.entries())
+                        .filter(([, ts]) => _now - ts < 180000)
+                        .map(([key]) => { const [dx, dz] = key.split(',').map(Number); return { x: dx, z: dz }; });
+                    if (_danger.length > 0) {
+                        const _isNearDanger = (pos) => _danger.some(d =>
+                            Math.abs(pos.x - d.x) + Math.abs(pos.z - d.z) <= 3
+                        );
+                        // Try to find a non-dangerous candidate first
+                        const _safeCandidates = candidates.filter(c => !_isNearDanger(c));
+                        if (_safeCandidates.length > 0 && _isNearDanger(selectedMoveTo)) {
+                            selectedMoveTo = _safeCandidates[Math.floor(Math.random() * _safeCandidates.length)];
+                        }
+                    }
+                }
                 this.action = { type, target, item };
                 this.setNavigationTarget(selectedMoveTo);
                 this.state = 'moving';
@@ -1810,6 +1827,11 @@ class Character {
         this.noteMutualContact(otherChar);
         this._nearEnemy = true;
         otherChar._nearEnemy = true;
+        // Record this conflict tile in both characters' danger memory
+        const _conflictKey = `${this.gridPos.x},${this.gridPos.z}`;
+        const _now_conflict = Date.now();
+        if (this._dangerMemory)      this._dangerMemory.set(_conflictKey, _now_conflict);
+        if (otherChar._dangerMemory) otherChar._dangerMemory.set(_conflictKey, _now_conflict);
 
         const globalMap = (typeof window !== 'undefined') ? window.worldTerritoryOwner : null;
         if (myScore > otherScore) {
@@ -2523,6 +2545,13 @@ class Character {
         this._knownFoodSpots = new Map(); // "x,y,z" → timestamp; experienced chars remember food locations (TTL 60s)
         this._failedFoodTargets = new Map(); // local food-path failures should not globally hide fruit from the whole society
         this._busyFoodTargets = new Map(); // short-lived contention memory keeps hungry chars from dog-piling the same fruit
+        this._dangerMemory = new Map(); // "x,z" → timestamp; danger sites (conflict/death) to avoid when wandering (TTL 180s)
+        // Disease state (SIR model): null='susceptible', 'infected', 'recovered'
+        // _diseaseTimer counts down remaining duration; _immuneTimer counts immune window after recovery.
+        this._diseaseState = null;
+        this._diseaseTimer = 0;
+        this._immuneTimer  = 0;
+        this._diseaseTransmitTick = Math.random() * 3; // stagger transmission checks
         this.appearanceProfile = { ...this.personality };
         this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
@@ -4153,8 +4182,45 @@ class Character {
         }
         const socialNeedDecayRate = (typeof window !== 'undefined' && window.socialNeedDecayRate !== undefined) ? Number(window.socialNeedDecayRate) : 0.8;
         this.needs.social -= deltaTime * socialNeedDecayRate;
-        if (this.state === 'moving' || this.state === 'working') {
-            this.needs.energy -= deltaTime * activeEnergyDrainRate;
+        // Activity-differentiated energy cost:
+        // Heavy labor (build/chop/dig) > foraging > moving > socializing > resting
+        // Combat stress adds a flat +3/s on top when _nearEnemy is true.
+        if (this.state === 'moving' || this.state === 'working' || this.state === 'socializing') {
+            const _actionType = this.action?.type || '';
+            const _isHeavyLabor = _actionType === 'BUILD_HOME' || _actionType === 'CHOP_WOOD' || _actionType === 'DESTROY_BLOCK';
+            const _isForaging   = _actionType === 'COLLECT_FOOD' || _actionType === 'EAT';
+            const _costMul = _isHeavyLabor ? 2.2
+                           : _isForaging   ? 1.4
+                           : this.state === 'socializing' ? 0.3
+                           : 1.0;
+            this.needs.energy -= deltaTime * activeEnergyDrainRate * _costMul;
+        }
+        // Combat adrenaline drain: extra 3/s when near an enemy regardless of state
+        if (this._nearEnemy) {
+            this.needs.energy -= deltaTime * 3.0;
+        }
+        // Thermal drain: cold season × outdoor exposure (campfire proximity gives shelter)
+        {
+            const _si = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
+            const _sp = _si ? _si.phase : 0.5;
+            const _isWinter     = _sp > 0.78 || _sp < 0.06;
+            const _isColdSeason = _sp > 0.65 || _sp < 0.15; // late-autumn through early-spring
+            const _isOutdoor    = !(this._homeAbsorb && (this._homeAbsorb.phase === 'inside' || this._homeAbsorb.phase === 'entering'));
+            if (_isColdSeason && _isOutdoor) {
+                const _coldIntensity = _isWinter ? 1.0 : 0.45;
+                const _fires = (typeof window !== 'undefined' && window._activeCampfirePositions) || [];
+                const _nearFire = _fires.some(fp =>
+                    Math.abs(this.gridPos.x - fp.x) + Math.abs(this.gridPos.z - fp.z) <= 5
+                );
+                if (!_nearFire) {
+                    this.needs.energy -= deltaTime * 0.7 * _coldIntensity;
+                    this._coldExposed = true;
+                } else {
+                    this._coldExposed = false;
+                }
+            } else {
+                this._coldExposed = false;
+            }
         }
         if (isNight && !this.isSafe(isNight)) {
             this.needs.safety -= deltaTime * unsafeNightSafetyDecayRate;
@@ -4166,6 +4232,55 @@ class Character {
         this.needs.social = Math.max(this.needs.social, 0);
         this.needs.energy = Math.max(this.needs.energy, 0);
         this.needs.safety = Math.max(this.needs.safety, 0);
+
+        // --- Disease (SIR model) ---
+        // State transitions and cost application.  Transmission is checked in a throttled block below.
+        if (this._diseaseState === 'infected') {
+            this._diseaseTimer -= deltaTime;
+            // Infected: extra energy + hunger drain, reduced movement speed
+            this.needs.energy -= deltaTime * 1.2;
+            this.needs.hunger -= deltaTime * 0.5;
+            if (this.movementSpeed && !this._preDiseaseSpeed) {
+                this._preDiseaseSpeed = this.movementSpeed;
+                this.movementSpeed = this.movementSpeed * 0.70;
+            }
+            if (this._diseaseTimer <= 0) {
+                this._diseaseState = 'recovered';
+                this._immuneTimer  = 180 + Math.random() * 120; // 3–5 min immunity
+                if (this._preDiseaseSpeed) { this.movementSpeed = this._preDiseaseSpeed; this._preDiseaseSpeed = null; }
+            }
+        } else if (this._diseaseState === 'recovered') {
+            this._immuneTimer -= deltaTime;
+            if (this._immuneTimer <= 0) this._diseaseState = null; // back to susceptible
+        }
+
+        // Throttled disease transmission check (every ~3s per character)
+        this._diseaseTransmitTick = (this._diseaseTransmitTick || 0) + deltaTime;
+        if (this._diseaseTransmitTick >= 3.0) {
+            this._diseaseTransmitTick = 0;
+            if (this._diseaseState === 'infected') {
+                // Spread to nearby susceptible characters
+                const _allChars = (typeof window !== 'undefined' && window.characters)
+                    ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+                for (const _other of _allChars) {
+                    if (!_other || _other.id === this.id || _other.state === 'dead') continue;
+                    if (_other._diseaseState !== null) continue; // already infected or immune
+                    const _dist = Math.abs(this.gridPos.x - _other.gridPos.x) + Math.abs(this.gridPos.z - _other.gridPos.z);
+                    if (_dist > 2) continue;
+                    // 3% per 3s transmission tick; crowded settings spread faster
+                    if (Math.random() < 0.09) {
+                        _other._diseaseState = 'infected';
+                        _other._diseaseTimer = 90 + Math.random() * 90; // 90–180s
+                    }
+                }
+            } else if (this._diseaseState === null) {
+                // Spontaneous infection: very rare environmental source (0.25% per 3s per char)
+                if (Math.random() < 0.0025) {
+                    this._diseaseState = 'infected';
+                    this._diseaseTimer = 90 + Math.random() * 90;
+                }
+            }
+        }
 
         // --- Support comfort: nearby trusted ties reduce social depletion and improve night safety ---
         if (this.relationships && this.relationships.size > 0) {
@@ -5239,6 +5354,13 @@ class Character {
                         intensity: Math.min(1, _aff / 100),
                         remainingSeconds: _griefSec,
                     };
+                }
+                // Danger memory: witnesses near the death site remember it as dangerous
+                if (_aff > 0) {
+                    const _wDist = Math.abs(_c.gridPos.x - _deadPos.x) + Math.abs(_c.gridPos.z - _deadPos.z);
+                    if (_wDist <= 12 && _c._dangerMemory) {
+                        _c._dangerMemory.set(`${_deadPos.x},${_deadPos.z}`, Date.now());
+                    }
                 }
                 if (_c.relationships) _c.relationships.delete(_deadId);
             }
@@ -6677,6 +6799,41 @@ class Character {
             if (this.pelvis) { this.pelvis.scale.x = this._bodyWidthScale; this.pelvis.scale.z = this._bodyWidthScale; }
         }
 
+        // Cold exposure visual: body emissive lerps toward blue when freezing outdoors.
+        // Uses emissive so the character's base color is never permanently modified.
+        if (this.bodyMaterial) {
+            if (!this._coldTint) this._coldTint = 0;
+            const _coldTarget = this._coldExposed ? 1 : 0;
+            this._coldTint += (_coldTarget - this._coldTint) * Math.min(1, deltaTime * 0.5);
+            if (this._coldTint > 0.005) {
+                if (!this.bodyMaterial.emissive) this.bodyMaterial.emissive = { r: 0, g: 0, b: 0, set: () => {} };
+                if (typeof this.bodyMaterial.emissive.setRGB === 'function') {
+                    this.bodyMaterial.emissive.setRGB(0.02, 0.06, 0.22 * this._coldTint);
+                }
+                this.bodyMaterial.emissiveIntensity = this._coldTint * 0.5;
+            } else if (this.bodyMaterial.emissiveIntensity > 0) {
+                this.bodyMaterial.emissiveIntensity = 0;
+            }
+        }
+
+        // Disease visual: skin emissive lerps toward sickly yellow-green when infected.
+        if (this.skinMaterial) {
+            if (!this._sickTint) this._sickTint = 0;
+            const _sickTarget = this._diseaseState === 'infected' ? 1 : 0;
+            this._sickTint += (_sickTarget - this._sickTint) * Math.min(1, deltaTime * 0.6);
+            if (this._sickTint > 0.005) {
+                if (!this.skinMaterial.emissive) this.skinMaterial.emissive = { setRGB: () => {} };
+                if (typeof this.skinMaterial.emissive.setRGB === 'function') {
+                    this.skinMaterial.emissive.setRGB(0.04 * this._sickTint, 0.12 * this._sickTint, 0.0);
+                }
+                if (this.skinMaterial.emissiveIntensity !== undefined) {
+                    this.skinMaterial.emissiveIntensity = this._sickTint * 0.6;
+                }
+            } else if (this.skinMaterial.emissiveIntensity > 0) {
+                this.skinMaterial.emissiveIntensity = 0;
+            }
+        }
+
         // Normalize head.rotation.y to [-π, π] each frame to prevent unbounded accumulation
         if (this.head) {
             while (this.head.rotation.y > Math.PI)  this.head.rotation.y -= Math.PI * 2;
@@ -6785,6 +6942,7 @@ class Character {
         else if (this.state === 'socializing') icons.push('💬');
         else if (this.state === 'moving' || this.state === 'active') icons.push('🚶');
         if (this._griefState?.remainingSeconds > 0) icons.push('😢');
+        if (this._diseaseState === 'infected') icons.push('🤒');
         if (this.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
         else if (this.needs && this.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
         if (this.needs && this.needs.energy < 30) icons.push('💤');
