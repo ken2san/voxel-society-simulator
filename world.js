@@ -1474,6 +1474,12 @@ export function updateWorldLighting() {
                 if (!updateWorldLighting._rainColor) updateWorldLighting._rainColor = io.createColor(0x778899);
                 scene.background.lerp(updateWorldLighting._rainColor, rainIntensity * 0.5);
             }
+            // Lightning flash: briefly bleach sky toward near-white
+            const flash = (typeof window !== 'undefined' && window._thunderFlash) ? Math.max(0, window._thunderFlash) : 0;
+            if (flash > 0.01) {
+                if (!updateWorldLighting._flashColor) updateWorldLighting._flashColor = io.createColor(0xeef8ff);
+                scene.background.lerp(updateWorldLighting._flashColor, flash * 0.75);
+            }
         } else {
             scene.background = dayIntensity >= 0.5 ? dayColor.clone() : nightColor.clone();
         }

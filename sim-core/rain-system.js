@@ -14,6 +14,7 @@
  */
 
 import * as THREE from 'three';
+import { playSound } from './sound-system.js';
 
 const RAIN_COUNT = 1200;
 const SPREAD_XZ  = 40;
@@ -27,6 +28,10 @@ const EVENT_MIN_S  = 30;
 const EVENT_MAX_S  = 90;
 const PAUSE_MIN_S  = 60;
 const PAUSE_MAX_S  = 180;
+
+// Thunder: strikes occur 8–30 s apart once rain is established (intensity > 0.6)
+const THUNDER_MIN_S = 8;
+const THUNDER_MAX_S = 30;
 
 export function createRainSystem(scene) {
     const positions = new Float32Array(RAIN_COUNT * 3);
@@ -64,6 +69,10 @@ export function createRainSystem(scene) {
     let intensity    = 0;   // current rendered opacity 0→1
     let sysTime      = 0;
 
+    // Thunder state
+    let thunderTimer = THUNDER_MIN_S + Math.random() * (THUNDER_MAX_S - THUNDER_MIN_S);
+    // window._thunderFlash: 0=none, 0→1 peak, decays each frame; read by world.js sky blend
+
     return {
         /**
          * @param {number}  deltaTime   seconds since last frame
@@ -92,6 +101,34 @@ export function createRainSystem(scene) {
 
             // Expose rain state globally so AI and sound can read it cheaply
             if (typeof window !== 'undefined') window._isRaining = shouldRain;
+
+            // ── Thunder ─────────────────────────────────────────────────────
+            // Only when rain is well-established (intensity > 0.6).
+            // Decay any existing flash regardless of rain state.
+            if (typeof window !== 'undefined') {
+                const prevFlash = window._thunderFlash || 0;
+                if (prevFlash > 0.01) {
+                    window._thunderFlash = prevFlash - deltaTime * 6; // flash fades over ~0.17 s
+                } else {
+                    window._thunderFlash = 0;
+                }
+            }
+            if (shouldRain && intensity > 0.6) {
+                thunderTimer -= deltaTime;
+                if (thunderTimer <= 0) {
+                    thunderTimer = THUNDER_MIN_S + Math.random() * (THUNDER_MAX_S - THUNDER_MIN_S);
+                    // Visual flash
+                    if (typeof window !== 'undefined') window._thunderFlash = 1.0;
+                    // Sound (gated by soundEnabled inside playSound)
+                    playSound('thunder');
+                }
+            } else {
+                // Drift timer when not raining so first strike after rain starts isn't instant
+                thunderTimer = Math.max(
+                    thunderTimer,
+                    THUNDER_MIN_S + Math.random() * (THUNDER_MAX_S - THUNDER_MIN_S) * 0.5
+                );
+            }
 
             // Fade intensity
             const targetIntensity = shouldRain ? 1 : 0;

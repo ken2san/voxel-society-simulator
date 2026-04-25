@@ -196,6 +196,25 @@ export function decideNextAction_rulebase(character, isNight) {
         }
     }
 
+    // === PRIORITY 0.8: RAIN SHELTER — homed characters retreat indoors when it rains ===
+    // Only activates when: raining + character owns a home + not a child + not starving.
+    // Uses a 70% chance (not 100%) so a few hardy characters stay outside — that contrast
+    // is visible and interesting. Energy emergency already forced rest at priority 0, so
+    // characters caught here have enough energy to walk home.
+    if ((typeof window !== 'undefined' && window._isRaining)
+        && character.homePosition
+        && !character.isChild
+        && character.needs.hunger > 20
+        && character.needs.energy > (effectiveEnergyEmergency + 6)) {
+        if (Math.random() < 0.70) {
+            const _homeP = character.homePosition;
+            const _homeAdj = character.findAdjacentSpot && character.findAdjacentSpot(_homeP);
+            character.log(`Action: SEEK_SHELTER_TO_REST (rain shelter)`);
+            character.setNextAction('SEEK_SHELTER_TO_REST', _homeP, _homeAdj || _homeP);
+            return;
+        }
+    }
+
     // === PRIORITY 1: RANDOM EXPLORATION (only when the character can afford to roam) ===
     const canExploreFreely = character.needs.energy > Math.max(effectiveEnergyEmergency + 18, effectiveRestThreshold + wanderReserveEnergy)
         && character.needs.hunger > 30

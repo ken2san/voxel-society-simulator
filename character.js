@@ -4706,10 +4706,14 @@ class Character {
             && !this.isChild
             && (isNight || !!(typeof window !== 'undefined' && window._isRaining));
 
-        // Trigger: enter home when resting at night/rain and not already absorbed
+        // Trigger: enter home when resting at night/rain AND near homePosition (≤3 tiles)
         if (_shouldBeInside && !this._homeAbsorb && this.state === 'resting') {
-            this._homeAbsorb = { phase: 'entering', timer: 0 };
-            playSound('enter_home');
+            const _hp = this.homePosition;
+            const _homeDist = Math.abs(this.gridPos.x - _hp.x) + Math.abs(this.gridPos.z - _hp.z);
+            if (_homeDist <= 3) {
+                this._homeAbsorb = { phase: 'entering', timer: 0 };
+                playSound('enter_home');
+            }
         }
         // Trigger: leave home when it's daytime and not raining, while still inside
         if (!_shouldBeInside && this._homeAbsorb && this._homeAbsorb.phase === 'inside') {

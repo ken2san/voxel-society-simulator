@@ -61,6 +61,7 @@ const THROTTLE = {
     dawn:       0,
     enter_home: 600,
     leave_home: 600,
+    thunder:    8000,   // max one crack per 8 s globally
 };
 
 /**
@@ -90,6 +91,7 @@ export function playSound(name) {
         case 'dawn':       _playDawn(ctx);      break;
         case 'enter_home': _playEnterHome(ctx); break;
         case 'leave_home': _playLeaveHome(ctx); break;
+        case 'thunder':    _playThunder(ctx, Math.random()); break;
         default: break;
     }
 }
@@ -209,7 +211,37 @@ function _playLeaveHome(ctx) {
     _noise(ctx, t + 0.08, 0.12, 0.18, 900);
 }
 
-// ─── Ambient sound system ────────────────────────────────────────────────────
+/**
+ * Thunder: sharp crack + low rolling rumble.
+ * Called from rain-system.js when a lightning strike triggers.
+ * Distance-randomised: closer strikes are louder/sharper.
+ */
+function _playThunder(ctx, distance = 0.5) {
+    const t = ctx.currentTime;
+    const crackGain  = 0.65 * (1 - distance * 0.6); // louder when close
+    const rumbleGain = 0.45 * (1 - distance * 0.4);
+    // Sharp broadband crack (short burst of white noise through a highpass)
+    const sr = ctx.sampleRate;
+    const crackLen = Math.floor(sr * 0.12);
+    const crackBuf = ctx.createBuffer(1, crackLen, sr);
+    const crackData = crackBuf.getChannelData(0);
+    for (let i = 0; i < crackLen; i++) crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.03));
+    const crackSrc = ctx.createBufferSource();
+    crackSrc.buffer = crackBuf;
+    const crackHp = ctx.createBiquadFilter();
+    crackHp.type = 'highpass';
+    crackHp.frequency.value = 800;
+    const crackG = ctx.createGain();
+    crackG.gain.value = crackGain;
+    crackSrc.connect(crackHp);
+    crackHp.connect(crackG);
+    crackG.connect(_masterGain);
+    crackSrc.start(t);
+    // Descending bass rumble
+    _osc(ctx, 'sawtooth', 80,  t + 0.05, t + 1.8, rumbleGain * 0.6, 28);
+    _osc(ctx, 'sine',     55,  t + 0.10, t + 2.4, rumbleGain * 0.4, 18);
+    _noise(ctx, t + 0.05, 2.2, rumbleGain * 0.55, 160);
+}
 // Persistent looping wind + periodic bird/cricket schedulers.
 // Rain layer: looping filtered noise, gain cross-faded by rain-system.js state.
 // All ambient nodes route through their own gain nodes.
