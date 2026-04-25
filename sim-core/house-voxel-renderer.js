@@ -33,6 +33,15 @@ const ROOF_Y_SHIFT = (WGH - 1) / 2 * WS + WI / 2   // wall top rel. to wall cent
                    + (RG  - 1) / 4 * RS + RI / 2   // negated roof bottom           = 0.293
                    - 1.0;                           // one grid-unit gap             = -0.251
 
+// ── Foundation palette (buried under wall, darker/earthier than wall) ────────
+// One voxel layer below wall bottom (iy=-1), slightly wider footprint (FW=WG+2=7).
+// world-y = (y+0.5) + (-1 - (WGH-1)/2)*WS = y+0.5 - 0.555 = y-0.055
+// → just below the terrain surface, so it looks like the wall grows from the earth.
+const FOUND_PALETTE = {
+    wood:  [0x6e5c44, 0x5c4a34, 0x7c6a52, 0x4e3c2a],  // dark earthy sandstone
+    stone: [0x3a4a58, 0x2e3d4a, 0x485868, 0x364454],  // dark blue-grey ashlar
+};
+
 // ── Color palettes (voxelchar04-style) ───────────────────────────────────────
 // Wall: white/cream base + ~12% brick accent
 const WALL_PALETTE = {
@@ -146,6 +155,22 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
 
     const voxels = [];
     const winVoxels = [];  // window voxels rendered unlit (MeshBasicMaterial)
+
+    // ── Foundation layer: sunk into terrain to anchor the building visually ───
+    // iy=-1 → vy = (-1-(WGH-1)/2)*WS = -3*0.185 = -0.555 from group centre
+    // world-y = (y+0.5)-0.555 = y-0.055 (just below the terrain surface)
+    // FW = WG+2 = 7 → overhangs wall by one voxel on each side (flair effect)
+    const foundPal = FOUND_PALETTE[houseType];
+    const FW      = WG + 2;
+    const foundY  = ((-1) - (WGH - 1) / 2) * WS;  // -0.555
+    for (let fx = 0; fx < FW; fx++) {
+        for (let fz = 0; fz < FW; fz++) {
+            const vx = (fx - (FW - 1) / 2) * WS;
+            const vz = (fz - (FW - 1) / 2) * WS;
+            voxels.push({ x: vx, y: foundY, z: vz, color: foundPal[Math.floor(rng() * foundPal.length)] });
+        }
+    }
+
     for (let ix = 0; ix < WG; ix++) {
         for (let iy = 0; iy < WGH; iy++) {
             for (let iz = 0; iz < WG; iz++) {
@@ -277,6 +302,18 @@ export function buildBedGroup(type, x, y, z, isVisible) {
     // BASE_Y = -4 → bottom of platform at y_local = -4*CSV = -0.52u from group centre
     // group.position.y = y+0.2, so platform bottom ≈ y+0.2-0.52 = y-0.32 (buried slightly)
     const BASE_Y = -4;
+
+    // Outer anchor ring: 9×9, one layer deeper than main base.
+    // world-y = y+0.2 + (BASE_Y-1)*CSV = y+0.2-0.65 = y-0.45 (deeper underground)
+    // Wider than the base to create an earth-anchor "root" feel.
+    for (let ix = -4; ix <= 4; ix++) {
+        for (let iz = -4; iz <= 4; iz++) {
+            if (Math.abs(ix) <= 3 && Math.abs(iz) <= 3) continue; // skip inner (covered by main base)
+            const col = CS_BASE[Math.floor(rng() * CS_BASE.length)];
+            voxels.push({ x: ix * CSV, y: (BASE_Y - 1) * CSV, z: iz * CSV, color: col });
+        }
+    }
+
     for (let iy = BASE_Y; iy <= BASE_Y + 1; iy++) {
         for (let ix = -3; ix <= 3; ix++) {
             for (let iz = -3; iz <= 3; iz++) {

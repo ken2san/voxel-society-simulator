@@ -140,8 +140,10 @@ class Character {
                     }
                 }
             } else if (type === 'underground') {
-                // 地下シェルターは上に1マス壁
-                addBlock(pos.x, pos.y + 1, pos.z, wallBlock, true);
+                // Underground shelter: no wall block placed above the ChargeStone.
+                // findDiggableShelterSpot requires air at pos.y+1, so placing a wall
+                // there would always be a floating block with nothing below it.
+                // isSafe() for the occupant comes from surrounding terrain, not this wall.
             }
         }
         // 完了共通処理
