@@ -2552,6 +2552,12 @@ class Character {
         this._diseaseTimer = 0;
         this._immuneTimer  = 0;
         this._diseaseTransmitTick = Math.random() * 3; // stagger transmission checks
+        // Pregnancy: when set, movement slows and belly grows; birth happens when timer expires.
+        this._pregnant = false;
+        this._pregnancyTimer = 0;
+        this._pendingBabyGenes = null; // { childColor, childGenes } cached at conception
+        this._parentalTimer = 0;       // parental investment countdown after birth (stay near child)
+        this._lastChildId  = null;
         this.appearanceProfile = { ...this.personality };
         this.morphology = this.createMorphologyProfile(this.appearanceProfile);
         this.state = 'idle';
@@ -4445,7 +4451,12 @@ class Character {
                     _csMult = 1.0 + (_fullMult - 1.0) * 0.5;
                 }
             }
-            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate * _csMult);
+            // Aging: elders recover energy more slowly — the body takes longer to recuperate.
+            // mobilityMul already < 1 for elders; use it to scale recovery rate (soft, not 1:1).
+            const _agingRecovMul = this.getAgingProfile
+                ? (0.55 + (this.getAgingProfile().mobilityMul || 1.0) * 0.45)
+                : 1.0;
+            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate * _csMult * _agingRecovMul);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
                 this.learn && this.learn({ type: 'FOUND_SHELTER' });
@@ -4830,6 +4841,27 @@ class Character {
         if (this._griefState && this._griefState.remainingSeconds > 0) {
             this._griefState.remainingSeconds -= deltaTime;
             if (this._griefState.remainingSeconds <= 0) this._griefState = null;
+        }
+
+        // --- Pregnancy: count down to birth ---
+        if (this._pregnant && this._pendingBabyGenes) {
+            this._pregnancyTimer -= deltaTime;
+            if (this._pregnancyTimer <= 0) {
+                try { this._giveBirth(); } catch (_be) { /* birth error — non-fatal */ this._pregnant = false; this._pendingBabyGenes = null; }
+            }
+        }
+        // --- Parental investment: slow drift toward newborn for ~20s after birth ---
+        if (this._parentalTimer > 0) {
+            this._parentalTimer -= deltaTime;
+            if (this._parentalTimer > 0 && this._lastChildId && this.state === 'idle') {
+                const _allChars = (typeof window !== 'undefined' && window.characters)
+                    ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+                const _child = _allChars.find(c => c && c.id === this._lastChildId && c.state !== 'dead');
+                if (_child) {
+                    const _d = Math.abs(this.gridPos.x - _child.gridPos.x) + Math.abs(this.gridPos.z - _child.gridPos.z);
+                    if (_d > 2) this.setNextAction('WANDER', null, _child.gridPos);
+                }
+            }
         }
 
         // --- Home absorption animation tick ---
@@ -5902,7 +5934,7 @@ class Character {
         }
     // apply speed multiplier for slight variation
     const aging = this.getAgingProfile ? this.getAgingProfile() : { mobilityMul: 1.0 };
-    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0) * (aging.mobilityMul || 1.0);
+    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0) * (aging.mobilityMul || 1.0) * (this._pregnant ? 0.75 : 1.0);
     const moveDistance = effectiveSpeed * deltaTime;
         if (direction.length() < moveDistance) {
             // 移動実行前の最終当たり判定チェック
@@ -6796,7 +6828,23 @@ class Character {
             if (!this._bodyWidthScale) this._bodyWidthScale = _fatW;
             this._bodyWidthScale += (_fatW - this._bodyWidthScale) * Math.min(1, deltaTime * 0.3);
             if (this.body)   { this.body.scale.x   = this._bodyWidthScale; this.body.scale.z   = this._bodyWidthScale; }
-            if (this.pelvis) { this.pelvis.scale.x = this._bodyWidthScale; this.pelvis.scale.z = this._bodyWidthScale; }
+            // Pregnancy belly: pelvis Y scale grows as pregnancy progresses
+            if (this.pelvis) {
+                this.pelvis.scale.x = this._bodyWidthScale;
+                this.pelvis.scale.z = this._bodyWidthScale;
+                if (this._pregnant && this._pregnancyTimer > 0) {
+                    const _maxTimer = 60; // approximate max
+                    const _progress = Math.max(0, Math.min(1, 1 - (this._pregnancyTimer / _maxTimer)));
+                    const _bellyTarget = 1.0 + _progress * 0.55;
+                    if (!this._bellyScale) this._bellyScale = 1.0;
+                    this._bellyScale += (_bellyTarget - this._bellyScale) * Math.min(1, deltaTime * 0.5);
+                    this.pelvis.scale.y = this._bellyScale;
+                } else {
+                    if (!this._bellyScale) this._bellyScale = 1.0;
+                    this._bellyScale += (1.0 - this._bellyScale) * Math.min(1, deltaTime * 0.5);
+                    this.pelvis.scale.y = this._bellyScale;
+                }
+            }
         }
 
         // Cold exposure visual: body emissive lerps toward blue when freezing outdoors.
@@ -6943,6 +6991,7 @@ class Character {
         else if (this.state === 'moving' || this.state === 'active') icons.push('🚶');
         if (this._griefState?.remainingSeconds > 0) icons.push('😢');
         if (this._diseaseState === 'infected') icons.push('🤒');
+        if (this._pregnant) icons.push('🤰');
         if (this.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
         else if (this.needs && this.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
         if (this.needs && this.needs.energy < 30) icons.push('💤');
@@ -7058,15 +7107,42 @@ class Character {
             resilience:      _blendTrait(p.resilience       ?? 1.0, q.resilience       ?? 1.0),
         };
         // Find spawn position near parents (prefer free adjacent spot)
+        // Pregnancy: defer actual birth by 30-60 simulated seconds.
+        // Store genes and partner id; spawnCharacter is called when the timer expires.
+        if (this._pregnant) {
+            if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction blocked: already pregnant`); } catch(e){} }
+            return;
+        }
+        this._pregnant = true;
+        this._pregnancyTimer = 30 + Math.random() * 30;
+        this._pendingBabyGenes = { childColor, childGenes, partnerId: partner ? partner.id : null };
+        this._lastReproductionTime = _reproSimSec();
+        if (partner) partner._lastReproductionTime = _reproSimSec();
+        if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} pregnancy started (${Math.round(this._pregnancyTimer)}s), partner=${partner?.id}`); } catch(e){} }
+        return; // birth happens in update loop
+    }
+
+    // Called from update loop when _pregnancyTimer expires; performs the actual birth.
+    _giveBirth() {
+        const { childColor, childGenes, partnerId } = this._pendingBabyGenes || {};
+        this._pregnant = false;
+        this._pregnancyTimer = 0;
+        this._pendingBabyGenes = null;
+
+        const _allChars = (typeof window !== 'undefined' && window.characters)
+            ? window.characters : (typeof characters !== 'undefined' ? characters : []);
+        const partner = partnerId ? _allChars.find(c => c && c.id === partnerId && c.state !== 'dead') : null;
+
+        // Compute spawn position at birth (parent has likely moved since conception)
         let spawnPos = null;
-        const trySpots = [this.gridPos, partner.gridPos];
+        const trySpots = [this.gridPos, partner?.gridPos].filter(Boolean);
         for (const base of trySpots) {
             const spot = this.findAdjacentSpot ? this.findAdjacentSpot(base) : null;
             if (spot) { spawnPos = spot; break; }
         }
-        if (!spawnPos) spawnPos = this.gridPos;
-    // Spawn child
-    if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} calling spawnCharacter at`, spawnPos, 'genes=', childGenes); } catch(e){} }
+        if (!spawnPos) spawnPos = { ...this.gridPos };
+
+    if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[BIRTH] ${this.id} giving birth at`, spawnPos, 'genes=', childGenes); } catch(e){} }
     const child = spawnCharacter(spawnPos, childGenes);
         // Set child color and initial needs after spawn
         if (child && child.bodyMaterial && child.bodyMaterial.color) {
@@ -7126,7 +7202,7 @@ class Character {
                     // Community intro: seed a small base affinity with all other living characters
                     const _introBonus = _kclamp(Math.round(_kinshipBonus * 0.60));
                     for (const other of _kchars) {
-                        if (!other || other.id === child.id || other.id === this.id || other.id === partner.id || _sibIds.has(other.id)) continue;
+                        if (!other || other.id === child.id || other.id === this.id || (partner && other.id === partner.id) || _sibIds.has(other.id)) continue;
                         if (!other.relationships) continue;
                         const _existing = child.relationships.get(other.id) || 0;
                         if (_existing < _introBonus) {
@@ -7137,8 +7213,8 @@ class Character {
                     }
                 } catch (_ke) { /* kinship affinity setup error — non-fatal */ }
                 // household continuity: child inherits the nearest known home context and stays a worker role-wise
-                child.homePosition = this.homePosition || partner.homePosition || child.homePosition || null;
-                child.provisionalHome = this.provisionalHome || partner.provisionalHome || child.provisionalHome || child.homePosition || null;
+                child.homePosition = this.homePosition || (partner && partner.homePosition) || child.homePosition || null;
+                child.provisionalHome = this.provisionalHome || (partner && partner.provisionalHome) || child.provisionalHome || child.homePosition || null;
                 child.role = 'worker';
                 // optional age fields for growth system
                 child.age = 0;
@@ -7160,14 +7236,11 @@ class Character {
                 } else if (typeof characters !== 'undefined') {
                     Character.detectGroupsAndElectLeaders(characters);
                 }
-                // record last reproduction time for both parents (simulated seconds)
-                this._lastReproductionTime = _reproSimSec();
-                partner._lastReproductionTime = _reproSimSec();
                 if (typeof window !== 'undefined' && typeof window.recordPopulationBirth === 'function') {
                     window.recordPopulationBirth({
                         childId: child.id,
                         generation: Number(child.generation || 0),
-                        parentIds: [this.id, partner.id]
+                        parentIds: [this.id, partner ? partner.id : null].filter(Boolean)
                     });
                 }
                 // Birth visual effect — CSS animation, zero per-frame cost
@@ -7181,13 +7254,16 @@ class Character {
                         kind: 'birth',
                         childId: child.id,
                         generation: Number(child.generation || 0),
-                        parents: [this.id, partner.id],
+                        parents: [this.id, partner ? partner.id : null].filter(Boolean),
                         pos: { x: child.gridPos.x, y: child.gridPos.y, z: child.gridPos.z }
                     });
                 }
-                if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} spawned child ${child.id} at ${JSON.stringify(spawnPos)} parents=${JSON.stringify(child.parentIds)}`); } catch(e){} }
+                if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[BIRTH] ${this.id} gave birth to child ${child.id} at ${JSON.stringify(spawnPos)}`); } catch(e){} }
             } catch (e) { /* ignore visual tweak errors */ }
         }
+        // Parental investment: mother stays near the newborn for ~20s
+        this._parentalTimer = 20;
+        this._lastChildId = child ? child.id : null;
     }
 
     decideNextAction(isNight) {

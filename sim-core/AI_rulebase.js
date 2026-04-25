@@ -855,6 +855,23 @@ export function decideNextAction_rulebase(character, isNight) {
         }
     }
 
+    // === PRIORITY 5.5: PREGNANCY SAFETY — pregnant characters avoid conflict and seek shelter ===
+    if (character._pregnant) {
+        // If low safety or at night, immediately head home / shelter
+        if (character.needs.safety < 55 || isNight) {
+            const _safeSpot = character.homePosition || character.provisionalHome || null;
+            if (_safeSpot) {
+                const _dist = Math.abs(character.gridPos.x - _safeSpot.x) + Math.abs(character.gridPos.z - _safeSpot.z);
+                if (_dist > 3) { character.setNextAction('WANDER', null, _safeSpot); return; }
+            }
+        }
+        // Block heavy labor during pregnancy
+        if (character.action?.type === 'BUILD_HOME' || character.action?.type === 'CHOP_WOOD' || character.action?.type === 'DESTROY_BLOCK') {
+            character.setNextAction('WANDER');
+            return;
+        }
+    }
+
     // === PRIORITY 6: SAFETY (Night time) ===
     // nightSafetyOverride: brave characters (bravery > 1.2) with adequate energy stay outside at night.
     // bravery direction fix: low bravery → high threshold (flees at moderate danger);
