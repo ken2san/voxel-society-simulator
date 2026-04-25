@@ -230,11 +230,45 @@
     <div id="mobile-accordion-bar">
         <button class="m-acc-btn" id="m-acc-left-btn">👥 Characters</button>
         <button class="m-acc-btn" id="m-acc-right-btn">🔍 Detail</button>
+        <button class="m-acc-btn" id="m-acc-world-btn">⚙️ World</button>
     </div>
 
     <!-- Sidebars: fixed panels on desktop, collapsible panels on mobile -->
     <div id="sidebar-left" class="sidebar-bg"></div>
     <div id="sidebar-right" class="sidebar-bg-right"></div>
+
+    <!-- World settings panel: mobile only bottom-sheet -->
+    <div id="mobile-world-panel">
+        <div class="m-world-inner">
+            <div class="m-world-sliders">
+                <div class="m-world-row">
+                    <label class="m-world-label">🌲 Trees</label>
+                    <input type="range" id="treeSlider-m" min="0" max="1" step="0.05" value="0.35" class="m-world-range">
+                    <span class="m-world-val" id="treeValue-m">35%</span>
+                </div>
+                <div class="m-world-row">
+                    <label class="m-world-label">🍃 Leaves</label>
+                    <input type="range" id="leafSlider-m" min="0" max="1" step="0.05" value="0.70" class="m-world-range">
+                    <span class="m-world-val" id="leafValue-m">70%</span>
+                </div>
+                <div class="m-world-row">
+                    <label class="m-world-label">🍎 Fruit</label>
+                    <input type="range" id="fruitSlider-m" min="0" max="1" step="0.05" value="0.30" class="m-world-range">
+                    <span class="m-world-val" id="fruitValue-m">30%</span>
+                </div>
+                <div class="m-world-row">
+                    <label class="m-world-label">🗿 Stone</label>
+                    <input type="range" id="stoneSlider-m" min="0" max="1" step="0.05" value="0.15" class="m-world-range">
+                    <span class="m-world-val" id="stoneValue-m">15%</span>
+                </div>
+                <div class="m-world-row">
+                    <label class="m-world-label">🕳️ Caves</label>
+                    <input type="range" id="caveSlider-m" min="0" max="0.5" step="0.05" value="0.10" class="m-world-range">
+                    <span class="m-world-val" id="caveValue-m">10%</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="messageBox" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-8 rounded-2xl shadow-2xl z-50" data-aos="fade-in" data-aos-delay="300">
         <p id="messageText" class="text-xl font-bold mb-6"></p>
@@ -334,21 +368,60 @@
             // ── Accordion panels ──────────────────────────────────────────
             var accLeftBtn  = document.getElementById('m-acc-left-btn');
             var accRightBtn = document.getElementById('m-acc-right-btn');
+            var accWorldBtn = document.getElementById('m-acc-world-btn');
             var accLeft     = document.getElementById('sidebar-left');
             var accRight    = document.getElementById('sidebar-right');
+            var accWorld    = document.getElementById('mobile-world-panel');
+
+            var allPanels = [accLeft, accRight, accWorld];
+            var allBtns   = [accLeftBtn, accRightBtn, accWorldBtn];
 
             function mAccToggle(panel, btn) {
                 var willOpen = !panel.classList.contains('mobile-open');
-                [accLeft, accRight].forEach(function (p) { p && p.classList.remove('mobile-open'); });
-                [accLeftBtn, accRightBtn].forEach(function (b) { b && b.classList.remove('active'); });
+                allPanels.forEach(function (p) { p && p.classList.remove('mobile-open'); });
+                allBtns.forEach(function (b) { b && b.classList.remove('active'); });
                 if (willOpen) {
                     panel.classList.add('mobile-open');
                     btn.classList.add('active');
-                    panel.scrollTop = 0;
+                    if (panel.scrollTop !== undefined) panel.scrollTop = 0;
                 }
             }
-            if (accLeftBtn && accLeft)   accLeftBtn.addEventListener('click',  function () { mAccToggle(accLeft,  accLeftBtn); });
+            if (accLeftBtn  && accLeft)  accLeftBtn.addEventListener('click',  function () { mAccToggle(accLeft,  accLeftBtn); });
             if (accRightBtn && accRight) accRightBtn.addEventListener('click', function () { mAccToggle(accRight, accRightBtn); });
+            if (accWorldBtn && accWorld) accWorldBtn.addEventListener('click', function () { mAccToggle(accWorld, accWorldBtn); });
+
+            // ── World panel sliders: mirror values to the desktop sliders ──────────
+            var sliderPairs = [
+                ['treeSlider',  'treeValue',  'treeSlider-m',  'treeValue-m'],
+                ['leafSlider',  'leafValue',  'leafSlider-m',  'leafValue-m'],
+                ['fruitSlider', 'fruitValue', 'fruitSlider-m', 'fruitValue-m'],
+                ['stoneSlider', 'stoneValue', 'stoneSlider-m', 'stoneValue-m'],
+                ['caveSlider',  'caveValue',  'caveSlider-m',  'caveValue-m'],
+            ];
+            sliderPairs.forEach(function (pair) {
+                var desk = document.getElementById(pair[0]);
+                var dVal = document.getElementById(pair[1]);
+                var mob  = document.getElementById(pair[2]);
+                var mVal = document.getElementById(pair[3]);
+                if (!desk || !mob) return;
+                // Sync mobile slider from desktop initial value
+                mob.value = desk.value;
+                if (mVal && dVal) mVal.textContent = dVal.textContent;
+                // Mobile change → fire input on desktop slider (lets main.js handle the rest)
+                mob.addEventListener('input', function () {
+                    desk.value = mob.value;
+                    var pct = Math.round(parseFloat(mob.value) / parseFloat(mob.max) * 100);
+                    var displayVal = pct + '%';
+                    if (mVal) mVal.textContent = displayVal;
+                    if (dVal) dVal.textContent = displayVal;
+                    desk.dispatchEvent(new Event('input', { bubbles: true }));
+                });
+                // Desktop change → keep mobile in sync
+                desk.addEventListener('input', function () {
+                    mob.value = desk.value;
+                    if (dVal && mVal) mVal.textContent = dVal.textContent;
+                });
+            });
         });
     })();
     </script>
