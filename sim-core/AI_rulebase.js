@@ -159,6 +159,27 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // === PRIORITY 0.75: SEEK TRUSTED SUPPORT WHEN ANXIOUS OR LONELY ===
+    // --- Grief sub-check: recently lost a close ally —
+    // With low probability, a grieving character drifts toward where the ally died
+    // (lingering / pilgrimage). This is a passive pull, not a forced action:
+    // survival needs always gate it (hunger > 25, energy above floor).
+    if (character._griefState?.remainingSeconds > 0
+        && character.needs.energy > (effectiveEnergyEmergency + 10)
+        && character.needs.hunger > 25) {
+        const dp = character._griefState.deathPos;
+        const dist = Math.abs(character.gridPos.x - dp.x) + Math.abs(character.gridPos.z - dp.z);
+        // Only drift if we're not already nearby (> 4 tiles) and not too far to be meaningful
+        if (dist > 4 && dist < 28) {
+            // Probability scales with grief intensity and fades as time runs out.
+            // Total pull window is 30–90s; we trigger at most ~10–15% of decisions.
+            const griefPull = character._griefState.intensity * 0.12;
+            if (Math.random() < griefPull) {
+                character.log(`Action: WANDER (grief pull toward death site dist=${dist.toFixed(0)})`);
+                character.setNextAction('WANDER', null, dp);
+                return;
+            }
+        }
+    }
     const supportUrgency = clamp(
         (Math.max(0, 55 - character.needs.social) / 55) * 0.55 +
         (Math.max(0, 50 - character.needs.safety) / 50) * 0.45,
@@ -204,6 +225,37 @@ export function decideNextAction_rulebase(character, isNight) {
             character.setNextAction('WANDER');
             character.log('Action: WANDER (random exploration)');
             return;
+        }
+    }
+
+    // === PRIORITY 1.5: NIGHT COHESION — group members cluster at night ===
+    // At night, characters who belong to a group and have enough energy/food
+    // drift toward the nearest ally instead of wandering alone.
+    // This creates observable village-life clustering without forcing behavior:
+    // survival pressures (hunger, energy) always gate this check.
+    if (isNight
+        && character.groupId
+        && character.needs.energy > (effectiveEnergyEmergency + 14)
+        && character.needs.hunger > 32) {
+        const _nightCohesionRate = clamp(0.22 + (character.personality.sociality ?? 1.0) * 0.12, 0.1, 0.40);
+        if (Math.random() < _nightCohesionRate) {
+            const _chars = (typeof window !== 'undefined' && window.characters)
+                ? window.characters
+                : (typeof characters !== 'undefined' ? characters : []);
+            let _nearestAlly = null;
+            let _minDist = 30;
+            for (const _nc of _chars) {
+                if (_nc.id === character.id || _nc.state === 'dead') continue;
+                if (_nc.groupId !== character.groupId) continue;
+                const _d = Math.abs(character.gridPos.x - _nc.gridPos.x)
+                         + Math.abs(character.gridPos.z - _nc.gridPos.z);
+                if (_d > 2 && _d < _minDist) { _minDist = _d; _nearestAlly = _nc; }
+            }
+            if (_nearestAlly) {
+                character.log(`Action: SOCIALIZE (night cohesion dist=${_minDist})`);
+                character.setNextAction('SOCIALIZE', _nearestAlly, _nearestAlly.gridPos);
+                return;
+            }
         }
     }
 

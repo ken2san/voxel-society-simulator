@@ -4687,6 +4687,12 @@ class Character {
                 return;
             }
         }
+        // --- griefState tick-down (seconds, like loveTimer) ---
+        if (this._griefState && this._griefState.remainingSeconds > 0) {
+            this._griefState.remainingSeconds -= deltaTime;
+            if (this._griefState.remainingSeconds <= 0) this._griefState = null;
+        }
+
         // --- loveTimer減少 ---
         if (this.loveTimer > 0) {
             const prev = this.loveTimer;
@@ -5130,14 +5136,28 @@ class Character {
         // --- Clean up zombie references in living characters ---
         // _socialAnchorId pointing to a dead character causes needless pathfinding.
         // relationships entries for dead characters waste decay-loop iterations.
+        // Close ties (affinity >= 65) enter a grief state — they show 😢 and
+        // occasionally drift toward where the ally died.
         try {
             const _deadId = this.id;
+            const _deadPos = { x: this.gridPos.x, y: this.gridPos.y, z: this.gridPos.z };
             const _allChars = (typeof window !== 'undefined' && window.characters)
                 ? window.characters
                 : (typeof characters !== 'undefined' ? characters : []);
             for (const _c of _allChars) {
                 if (!_c || _c.state === 'dead') continue;
                 if (_c._socialAnchorId === _deadId) _c._socialAnchorId = null;
+                // Grief: read affinity BEFORE deleting the relationship
+                const _aff = _c.relationships?.get(_deadId) ?? 0;
+                if (_aff >= 65) {
+                    // Duration: 30s (affinity 65) → 90s (affinity 100), scaled linearly
+                    const _griefSec = 30 + (_aff - 65) * (60 / 35);
+                    _c._griefState = {
+                        deathPos: _deadPos,
+                        intensity: Math.min(1, _aff / 100),
+                        remainingSeconds: _griefSec,
+                    };
+                }
                 if (_c.relationships) _c.relationships.delete(_deadId);
             }
         } catch (_e) {}
@@ -6671,6 +6691,7 @@ class Character {
         else if (this.state === 'resting') icons.push('⚡');
         else if (this.state === 'socializing') icons.push('💬');
         else if (this.state === 'moving' || this.state === 'active') icons.push('🚶');
+        if (this._griefState?.remainingSeconds > 0) icons.push('😢');
         if (this.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');
         else if (this.needs && this.needs.hunger < 30 && !icons.includes('🍎')) icons.push('🍎');
         if (this.needs && this.needs.energy < 30) icons.push('💤');
