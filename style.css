@@ -148,8 +148,8 @@
   /* Hide the canvas-embedded Centre button (HUD has 🎯 already) */
   #centreCameraBtn { display: none !important; }
 
-  /* Remove vignette border-radius on full-screen canvas */
-  #game-container::before { border-radius: 0 !important; }
+  /* Fully suppress vignette overlay on mobile (not needed on full-screen canvas) */
+  #game-container::before { display: none !important; }
 
   /* Minimap: smaller, stays in top-right corner */
   #minimapCanvas { width: 64px !important; height: 64px !important; }
