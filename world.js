@@ -1663,6 +1663,8 @@ export function animate() {
     // ── Rain update helper (called both when paused and running) ─────────────
     function _updateRain(dt) {
         if (!animate._rain) return;
+        // On mobile, skip rain particle CPU update on the non-rendered frame
+        if (_skipRender) return;
         const si  = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
         const ph  = si ? si.phase     : 0;
         const amp = si ? si.amplitude : 0;

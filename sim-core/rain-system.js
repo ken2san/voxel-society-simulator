@@ -19,7 +19,7 @@
 import * as THREE from 'three';
 import { playSound } from './sound-system.js';
 
-const RAIN_COUNT = 1200;
+const RAIN_COUNT = (typeof window !== 'undefined' && window.__mobileOptimized) ? 500 : 1200;
 const SPREAD_XZ  = 40;
 const SPAWN_Y    = 10;
 const RECYCLE_Y  = -1;
