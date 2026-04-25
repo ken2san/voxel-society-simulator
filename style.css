@@ -101,7 +101,10 @@
     overflow: hidden !important;
     height: 100dvh !important;
     padding: 0 !important;
+    background: #0f172a !important;
   }
+
+  html { background: #0f172a !important; }
 
   h1              { display: none !important; }
   #debug-launcher { display: none !important; }
@@ -158,6 +161,9 @@
     left: 0 !important;
     right: 0 !important;
     z-index: 150 !important;
+    background: #0f172a !important;
+    border: none !important;
+    outline: none !important;
   }
 }
 
