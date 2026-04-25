@@ -311,6 +311,7 @@ function renderCharacterDetail() {
         maxAffinity:                        100,
         reproductionCooldownSeconds:        8,
         fruitRegenIntervalSeconds:          60,
+        fruitCarryingCapacity:              80,
         dayDurationSeconds:                 120,
         seasonCycleSeconds:                 4,
         seasonAmplitude:                    0.6,
@@ -2024,6 +2025,51 @@ function renderCharacterDetail() {
     tabPanels[2].appendChild(fruitRegenRow);
     fruitRegenInput.disabled = paramDisabled;
     fruitRegenVal.disabled = paramDisabled;
+
+    // --- Fruit Carrying Capacity Slider ---
+    if (sidebarParams.fruitCarryingCapacity === undefined) sidebarParams.fruitCarryingCapacity = 80;
+    const fruitCapRow = document.createElement('div');
+    fruitCapRow.style.display = 'flex';
+    fruitCapRow.style.alignItems = 'center';
+    fruitCapRow.style.gap = '10px';
+    const fruitCapLabel = document.createElement('span');
+    fruitCapLabel.textContent = '🍎 Carrying Capacity:';
+    fruitCapLabel.style.flex = '1';
+    const fruitCapInput = document.createElement('input');
+    fruitCapInput.type = 'range';
+    fruitCapInput.min = 10;
+    fruitCapInput.max = 300;
+    fruitCapInput.step = 5;
+    fruitCapInput.value = sidebarParams.fruitCarryingCapacity;
+    fruitCapInput.style.flex = '2';
+    fruitCapInput.id = 'fruitCapInput';
+    fruitCapInput.name = 'fruitCapInput';
+    const fruitCapVal = document.createElement('input');
+    fruitCapVal.type = 'number';
+    fruitCapVal.min = 10;
+    fruitCapVal.max = 300;
+    fruitCapVal.step = 5;
+    fruitCapVal.value = sidebarParams.fruitCarryingCapacity;
+    fruitCapVal.style.width = '60px';
+    fruitCapVal.id = 'fruitCapVal';
+    fruitCapVal.name = 'fruitCapVal';
+    fruitCapRow.appendChild(fruitCapLabel);
+    fruitCapRow.appendChild(fruitCapInput);
+    fruitCapRow.appendChild(fruitCapVal);
+    fruitCapInput.oninput = () => {
+        fruitCapVal.value = fruitCapInput.value;
+        sidebarParams.fruitCarryingCapacity = parseInt(fruitCapInput.value);
+        window.fruitCarryingCapacity = parseInt(fruitCapInput.value);
+    };
+    fruitCapVal.oninput = () => {
+        fruitCapInput.value = fruitCapVal.value;
+        sidebarParams.fruitCarryingCapacity = parseInt(fruitCapVal.value);
+        window.fruitCarryingCapacity = parseInt(fruitCapVal.value);
+    };
+    fruitCapRow.dataset.label = 'Fruit Carrying Capacity';
+    tabPanels[2].appendChild(fruitCapRow);
+    fruitCapInput.disabled = paramDisabled;
+    fruitCapVal.disabled = paramDisabled;
 
     // --- Day Duration Slider ---
     if (sidebarParams.dayDurationSeconds === undefined) sidebarParams.dayDurationSeconds = 120;

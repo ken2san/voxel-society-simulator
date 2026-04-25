@@ -1366,12 +1366,20 @@ export function tickFruitRegen(deltaTime) {
         ? globalThis.window.fruitRegenIntervalSeconds : 60;
     if (_fruitRegenAccum < fruitRegenInterval) return;
     _fruitRegenAccum = 0;
+    // Density-dependent multiplier: logistic cap so heavy consumption accelerates regrowth
+    // and a full ecosystem slows to zero. densityMult = max(0, 1 - currentFruit / capacity).
+    const carryingCapacity = (typeof globalThis.window !== 'undefined' && globalThis.window.fruitCarryingCapacity > 0)
+        ? globalThis.window.fruitCarryingCapacity : 80;
+    let _currentFruitCount = 0;
+    forEachWorldKeyOfTypes([BLOCK_TYPES.FRUIT.id], () => _currentFruitCount++);
+    const densityMult = Math.max(0, 1 - _currentFruitCount / carryingCapacity);
+    if (densityMult <= 0) return; // At/above carrying capacity — no new spawns
     // Apply the same seasonal multiplier that animate() uses in the browser.
     // Without this, headless CLI always runs at full spawn rate while the browser
     // experiences winter dips (amplitude=0.6 → 0.4× rate), making CLI unrepresentative.
     const seasonalMultiplier = (typeof globalThis.window !== 'undefined' && globalThis.window.currentSeasonInfo)
         ? Math.max(0, globalThis.window.currentSeasonInfo.multiplier) : 1;
-    const rate = fruitSpawnRate * seasonalMultiplier;
+    const rate = fruitSpawnRate * seasonalMultiplier * densityMult;
     for (let x = 0; x < gridSize; x++) {
         for (let z = 0; z < gridSize; z++) {
             if (Math.random() >= rate) continue;
