@@ -82,6 +82,12 @@
         }
     }
     </script>
+    <script>
+        // Set mobile optimization flag before main.js loads (touch device heuristic)
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            window.__mobileOptimized = true;
+        }
+    </script>
     <script type="module" src="main.js"></script>
     <script type="module" src="sidebar.js"></script>
 </head>
