@@ -12,6 +12,8 @@ _Last updated: 2026-04-25_
 
 They gather food (fuel/materials), form bonds, build and maintain shelters, grieve their dead, and seek cover from the rain. The simulation is a window into their society, not a game about them. The observer is an outsider.
 
+They build houses not because they strictly need shelter, but because they inherited the behavioral templates of the species that made them. The mimicry is imperfect, unconscious, and persistent — which is exactly what makes it interesting to watch.
+
 This lore is intentionally kept implicit in the UI — nothing needs to be explained to the player. The behavior should feel organic enough that the setting is inferred, not announced.
 
 ---
