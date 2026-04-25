@@ -4,8 +4,6 @@ import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
 import { createBirdSystem } from './sim-core/ambient-creatures.js';
-import { createBirdSystem } from './sim-core/ambient-creatures.js';
-import { createBirdSystem } from './sim-core/ambient-creatures.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
 import { buildWellGroup } from './sim-core/well-renderer.js';
 import { buildAngelGroup, buildReaperGroup } from './sim-core/special-entities.js';
