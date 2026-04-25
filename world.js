@@ -3,6 +3,9 @@ import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
+import { createBirdSystem } from './sim-core/ambient-creatures.js';
+import { createBirdSystem } from './sim-core/ambient-creatures.js';
+import { createBirdSystem } from './sim-core/ambient-creatures.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
 import { buildWellGroup } from './sim-core/well-renderer.js';
 import { buildAngelGroup, buildReaperGroup } from './sim-core/special-entities.js';
@@ -1561,6 +1564,12 @@ export function animate() {
     if (!animate._snow && scene) {
         animate._snow = createSnowSystem(scene);
     }
+
+    // ── Lazy-init bird system (ambient creatures, pure visual) ────────────────
+    if (!animate._birds && scene) {
+        animate._birds = createBirdSystem(scene, gridSize);
+    }
+    if (animate._birds) animate._birds.update(deltaTime);
 
     // ── Campfire lifecycle ────────────────────────────────────────────────────
     // Visible count = min(spots, floor(aliveChars / CHARS_PER_CAMPFIRE)).

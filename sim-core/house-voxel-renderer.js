@@ -43,31 +43,33 @@ const FOUND_PALETTE = {
 };
 
 // ── Color palettes (voxelchar04-style) ───────────────────────────────────────
-// Wall: white/cream base + ~12% brick accent
+// Wall: warm honey/golden base + red brick accent (wood) | blue-grey ashlar (stone)
 const WALL_PALETTE = {
-    wood:  { base: [0xecf0f1, 0xe8e0d4, 0xf5f0e8, 0xddd8cc], brick: 0xc0392b },
+    wood:  { base: [0xf0e0a0, 0xe8d090, 0xfcecc0, 0xd8c478], brick: 0xb83222 },
     stone: { base: [0xa0b4c4, 0x8a9aa8, 0xb4c4d4, 0x7a8a98], brick: 0x607868 },
 };
-// Roof: dark navy checkerboard (voxelchar04: 0x2c3e50 / 0x1a252f)
+// Roof: warm dark brown for wood (cottage), dark slate for stone
 const ROOF_PALETTE = {
-    wood:  [0x2c3e50, 0x1a252f],
+    wood:  [0x5a3820, 0x3d2410],
     stone: [0x3a4a5a, 0x25333e],
 };
-// Chimney: medium grey (voxelchar04: 0x95a5a6)
+// Chimney
 const CHIMNEY_COLOR = {
-    wood:  0x95a5a6,
+    wood:  0x8a7060,
     stone: 0x607888,
 };
-// Door: grey slab (voxelchar04: 0x7f8c8d)
+// Door: dark oak for wood, dark slate for stone
 const DOOR_COLOR = {
-    wood:  0x7f8c8d,
+    wood:  0x6b4c2a,
     stone: 0x354050,
 };
-// Window: warm yellow glow (voxelchar04: 0xf1c40f)
+// Window: warm amber glow (wood) | cold blue-white (stone)
 const WINDOW_COLOR = {
-    wood:  0xf1c40f,
-    stone: 0xc8e8ff,
+    wood:  0xffcc44,
+    stone: 0xb8e0ff,
 };
+// Flower box accent below front window (wood only)
+const FLOWER_COLOR = 0xe84040;
 
 // Per-face brightness (+X, -X, +Y, -Y, +Z, -Z)
 const _FB = [0.88, 0.78, 1.30, 0.40, 1.00, 0.70];
@@ -142,10 +144,11 @@ function buildVoxelGeo(voxels, innerSize) {
 //
 // Front face (iz=0) layout, ix=0..4 left→right, iy=0..4 bottom→top:
 //   iy=4: W  W  W  W  W   (top)
-//   iy=3: W  F  F  W  W   F=door lintel accent
-//   iy=2: W  _  _  Wn W   _=door opening, Wn=window glow
-//   iy=1: W  _  _  Wn W   _=door opening, Wn=window glow
-//   iy=0: W  W  W  W  W   (threshold)
+//   iy=3: W  Ld Ld Wn W   Ld=door lintel, Wn=window top (3-tall)
+//   iy=2: W  _  _  Wn W   _=door opening, Wn=window mid
+//   iy=1: W  _  _  Wn W   _=door opening, Wn=window bot
+//   iy=0: W  W  Fl W  W   Fl=flower box below window (wood only)
+// Back face (iz=4): center window (ix=2, iy=1,2)
 export function buildHouseWallGroup(type, x, y, z, isVisible) {
     const houseType = type.isStoneWall ? 'stone' : 'wood';
     const pal       = WALL_PALETTE[houseType];
@@ -180,17 +183,23 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
                 // Door opening: front face, ix=1,2, iy=1,2
                 if (iz === 0 && ix >= 1 && ix <= 2 && iy >= 1 && iy <= 2) continue;
 
-                // Feature voxels on front face
-                const isDoorLintel = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
-                const isWindow     = iz === 0 && ix === 3 && iy >= 1 && iy <= 2;
+                // Feature voxels
+                const isDoorLintel  = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
+                // Front window: 3 voxels tall (iy=1,2,3)
+                const isFrontWindow = iz === 0 && ix === 3 && iy >= 1 && iy <= 3;
+                // Back window: center column, 2 tall
+                const isBackWindow  = iz === WG - 1 && ix === 2 && iy >= 1 && iy <= 2;
+                // Flower box: front face, under the window, wood only
+                const isFlowerBox   = iz === 0 && ix === 3 && iy === 0 && !type.isStoneWall;
 
                 const vx = (ix - (WG - 1) / 2) * WS;
                 const vy = (iy - (WGH - 1) / 2) * WS;
                 const vz = (iz - (WG - 1) / 2) * WS;
 
-                if (isWindow) {
-                    // Window goes into a separate unlit array so it always glows
+                if (isFrontWindow || isBackWindow) {
                     winVoxels.push({ x: vx, y: vy, z: vz, color: winCol });
+                } else if (isFlowerBox) {
+                    voxels.push({ x: vx, y: vy, z: vz, color: FLOWER_COLOR });
                 } else {
                     let color;
                     if (isDoorLintel) {
