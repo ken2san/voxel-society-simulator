@@ -1,16 +1,19 @@
 /**
  * rain-system.js
  *
- * Lightweight THREE.Points-based rainfall effect.
- * Active during Spring (phase 0.0–0.25) and Summer (0.25–0.50) with
- * random rain-event windows. Each rain event lasts 30–90 s sim-time.
- * Exposes window._isRaining (boolean) so AI and sound can react.
+ * Two types of rainfall:
+ *  - 'heavy'   土砂降り: dense fast drops, high wind, thunder, grey sky.
+ *              Characters with homes retreat indoors (~70% chance).
+ *  - 'drizzle' しっとり雨: sparse slow drops, minimal wind, no thunder, soft blue-grey sky.
+ *              Only the most timid characters go inside (~25% chance).
  *
- * Design constraints (same as snow-system.js):
- *  - Single draw call: one THREE.Points object, 1200 streaked particles.
- *  - No per-frame heap allocation: positions reused via DynamicDrawUsage.
- *  - Particles recycle when they fall below ground.
- *  - Respects window.showEffects === false.
+ * Exposes:
+ *   window._isRaining  boolean
+ *   window._rainType   'heavy' | 'drizzle' | null
+ *   window._thunderFlash  0–1 per-frame flash magnitude (world.js reads this)
+ *
+ * Design: single draw call (one THREE.Points), material params are updated
+ * per-frame to match current type — no second geometry needed.
  */
 
 import * as THREE from 'three';
@@ -20,28 +23,46 @@ const RAIN_COUNT = 1200;
 const SPREAD_XZ  = 40;
 const SPAWN_Y    = 10;
 const RECYCLE_Y  = -1;
-const FALL_SPEED = 8.0;   // u/s — rain falls much faster than snow
-const WIND_X     = 1.2;   // slight horizontal drift
 
-// Rain event config (wall-clock seconds so tabs don't drift)
-const EVENT_MIN_S  = 30;
-const EVENT_MAX_S  = 90;
-const PAUSE_MIN_S  = 60;
-const PAUSE_MAX_S  = 180;
+// Base fall speed; multiplied per-type each frame
+const BASE_SPEED = 8.0;
 
-// Thunder: strikes occur 8–30 s apart once rain is established (intensity > 0.6)
+// Event durations (seconds)
+const HEAVY_MIN_S   = 20;  const HEAVY_MAX_S   = 60;   // shorter, intense
+const DRIZZLE_MIN_S = 60;  const DRIZZLE_MAX_S = 150;  // longer, gentle
+const PAUSE_MIN_S   = 60;  const PAUSE_MAX_S   = 180;
+
+// Thunder timing (heavy only)
 const THUNDER_MIN_S = 8;
 const THUNDER_MAX_S = 30;
 
+// Per-type visual parameters
+const TYPE_PARAMS = {
+    heavy: {
+        size:         0.14,
+        opacityScale: 0.60,
+        speedMul:     1.00,
+        windX:        1.40,
+        color:        0x99bbee,  // steely blue-grey
+    },
+    drizzle: {
+        size:         0.07,
+        opacityScale: 0.28,
+        speedMul:     0.32,
+        windX:        0.20,
+        color:        0xddeeff,  // soft pale blue
+    },
+};
+
 export function createRainSystem(scene) {
     const positions = new Float32Array(RAIN_COUNT * 3);
-    const speeds    = new Float32Array(RAIN_COUNT);
+    const speeds    = new Float32Array(RAIN_COUNT);  // per-particle speed base
 
     for (let i = 0; i < RAIN_COUNT; i++) {
         positions[i * 3]     = (Math.random() - 0.5) * SPREAD_XZ;
         positions[i * 3 + 1] = Math.random() * SPAWN_Y;
         positions[i * 3 + 2] = (Math.random() - 0.5) * SPREAD_XZ;
-        speeds[i] = FALL_SPEED * (0.85 + Math.random() * 0.3);
+        speeds[i] = BASE_SPEED * (0.85 + Math.random() * 0.30);
     }
 
     const geo     = new THREE.BufferGeometry();
@@ -50,11 +71,11 @@ export function createRainSystem(scene) {
     geo.setAttribute('position', posAttr);
 
     const mat = new THREE.PointsMaterial({
-        color:           0xaaccff,
-        size:            0.13,
+        color:           0x99bbee,
+        size:            0.14,
         sizeAttenuation: true,
         transparent:     true,
-        opacity:         0.55,
+        opacity:         0,
         depthWrite:      false,
     });
 
@@ -63,83 +84,89 @@ export function createRainSystem(scene) {
     points.visible = false;
     scene.add(points);
 
-    // Rain event state
+    // Event state
     let eventActive  = false;
+    let currentType  = null;   // 'heavy' | 'drizzle' | null
     let eventTimer   = PAUSE_MIN_S + Math.random() * (PAUSE_MAX_S - PAUSE_MIN_S);
-    let intensity    = 0;   // current rendered opacity 0→1
+    let intensity    = 0;      // 0→1 fade
     let sysTime      = 0;
 
-    // Thunder state
+    // Thunder state (heavy only)
     let thunderTimer = THUNDER_MIN_S + Math.random() * (THUNDER_MAX_S - THUNDER_MIN_S);
-    // window._thunderFlash: 0=none, 0→1 peak, decays each frame; read by world.js sky blend
 
     return {
-        /**
-         * @param {number}  deltaTime   seconds since last frame
-         * @param {number}  phase       window.currentSeasonInfo.phase (0–1)
-         * @param {number}  amplitude   season amplitude (0 = seasons off)
-         * @param {boolean} effectsOn   window.showEffects !== false
-         */
         update(deltaTime, phase, amplitude, effectsOn) {
             sysTime += deltaTime;
             eventTimer -= deltaTime;
 
-            // Rain only in Spring (0–0.25) and Summer (0.25–0.50)
+            // Active during Spring (0–0.25) and Summer (0.25–0.50)
             const seasonOk = amplitude > 0 && phase < 0.50;
 
-            // Toggle events
+            // Toggle event on/off; pick type when turning on
             if (eventTimer <= 0) {
                 eventActive = !eventActive;
                 if (eventActive) {
-                    eventTimer = EVENT_MIN_S + Math.random() * (EVENT_MAX_S - EVENT_MIN_S);
+                    // 60% heavy, 40% drizzle
+                    currentType = Math.random() < 0.60 ? 'heavy' : 'drizzle';
+                    eventTimer  = currentType === 'heavy'
+                        ? HEAVY_MIN_S   + Math.random() * (HEAVY_MAX_S   - HEAVY_MIN_S)
+                        : DRIZZLE_MIN_S + Math.random() * (DRIZZLE_MAX_S - DRIZZLE_MIN_S);
                 } else {
-                    eventTimer = PAUSE_MIN_S + Math.random() * (PAUSE_MAX_S - PAUSE_MIN_S);
+                    currentType = null;
+                    eventTimer  = PAUSE_MIN_S + Math.random() * (PAUSE_MAX_S - PAUSE_MIN_S);
                 }
             }
 
             const shouldRain = eventActive && seasonOk && effectsOn;
+            const activeType = shouldRain ? currentType : null;
 
-            // Expose rain state globally so AI and sound can read it cheaply
-            if (typeof window !== 'undefined') window._isRaining = shouldRain;
+            // Publish globals
+            if (typeof window !== 'undefined') {
+                window._isRaining = shouldRain;
+                window._rainType  = activeType;
+            }
 
-            // ── Thunder ─────────────────────────────────────────────────────
-            // Only when rain is well-established (intensity > 0.6).
-            // Decay any existing flash regardless of rain state.
+            // ── Thunder (heavy only) ──────────────────────────────────────
             if (typeof window !== 'undefined') {
                 const prevFlash = window._thunderFlash || 0;
-                if (prevFlash > 0.01) {
-                    window._thunderFlash = prevFlash - deltaTime * 6; // flash fades over ~0.17 s
-                } else {
-                    window._thunderFlash = 0;
-                }
+                window._thunderFlash = prevFlash > 0.01
+                    ? prevFlash - deltaTime * 6   // fades in ~0.17 s
+                    : 0;
             }
-            if (shouldRain && intensity > 0.6) {
+            if (shouldRain && currentType === 'heavy' && intensity > 0.60) {
                 thunderTimer -= deltaTime;
                 if (thunderTimer <= 0) {
                     thunderTimer = THUNDER_MIN_S + Math.random() * (THUNDER_MAX_S - THUNDER_MIN_S);
-                    // Visual flash
                     if (typeof window !== 'undefined') window._thunderFlash = 1.0;
-                    // Sound (gated by soundEnabled inside playSound)
                     playSound('thunder');
                 }
-            } else {
-                // Drift timer when not raining so first strike after rain starts isn't instant
+            } else if (!shouldRain || currentType !== 'heavy') {
+                // Ensure first post-start strike isn't immediate
                 thunderTimer = Math.max(
                     thunderTimer,
                     THUNDER_MIN_S + Math.random() * (THUNDER_MAX_S - THUNDER_MIN_S) * 0.5
                 );
             }
 
-            // Fade intensity
+            // ── Fade intensity ────────────────────────────────────────────
             const targetIntensity = shouldRain ? 1 : 0;
-            intensity += (targetIntensity - intensity) * Math.min(1, deltaTime * 1.2);
+            intensity += (targetIntensity - intensity) * Math.min(1, deltaTime * 1.0);
 
             const visible = intensity > 0.02;
             points.visible = visible;
-            mat.opacity    = 0.55 * intensity;
 
             if (!visible) return;
 
+            // ── Update material to match current type ─────────────────────
+            const p = TYPE_PARAMS[currentType || 'drizzle'];
+            mat.size    = p.size;
+            mat.opacity = p.opacityScale * intensity;
+            mat.color.setHex(p.color);
+
+            const windX    = p.windX;
+            const speedMul = p.speedMul;
+
+            // ── Particle movement ─────────────────────────────────────────
             const camX = (typeof window !== 'undefined' && window._simCamera)
                 ? window._simCamera.position.x : 0;
             const camZ = (typeof window !== 'undefined' && window._simCamera)
@@ -147,8 +174,8 @@ export function createRainSystem(scene) {
 
             const pos = positions;
             for (let i = 0; i < RAIN_COUNT; i++) {
-                pos[i * 3]     += WIND_X * deltaTime;
-                pos[i * 3 + 1] -= speeds[i] * deltaTime;
+                pos[i * 3]     += windX * deltaTime;
+                pos[i * 3 + 1] -= speeds[i] * speedMul * deltaTime;
 
                 if (pos[i * 3 + 1] < RECYCLE_Y) {
                     pos[i * 3]     = camX + (Math.random() - 0.5) * SPREAD_XZ;
@@ -163,7 +190,10 @@ export function createRainSystem(scene) {
             scene.remove(points);
             geo.dispose();
             mat.dispose();
-            if (typeof window !== 'undefined') window._isRaining = false;
+            if (typeof window !== 'undefined') {
+                window._isRaining = false;
+                window._rainType  = null;
+            }
         },
     };
 }

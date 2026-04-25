@@ -198,18 +198,23 @@ export function decideNextAction_rulebase(character, isNight) {
 
     // === PRIORITY 0.8: RAIN SHELTER — homed characters retreat indoors when it rains ===
     // Only activates when: raining + character owns a home + not a child + not starving.
-    // Uses a 70% chance (not 100%) so a few hardy characters stay outside — that contrast
-    // is visible and interesting. Energy emergency already forced rest at priority 0, so
-    // characters caught here have enough energy to walk home.
+    // Shelter chance differs by rain type:
+    //   heavy (土砂降り) — 70%: most characters run for cover
+    //   drizzle (しっとり雨) — 25%: only timid characters bother going inside
+    // Energy emergency already forced rest at priority 0, so characters here
+    // have enough energy to walk home. The remaining % stay outside visibly,
+    // preserving the homed-vs-homeless contrast that makes weather meaningful.
     if ((typeof window !== 'undefined' && window._isRaining)
         && character.homePosition
         && !character.isChild
         && character.needs.hunger > 20
         && character.needs.energy > (effectiveEnergyEmergency + 6)) {
-        if (Math.random() < 0.70) {
+        const _rainType = (typeof window !== 'undefined' && window._rainType) || 'heavy';
+        const _shelterChance = _rainType === 'heavy' ? 0.70 : 0.25;
+        if (Math.random() < _shelterChance) {
             const _homeP = character.homePosition;
             const _homeAdj = character.findAdjacentSpot && character.findAdjacentSpot(_homeP);
-            character.log(`Action: SEEK_SHELTER_TO_REST (rain shelter)`);
+            character.log(`Action: SEEK_SHELTER_TO_REST (${_rainType} rain shelter)`);
             character.setNextAction('SEEK_SHELTER_TO_REST', _homeP, _homeAdj || _homeP);
             return;
         }

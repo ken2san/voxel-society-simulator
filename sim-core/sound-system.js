@@ -419,18 +419,21 @@ export function updateAmbience(isNight, seasonPhase) {
     const isAutumn = quarter === 2;
     const isSummer = quarter === 1;
 
-    // Wind: louder in autumn/winter, or during rain
-    const isRaining = (typeof window !== 'undefined' && !!window._isRaining);
-    const windTarget = isRaining ? 0.14 : isWinter ? 0.20 : isAutumn ? 0.13 : 0.06;
+    // Wind: louder in autumn/winter, or during heavy rain; barely changes for drizzle
+    const isRaining   = (typeof window !== 'undefined' && !!window._isRaining);
+    const rainType    = (typeof window !== 'undefined' && window._rainType) || null;
+    const isHeavy     = isRaining && rainType === 'heavy';
+    const isDrizzle   = isRaining && rainType === 'drizzle';
+    const windTarget  = isHeavy ? 0.18 : isDrizzle ? 0.07 : isWinter ? 0.20 : isAutumn ? 0.13 : 0.06;
     _ambWindGain.gain.setTargetAtTime(windTarget, t, 4.0);
 
-    // Rain: cross-fade over 5 s based on window._isRaining (set by rain-system.js)
-    const rainTarget = isRaining ? 0.55 : 0;
+    // Rain: heavy is loud (0.55), drizzle is soft (0.22); 5 s cross-fade
+    const rainTarget = isHeavy ? 0.55 : isDrizzle ? 0.22 : 0;
     if (_ambRainGain) _ambRainGain.gain.setTargetAtTime(rainTarget, t, 5.0);
 
-    // Birds: daytime only, spring/summer present, autumn faint, winter off, muted in rain
+    // Birds: silenced by heavy rain, only slightly reduced in drizzle (rain on leaves sounds nice)
     let birdTarget = 0;
-    if (!isNight && !isWinter && !isRaining) birdTarget = isSummer ? 0.85 : isAutumn ? 0.35 : 0.70;
+    if (!isNight && !isWinter && !isHeavy) birdTarget = isDrizzle ? 0.30 : isAutumn ? 0.35 : isSummer ? 0.85 : 0.70;
     _ambBirdGain.gain.setTargetAtTime(birdTarget, t, 3.0);
 
     // Crickets: night only, spring/summer present, autumn faint, winter off

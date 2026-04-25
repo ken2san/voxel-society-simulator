@@ -1468,11 +1468,16 @@ export function updateWorldLighting() {
         if (!scene.background) scene.background = io.createColor(0x87CEEB);
         if (typeof scene.background?.lerpColors === 'function') {
             scene.background.lerpColors(nightColor, dayColor, Math.max(0, dayIntensity));
-            // Blend toward grey overcast sky when it's raining
-            const rainIntensity = (typeof window !== 'undefined' && window._isRaining) ? 0.55 : 0;
-            if (rainIntensity > 0.01) {
-                if (!updateWorldLighting._rainColor) updateWorldLighting._rainColor = io.createColor(0x778899);
-                scene.background.lerp(updateWorldLighting._rainColor, rainIntensity * 0.5);
+            // Blend sky toward overcast — heavy rain = dark slate, drizzle = soft blue-grey
+            const _isRaining  = (typeof window !== 'undefined' && !!window._isRaining);
+            const _rainType   = (typeof window !== 'undefined' && window._rainType) || null;
+            if (_isRaining) {
+                const isHeavy = _rainType === 'heavy';
+                const rainSkyHex   = isHeavy ? 0x556677 : 0x9aaabb;  // dark slate vs soft grey-blue
+                const rainSkyBlend = isHeavy ? 0.60 : 0.35;
+                if (!updateWorldLighting._rainColor) updateWorldLighting._rainColor = io.createColor(0x556677);
+                updateWorldLighting._rainColor.setHex(rainSkyHex);
+                scene.background.lerp(updateWorldLighting._rainColor, rainSkyBlend);
             }
             // Lightning flash: briefly bleach sky toward near-white
             const flash = (typeof window !== 'undefined' && window._thunderFlash) ? Math.max(0, window._thunderFlash) : 0;
