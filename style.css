@@ -7,18 +7,21 @@
 #mobile-hud {
   display: none; /* hidden on desktop */
   position: fixed;
-  bottom: 0; left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  left: 16px;
+  right: 16px;
   z-index: 200;
-  height: 56px;
+  height: 52px;
+  border-radius: 999px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 12px;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: rgba(10, 16, 40, 0.90);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0 16px;
+  background: rgba(10, 16, 40, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .m-hud-btn {
@@ -109,6 +112,8 @@
   h1              { display: none !important; }
   #debug-launcher { display: none !important; }
   #resource-gen-settings { display: none !important; }
+  /* Hide the Detail sidebar's Start/Finish button — HUD has it already */
+  #sim-action-bar { display: none !important; }
 
   /* Canvas container fills entire viewport (behind HUD via z-index) */
   #game-container {
@@ -154,10 +159,10 @@
   /* Minimap: smaller, stays in top-right corner */
   #minimapCanvas { width: 64px !important; height: 64px !important; }
 
-  /* Accordion tab bar: fixed just above HUD */
+  /* Accordion tab bar: fixed just above floating HUD pill */
   #mobile-accordion-bar {
     position: fixed !important;
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
     left: 0 !important;
     right: 0 !important;
     z-index: 150 !important;

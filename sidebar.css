@@ -429,8 +429,8 @@
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    /* sits above accordion bar (44px) + HUD (56px) */
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 44px) !important;
+    /* sits above accordion bar (44px) + HUD pill (52px) + margins (20px) */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 116px) !important;
     top: auto !important;
     width: 100% !important;
     min-width: unset !important;
@@ -469,7 +469,7 @@
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 44px) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 116px) !important;
     top: auto !important;
     width: 100% !important;
     height: auto !important;
