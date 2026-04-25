@@ -123,10 +123,13 @@
     padding: 0 !important;
     border-radius: 0 !important;
     border: none !important;
+    outline: none !important;
     box-shadow: none !important;
+    background: transparent !important;
     max-width: 100% !important;
     width: 100% !important;
     height: 100% !important;
+    overflow: hidden !important;
   }
 
   /* Canvas fills the fixed container — Three.js onWindowResize reads clientWidth/Height */
@@ -135,6 +138,8 @@
     height: 100% !important;
     aspect-ratio: unset !important;
     border-radius: 0 !important;
+    background: transparent !important;
+    display: block !important;
   }
 
   /* Hide the canvas-embedded Centre button (HUD has 🎯 already) */
