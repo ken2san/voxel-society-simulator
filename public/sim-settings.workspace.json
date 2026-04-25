@@ -10,7 +10,7 @@
       "hungerEmergencyThreshold": 10,
       "energyEmergencyThreshold": 32,
       "wanderReserveEnergy": 10,
-      "hungerDecayRate": 0.55,
+      "hungerDecayRate": 0.45,
       "foodSeekHungerThreshold": 50,
       "foodTargetRetrySeconds": 25,
       "activeEnergyDrainRate": 2,

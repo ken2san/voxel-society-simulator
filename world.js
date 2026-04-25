@@ -120,7 +120,7 @@ export function getDEBUG_MODE() { return DEBUG_MODE; }
 
 // Resource generation settings (controlled by sliders)
 export let treeSpawnRate = 0.35; // 35% chance for trees (increased for more wood)
-export let fruitSpawnRate = 0.30; // 30% chance for fruit
+export let fruitSpawnRate = 0.38; // 38% chance for fruit (tuned for pop up to ~50)
 export let stoneSpawnRate = 0.15; // 15% chance for stone
 export let caveSpawnRate = 0.10; // 10% chance for caves
 export let leafSpawnRate = 0.70; // 70% chance for leaf generation per position (controls leaf density)
@@ -1365,13 +1365,13 @@ let _fruitRegenAccum = 0;
 export function tickFruitRegen(deltaTime) {
     _fruitRegenAccum += deltaTime;
     const fruitRegenInterval = (typeof globalThis.window !== 'undefined' && globalThis.window.fruitRegenIntervalSeconds > 0)
-        ? globalThis.window.fruitRegenIntervalSeconds : 60;
+        ? globalThis.window.fruitRegenIntervalSeconds : 40;
     if (_fruitRegenAccum < fruitRegenInterval) return;
     _fruitRegenAccum = 0;
     // Density-dependent multiplier: logistic cap so heavy consumption accelerates regrowth
     // and a full ecosystem slows to zero. densityMult = max(0, 1 - currentFruit / capacity).
     const carryingCapacity = (typeof globalThis.window !== 'undefined' && globalThis.window.fruitCarryingCapacity > 0)
-        ? globalThis.window.fruitCarryingCapacity : 80;
+        ? globalThis.window.fruitCarryingCapacity : 100;
     let _currentFruitCount = 0;
     forEachWorldKeyOfTypes([BLOCK_TYPES.FRUIT.id], () => _currentFruitCount++);
     const densityMult = Math.max(0, 1 - _currentFruitCount / carryingCapacity);

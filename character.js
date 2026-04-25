@@ -4243,16 +4243,16 @@ class Character {
         // State transitions and cost application.  Transmission is checked in a throttled block below.
         if (this._diseaseState === 'infected') {
             this._diseaseTimer -= deltaTime;
-            // Infected: extra energy + hunger drain, reduced movement speed
-            this.needs.energy -= deltaTime * 1.2;
-            this.needs.hunger -= deltaTime * 0.5;
+            // Infected: mild energy + hunger drain, reduced movement speed
+            this.needs.energy -= deltaTime * 0.5;
+            this.needs.hunger -= deltaTime * 0.15;
             if (this.movementSpeed && !this._preDiseaseSpeed) {
                 this._preDiseaseSpeed = this.movementSpeed;
                 this.movementSpeed = this.movementSpeed * 0.70;
             }
             if (this._diseaseTimer <= 0) {
                 this._diseaseState = 'recovered';
-                this._immuneTimer  = 180 + Math.random() * 120; // 3–5 min immunity
+                this._immuneTimer  = 300 + Math.random() * 180; // 5–8 min immunity
                 if (this._preDiseaseSpeed) { this.movementSpeed = this._preDiseaseSpeed; this._preDiseaseSpeed = null; }
             }
         } else if (this._diseaseState === 'recovered') {
@@ -4273,15 +4273,15 @@ class Character {
                     if (_other._diseaseState !== null) continue; // already infected or immune
                     const _dist = Math.abs(this.gridPos.x - _other.gridPos.x) + Math.abs(this.gridPos.z - _other.gridPos.z);
                     if (_dist > 2) continue;
-                    // 3% per 3s transmission tick; crowded settings spread faster
-                    if (Math.random() < 0.09) {
+                    // ~2.5% per 3s transmission tick (tuned for R0≈2 at typical density)
+                    if (Math.random() < 0.025) {
                         _other._diseaseState = 'infected';
                         _other._diseaseTimer = 90 + Math.random() * 90; // 90–180s
                     }
                 }
             } else if (this._diseaseState === null) {
-                // Spontaneous infection: very rare environmental source (0.25% per 3s per char)
-                if (Math.random() < 0.0025) {
+                // Spontaneous infection: very rare environmental source (0.05% per 3s per char)
+                if (Math.random() < 0.0005) {
                     this._diseaseState = 'infected';
                     this._diseaseTimer = 90 + Math.random() * 90;
                 }
