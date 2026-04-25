@@ -1714,10 +1714,20 @@ export function animate() {
         window.__activeCharacterCount = activeCount;
     }
     if (controls) controls.update();
-    for (const char of characters) char.update(deltaTime, isNight, camera);
+
+    // On mobile, skip character AI+animation on the non-rendered frame.
+    // Accumulate deltaTime so the next frame processes the full elapsed time.
+    // This halves character update CPU cost while keeping simulation time accurate.
+    if (_skipRender) {
+        animate._mobileCharDtAccum = (animate._mobileCharDtAccum || 0) + deltaTime;
+    } else {
+        const charDt = (animate._mobileCharDtAccum || 0) + deltaTime;
+        animate._mobileCharDtAccum = 0;
+        for (const char of characters) char.update(charDt, isNight, camera);
+    }
 
     // Sync instanced character renderer (batches body/head/arms/shadow into 5 draw calls)
-    if (typeof window !== 'undefined' && window._instancedCharRenderer) {
+    if (!_skipRender && typeof window !== 'undefined' && window._instancedCharRenderer) {
         window._instancedCharRenderer.update(characters);
     }
 
