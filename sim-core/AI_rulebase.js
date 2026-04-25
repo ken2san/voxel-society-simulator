@@ -146,7 +146,11 @@ export function decideNextAction_rulebase(character, isNight) {
     }
 
     // If food is available, start foraging before reaching crisis so the hunger bar behaves more naturally.
-    if (character.needs.hunger <= foodSeekHungerThreshold) {
+    // Fat reserve modulates the threshold: lean chars (low fat) forage earlier; plump chars can wait longer.
+    const _fatReserve = Number(character.fatReserve || 0);
+    const _fatAdjustedThreshold = foodSeekHungerThreshold + (10 - _fatReserve * 0.2); // +10 lean → -0 plump
+    const _effectiveFoodThreshold = Math.min(70, Math.max(15, _fatAdjustedThreshold));
+    if (character.needs.hunger <= _effectiveFoodThreshold) {
         const foodPos = character.findClosestFood && character.findClosestFood();
         if (foodPos) {
             const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(foodPos);
