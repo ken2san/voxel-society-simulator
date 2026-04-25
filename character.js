@@ -4700,14 +4700,10 @@ class Character {
 
         // --- Home absorption animation tick ---
         // Duration 0.5s (entering/leaving); characters snap invisible while 'inside'.
-        // Golems are stone constructs — they can't fit through a door and rain doesn't
-        // affect them, so they are never absorbed into buildings.
         const ABSORB_DUR = 0.5;
         const _baseScale = this._golemScaleX || this._humanScaleX || 1;
-        const _isGolemSkin = typeof window !== 'undefined' && window.ACTIVE_SKIN_ID === 'golem';
         const _shouldBeInside = this.homePosition
             && !this.isChild
-            && !_isGolemSkin
             && (isNight || !!(typeof window !== 'undefined' && window._isRaining));
 
         // Trigger: enter home when resting at night/rain AND near homePosition (≤3 tiles)
