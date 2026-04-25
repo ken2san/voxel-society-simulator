@@ -293,6 +293,9 @@
         <button id="m-hud-regen" class="m-hud-btn m-hud-regen" title="Regenerate World">🔄</button>
     </div>
 
+    <!-- Tap-outside dismiss overlay (sits between canvas z=0 and sheets z=140) -->
+    <div id="mobile-sheet-overlay"></div>
+
     <script>
     // ── Mobile HUD wiring (non-module, runs after sidebar.js has booted) ──
     (function () {
@@ -372,23 +375,31 @@
             var accLeft     = document.getElementById('sidebar-left');
             var accRight    = document.getElementById('sidebar-right');
             var accWorld    = document.getElementById('mobile-world-panel');
+            var overlay     = document.getElementById('mobile-sheet-overlay');
 
             var allPanels = [accLeft, accRight, accWorld];
             var allBtns   = [accLeftBtn, accRightBtn, accWorldBtn];
 
-            function mAccToggle(panel, btn) {
-                var willOpen = !panel.classList.contains('mobile-open');
+            function closeAllPanels() {
                 allPanels.forEach(function (p) { p && p.classList.remove('mobile-open'); });
                 allBtns.forEach(function (b) { b && b.classList.remove('active'); });
+                if (overlay) overlay.classList.remove('active');
+            }
+
+            function mAccToggle(panel, btn) {
+                var willOpen = !panel.classList.contains('mobile-open');
+                closeAllPanels();
                 if (willOpen) {
                     panel.classList.add('mobile-open');
                     btn.classList.add('active');
+                    if (overlay) overlay.classList.add('active');
                     if (panel.scrollTop !== undefined) panel.scrollTop = 0;
                 }
             }
             if (accLeftBtn  && accLeft)  accLeftBtn.addEventListener('click',  function () { mAccToggle(accLeft,  accLeftBtn); });
             if (accRightBtn && accRight) accRightBtn.addEventListener('click', function () { mAccToggle(accRight, accRightBtn); });
             if (accWorldBtn && accWorld) accWorldBtn.addEventListener('click', function () { mAccToggle(accWorld, accWorldBtn); });
+            if (overlay) overlay.addEventListener('click', closeAllPanels);
 
             // ── World panel sliders: mirror values to the desktop sliders ──────────
             var sliderPairs = [

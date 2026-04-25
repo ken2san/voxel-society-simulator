@@ -161,6 +161,25 @@
   display: none; /* shown only on mobile via media query in sidebar.css */
 }
 
+/* Tap-outside dismiss overlay */
+#mobile-sheet-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  pointer-events: none;
+}
+
+@media (max-width: 1400px) {
+  #mobile-sheet-overlay {
+    display: block;
+    pointer-events: none;
+  }
+  #mobile-sheet-overlay.active {
+    pointer-events: auto;
+  }
+}
+
 /* World panel inner layout */
 .m-world-inner {
   padding: 12px 16px 16px;
