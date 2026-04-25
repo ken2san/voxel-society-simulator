@@ -393,3 +393,51 @@ console.log('\nHint: If avgLowEnergyRatio is high and avgWanderRatio is high tog
     console.log('Hint: Many chars in groupSize=1 = ideological fragmentation working. Larger clusters = homogeneous community forming.');
   }
 }
+
+// --- Biology summary (fat reserve, disease, pregnancy, thermal) ---
+{
+  const bioSamples = samples.filter(s => s.biology);
+  if (bioSamples.length > 0) {
+    const recStart = meta.startedAt ?? samples[0].t;
+    const BUCKET_SEC = 30;
+
+    // Aggregate by time bucket
+    const buckets = new Map();
+    for (const s of bioSamples) {
+      const idx = Math.floor((s.t - recStart) / 1000 / BUCKET_SEC);
+      if (!buckets.has(idx)) buckets.set(idx, { fatSum: 0, infected: 0, pregnant: 0, cold: 0, total: 0 });
+      const b = buckets.get(idx);
+      b.fatSum   += Number(s.biology.fatReserve || 0);
+      b.infected += s.biology.diseaseState === 'infected' ? 1 : 0;
+      b.pregnant += s.biology.pregnant ? 1 : 0;
+      b.cold     += s.biology.coldExposed ? 1 : 0;
+      b.total    += 1;
+    }
+
+    console.log('\n=== Biology Over Time ===');
+    console.log('bucket_start_s  pop  avgFat  infected%  pregnant%  cold%');
+    for (const [idx, b] of Array.from(buckets.entries()).sort((a, b) => a[0] - b[0])) {
+      const n = Math.max(1, b.total);
+      console.log(
+        `  t=${String(idx * BUCKET_SEC).padStart(5)}s` +
+        `  pop=${String(n).padStart(3)}` +
+        `  fat=${(b.fatSum / n).toFixed(1).padStart(5)}` +
+        `  infect=${pct(b.infected / n).padStart(6)}` +
+        `  preg=${pct(b.pregnant / n).padStart(6)}` +
+        `  cold=${pct(b.cold / n).padStart(6)}`
+      );
+    }
+
+    // Peak disease and pregnancy counts
+    const allEvents = Array.isArray(payload.events) ? payload.events : [];
+    const diseaseInfects = allEvents.filter(e => e.kind === 'disease-infected');
+    const births = allEvents.filter(e => e.kind === 'birth');
+    const maxInfected = Math.max(0, ...Array.from(buckets.values()).map(b => b.infected));
+    console.log(`peakInfectedInAnyBucket: ${maxInfected}`);
+    console.log(`totalBirthEvents: ${births.length}`);
+    console.log('Hint: If avgFat stays near 0 through winter, characters may be starving before they can build reserves. Check autumn hyperphagia threshold.');
+    console.log('Hint: If infect% stays above 20% persistently, spontaneous seeding rate may be too high or population density too large for SIR recovery.');
+  } else {
+    console.log('\n[biology] no biology samples found — run a newer sim (character.js r4b35e8c+)');
+  }
+}

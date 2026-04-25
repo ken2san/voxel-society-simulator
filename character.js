@@ -5223,6 +5223,14 @@ class Character {
                             distance: homeDistance
                         },
                         nearEnemy: !!this._nearEnemy,
+                        biology: {
+                            fatReserve:      Number(this.fatReserve  || 0),
+                            diseaseState:    this._diseaseState || 'susceptible',
+                            pregnant:        !!this._pregnant,
+                            pregnancyTimer:  this._pregnant ? Number(this._pregnancyTimer || 0) : 0,
+                            coldExposed:     !!this._coldExposed,
+                            dangerSiteCount: this._dangerMemory ? this._dangerMemory.size : 0
+                        },
                         inventory: {
                             count: inventoryCount,
                             hasTool: Array.isArray(this.inventory) ? this.inventory.includes('STONE_TOOL') : false,

@@ -73,6 +73,10 @@ export function createColor(hex = 0x888888) {
             this.value = Number(hex) || 0;
             return this;
         },
+        setHex(hex = 0x888888) {
+            this.value = Number(hex) || 0;
+            return this;
+        },
         setRGB(r = 0, g = 0, b = 0) {
             const rr = clampByte((Number(r) || 0) * 255);
             const gg = clampByte((Number(g) || 0) * 255);
@@ -127,6 +131,13 @@ function createScale(x = 1, y = 1, z = 1) {
             this.x *= n;
             this.y *= n;
             this.z *= n;
+            return this;
+        },
+        setScalar(scalar = 1) {
+            const n = Number(scalar) || 1;
+            this.x = n;
+            this.y = n;
+            this.z = n;
             return this;
         }
     };
