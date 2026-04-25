@@ -1731,10 +1731,13 @@ function renderCharacterDetail() {
         }
         window.renderCharacterList && window.renderCharacterList();
     };
-    // Allow free typing; only sync slider when value is a valid integer
+    // Allow free typing; only sync slider when value is already within valid range
     charNumVal.oninput = () => {
         const raw = charNumVal.value;
         if (raw === '' || raw === '-') return; // mid-edit: leave field alone
+        const parsed = parseInt(raw, 10);
+        const maxAllowed = Number(charNumVal.max || charCapacity.max);
+        if (isNaN(parsed) || parsed < 5 || parsed > maxAllowed) return; // still typing, don't clamp yet
         _applyCharNum(raw);
     };
     // Snap to valid range on blur or Enter
