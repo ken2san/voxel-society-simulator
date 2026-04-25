@@ -3,6 +3,7 @@ import { PerlinNoise } from './utils.js';
 import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
+import { createRainSystem } from './sim-core/rain-system.js';
 import { createBirdSystem } from './sim-core/ambient-creatures.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
 import { buildWellGroup } from './sim-core/well-renderer.js';
@@ -1467,6 +1468,12 @@ export function updateWorldLighting() {
         if (!scene.background) scene.background = io.createColor(0x87CEEB);
         if (typeof scene.background?.lerpColors === 'function') {
             scene.background.lerpColors(nightColor, dayColor, Math.max(0, dayIntensity));
+            // Blend toward grey overcast sky when it's raining
+            const rainIntensity = (typeof window !== 'undefined' && window._isRaining) ? 0.55 : 0;
+            if (rainIntensity > 0.01) {
+                if (!updateWorldLighting._rainColor) updateWorldLighting._rainColor = io.createColor(0x778899);
+                scene.background.lerp(updateWorldLighting._rainColor, rainIntensity * 0.5);
+            }
         } else {
             scene.background = dayIntensity >= 0.5 ? dayColor.clone() : nightColor.clone();
         }
@@ -1569,6 +1576,11 @@ export function animate() {
     }
     if (animate._birds) animate._birds.update(deltaTime);
 
+    // ── Lazy-init rain system (spring/summer rainfall, pure visual) ──────────
+    if (!animate._rain && scene) {
+        animate._rain = createRainSystem(scene);
+    }
+
     // ── Campfire lifecycle ────────────────────────────────────────────────────
     // Visible count = min(spots, floor(aliveChars / CHARS_PER_CAMPFIRE)).
     // Only active (dusk-to-dawn) fires flicker; count is re-evaluated every ~1s.
@@ -1637,12 +1649,23 @@ export function animate() {
         animate._snow.update(dt, ph, amp, fx);
     }
 
+    // ── Rain update helper (called both when paused and running) ─────────────
+    function _updateRain(dt) {
+        if (!animate._rain) return;
+        const si  = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
+        const ph  = si ? si.phase     : 0;
+        const amp = si ? si.amplitude : 0;
+        const fx  = !(typeof window !== 'undefined' && window.showEffects === false);
+        animate._rain.update(dt, ph, amp, fx);
+    }
+
     // simulationRunningがtrueのときだけ進行
     if (typeof window !== 'undefined' && window.simulationRunning === false) {
         // 停止中もワールドの描画・UI更新は継続
         updateWorldLighting();
         updateAmbientWorldEffects();
         _updateSnow(deltaTime);
+        _updateRain(deltaTime);
         if (controls) controls.update();
         if (!_skipRender) renderer.render(scene, camera);
         return;
@@ -1652,6 +1675,7 @@ export function animate() {
     updateWorldLighting();
     updateAmbientWorldEffects();
     _updateSnow(deltaTime);
+    _updateRain(deltaTime);
     const _dd = getDayDuration();
     const isNight = (worldTime % _dd) > (_dd / 2);
     // Day/night transition sounds

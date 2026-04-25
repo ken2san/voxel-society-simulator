@@ -2462,6 +2462,11 @@ class Character {
         this.loveTimer = 0;
         this.lovePhase = null; // 'showing', 'completed', null
 
+        // --- Home absorption animation state ---
+        // phase: 'entering' | 'inside' | 'leaving' | null
+        // timer: 0→1 over ABSORB_DURATION seconds
+        this._homeAbsorb = null;
+
         // --- Social role assignment ---
         this.role = 'worker'; // All start as worker; leader emerges via group detection
         this.groupId = null; // Will be set by group detection
@@ -4693,6 +4698,54 @@ class Character {
             if (this._griefState.remainingSeconds <= 0) this._griefState = null;
         }
 
+        // --- Home absorption animation tick ---
+        // Duration 0.5s (entering/leaving); characters snap invisible while 'inside'.
+        const ABSORB_DUR = 0.5;
+        const _baseScale = this._golemScaleX || this._humanScaleX || 1;
+        const _shouldBeInside = this.homePosition
+            && !this.isChild
+            && (isNight || !!(typeof window !== 'undefined' && window._isRaining));
+
+        // Trigger: enter home when resting at night/rain and not already absorbed
+        if (_shouldBeInside && !this._homeAbsorb && this.state === 'resting') {
+            this._homeAbsorb = { phase: 'entering', timer: 0 };
+            playSound('enter_home');
+        }
+        // Trigger: leave home when it's daytime and not raining, while still inside
+        if (!_shouldBeInside && this._homeAbsorb && this._homeAbsorb.phase === 'inside') {
+            this._homeAbsorb = { phase: 'leaving', timer: 0 };
+            if (this.mesh) this.mesh.visible = true;
+            playSound('leave_home');
+        }
+        // Animate entering: scale 1→0, then hide
+        if (this._homeAbsorb && this._homeAbsorb.phase === 'entering') {
+            this._homeAbsorb.timer += deltaTime / ABSORB_DUR;
+            const t = Math.min(1, this._homeAbsorb.timer);
+            if (this.mesh) this.mesh.scale.setScalar(Math.max(0.02, (1 - t) * _baseScale));
+            if (t >= 1) {
+                if (this.mesh) { this.mesh.visible = false; this.mesh.scale.setScalar(_baseScale); }
+                this._homeAbsorb = { phase: 'inside', timer: 0 };
+            }
+        }
+        // Animate leaving: unhide + scale 0→1
+        if (this._homeAbsorb && this._homeAbsorb.phase === 'leaving') {
+            this._homeAbsorb.timer += deltaTime / ABSORB_DUR;
+            const t = Math.min(1, this._homeAbsorb.timer);
+            if (this.mesh) {
+                if (!this.mesh.visible) this.mesh.visible = true;
+                this.mesh.scale.setScalar(Math.min(_baseScale, t * _baseScale));
+            }
+            if (t >= 1) {
+                if (this.mesh) this.mesh.scale.setScalar(_baseScale);
+                this._homeAbsorb = null;
+            }
+        }
+        // If character dies or loses home while inside, restore visibility
+        if (this._homeAbsorb && this._homeAbsorb.phase === 'inside' && this.state === 'dead') {
+            if (this.mesh) { this.mesh.visible = true; this.mesh.scale.setScalar(_baseScale); }
+            this._homeAbsorb = null;
+        }
+
         // --- loveTimer減少 ---
         if (this.loveTimer > 0) {
             const prev = this.loveTimer;
@@ -5870,7 +5923,8 @@ class Character {
         // Deliberately excludes low needs: a resting/walking char with low energy looks
         // identical at 12fps vs 60fps, and including it caused whole-colony throttle bypass
         // during energy crises (all N chars urgent → O(N) full anim every frame).
-        const animUrgent = isSelected || this.loveTimer > 0 || !!this._nearEnemy;
+        const animUrgent = isSelected || this.loveTimer > 0 || !!this._nearEnemy
+            || !!(this._homeAbsorb && this._homeAbsorb.phase !== 'inside');
         // needsUrgent: used only for thought-bubble refresh rate — keeps needs visible to player.
         const needsUrgent = animUrgent
             || !!(this.needs && (this.needs.hunger < 35 || this.needs.energy < 30 || this.needs.safety < 50));

@@ -52,13 +52,15 @@ export function setSoundVolume(v) {
 // Per-sound cooldown map (ms timestamps of last play)
 const _lastPlay = {};
 const THROTTLE = {
-    dig:    120,
-    build:  200,
-    eat:    300,
-    social: 400,
-    death:  600,
-    night:  0,
-    dawn:   0,
+    dig:        120,
+    build:      200,
+    eat:        300,
+    social:     400,
+    death:      600,
+    night:      0,
+    dawn:       0,
+    enter_home: 600,
+    leave_home: 600,
 };
 
 /**
@@ -84,8 +86,10 @@ export function playSound(name) {
         case 'eat':    _playEat(ctx);    break;
         case 'social': _playSocial(ctx); break;
         case 'death':  _playDeath(ctx);  break;
-        case 'night':  _playNight(ctx);  break;
-        case 'dawn':   _playDawn(ctx);   break;
+        case 'night':      _playNight(ctx);     break;
+        case 'dawn':       _playDawn(ctx);      break;
+        case 'enter_home': _playEnterHome(ctx); break;
+        case 'leave_home': _playLeaveHome(ctx); break;
         default: break;
     }
 }
@@ -185,13 +189,35 @@ function _playDawn(ctx) {
     _osc(ctx, 'sine', 550, t + 0.36, t + 0.9, 0.12, 660);
 }
 
+/** Soft wooden thud + brief air whoosh – character enters home */
+function _playEnterHome(ctx) {
+    const t = ctx.currentTime;
+    // Low woody knock
+    _noise(ctx, t, 0.08, 0.35, 320);
+    _osc(ctx, 'sine', 200, t, t + 0.10, 0.22, 140);
+    // Quiet door-close creak
+    _osc(ctx, 'triangle', 480, t + 0.05, t + 0.18, 0.10, 280);
+}
+
+/** Soft creak + airy pop – character emerges from home */
+function _playLeaveHome(ctx) {
+    const t = ctx.currentTime;
+    // Door-open creak
+    _osc(ctx, 'triangle', 260, t,        t + 0.15, 0.12, 440);
+    // Bright little emergence chime
+    _osc(ctx, 'sine',     660, t + 0.10, t + 0.28, 0.16, 880);
+    _noise(ctx, t + 0.08, 0.12, 0.18, 900);
+}
+
 // ─── Ambient sound system ────────────────────────────────────────────────────
 // Persistent looping wind + periodic bird/cricket schedulers.
-// All ambient nodes route through their own gain nodes (not _masterGain directly)
-// so they can be cross-faded independently.
+// Rain layer: looping filtered noise, gain cross-faded by rain-system.js state.
+// All ambient nodes route through their own gain nodes.
 
 let _ambWindSrc   = null;   // BufferSource (looping)
 let _ambWindGain  = null;   // GainNode for wind layer
+let _ambRainSrc   = null;   // BufferSource (looping) for rain
+let _ambRainGain  = null;   // GainNode for rain layer
 let _ambBirdGain  = null;   // GainNode for bird layer
 let _ambCricketGain = null; // GainNode for cricket layer
 let _ambActive    = false;  // whether ambient loop is running
@@ -264,12 +290,47 @@ function _oscTo(dest, ctx, type, freq, startT, endT, gainVal, freqEnd = null) {
     o.stop(endT + 0.01);
 }
 
+/** Start a looping rain noise source routed to destGain */
+function _startRain(ctx, destGain) {
+    const sr = ctx.sampleRate;
+    const bufLen = Math.floor(sr * 3);
+    const buf = ctx.createBuffer(2, bufLen, sr);
+    for (let ch = 0; ch < 2; ch++) {
+        const data = buf.getChannelData(ch);
+        for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1200;
+    hp.Q.value = 0.5;
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2400;
+    bp.Q.value = 0.8;
+
+    src.connect(hp);
+    hp.connect(bp);
+    bp.connect(destGain);
+    src.start();
+    return src;
+}
+
 /** Initialise ambient nodes (called once, after AudioContext is ready) */
 function _initAmbience(ctx) {
     _ambWindGain = ctx.createGain();
     _ambWindGain.gain.value = 0.08;
     _ambWindGain.connect(_masterGain);
     _ambWindSrc = _startWind(ctx, _ambWindGain);
+
+    _ambRainGain = ctx.createGain();
+    _ambRainGain.gain.value = 0;
+    _ambRainGain.connect(_masterGain);
+    _ambRainSrc = _startRain(ctx, _ambRainGain);
 
     _ambBirdGain = ctx.createGain();
     _ambBirdGain.gain.value = 0;
@@ -292,7 +353,8 @@ export function stopAmbience() {
     _ambBirdTimer = null;
     _ambCricketTimer = null;
     if (_ambWindSrc) { try { _ambWindSrc.stop(); } catch (_) {} _ambWindSrc = null; }
-    _ambWindGain = _ambBirdGain = _ambCricketGain = null;
+    if (_ambRainSrc) { try { _ambRainSrc.stop(); } catch (_) {} _ambRainSrc = null; }
+    _ambWindGain = _ambRainGain = _ambBirdGain = _ambCricketGain = null;
 }
 
 /**
@@ -325,13 +387,18 @@ export function updateAmbience(isNight, seasonPhase) {
     const isAutumn = quarter === 2;
     const isSummer = quarter === 1;
 
-    // Wind: louder in autumn/winter
-    const windTarget = isWinter ? 0.20 : isAutumn ? 0.13 : 0.06;
+    // Wind: louder in autumn/winter, or during rain
+    const isRaining = (typeof window !== 'undefined' && !!window._isRaining);
+    const windTarget = isRaining ? 0.14 : isWinter ? 0.20 : isAutumn ? 0.13 : 0.06;
     _ambWindGain.gain.setTargetAtTime(windTarget, t, 4.0);
 
-    // Birds: daytime only, spring/summer present, autumn faint, winter off
+    // Rain: cross-fade over 5 s based on window._isRaining (set by rain-system.js)
+    const rainTarget = isRaining ? 0.55 : 0;
+    if (_ambRainGain) _ambRainGain.gain.setTargetAtTime(rainTarget, t, 5.0);
+
+    // Birds: daytime only, spring/summer present, autumn faint, winter off, muted in rain
     let birdTarget = 0;
-    if (!isNight && !isWinter) birdTarget = isSummer ? 0.85 : isAutumn ? 0.35 : 0.70;
+    if (!isNight && !isWinter && !isRaining) birdTarget = isSummer ? 0.85 : isAutumn ? 0.35 : 0.70;
     _ambBirdGain.gain.setTargetAtTime(birdTarget, t, 3.0);
 
     // Crickets: night only, spring/summer present, autumn faint, winter off
