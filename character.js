@@ -4288,14 +4288,20 @@ class Character {
         // Recovery
         if (this.state === 'resting') {
             const restEnergyRecoveryRate = (typeof window !== 'undefined' && window.restEnergyRecoveryRate !== undefined) ? Number(window.restEnergyRecoveryRate) : 10;
-            // Charge Stone bonus: resting at homePosition with a ChargeStone block multiplies recovery
+            // Home recovery bonus: having a settled home (any type) improves energy recovery.
+            // Underground shelters with a ChargeStone give the full CSMult bonus.
+            // Wood/stone homes give a partial bonus (base 1.2x) reflecting psychological shelter value.
             let _csMult = 1.0;
             if (this.homePosition) {
                 const _csKey = `${this.homePosition.x},${this.homePosition.y},${this.homePosition.z}`;
                 const _csVal = worldData.get(_csKey);
                 const _csId = (_csVal && typeof _csVal === 'object') ? _csVal.id : _csVal;
+                const _fullMult = (typeof window !== 'undefined' && window.chargeStoneRecoveryMult !== undefined) ? Number(window.chargeStoneRecoveryMult) : 1.5;
                 if (_csId === BLOCK_TYPES.BED?.id) {
-                    _csMult = (typeof window !== 'undefined' && window.chargeStoneRecoveryMult !== undefined) ? Number(window.chargeStoneRecoveryMult) : 1.5;
+                    _csMult = _fullMult;
+                } else {
+                    // Any other home type: partial bonus (midpoint between 1.0 and full mult)
+                    _csMult = 1.0 + (_fullMult - 1.0) * 0.5;
                 }
             }
             this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate * _csMult);
