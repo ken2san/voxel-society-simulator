@@ -42,34 +42,73 @@ const FOUND_PALETTE = {
     stone: [0x3a4a58, 0x2e3d4a, 0x485868, 0x364454],  // dark blue-grey ashlar
 };
 
-// ── Color palettes (voxelchar04-style) ───────────────────────────────────────
-// Wall: warm honey/golden base + red brick accent (wood) | blue-grey ashlar (stone)
-const WALL_PALETTE = {
-    wood:  { base: [0xf0e0a0, 0xe8d090, 0xfcecc0, 0xd8c478], brick: 0xb83222 },
-    stone: { base: [0xa0b4c4, 0x8a9aa8, 0xb4c4d4, 0x7a8a98], brick: 0x607868 },
-};
-// Roof: warm dark brown for wood (cottage), dark slate for stone
-const ROOF_PALETTE = {
-    wood:  [0x5a3820, 0x3d2410],
-    stone: [0x3a4a5a, 0x25333e],
-};
-// Chimney
-const CHIMNEY_COLOR = {
-    wood:  0x8a7060,
-    stone: 0x607888,
-};
-// Door: dark oak for wood, dark slate for stone
-const DOOR_COLOR = {
-    wood:  0x6b4c2a,
-    stone: 0x354050,
-};
-// Window: warm amber glow (wood) | cold blue-white (stone)
-const WINDOW_COLOR = {
-    wood:  0xffcc44,
-    stone: 0xb8e0ff,
-};
-// Flower box accent below front window (wood only)
-const FLOWER_COLOR = 0xe84040;
+// ── House variants ────────────────────────────────────────────────────────────
+// 3 distinct wood styles, chosen deterministically by floor grid position (x,z).
+// Wall and roof share the same variant because they occupy the same x,z.
+//
+//  0  Golden Cottage  — honey walls, brown roof,      door left  (ix 1-2), window right (ix 3)
+//  1  Rustic Cabin    — peach walls,  dark-red roof,  door right (ix 2-3), window left  (ix 1)
+//  2  Forest Hut      — sage walls,   moss-green roof,door left  (ix 1-2), twin side windows
+const WOOD_VARIANTS = [
+    {
+        wall:    { base: [0xf0e0a0, 0xe8d090, 0xfcecc0, 0xd8c478], brick: 0xb83222 },
+        roof:    [0x5a3820, 0x3d2410],
+        chimney: 0x8a7060,
+        door:    0x6b4c2a,
+        window:  0xffcc44,
+        doorIx:  [1, 2],  winIx: 3,
+        flower:  0xe84040,
+    },
+    {
+        wall:    { base: [0xf4cca0, 0xecbc90, 0xfcd8b0, 0xe4b888], brick: 0x8a2222 },
+        roof:    [0x6b2018, 0x4a1408],
+        chimney: 0x7a6050,
+        door:    0x5a3820,
+        window:  0xffaa22,
+        doorIx:  [2, 3],  winIx: 1,
+        flower:  0xcc4422,
+    },
+    {
+        wall:    { base: [0xe8e4cc, 0xdcdab8, 0xf0eedd, 0xd0ccb0], brick: 0x5a7a3a },
+        roof:    [0x2a4020, 0x1a2c14],
+        chimney: 0x607868,
+        door:    0x4a5c38,
+        window:  0xddeebb,
+        doorIx:  [1, 2],  winIx: 3,
+        flower:  0x88cc44,
+    },
+];
+
+// 2 stone variants (blue-grey ashlar vs. warm brownstone)
+const STONE_VARIANTS = [
+    {
+        wall:    { base: [0xa0b4c4, 0x8a9aa8, 0xb4c4d4, 0x7a8a98], brick: 0x607868 },
+        roof:    [0x3a4a5a, 0x25333e],
+        chimney: 0x607888,
+        door:    0x354050,
+        window:  0xb8e0ff,
+        doorIx:  [1, 2],  winIx: 3,
+    },
+    {
+        wall:    { base: [0xb4a090, 0xa08878, 0xc4b0a0, 0x907868], brick: 0x6a4838 },
+        roof:    [0x3a2e28, 0x281e1a],
+        chimney: 0x6a5848,
+        door:    0x3a2820,
+        window:  0xffdda0,
+        doorIx:  [1, 2],  winIx: 3,
+    },
+];
+
+/**
+ * Deterministic 0-based variant index from grid position.
+ * Wall (x,y,z) and roof (x,y+1,z) share the same x,z → same variant.
+ */
+function getWoodVariant(x, z) {
+    return Math.abs((x * 7 + z * 13)) % WOOD_VARIANTS.length;
+}
+function getStoneVariant(x, z) {
+    return Math.abs((x * 11 + z * 17)) % STONE_VARIANTS.length;
+}
 
 // Per-face brightness (+X, -X, +Y, -Y, +Z, -Z)
 const _FB = [0.88, 0.78, 1.30, 0.40, 1.00, 0.70];
@@ -150,22 +189,23 @@ function buildVoxelGeo(voxels, innerSize) {
 //   iy=0: W  W  Fl W  W   Fl=flower box below window (wood only)
 // Back face (iz=4): center window (ix=2, iy=1,2)
 export function buildHouseWallGroup(type, x, y, z, isVisible) {
-    const houseType = type.isStoneWall ? 'stone' : 'wood';
-    const pal       = WALL_PALETTE[houseType];
-    const doorCol   = DOOR_COLOR[houseType];
-    const winCol    = WINDOW_COLOR[houseType];
-    const rng       = makeRng(x, y, z);
+    const isStone = type.isStoneWall;
+    const v       = isStone ? STONE_VARIANTS[getStoneVariant(x, z)] : WOOD_VARIANTS[getWoodVariant(x, z)];
+    const pal     = v.wall;
+    const doorCol = v.door;
+    const winCol  = v.window;
+    const [doorL, doorR] = v.doorIx;
+    const winIx   = v.winIx;
+    const rng     = makeRng(x, y, z);
 
-    const voxels = [];
+    const voxels    = [];
     const winVoxels = [];  // window voxels rendered unlit (MeshBasicMaterial)
 
-    // ── Foundation layer: sunk into terrain to anchor the building visually ───
-    // iy=-1 → vy = (-1-(WGH-1)/2)*WS = -3*0.185 = -0.555 from group centre
-    // world-y = (y+0.5)-0.555 = y-0.055 (just below the terrain surface)
-    // FW = WG+2 = 7 → overhangs wall by one voxel on each side (flair effect)
-    const foundPal = FOUND_PALETTE[houseType];
-    const FW      = WG + 2;
-    const foundY  = ((-1) - (WGH - 1) / 2) * WS;  // -0.555
+    // ── Foundation layer ─────────────────────────────────────────────────────
+    const houseType = isStone ? 'stone' : 'wood';
+    const foundPal  = FOUND_PALETTE[houseType];
+    const FW        = WG + 2;
+    const foundY    = ((-1) - (WGH - 1) / 2) * WS;
     for (let fx = 0; fx < FW; fx++) {
         for (let fz = 0; fz < FW; fz++) {
             const vx = (fx - (FW - 1) / 2) * WS;
@@ -180,17 +220,17 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
                 // Hollow shell
                 if (ix > 0 && ix < WG-1 && iy > 0 && iy < WGH-1 && iz > 0 && iz < WG-1) continue;
 
-                // Door opening: front face, ix=1,2, iy=1,2
-                if (iz === 0 && ix >= 1 && ix <= 2 && iy >= 1 && iy <= 2) continue;
+                // Door opening: variant-controlled position
+                if (iz === 0 && ix >= doorL && ix <= doorR && iy >= 1 && iy <= 2) continue;
 
                 // Feature voxels
-                const isDoorLintel  = iz === 0 && ix >= 1 && ix <= 2 && iy === 3;
+                const isDoorLintel  = iz === 0 && ix >= doorL && ix <= doorR && iy === 3;
                 // Front window: 3 voxels tall (iy=1,2,3)
-                const isFrontWindow = iz === 0 && ix === 3 && iy >= 1 && iy <= 3;
+                const isFrontWindow = iz === 0 && ix === winIx && iy >= 1 && iy <= 3;
                 // Back window: center column, 2 tall
                 const isBackWindow  = iz === WG - 1 && ix === 2 && iy >= 1 && iy <= 2;
-                // Flower box: front face, under the window, wood only
-                const isFlowerBox   = iz === 0 && ix === 3 && iy === 0 && !type.isStoneWall;
+                // Flower box: front face, below window, wood only
+                const isFlowerBox   = iz === 0 && ix === winIx && iy === 0 && !isStone;
 
                 const vx = (ix - (WG - 1) / 2) * WS;
                 const vy = (iy - (WGH - 1) / 2) * WS;
@@ -199,7 +239,7 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
                 if (isFrontWindow || isBackWindow) {
                     winVoxels.push({ x: vx, y: vy, z: vz, color: winCol });
                 } else if (isFlowerBox) {
-                    voxels.push({ x: vx, y: vy, z: vz, color: FLOWER_COLOR });
+                    voxels.push({ x: vx, y: vy, z: vz, color: v.flower || 0xe84040 });
                 } else {
                     let color;
                     if (isDoorLintel) {
@@ -236,9 +276,11 @@ export function buildHouseWallGroup(type, x, y, z, isVisible) {
 // GABLED ROOF: tapers in X only (5→3→1), full depth in Z.
 // Total width 0.986u ≈ 1u (hairline eave overhang beyond 0.91u wall).
 export function buildHouseRoofGroup(type, x, y, z, isVisible) {
-    const houseType    = type.isDarkRoof ? 'stone' : 'wood';
-    const [col0, col1] = ROOF_PALETTE[houseType];
-    const chimCol      = CHIMNEY_COLOR[houseType];
+    // Roof is at (x, y, z); wall is at (x, y-1, z) → same x,z → same variant index.
+    const isStone  = type.isDarkRoof;
+    const v        = isStone ? STONE_VARIANTS[getStoneVariant(x, z)] : WOOD_VARIANTS[getWoodVariant(x, z)];
+    const [col0, col1] = v.roof;
+    const chimCol  = v.chimney;
 
     const STEPS  = (RG + 1) / 2;   // = 3  (RG=5, must be odd)
     const DEPTH  = RG;              // 5 — full Z depth per layer
