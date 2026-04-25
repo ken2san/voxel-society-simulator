@@ -206,7 +206,10 @@ export function decideNextAction_rulebase(character, isNight) {
     // preserving the homed-vs-homeless contrast that makes weather meaningful.
     // Note: golems are stone creatures and are NOT absorbed into the house (see character.js),
     // but they still walk to the doorstep and shelter against the wall — which looks right.
-    if ((typeof window !== 'undefined' && window._isRaining)
+    // Skip if already absorbed inside home — re-firing would cause invisible pathfinding loops.
+    const _alreadyInside = character._homeAbsorb && character._homeAbsorb.phase === 'inside';
+    if (!_alreadyInside
+        && (typeof window !== 'undefined' && window._isRaining)
         && character.homePosition
         && !character.isChild
         && character.needs.hunger > 20

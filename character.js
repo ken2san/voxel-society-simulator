@@ -4716,7 +4716,13 @@ class Character {
             }
         }
         // Trigger: leave home when it's daytime and not raining, while still inside
-        if (!_shouldBeInside && this._homeAbsorb && this._homeAbsorb.phase === 'inside') {
+        // Also force-release on survival emergency so characters don't starve/crash while invisible.
+        // Thresholds are set above the AI's shelter-entry gates (hunger>20, energy>emergency+6)
+        // so characters leave home before the next shelter decision re-traps them.
+        const _survivalEmergency = this.needs
+            && (this.needs.hunger < 25 || this.needs.energy < 15);
+        if (this._homeAbsorb && this._homeAbsorb.phase === 'inside'
+            && (!_shouldBeInside || _survivalEmergency)) {
             this._homeAbsorb = { phase: 'leaving', timer: 0 };
             if (this.mesh) this.mesh.visible = true;
             playSound('leave_home');
