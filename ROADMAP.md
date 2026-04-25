@@ -1,10 +1,20 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-04-18_
+_Last updated: 2026-04-25_
 
 ---
 
 ## Project Concept
+
+### World Lore
+
+**Setting: post-human Earth. The dominant civilization collapsed. What remains are AI-embedded autonomous robots ("golems") who inherited the structures, habits, and social patterns of the species that built them — but not the species itself.**
+
+They gather food (fuel/materials), form bonds, build and maintain shelters, grieve their dead, and seek cover from the rain. The simulation is a window into their society, not a game about them. The observer is an outsider.
+
+This lore is intentionally kept implicit in the UI — nothing needs to be explained to the player. The behavior should feel organic enough that the setting is inferred, not announced.
+
+---
 
 **Voxel Society Simulator is a glass-tank observation tool, not a game to win.**
 
