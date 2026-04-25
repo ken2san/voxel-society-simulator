@@ -17,6 +17,7 @@
       "unsafeNightSafetyDecayRate": 5,
       "daytimeSafetyRecoveryRate": 16,
       "restEnergyRecoveryRate": 18,
+      "chargeStoneRecoveryMult": 1.5,
       "characterLifespan": 420,
       "homeReturnHungerLevel": 85,
       "homeBuildingPriority": 72,

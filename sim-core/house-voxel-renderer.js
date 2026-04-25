@@ -256,85 +256,85 @@ export function buildHouseRoofGroup(type, x, y, z, isVisible) {
     return group;
 }
 
-// ── BED block: voxel mattress with pillow and wooden frame ────────────────────
-// Bed sits low in the block (isBed: BoxGeometry height = 0.4u).
-// BVS=0.12, frame is 7 wide × 11 long × 3 tall; mattress fill above frame.
-// Total height: 3*BVS = 0.36u (frame) + 1 voxel padding → 0.48u from bottom → fits ✓
-const BVS = 0.12;
-const BVI = BVS * 0.93;
+// ── CHARGE STONE block: golem energy-charge crystal pedestal ─────────────────
+// A low stone base with purple crystal spires and teal rune accents.
+// CSV=0.13, base footprint 7×7 (2 layers tall); spires rise 6 voxels above base.
+// Total height: ~8*CSV = 1.04u → capped at block top → fits ✓
+const CSV = 0.13;
+const CVI = CSV * 0.92;
 
 // Colour constants
-const BED_FRAME  = [0x5d4037, 0x4e342e, 0x6d4c41];  // dark wood
-const BED_MATT   = [0xf5f5dc, 0xfdf5e6, 0xfffacd, 0xfaebd7]; // warm cream mattress
-const BED_SHEET  = [0xdce8f5, 0xc8ddf0, 0xbfd3ed];  // pale blue sheet
-const BED_PILLOW = [0xffffff, 0xf0f0f0, 0xf8f8f8];  // white pillow
+const CS_BASE   = [0x3d2f4e, 0x4a3a5c, 0x56437a];  // dark stone base
+const CS_MAIN   = [0x7b4fcf, 0x8b5fd8, 0x6a3fbf];  // purple crystal body
+const CS_BRIGHT = [0xb08aff, 0xc4a8ff, 0xa07aef];  // bright crystal tip
+const CS_RUNE   = [0x44ddff, 0x66eeff, 0x22ccee];  // teal rune accent
 
 export function buildBedGroup(type, x, y, z, isVisible) {
     const rng    = makeRng(x, y, z);
     const voxels = [];
 
-    // Layout in voxel grid (grid coordinates):
-    //   X: -3..+3 (7 wide  = 7*BVS = 0.84u → centred)
-    //   Z: -5..+5 (11 long = 11*BVS = 1.32u → truncated to 1u, fits since BVS small)
-    //   Y: -4 = group centre offset to sit near block bottom
-    // group.position.y = y+0.5, so block bottom is at y+0.0 = group centre −0.5
-    // We want bed top ~0.38u → top voxel at group local Y = −0.12u → iy = −0.12/BVS ≈ −1
-
-    const WX = 3;   // half-width  in voxels
-    const LZ = 5;   // half-length in voxels
-    const BASE_Y = -4; // bottom of frame in voxel grid (−4*BVS = −0.48u from centre)
-
-    // Wooden frame: perimeter + floor, 2 voxels tall
+    // Stone base platform: 7×7 footprint, 2 layers tall
+    // BASE_Y = -4 → bottom of platform at y_local = -4*CSV = -0.52u from group centre
+    // group.position.y = y+0.2, so platform bottom ≈ y+0.2-0.52 = y-0.32 (buried slightly)
+    const BASE_Y = -4;
     for (let iy = BASE_Y; iy <= BASE_Y + 1; iy++) {
-        for (let ix = -WX; ix <= WX; ix++) {
-            for (let iz = -LZ; iz <= LZ; iz++) {
-                const onEdge = Math.abs(ix) === WX || Math.abs(iz) === LZ;
-                if (!onEdge) continue;
-                const col = BED_FRAME[Math.floor(rng() * BED_FRAME.length)];
-                voxels.push({ x: ix * BVS, y: iy * BVS, z: iz * BVS, color: col });
+        for (let ix = -3; ix <= 3; ix++) {
+            for (let iz = -3; iz <= 3; iz++) {
+                const col = CS_BASE[Math.floor(rng() * CS_BASE.length)];
+                voxels.push({ x: ix * CSV, y: iy * CSV, z: iz * CSV, color: col });
             }
         }
     }
 
-    // Headboard: +2 voxels tall at z = +LZ end
-    for (let iy = BASE_Y + 2; iy <= BASE_Y + 4; iy++) {
-        for (let ix = -WX; ix <= WX; ix++) {
-            const col = BED_FRAME[Math.floor(rng() * BED_FRAME.length)];
-            voxels.push({ x: ix * BVS, y: iy * BVS, z: LZ * BVS, color: col });
+    // Rune cross on platform top surface
+    const RUNE_Y = BASE_Y + 2;
+    for (let ix = -2; ix <= 2; ix++) {
+        const col = CS_RUNE[Math.floor(rng() * CS_RUNE.length)];
+        voxels.push({ x: ix * CSV, y: RUNE_Y * CSV, z: 0, color: col });
+    }
+    for (let iz = -2; iz <= 2; iz++) {
+        const col = CS_RUNE[Math.floor(rng() * CS_RUNE.length)];
+        voxels.push({ x: 0, y: RUNE_Y * CSV, z: iz * CSV, color: col });
+    }
+
+    // Center spire: 7 voxels tall, tapers at tip
+    const SPIRE_BASE = BASE_Y + 3;
+    for (let iy = SPIRE_BASE; iy <= SPIRE_BASE + 6; iy++) {
+        const tipFrac = (iy - SPIRE_BASE) / 6;
+        const col = tipFrac > 0.55
+            ? CS_BRIGHT[Math.floor(rng() * CS_BRIGHT.length)]
+            : CS_MAIN[Math.floor(rng() * CS_MAIN.length)];
+        voxels.push({ x: 0, y: iy * CSV, z: 0, color: col });
+        // Widen base of spire (first 2 levels)
+        if (iy <= SPIRE_BASE + 1) {
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    if (dx === 0 && dz === 0) continue;
+                    const c = CS_MAIN[Math.floor(rng() * CS_MAIN.length)];
+                    voxels.push({ x: dx * CSV, y: iy * CSV, z: dz * CSV, color: c });
+                }
+            }
         }
     }
 
-    // Mattress fill (inside frame, one layer above frame floor)
-    const MATT_Y = BASE_Y + 2;
-    for (let ix = -(WX-1); ix <= WX-1; ix++) {
-        for (let iz = -(LZ-1); iz <= LZ-1; iz++) {
-            // Bottom half: cream mattress
-            const mCol = BED_MATT[Math.floor(rng() * BED_MATT.length)];
-            voxels.push({ x: ix * BVS, y: MATT_Y * BVS, z: iz * BVS, color: mCol });
-            // Top layer: sheet (blue-tinted)
-            const sCol = iz < LZ - 2
-                ? BED_SHEET[Math.floor(rng() * BED_SHEET.length)]
-                : BED_MATT[Math.floor(rng() * BED_MATT.length)]; // foot: bare mattress
-            voxels.push({ x: ix * BVS, y: (MATT_Y + 1) * BVS, z: iz * BVS, color: sCol });
+    // Two smaller flanking spires
+    const FLANK_COORDS = [[-2, -1], [2, 1]];
+    for (const [fx, fz] of FLANK_COORDS) {
+        for (let iy = SPIRE_BASE; iy <= SPIRE_BASE + 3; iy++) {
+            const tipFrac = (iy - SPIRE_BASE) / 3;
+            const col = tipFrac > 0.5
+                ? CS_BRIGHT[Math.floor(rng() * CS_BRIGHT.length)]
+                : CS_MAIN[Math.floor(rng() * CS_MAIN.length)];
+            voxels.push({ x: fx * CSV, y: iy * CSV, z: fz * CSV, color: col });
         }
     }
 
-    // Pillow: 3 wide × 2 deep, at head end (z = +LZ-1 to +LZ-2)
-    const PIL_Y = MATT_Y + 2;
-    for (let ix = -1; ix <= 1; ix++) {
-        for (let iz = LZ - 3; iz <= LZ - 1; iz++) {
-            const col = BED_PILLOW[Math.floor(rng() * BED_PILLOW.length)];
-            voxels.push({ x: ix * BVS, y: PIL_Y * BVS, z: iz * BVS, color: col });
-        }
-    }
-
-    const geo   = buildVoxelGeo(voxels, BVI);
+    const geo   = buildVoxelGeo(voxels, CVI);
     const mat   = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mesh  = new THREE.Mesh(geo, mat);
 
     const group = new THREE.Group();
     group.add(mesh);
-    // Shift down so the bed sits at block bottom (same offset as original isBed yOffset=0.2)
     group.position.set(x + 0.5, y + 0.2, z + 0.5);
     group.visible = isVisible;
     return group;

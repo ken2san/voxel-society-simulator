@@ -4288,7 +4288,17 @@ class Character {
         // Recovery
         if (this.state === 'resting') {
             const restEnergyRecoveryRate = (typeof window !== 'undefined' && window.restEnergyRecoveryRate !== undefined) ? Number(window.restEnergyRecoveryRate) : 10;
-            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate);
+            // Charge Stone bonus: resting at homePosition with a ChargeStone block multiplies recovery
+            let _csMult = 1.0;
+            if (this.homePosition) {
+                const _csKey = `${this.homePosition.x},${this.homePosition.y},${this.homePosition.z}`;
+                const _csVal = worldData.get(_csKey);
+                const _csId = (_csVal && typeof _csVal === 'object') ? _csVal.id : _csVal;
+                if (_csId === BLOCK_TYPES.BED?.id) {
+                    _csMult = (typeof window !== 'undefined' && window.chargeStoneRecoveryMult !== undefined) ? Number(window.chargeStoneRecoveryMult) : 1.5;
+                }
+            }
+            this.needs.energy = Math.min(100, this.needs.energy + deltaTime * restEnergyRecoveryRate * _csMult);
             if (this.needs.energy >= 100) {
                 this.state = 'idle';
                 this.learn && this.learn({ type: 'FOUND_SHELTER' });
@@ -5079,6 +5089,15 @@ class Character {
             }
             this.inventory[0] = null;
             this.carriedItemMesh.visible = false;
+        }
+        // Charge Stone cleanup: remove stone at homePosition on death so it doesn't linger
+        if (this.homePosition && typeof removeBlock === 'function') {
+            const _hpKey = `${this.homePosition.x},${this.homePosition.y},${this.homePosition.z}`;
+            const _hpVal = worldData.get(_hpKey);
+            const _hpId = (_hpVal && typeof _hpVal === 'object') ? _hpVal.id : _hpVal;
+            if (_hpId === BLOCK_TYPES.BED?.id) {
+                removeBlock(this.homePosition.x, this.homePosition.y, this.homePosition.z);
+            }
         }
         // シーンから削除
         if (this.scene && this.mesh) {
@@ -6641,7 +6660,7 @@ class Character {
         }
         let icons = [];
         if (this.state === 'dead') icons.push('💀');
-        else if (this.state === 'resting') icons.push('🛏️');
+        else if (this.state === 'resting') icons.push('⚡');
         else if (this.state === 'socializing') icons.push('💬');
         else if (this.state === 'moving' || this.state === 'active') icons.push('🚶');
         if (this.currentAction === 'COLLECT_FOOD' && !icons.includes('🍎')) icons.push('🍎');

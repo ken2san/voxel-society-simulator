@@ -256,6 +256,7 @@ function renderCharacterDetail() {
         unsafeNightSafetyDecayRate:         5.0,
         daytimeSafetyRecoveryRate:          16.0,
         restEnergyRecoveryRate:             18.0,
+        chargeStoneRecoveryMult:            1.5,
         characterLifespan:                  420,
         homeReturnHungerLevel:              85,
         homeBuildingPriority:               72,
@@ -1018,6 +1019,7 @@ function renderCharacterDetail() {
     appendCompactSliderInput(needsDynamicsRow, 'NightS', 'unsafeNightSafetyDecayRate', { min: 0, max: 10, step: 0.1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'DayS', 'daytimeSafetyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'RestE', 'restEnergyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'CSMult', 'chargeStoneRecoveryMult', { min: 1.0, max: 3.0, step: 0.1, width: '64px', sliderWidth: '72px' });
     needsDynamicsRow.dataset.label = 'Needs Dynamics';
     tabPanels[2].appendChild(needsDynamicsRow);
 

@@ -755,7 +755,7 @@ export const BLOCK_TYPES = {
     FRUIT: { id: 4, name: 'Fruit', color: 0xff4500, isEdible: true, foodValue: 50, drops: 'FRUIT_ITEM', isFruitBlock: true },
     WOOD:  { id: 5, name: 'Wood', color: 0x8b5a2b, diggable: true, drops: 'WOOD_LOG', isWoodBlock: true },
     LEAF:  { id: 6, name: 'Leaf', color: 0x228b22, diggable: true, isLeafBlock: true },
-    BED:   { id: 7, name: 'Bed', color: 0xffec8b, isBed: true, isBedBlock: true },
+    BED:   { id: 7, name: 'Charge Stone', color: 0x7b4fcf, isBed: true, isBedBlock: true, isChargeStone: true },
     HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd8c39a, isHouseWall: true },
     HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x6b4a2f, isHouseRoof: true },
     STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x7b8a94, isHouseWall: true, isStoneWall: true },
