@@ -5,23 +5,13 @@
 
 /* ── Mobile floating HUD ─────────────────────────────────────────────────── */
 #mobile-hud {
-  display: none; /* hidden on desktop */
-  position: fixed;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-  left: 16px;
-  right: 16px;
-  z-index: 200;
+  display: flex; /* shown via #mobile-control-zone on mobile */
   height: 52px;
-  border-radius: 999px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 0 16px;
-  background: rgba(10, 16, 40, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
 }
 
 .m-hud-btn {
@@ -63,11 +53,29 @@
 
 /* ── Mobile accordion bar (shown on mobile only) ────────────────────── */
 #mobile-accordion-bar {
-  display: none; /* hidden on desktop */
+  display: none; /* visibility controlled by parent #mobile-control-zone */
   width: 100%;
-  background: rgba(15, 23, 42, 0.96);
+  height: 44px;
+  background: transparent;
   border-top: none;
   border-bottom: none;
+}
+
+/* ── Mobile control zone (accordion tabs + action row, mobile-only) ────────── */
+#mobile-control-zone {
+  display: none; /* shown on mobile via media query */
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 200;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(10, 16, 40, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 16px 16px 0 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
 }
 
 .m-acc-btn {
@@ -96,6 +104,7 @@
 /* ── Mobile layout: canvas-as-background + bottom-sheet panels ───────────── */
 /* Covers: iPhone, iPad, iPad Pro 11" landscape (1194px), iPad Pro 12.9"/13" landscape (1366px) */
 @media (max-width: 1400px) {
+  #mobile-control-zone  { display: flex; }
   #mobile-hud           { display: flex; }
   #mobile-accordion-bar { display: flex; }
 
@@ -159,17 +168,7 @@
   /* Minimap: smaller, stays in top-right corner */
   #minimapCanvas { width: 64px !important; height: 64px !important; }
 
-  /* Accordion tab bar: fixed just above floating HUD pill */
-  #mobile-accordion-bar {
-    position: fixed !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 150 !important;
-    background: #0f172a !important;
-    border: none !important;
-    outline: none !important;
-  }
+  /* #mobile-accordion-bar positioning is handled by #mobile-control-zone */
 }
 
 /* ── Mobile World panel (desktop: hidden, mobile: bottom-sheet via sidebar.css) ── */

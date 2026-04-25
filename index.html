@@ -226,11 +226,22 @@
         </div>
     </div>
 
-    <!-- Mobile accordion bar (hidden on desktop) -->
-    <div id="mobile-accordion-bar">
-        <button class="m-acc-btn" id="m-acc-left-btn">👥 Characters</button>
-        <button class="m-acc-btn" id="m-acc-right-btn">🔍 Detail</button>
-        <button class="m-acc-btn" id="m-acc-world-btn">⚙️ World</button>
+    <!-- Mobile control zone: accordion tabs + action row (mobile only) -->
+    <div id="mobile-control-zone">
+      <div id="mobile-accordion-bar">
+          <button class="m-acc-btn" id="m-acc-left-btn">👥 Characters</button>
+          <button class="m-acc-btn" id="m-acc-right-btn">🔍 Detail</button>
+          <button class="m-acc-btn" id="m-acc-world-btn">⚙️ World</button>
+      </div>
+      <div id="mobile-hud" aria-label="Mobile controls">
+        <button id="m-hud-start" class="m-hud-btn m-hud-start">▶ Start</button>
+        <div class="m-hud-info">
+            <span id="m-hud-season">🌸 Spring</span>
+            <span id="m-hud-pop">👥 –</span>
+        </div>
+        <button id="m-hud-centre" class="m-hud-btn m-hud-icon" title="Centre camera">🎯</button>
+        <button id="m-hud-regen" class="m-hud-btn m-hud-regen" title="Regenerate World">🔄</button>
+      </div>
     </div>
 
     <!-- Sidebars: fixed panels on desktop, collapsible panels on mobile -->
@@ -281,17 +292,6 @@
         });
         // All game logic is now in game.js
     </script>
-
-    <!-- ── Mobile floating HUD (hidden on desktop via CSS) ───────────────── -->
-    <div id="mobile-hud" aria-label="Mobile controls">
-        <button id="m-hud-start" class="m-hud-btn m-hud-start">▶ Start</button>
-        <div class="m-hud-info">
-            <span id="m-hud-season">🌸 Spring</span>
-            <span id="m-hud-pop">👥 –</span>
-        </div>
-        <button id="m-hud-centre" class="m-hud-btn m-hud-icon" title="Centre camera">🎯</button>
-        <button id="m-hud-regen" class="m-hud-btn m-hud-regen" title="Regenerate World">🔄</button>
-    </div>
 
     <!-- Tap-outside dismiss overlay (sits between canvas z=0 and sheets z=140) -->
     <div id="mobile-sheet-overlay"></div>
