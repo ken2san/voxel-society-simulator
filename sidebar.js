@@ -1712,9 +1712,11 @@ function renderCharacterDetail() {
         }
         window.renderCharacterList && window.renderCharacterList();
     };
-    charNumVal.oninput = () => {
+    const _applyCharNum = (rawVal) => {
+        const parsed = parseInt(rawVal, 10);
+        if (isNaN(parsed)) return;
         const maxAllowed = Number(charNumVal.max || charCapacity.max);
-        const safeValue = Math.max(5, Math.min(maxAllowed, Number(charNumVal.value) || 5));
+        const safeValue = Math.max(5, Math.min(maxAllowed, parsed));
         charNumInput.value = safeValue;
         charNumVal.value = safeValue;
         sidebarParams.charNum = safeValue;
@@ -1729,6 +1731,15 @@ function renderCharacterDetail() {
         }
         window.renderCharacterList && window.renderCharacterList();
     };
+    // Allow free typing; only sync slider when value is a valid integer
+    charNumVal.oninput = () => {
+        const raw = charNumVal.value;
+        if (raw === '' || raw === '-') return; // mid-edit: leave field alone
+        _applyCharNum(raw);
+    };
+    // Snap to valid range on blur or Enter
+    charNumVal.onblur = () => _applyCharNum(charNumVal.value || '5');
+    charNumVal.onkeydown = (e) => { if (e.key === 'Enter') _applyCharNum(charNumVal.value || '5'); };
     charNumRow.dataset.label = 'Number of Characters';
     tabPanels[0].appendChild(charNumRow);
     tabPanels[0].appendChild(populationHint);
