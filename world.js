@@ -1543,6 +1543,12 @@ export function animate() {
     const _frameStart = performance.now();
     const deltaTime = Math.min(clock.getDelta(), 0.1); // cap at 100ms to prevent tab-backgrounding spikes
 
+    // ── Mobile render throttle: toggle each frame so GPU renders at ~30fps ────
+    // Simulation logic still runs every frame; only the renderer.render() call
+    // is skipped on odd frames to halve mobile GPU fill cost.
+    animate._mobileRenderFlag = !animate._mobileRenderFlag;
+    const _skipRender = !!(typeof window !== 'undefined' && window.__mobileOptimized && animate._mobileRenderFlag);
+
     // ── Lazy-init snow system (created once, tied to scene lifetime) ──────────
     if (!animate._snow && scene) {
         animate._snow = createSnowSystem(scene);
@@ -1623,7 +1629,7 @@ export function animate() {
         updateAmbientWorldEffects();
         _updateSnow(deltaTime);
         if (controls) controls.update();
-        renderer.render(scene, camera);
+        if (!_skipRender) renderer.render(scene, camera);
         return;
     }
     worldTime += deltaTime;
@@ -1711,7 +1717,7 @@ export function animate() {
         // Rebuild terrain voxels when season changes (snow on step edges etc.)
         if (animate._lastSeasonName !== _name) {
             animate._lastSeasonName = _name;
-            if (window.voxelDetailMode !== false) rebuildAllBlockVisuals();
+            if (window.voxelDetailMode !== false && !window.__mobileOptimized) rebuildAllBlockVisuals();
         }
 
         // --- Society Chronicle event hooks (always active) ---
@@ -1963,7 +1969,7 @@ export function animate() {
     }
 
     const _renderStart = performance.now();
-    renderer.render(scene, camera);
+    if (!_skipRender) renderer.render(scene, camera);
     const _frameEnd = performance.now();
 
     // --- Perf stats for debug overlay ---

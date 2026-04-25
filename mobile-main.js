@@ -15,6 +15,10 @@ window.sidebarParams.activeDistrictIndex = window.sidebarParams.activeDistrictIn
 // Start paused so world generates before sim begins (user taps Play to start)
 window.simulationRunning = false;
 
+// ── Mobile performance: set before main.js reads renderer options ─────────────
+// Enables lower pixel ratio (1.0), antialias-off, and frame-throttled rendering.
+window.__mobileOptimized = true;
+
 // ── 2. Boot game engine ───────────────────────────────────────────────────────
 // main.js auto-calls main() → init() → animate() on module load.
 // All DOM references in main.js are null-guarded so missing elements are safe.

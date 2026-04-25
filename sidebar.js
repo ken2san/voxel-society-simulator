@@ -560,6 +560,7 @@ function renderCharacterDetail() {
     actionBar.style.position = 'sticky';
     actionBar.style.top = '6px';
     actionBar.style.zIndex = '15';
+    actionBar.id = 'sim-action-bar';
     actionBar.style.display = 'flex';
     actionBar.style.alignItems = 'center';
     actionBar.style.justifyContent = 'space-between';
