@@ -63,8 +63,8 @@
   display: none; /* hidden on desktop */
   width: 100%;
   background: rgba(15, 23, 42, 0.96);
-  border-top: 1px solid rgba(148, 163, 184, 0.15);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: none;
+  border-bottom: none;
 }
 
 .m-acc-btn {
