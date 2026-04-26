@@ -362,19 +362,22 @@ export function buildReaperGroup() {
 
     // ── Animation ─────────────────────────────────────────────────────────────
     root.userData.updateAnim = (t) => {
-        // 1. Heavy hover sway — large creature with mass, slow and deliberate
-        bodyGroup.rotation.z = Math.sin(t * 0.8) * 0.055;
-        bodyGroup.position.y = Math.sin(t * 0.9 + 0.5) * 0.04; // independent of world float
+        // 1. Stately robe sway — heavy silhouette, slow and deliberate
+        //    No bodyGroup.position.y: world.js float already provides hover;
+        //    adding an independent bob created a double-bounce "bouncing block" feel.
+        bodyGroup.rotation.z = Math.sin(t * 0.70) * 0.12;
 
-        // 2. Head: predatory survey — slow sweep + occasional glance + forward stalk tilt
-        //    rotation.x = bird-of-prey forward lean; reads as focus / menace
-        headGroup.rotation.y = Math.sin(t * 0.45) * 0.16 + Math.sin(t * 1.3) * 0.04;
-        headGroup.rotation.x = -0.06 + Math.sin(t * 0.55) * 0.08;
-        headGroup.rotation.z = Math.sin(t * 0.80) * 0.035;
+        // 2. Head: predatory stalking — slow survey, forward stalk lean
+        //    Counter-sway keeps the head visually stable as the body rocks
+        //    → reads as intentional posture, not just wobbling
+        headGroup.rotation.y = Math.sin(t * 0.45) * 0.18 + Math.sin(t * 1.3) * 0.05;
+        headGroup.rotation.x = -0.08 + Math.sin(t * 0.55) * 0.10;
+        headGroup.rotation.z = -bodyGroup.rotation.z * 0.6; // stabilise against body sway
 
-        // 3. Scythe: heavy pendulum — slower freq, larger arc, axial wobble for mass
-        scytheGroup.rotation.z = -0.25 + Math.sin(t * 0.9) * 0.18;
-        scytheGroup.rotation.y =  0.15 + Math.sin(t * 1.3) * 0.06;
+        // 3. Scythe: wide reaping pendulum — the signature motion of death
+        //    ±0.45 rad arc (was ±0.18) reads clearly in top-down view as a sweep
+        scytheGroup.rotation.z = -0.35 + Math.sin(t * 1.1) * 0.45;
+        scytheGroup.rotation.y =  0.15 + Math.sin(t * 1.5) * 0.08;
     };
 
     // Slower than angel, phase π apart — they bob out of sync in the world
