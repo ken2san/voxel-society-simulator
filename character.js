@@ -888,9 +888,12 @@ class Character {
             this._digAnimTimer = 0.5;
             this._digAnimTarget = { x, y, z }; // store so updateAnimations can compute direction
             // Play only at the start of a new dig and at the halfway point — not every tick.
-            // Every-tick playback with 32 chars = constant global spam regardless of throttle.
-            if (this._diggingProgress === 1 || this._diggingProgress === 9) {
+            // Per-character cooldown (2s) prevents 32-char global spam that bypasses global throttle.
+            const _digNow = performance.now();
+            if ((this._diggingProgress === 1 || this._diggingProgress === 9)
+                && (!this._lastDigSoundAt || _digNow - this._lastDigSoundAt > 2000)) {
                 playSound('dig');
+                this._lastDigSoundAt = _digNow;
             }
 
             // 段階的なアイコン表示とエフェクト
@@ -4119,7 +4122,9 @@ class Character {
         }
 
         // --- 完全閉じ込め救済: 周囲8方向すべてブロックで埋まっている場合、強制的に1つ壊す ---
-        let surrounded = true;
+        // Skip while inside home — character is invisible and home walls should not be destroyed
+        const _insideHome = this._homeAbsorb && (this._homeAbsorb.phase === 'inside' || this._homeAbsorb.phase === 'entering');
+        let surrounded = _insideHome ? false : true;
         let breakable = null;
         for (let dx = -1; dx <= 1; dx++) {
             for (let dz = -1; dz <= 1; dz++) {
@@ -4166,6 +4171,13 @@ class Character {
 
         // --- working状態での段階的処理継続 ---
         if (this.state === 'working' && this.action) {
+            // Skip work while inside home — character is invisible and shouldn't be digging
+            if (this._homeAbsorb && (this._homeAbsorb.phase === 'inside' || this._homeAbsorb.phase === 'entering')) {
+                this.setIdleState({ clearAction: true, cooldown: 1.0 });
+                this.updateAnimations(deltaTime);
+                this.updateThoughtBubble(isNight, camera);
+                return;
+            }
             this.log(`⚡ continuing processing in working state: ${this.action.type}`, this.action);
             if (!this.runWorkAction(this.action.type)) {
                 this.log(`Unhandled working action: ${this.action.type}`);
@@ -4752,8 +4764,13 @@ class Character {
         // starvation death is now handled above via _starvationTimer
         // --- 行動決定 ---
         if (this.state === 'idle') {
-            this.actionCooldown -= deltaTime;
-            if (this.actionCooldown <= 0) this.decideNextAction && this.decideNextAction(isNight);
+            // While inside home, just rest — don't invoke AI to avoid assigning DESTROY_BLOCK etc.
+            if (this._homeAbsorb && (this._homeAbsorb.phase === 'inside' || this._homeAbsorb.phase === 'entering')) {
+                this.state = 'resting';
+            } else {
+                this.actionCooldown -= deltaTime;
+                if (this.actionCooldown <= 0) this.decideNextAction && this.decideNextAction(isNight);
+            }
         }
         // moving状態でも定期的にactionCooldownを減少させ、必要に応じて新しいアクションを決定
         else if (this.state === 'moving') {
