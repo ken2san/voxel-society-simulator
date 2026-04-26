@@ -55,7 +55,7 @@ const THROTTLE = {
     dig:        300,   // 300ms: responsive enough to feel sync'd, slow enough to not spam
     build:      200,
     eat:        300,
-    social:     400,
+    social:     1200,
     death:      600,
     night:      0,
     dawn:       0,
@@ -80,6 +80,13 @@ export function playSound(name) {
     const throttleMs = THROTTLE[name] ?? 150;
     if (throttleMs > 0 && _lastPlay[name] && (now - _lastPlay[name]) < throttleMs) return;
     _lastPlay[name] = now;
+
+    // DEBUG: per-sound mute flags — set e.g. window.muteSound_dig = true in console to silence one sound
+    if (typeof window !== 'undefined' && window[`muteSound_${name}`] === true) return;
+    // DEBUG: log every sound that plays (helps identify "poko" by watching console)
+    if (typeof window !== 'undefined' && window.debugSounds === true) {
+        console.log(`[sound] ${name} @ ${now.toFixed(0)}ms`);
+    }
 
     switch (name) {
         case 'dig':    _playDig(ctx);    break;
@@ -180,11 +187,13 @@ function _playEat(ctx) {
     _osc(ctx, 'sine', 880, t + 0.08, t + 0.22, 0.20, 1100);
 }
 
-/** Short chirp – two characters greeting */
+/** Soft murmur – two characters talking (low-key, won't spam as "poko") */
 function _playSocial(ctx) {
     const t = ctx.currentTime;
-    _osc(ctx, 'sine', 740, t,        t + 0.08, 0.22, 880);
-    _osc(ctx, 'sine', 880, t + 0.06, t + 0.14, 0.15, 660);
+    // Gentle breath-like noise burst — reads as quiet chatter, not a tone
+    _noise(ctx, t, 0.18, 0.10, 420);
+    // Soft low hum underneath
+    _osc(ctx, 'triangle', 280, t, t + 0.20, 0.07, 240);
 }
 
 /** Descending tone + noise – character dies */
