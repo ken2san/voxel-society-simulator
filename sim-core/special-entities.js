@@ -33,6 +33,8 @@ function box(w, h, d, color, unlit = false) {
 // Compact chibi proportions — slightly narrower skirt, shorter wings, tighter halo.
 export function buildAngelGroup() {
     const root = new THREE.Group();
+    const bodyGroup = new THREE.Group(); // world.js controls root.position.y; bodyGroup holds all mesh
+    root.add(bodyGroup);
 
     const WHITE  = 0xf8f8f8;
     const WHITE2 = 0xeeeef2;
@@ -49,18 +51,18 @@ export function buildAngelGroup() {
         const [sw, sh, sd] = SKIRT[i];
         const tier = box(sw, sh, sd, i === 0 ? WHITE2 : WHITE);
         tier.position.y = (-3 + i * 2) * S;
-        root.add(tier);
+        bodyGroup.add(tier);
     }
 
     // ── Torso ─────────────────────────────────────────────────────────────────
     const torso = box(4, 6, 4, WHITE);
     torso.position.y = 3 * S;
-    root.add(torso);
+    bodyGroup.add(torso);
 
     // ── Head group ────────────────────────────────────────────────────────────
     const headGroup = new THREE.Group();
     headGroup.position.y = 9 * S;
-    root.add(headGroup);
+    bodyGroup.add(headGroup);
 
     // Face: 3-layer — all rows same z-depth so forehead is flush (matches sandbox)
     const FACE_ROWS = [
@@ -146,17 +148,35 @@ export function buildAngelGroup() {
             }
         }
     }
-    root.add(leftWing);
-    root.add(rightWing);
+    bodyGroup.add(leftWing);
+    bodyGroup.add(rightWing);
 
     // ── Animation ─────────────────────────────────────────────────────────────
     root.userData.updateAnim = (t) => {
+        // Z-axis = up/down wing stroke (bird mechanics)
+        // leftWing voxels extend in -x: rotation.z negative = tip UP
+        // rightWing voxels extend in +x: rotation.z positive = tip UP
+        const flap = Math.sin(t * 3.5);   // ~3.5 flaps/sec
+        leftWing.rotation.z  = -(0.15 + flap * 0.55);
+        rightWing.rotation.z =  (0.15 + flap * 0.55);
+        // Sweep wings back on upstroke (fold slightly, natural kinematics)
+        const sweep = Math.max(0, flap) * 0.22;
+        leftWing.rotation.y  =  sweep;
+        rightWing.rotation.y = -sweep;
+
+        // Body lifts when wings push air DOWN (peak on downstroke = flap negative)
+        // Uses bodyGroup so it doesn't fight world.js root.position.y interpolation
+        bodyGroup.position.y = Math.max(0, -flap) * 0.05;
+        // Gentle lean from alternating wing pressure
+        bodyGroup.rotation.z = flap * 0.022;
+
+        // Head: two-frequency curiosity (quick alert bird)
+        headGroup.rotation.y = Math.sin(t * 0.50) * 0.14 + Math.sin(t * 1.80) * 0.07;
+        headGroup.rotation.z = Math.sin(t * 0.75) * 0.09;
+
+        // Halo
         haloGroup.rotation.y = t * 0.65;
         haloGroup.position.y = 7.5 * S + Math.sin(t * 2.2) * 0.25 * S;
-        leftWing.rotation.y  =  0.30 + Math.sin(t * 3.2) * 0.38;
-        rightWing.rotation.y = -0.30 - Math.sin(t * 3.2) * 0.38;
-        headGroup.rotation.z = Math.sin(t * 0.75) * 0.06;
-        headGroup.rotation.y = Math.sin(t * 0.40) * 0.05;
     };
 
     root.userData.roam = { tx: 8, tz: 8, speed: 1.5, phase: 0.0 };
@@ -168,6 +188,8 @@ export function buildAngelGroup() {
 // asymmetric raised scythe arm, blade arc above head, two golden fangs.
 export function buildReaperGroup() {
     const root = new THREE.Group();
+    const bodyGroup = new THREE.Group(); // world.js controls root; bodyGroup holds all mesh
+    root.add(bodyGroup);
 
     // Two robe tones — standard voxel trick for depth without lighting math
     const ROBE   = 0x1a0f22;   // core shadow robe
@@ -186,62 +208,62 @@ export function buildReaperGroup() {
         const [sw, sh, sd] = SKIRT[i];
         const tier = box(sw, sh, sd, ROBE);
         tier.position.y = (-2 - i * 2) * S;
-        root.add(tier);
+        bodyGroup.add(tier);
     }
     // Crimson hem strip on bottom tier — grounds the silhouette
     const hem = box(8, 0.8, 0.5, TRIM);
     hem.position.set(0, -7.4 * S, 3.6 * S);
-    root.add(hem);
+    bodyGroup.add(hem);
 
     // ── Robe body: taller column + lighter front slab for depth ──────────────
     const body = box(5, 7, 4, ROBE);
     body.position.y = 2 * S;
-    root.add(body);
+    bodyGroup.add(body);
     const bodyFront = box(4, 6, 0.6, ROBEF);
     bodyFront.position.set(0, 2.3 * S, 2.3 * S);
-    root.add(bodyFront);
+    bodyGroup.add(bodyFront);
 
     // Belt — border ring + central buckle + dangling sash
     const beltF = box(5.5, 1.2, 0.6, TRIM);
     beltF.position.set(0, -0.2 * S, 2.3 * S);
-    root.add(beltF);
+    bodyGroup.add(beltF);
     const beltB = box(5.5, 1.2, 0.6, TRIM);
     beltB.position.set(0, -0.2 * S, -2.3 * S);
-    root.add(beltB);
+    bodyGroup.add(beltB);
     const beltSL = box(0.6, 1.2, 3.5, TRIM);
     beltSL.position.set(-2.8 * S, -0.2 * S, 0);
-    root.add(beltSL);
+    bodyGroup.add(beltSL);
     const beltSR = box(0.6, 1.2, 3.5, TRIM);
     beltSR.position.set(2.8 * S, -0.2 * S, 0);
-    root.add(beltSR);
+    bodyGroup.add(beltSR);
     // Bone belt buckle (visual anchor at center front)
     const buckle = box(1.4, 1.6, 0.9, BONE);
     buckle.position.set(0, -0.2 * S, 2.7 * S);
-    root.add(buckle);
+    bodyGroup.add(buckle);
     // Dangling sash left-of-center
     const sash = box(1, 3.5, 0.5, TRIM);
     sash.position.set(-1.2 * S, -3 * S, 2.2 * S);
-    root.add(sash);
+    bodyGroup.add(sash);
 
     // ── Arms — asymmetric pose (left hangs, right raises for scythe) ──────────
     const armL = box(1.5, 3.5, 1.5, ROBE);
     armL.position.set(-3.5 * S, 2.3 * S, 0);
-    root.add(armL);
+    bodyGroup.add(armL);
     const handL = box(1.3, 1, 1.3, BONE);
     handL.position.set(-3.5 * S, 0.3 * S, 0);
-    root.add(handL);
+    bodyGroup.add(handL);
 
     const armR = box(1.5, 3, 1.5, ROBE);
     armR.position.set(3.5 * S, 3.8 * S, 0);
-    root.add(armR);
+    bodyGroup.add(armR);
     const handR = box(1.3, 1, 1.3, BONE);
     handR.position.set(3.5 * S, 2 * S, 0);
-    root.add(handR);
+    bodyGroup.add(handR);
 
     // ── Head group ────────────────────────────────────────────────────────────
     const headGroup = new THREE.Group();
     headGroup.position.y = 8.5 * S;
-    root.add(headGroup);
+    bodyGroup.add(headGroup);
 
     // Skull — narrower (4w) than hood width (7w) so face is framed / shadowed
     const skull = box(4, 6, 3, BONE);
@@ -303,7 +325,7 @@ export function buildReaperGroup() {
     // Pre-tilt: blade leans slightly outward & forward — natural carrying posture
     scytheGroup.rotation.z = -0.25;
     scytheGroup.rotation.y = 0.15;
-    root.add(scytheGroup);
+    bodyGroup.add(scytheGroup);
 
     // Handle — 10 voxels, extends up and down from hand grip
     const handle = new THREE.Mesh(
@@ -338,24 +360,24 @@ export function buildReaperGroup() {
         scytheGroup.add(bv);
     }
 
-    // ── Animation — synced to world's 1.5 Hz float rhythm ────────────────────
+    // ── Animation ─────────────────────────────────────────────────────────────
     root.userData.updateAnim = (t) => {
-        // 1. Robe sway: whole body gently tilts left-right at world float frequency
-        //    (makes the robe feel like fabric responding to movement)
-        root.rotation.z = Math.sin(t * 1.5) * 0.032;
+        // 1. Heavy hover sway — large creature with mass, slow and deliberate
+        bodyGroup.rotation.z = Math.sin(t * 0.8) * 0.055;
+        bodyGroup.position.y = Math.sin(t * 0.9 + 0.5) * 0.04; // independent of world float
 
-        // 2. Head: slow ominous survey — looks around deliberately, rarely tilts
-        //    Frequency 0.55 Hz = about one full turn every 11 seconds (watchful)
-        headGroup.rotation.y = Math.sin(t * 0.55) * 0.14;
-        headGroup.rotation.z = Math.sin(t * 0.80) * 0.04;
+        // 2. Head: predatory survey — slow sweep + occasional glance + forward stalk tilt
+        //    rotation.x = bird-of-prey forward lean; reads as focus / menace
+        headGroup.rotation.y = Math.sin(t * 0.45) * 0.16 + Math.sin(t * 1.3) * 0.04;
+        headGroup.rotation.x = -0.06 + Math.sin(t * 0.55) * 0.08;
+        headGroup.rotation.z = Math.sin(t * 0.80) * 0.035;
 
-        // 3. Scythe pendulum — single Z-axis swing like a pendulum being carried
-        //    Offset from robe sway so they don't cancel: use cos not sin
-        scytheGroup.rotation.z = -0.25 + Math.cos(t * 1.2) * 0.12;
+        // 3. Scythe: heavy pendulum — slower freq, larger arc, axial wobble for mass
+        scytheGroup.rotation.z = -0.25 + Math.sin(t * 0.9) * 0.18;
+        scytheGroup.rotation.y =  0.15 + Math.sin(t * 1.3) * 0.06;
     };
 
-    // Slower than angel (1.5) — deliberate, ominous pace
-    // Phase offset by π so reaper and angel bob out of sync in the world
+    // Slower than angel, phase π apart — they bob out of sync in the world
     root.scale.setScalar(0.72);
 
     root.userData.roam = { tx: 8, tz: 6, speed: 1.0, phase: Math.PI };
