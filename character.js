@@ -887,7 +887,11 @@ class Character {
             // Keep dig animation alive for ~0.5 s after each tick regardless of state
             this._digAnimTimer = 0.5;
             this._digAnimTarget = { x, y, z }; // store so updateAnimations can compute direction
-            playSound('dig');
+            // Play only at the start of a new dig and at the halfway point — not every tick.
+            // Every-tick playback with 32 chars = constant global spam regardless of throttle.
+            if (this._diggingProgress === 1 || this._diggingProgress === 9) {
+                playSound('dig');
+            }
 
             // 段階的なアイコン表示とエフェクト
             const stages = ['⛏️', '💪⛏️', '💥⛏️', '🔥⛏️', '✨💎'];
