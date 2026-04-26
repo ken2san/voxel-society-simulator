@@ -93,9 +93,9 @@ export function buildAngelGroup() {
     hairBack.position.set(0, 2 * S, -4 * S);
     headGroup.add(hairBack);
 
-    // Ribbon / headband
-    const ribbon = box(8, 1.5, 1, RIBBON);
-    ribbon.position.y = 2 * S;
+    // Ribbon / headband (thinner and slightly inset to avoid forehead protrusion)
+    const ribbon = box(8, 1, 0.4, RIBBON);
+    ribbon.position.set(0, 2.2 * S, 1.7 * S);
     headGroup.add(ribbon);
 
     // Cheeks (sandbox: pink, outside lower face)
