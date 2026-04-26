@@ -164,158 +164,199 @@ export function buildAngelGroup() {
 }
 
 // ── Reaper ────────────────────────────────────────────────────────────────────
-// Chibi-proportioned redesign: big head, cute glowing eyes, robe skirt (angel-
-// style tiers), tiny bone hands, compact scythe. Total height ~1.6 world units
-// — comparable to a chibi character with a small accessory.
+// Pro chibi-voxel design: two-tone robe depth, skull framed by oversized hood,
+// asymmetric raised scythe arm, blade arc above head, two golden fangs.
 export function buildReaperGroup() {
     const root = new THREE.Group();
 
-    const ROBE   = 0x1e1228;   // deep purple-black
-    const TRIM   = 0x7a1828;   // crimson accent
-    const BONE   = 0xddd8c0;
-    const EYE    = 0xff2424;   // bright red glow
-    const HANDLE = 0x2a1208;
-    const BLADE  = 0xbcccd0;   // silver-blue
+    // Two robe tones — standard voxel trick for depth without lighting math
+    const ROBE   = 0x1a0f22;   // core shadow robe
+    const ROBEF  = 0x2e1840;   // front-face robe (lighter = ambient bounce)
+    const TRIM   = 0x8b1c2e;   // crimson accent
+    const BONE   = 0xe8e0cc;   // skull / hands
+    const TOOTH  = 0xd4a820;   // golden fangs
+    const EYE    = 0xff1111;   // hot red glow
+    const HANDLE = 0x3a1a0a;   // very dark brown
+    const BLADE  = 0xd0dce0;   // cold silver
+    const BLADED = 0x8898a0;   // blade inner (darker edge = 2-tone blade form)
 
-    // ── Robe skirt (3 tiers — bottom-heavy, mirrors angel silhouette) ─────────
-    const SKIRT = [[5, 2, 5], [6, 2, 6], [7, 2, 7]];
+    // ── Robe skirt — wider at base, TRIM hem on bottom tier ──────────────────
+    const SKIRT = [[5, 2, 5], [6, 2, 6], [8, 2, 7]];
     for (let i = 0; i < 3; i++) {
         const [sw, sh, sd] = SKIRT[i];
         const tier = box(sw, sh, sd, ROBE);
-        tier.position.y = (-2 - i * 2) * S;   // i=0: -2*S, i=1: -4*S, i=2: -6*S
+        tier.position.y = (-2 - i * 2) * S;
         root.add(tier);
     }
+    // Crimson hem strip on bottom tier — grounds the silhouette
+    const hem = box(8, 0.8, 0.5, TRIM);
+    hem.position.set(0, -7.4 * S, 3.6 * S);
+    root.add(hem);
 
-    // ── Robe body (sandbox: x=-5..5, wider column) ──────────────────────────
-    const body = box(5, 6, 4, ROBE);
-    body.position.y = 1.5 * S;
+    // ── Robe body: taller column + lighter front slab for depth ──────────────
+    const body = box(5, 7, 4, ROBE);
+    body.position.y = 2 * S;
     root.add(body);
+    const bodyFront = box(4, 6, 0.6, ROBEF);
+    bodyFront.position.set(0, 2.3 * S, 2.3 * S);
+    root.add(bodyFront);
 
-    // Belt — border ring style (sandbox: front/back/left/right plates at mid-body)
-    const beltF = box(5.5, 1, 0.5, TRIM);
-    beltF.position.set(0, -0.5 * S, 2.3 * S);
+    // Belt — border ring + central buckle + dangling sash
+    const beltF = box(5.5, 1.2, 0.6, TRIM);
+    beltF.position.set(0, -0.2 * S, 2.3 * S);
     root.add(beltF);
-    const beltB = box(5.5, 1, 0.5, TRIM);
-    beltB.position.set(0, -0.5 * S, -2.3 * S);
+    const beltB = box(5.5, 1.2, 0.6, TRIM);
+    beltB.position.set(0, -0.2 * S, -2.3 * S);
     root.add(beltB);
-    const beltL = box(0.5, 1, 4, TRIM);
-    beltL.position.set(-2.8 * S, -0.5 * S, 0);
-    root.add(beltL);
-    const beltR = box(0.5, 1, 4, TRIM);
-    beltR.position.set(2.8 * S, -0.5 * S, 0);
-    root.add(beltR);
-    // Dangling belt cord (sandbox: x=-3,-2, y=-11..-8, z=4)
-    const beltCord = box(0.8, 2.5, 0.5, TRIM);
-    beltCord.position.set(-1.5 * S, -3.5 * S, 2.2 * S);
-    root.add(beltCord);
+    const beltSL = box(0.6, 1.2, 3.5, TRIM);
+    beltSL.position.set(-2.8 * S, -0.2 * S, 0);
+    root.add(beltSL);
+    const beltSR = box(0.6, 1.2, 3.5, TRIM);
+    beltSR.position.set(2.8 * S, -0.2 * S, 0);
+    root.add(beltSR);
+    // Bone belt buckle (visual anchor at center front)
+    const buckle = box(1.4, 1.6, 0.9, BONE);
+    buckle.position.set(0, -0.2 * S, 2.7 * S);
+    root.add(buckle);
+    // Dangling sash left-of-center
+    const sash = box(1, 3.5, 0.5, TRIM);
+    sash.position.set(-1.2 * S, -3 * S, 2.2 * S);
+    root.add(sash);
 
-    // ── Tiny sleeves ──────────────────────────────────────────────────────────
-    const sleeveL = box(1.5, 3, 1.5, ROBE);
-    sleeveL.position.set(-3.5 * S, 2 * S, 0);
-    root.add(sleeveL);
-    const sleeveR = box(1.5, 3, 1.5, ROBE);
-    sleeveR.position.set(3.5 * S, 2 * S, 0);
-    root.add(sleeveR);
-
-    // Bone hands (cute tiny)
-    const handL = box(1.2, 0.9, 1.2, BONE);
+    // ── Arms — asymmetric pose (left hangs, right raises for scythe) ──────────
+    const armL = box(1.5, 3.5, 1.5, ROBE);
+    armL.position.set(-3.5 * S, 2.3 * S, 0);
+    root.add(armL);
+    const handL = box(1.3, 1, 1.3, BONE);
     handL.position.set(-3.5 * S, 0.3 * S, 0);
     root.add(handL);
-    const handR = box(1.2, 0.9, 1.2, BONE);
-    handR.position.set(3.5 * S, 0.3 * S, 0);
+
+    const armR = box(1.5, 3, 1.5, ROBE);
+    armR.position.set(3.5 * S, 3.8 * S, 0);
+    root.add(armR);
+    const handR = box(1.3, 1, 1.3, BONE);
+    handR.position.set(3.5 * S, 2 * S, 0);
     root.add(handR);
 
     // ── Head group ────────────────────────────────────────────────────────────
     const headGroup = new THREE.Group();
-    headGroup.position.y = 7 * S;
+    headGroup.position.y = 8.5 * S;
     root.add(headGroup);
 
-    // Skull face (sandbox: bone-colored, protrudes from hood opening on +Z)
-    // Covers the face area x=-2..2, y=-2..3, z = front of hood
-    const skull = box(5, 5, 3, BONE);
-    skull.position.set(0, 0, 0.8 * S);
+    // Skull — narrower (4w) than hood width (7w) so face is framed / shadowed
+    const skull = box(4, 6, 3, BONE);
+    skull.position.set(0, -0.5 * S, 1.2 * S);
     headGroup.add(skull);
+    // Hollow cheek shadows (dark robe spots — give skull its concave personality)
+    for (const cx of [-1.5, 1.5]) {
+        const cheek = box(1, 1.5, 0.6, ROBE);
+        cheek.position.set(cx * S, -1.3 * S, 2.8 * S);
+        headGroup.add(cheek);
+    }
 
-    // Hood: back/top block (covers back and top, z=-4..-0.5)
-    const hoodBack = box(6, 6, 4, ROBE);
-    hoodBack.position.set(0, 0.5 * S, -1.5 * S);
+    // Hood — wide back block (7w > skull 4w = skull visibly recessed)
+    const hoodBack = box(7, 6, 5, ROBE);
+    hoodBack.position.set(0, 0.5 * S, -1.2 * S);
     headGroup.add(hoodBack);
-    // Hood side caps (flank the face opening, give 3/4-view depth)
-    const hoodSideL = box(0.8, 6, 2.5, ROBE);
-    hoodSideL.position.set(-3.4 * S, 0.5 * S, 0.2 * S);
-    headGroup.add(hoodSideL);
-    const hoodSideR = box(0.8, 6, 2.5, ROBE);
-    hoodSideR.position.set(3.4 * S, 0.5 * S, 0.2 * S);
-    headGroup.add(hoodSideR);
-    // Hood brow overhang (darkens above the eyes, sandbox: y=7..8 forward cap)
-    const hoodBrow = box(5.5, 1.5, 2, ROBE);
-    hoodBrow.position.set(0, 3.3 * S, 0.3 * S);
-    headGroup.add(hoodBrow);
+    // Hood side lips — frame face opening, give clean 3/4-view profile
+    for (const sx of [-3.6 * S, 3.6 * S]) {
+        const lip = box(0.8, 7, 1.5, ROBE);
+        lip.position.set(sx, 0.5 * S, 0.9 * S);
+        headGroup.add(lip);
+    }
+    // Brow overhang — casts visual shadow above the eyes
+    const brow = box(6, 1.5, 2.8, ROBE);
+    brow.position.set(0, 3.2 * S, 0.5 * S);
+    headGroup.add(brow);
 
-    // Hood peak (2-step taper — cute little point)
-    const peak1 = box(5, 2, 4, ROBE);
-    peak1.position.y = 4 * S;
-    headGroup.add(peak1);
-    const peak2 = box(3.5, 2, 2.5, ROBE);
-    peak2.position.y = 6 * S;
-    headGroup.add(peak2);
+    // Hood peak — 3-step taper (traditional silhouette, more polished)
+    const PEAK = [[6, 2, 4.5], [4.5, 2, 3], [3, 2, 2]];
+    for (let i = 0; i < 3; i++) {
+        const [pw, ph, pd] = PEAK[i];
+        const pk = box(pw, ph, pd, ROBE);
+        pk.position.y = (4 + i * 2) * S;
+        headGroup.add(pk);
+    }
 
-    // Eyes (glowing red, embedded in skull face — sandbox: z=1.5, inset)
-    for (const ex of [-1.3, 1.3]) {
-        const eye = box(1.5, 1.8, 0.4, EYE, true);
-        eye.position.set(ex * S, 0.5 * S, 2.1 * S);
+    // Eyes — glowing red, inset behind brow
+    for (const ex of [-1.1, 1.1]) {
+        const eye = box(1.4, 1.6, 0.5, EYE, true);
+        eye.position.set(ex * S, 0.4 * S, 2.5 * S);
         headGroup.add(eye);
     }
-    // Eye highlight
-    for (const hx of [-0.6, 1.8]) {
-        const hl = box(0.5, 0.5, 0.3, 0xffffff, true);
-        hl.position.set(hx * S, 1.1 * S, 2.2 * S);
+    // Highlight dots
+    for (const hx of [-0.5, 1.7]) {
+        const hl = box(0.45, 0.45, 0.3, 0xffffff, true);
+        hl.position.set(hx * S, 0.95 * S, 2.6 * S);
         headGroup.add(hl);
     }
+    // Two golden fangs — much more skull personality than a single bar
+    for (const tx of [-0.8, 0.8]) {
+        const fang = box(0.9, 1.1, 0.5, TOOTH);
+        fang.position.set(tx * S, -2.3 * S, 2.5 * S);
+        headGroup.add(fang);
+    }
 
-    // Teeth / smile (sandbox: tooth=0xddb125 golden, at face bottom front)
-    const TOOTH = 0xddb125;
-    const smile = box(2.5, 0.7, 0.4, TOOTH);
-    smile.position.set(0, -1.8 * S, 2.1 * S);
-    headGroup.add(smile);
-
-    // ── Mini scythe (compact — handle 7*S, tight blade arc) ──────────────────
+    // ── Scythe — blade arc sweeps ABOVE the head (dramatic silhouette) ────────
     const scytheGroup = new THREE.Group();
-    scytheGroup.position.set(4.8 * S, 0.5 * S, 0);
+    scytheGroup.position.set(4 * S, 3.5 * S, 0);   // right hand, raised
+    // Pre-tilt: blade leans slightly outward & forward — natural carrying posture
+    scytheGroup.rotation.z = -0.25;
+    scytheGroup.rotation.y = 0.15;
     root.add(scytheGroup);
 
-    // Handle (7 voxels = 0.7 world units)
+    // Handle — 10 voxels, extends up and down from hand grip
     const handle = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8 * S, 7 * S, 0.8 * S),
+        new THREE.BoxGeometry(0.9 * S, 10 * S, 0.9 * S),
         new THREE.MeshLambertMaterial({ color: HANDLE }),
     );
-    handle.position.y = 0;
     scytheGroup.add(handle);
 
-    // Blade (compact 5-point arc)
+    // Blade — 8-point outer arc (clears head height for visual impact)
+    const bladeMat  = new THREE.MeshLambertMaterial({ color: BLADE });
+    const bladeDMat = new THREE.MeshLambertMaterial({ color: BLADED });
     const bladePts = [
-        [0.5, 3.8], [1.4, 4.4], [2.4, 4.2], [3.0, 3.5], [3.2, 2.5],
+        [0.0, 5.5], [0.8, 6.4], [1.8, 7.0], [2.8, 7.1],
+        [3.6, 6.7], [4.2, 5.8], [4.5, 4.7], [4.4, 3.6],
     ];
-    const bladeMat = new THREE.MeshLambertMaterial({ color: BLADE });
     for (const [bx, by] of bladePts) {
         const bv = new THREE.Mesh(
-            new THREE.BoxGeometry(1.4 * S, 1.4 * S, 0.5 * S),
+            new THREE.BoxGeometry(1.5 * S, 1.5 * S, 0.6 * S),
             bladeMat,
         );
         bv.position.set(bx * S, by * S, 0);
         scytheGroup.add(bv);
     }
+    // Inner edge (darker) — 2-tone blade gives form and depth
+    const innerPts = [[0.9, 6.2], [1.9, 6.7], [2.8, 6.6], [3.6, 6.0], [4.1, 5.1]];
+    for (const [bx, by] of innerPts) {
+        const bv = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9 * S, 0.9 * S, 0.5 * S),
+            bladeDMat,
+        );
+        bv.position.set(bx * S, by * S, 0.05 * S);
+        scytheGroup.add(bv);
+    }
 
-    // ── Animation ─────────────────────────────────────────────────────────────
+    // ── Animation — synced to world's 1.5 Hz float rhythm ────────────────────
     root.userData.updateAnim = (t) => {
-        headGroup.rotation.y = Math.sin(t * 0.85) * 0.08;
-        headGroup.rotation.z = Math.cos(t * 1.1) * 0.05;
-        scytheGroup.rotation.x = Math.sin(t * 1.6) * 0.12;
-        scytheGroup.rotation.z = Math.sin(t * 0.9) * 0.06;
+        // 1. Robe sway: whole body gently tilts left-right at world float frequency
+        //    (makes the robe feel like fabric responding to movement)
+        root.rotation.z = Math.sin(t * 1.5) * 0.032;
+
+        // 2. Head: slow ominous survey — looks around deliberately, rarely tilts
+        //    Frequency 0.55 Hz = about one full turn every 11 seconds (watchful)
+        headGroup.rotation.y = Math.sin(t * 0.55) * 0.14;
+        headGroup.rotation.z = Math.sin(t * 0.80) * 0.04;
+
+        // 3. Scythe pendulum — single Z-axis swing like a pendulum being carried
+        //    Offset from robe sway so they don't cancel: use cos not sin
+        scytheGroup.rotation.z = -0.25 + Math.cos(t * 1.2) * 0.12;
     };
 
-    // Scale down uniformly so total height ~1.4 world units (chibi-comparable)
-    root.scale.setScalar(0.68);
+    // Slower than angel (1.5) — deliberate, ominous pace
+    // Phase offset by π so reaper and angel bob out of sync in the world
+    root.scale.setScalar(0.72);
 
     root.userData.roam = { tx: 8, tz: 6, speed: 1.0, phase: Math.PI };
     return root;
