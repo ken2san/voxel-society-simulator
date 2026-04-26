@@ -162,12 +162,11 @@ function _playEat(ctx) {
     _osc(ctx, 'sine', 880, t + 0.08, t + 0.22, 0.20, 1100);
 }
 
-/** Ascending two-note chime – two characters greeting */
+/** Short chirp – two characters greeting */
 function _playSocial(ctx) {
     const t = ctx.currentTime;
-    // Clearly ascending (not descending) so it's distinct from any "poko" pop
-    _osc(ctx, 'sine', 880,  t,        t + 0.12, 0.18, 1100);
-    _osc(ctx, 'sine', 1100, t + 0.09, t + 0.22, 0.14, 1320);
+    _osc(ctx, 'sine', 740, t,        t + 0.08, 0.22, 880);
+    _osc(ctx, 'sine', 880, t + 0.06, t + 0.14, 0.15, 660);
 }
 
 /** Descending tone + noise – character dies */
@@ -207,11 +206,10 @@ function _playEnterHome(ctx) {
 function _playLeaveHome(ctx) {
     const t = ctx.currentTime;
     // Door-open creak
-    _osc(ctx, 'triangle', 260, t,        t + 0.20, 0.12, 380);
+    _osc(ctx, 'triangle', 260, t,        t + 0.15, 0.12, 440);
     // Bright little emergence chime
-    _osc(ctx, 'sine',     660, t + 0.10, t + 0.35, 0.16, 880);
-    // Extended airy pop — longer so it's easier to identify
-    _noise(ctx, t + 0.08, 0.35, 0.20, 900);
+    _osc(ctx, 'sine',     660, t + 0.10, t + 0.28, 0.16, 880);
+    _noise(ctx, t + 0.08, 0.12, 0.18, 900);
 }
 
 /**
