@@ -174,7 +174,6 @@ export function buildReaperGroup() {
     const TRIM   = 0x7a1828;   // crimson accent
     const BONE   = 0xddd8c0;
     const EYE    = 0xff2424;   // bright red glow
-    const SKIN   = 0xbcb09a;   // pale ashy skin
     const HANDLE = 0x2a1208;
     const BLADE  = 0xbcccd0;   // silver-blue
 
@@ -187,15 +186,28 @@ export function buildReaperGroup() {
         root.add(tier);
     }
 
-    // ── Robe body (chibi-wide, short — 4w × 5h × 4d) ─────────────────────────
-    const body = box(4, 5, 4, ROBE);
-    body.position.y = 1.5 * S;   // spans from -1*S to 4*S
+    // ── Robe body (sandbox: x=-5..5, wider column) ──────────────────────────
+    const body = box(5, 6, 4, ROBE);
+    body.position.y = 1.5 * S;
     root.add(body);
 
-    // Crimson belt strip
-    const belt = box(5, 1, 4.5, TRIM);
-    belt.position.y = -0.5 * S;
-    root.add(belt);
+    // Belt — border ring style (sandbox: front/back/left/right plates at mid-body)
+    const beltF = box(5.5, 1, 0.5, TRIM);
+    beltF.position.set(0, -0.5 * S, 2.3 * S);
+    root.add(beltF);
+    const beltB = box(5.5, 1, 0.5, TRIM);
+    beltB.position.set(0, -0.5 * S, -2.3 * S);
+    root.add(beltB);
+    const beltL = box(0.5, 1, 4, TRIM);
+    beltL.position.set(-2.8 * S, -0.5 * S, 0);
+    root.add(beltL);
+    const beltR = box(0.5, 1, 4, TRIM);
+    beltR.position.set(2.8 * S, -0.5 * S, 0);
+    root.add(beltR);
+    // Dangling belt cord (sandbox: x=-3,-2, y=-11..-8, z=4)
+    const beltCord = box(0.8, 2.5, 0.5, TRIM);
+    beltCord.position.set(-1.5 * S, -3.5 * S, 2.2 * S);
+    root.add(beltCord);
 
     // ── Tiny sleeves ──────────────────────────────────────────────────────────
     const sleeveL = box(1.5, 3, 1.5, ROBE);
@@ -213,23 +225,32 @@ export function buildReaperGroup() {
     handR.position.set(3.5 * S, 0.3 * S, 0);
     root.add(handR);
 
-    // ── Head group (chibi big-head proportions) ───────────────────────────────
+    // ── Head group ────────────────────────────────────────────────────────────
     const headGroup = new THREE.Group();
     headGroup.position.y = 7 * S;
     root.add(headGroup);
 
-    // Face skin (two layers, slightly forward so it peeks out of the hood)
-    const faceBot = box(4, 2, 3.5, SKIN);
-    faceBot.position.set(0, -1.5 * S, 0.6 * S);
-    headGroup.add(faceBot);
-    const faceMid = box(4, 2, 3.5, SKIN);
-    faceMid.position.set(0, 0.5 * S, 0.6 * S);
-    headGroup.add(faceMid);
+    // Skull face (sandbox: bone-colored, protrudes from hood opening on +Z)
+    // Covers the face area x=-2..2, y=-2..3, z = front of hood
+    const skull = box(5, 5, 3, BONE);
+    skull.position.set(0, 0, 0.8 * S);
+    headGroup.add(skull);
 
-    // Hood (covers top, sides, back — face opening on +Z front)
-    const hood = box(6, 6, 5, ROBE);
-    hood.position.set(0, 0.5 * S, -0.2 * S);
-    headGroup.add(hood);
+    // Hood: back/top block (covers back and top, z=-4..-0.5)
+    const hoodBack = box(6, 6, 4, ROBE);
+    hoodBack.position.set(0, 0.5 * S, -1.5 * S);
+    headGroup.add(hoodBack);
+    // Hood side caps (flank the face opening, give 3/4-view depth)
+    const hoodSideL = box(0.8, 6, 2.5, ROBE);
+    hoodSideL.position.set(-3.4 * S, 0.5 * S, 0.2 * S);
+    headGroup.add(hoodSideL);
+    const hoodSideR = box(0.8, 6, 2.5, ROBE);
+    hoodSideR.position.set(3.4 * S, 0.5 * S, 0.2 * S);
+    headGroup.add(hoodSideR);
+    // Hood brow overhang (darkens above the eyes, sandbox: y=7..8 forward cap)
+    const hoodBrow = box(5.5, 1.5, 2, ROBE);
+    hoodBrow.position.set(0, 3.3 * S, 0.3 * S);
+    headGroup.add(hoodBrow);
 
     // Hood peak (2-step taper — cute little point)
     const peak1 = box(5, 2, 4, ROBE);
@@ -239,22 +260,23 @@ export function buildReaperGroup() {
     peak2.position.y = 6 * S;
     headGroup.add(peak2);
 
-    // Eyes (large cute glowing red — chibi-scale spacing)
+    // Eyes (glowing red, embedded in skull face — sandbox: z=1.5, inset)
     for (const ex of [-1.3, 1.3]) {
         const eye = box(1.5, 1.8, 0.4, EYE, true);
-        eye.position.set(ex * S, 0.3 * S, 2.4 * S);
+        eye.position.set(ex * S, 0.5 * S, 2.1 * S);
         headGroup.add(eye);
     }
-    // Eye highlight (white sparkle, upper-inner corner)
+    // Eye highlight
     for (const hx of [-0.6, 1.8]) {
         const hl = box(0.5, 0.5, 0.3, 0xffffff, true);
-        hl.position.set(hx * S, 0.9 * S, 2.5 * S);
+        hl.position.set(hx * S, 1.1 * S, 2.2 * S);
         headGroup.add(hl);
     }
 
-    // Tiny cute mouth (bone-white, bottom of face)
-    const smile = box(2, 0.6, 0.4, BONE);
-    smile.position.set(0, -2.1 * S, 2.4 * S);
+    // Teeth / smile (sandbox: tooth=0xddb125 golden, at face bottom front)
+    const TOOTH = 0xddb125;
+    const smile = box(2.5, 0.7, 0.4, TOOTH);
+    smile.position.set(0, -1.8 * S, 2.1 * S);
     headGroup.add(smile);
 
     // ── Mini scythe (compact — handle 7*S, tight blade arc) ──────────────────
