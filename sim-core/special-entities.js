@@ -62,11 +62,11 @@ export function buildAngelGroup() {
     headGroup.position.y = 9 * S;
     root.add(headGroup);
 
-    // Face: 3-layer sphere approximation
+    // Face: 3-layer — all rows same z-depth so forehead is flush (matches sandbox)
     const FACE_ROWS = [
-        [5, 2, 4, -2.5],  // chin/lower
+        [5, 2, 5, -2.5],  // chin/lower
         [7, 3, 6,  0.5],  // mid (widest)
-        [6, 2, 4,  3.5],  // upper/forehead (slightly less front protrusion)
+        [6, 2, 6,  3.5],  // upper/forehead — same depth as mid, no recession
     ];
     for (const [fw, fh, fd, fy] of FACE_ROWS) {
         const fl = box(fw, fh, fd, SKIN);
@@ -74,11 +74,15 @@ export function buildAngelGroup() {
         headGroup.add(fl);
     }
 
-    // Hair cap (top — compact pom: 7×7)
+    // Hair cap (top — compact pom: 7×7, centred in z to wrap over forehead)
     const hairTop = box(7, 2.5, 7, HAIR);
     hairTop.position.y = 5.5 * S;
-    hairTop.position.z = -0.4 * S;
     headGroup.add(hairTop);
+
+    // Front bangs — hair over forehead, flush with face front (sandbox: z>2, y>=6)
+    const bangs = box(6, 2, 2, HAIR);
+    bangs.position.set(0, 4.5 * S, 2.3 * S);
+    headGroup.add(bangs);
 
     // Hair sides
     const hairSideL = box(2, 6, 5, HAIR);
