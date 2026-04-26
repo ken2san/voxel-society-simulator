@@ -52,7 +52,7 @@ export function setSoundVolume(v) {
 // Per-sound cooldown map (ms timestamps of last play)
 const _lastPlay = {};
 const THROTTLE = {
-    dig:        600,   // global rate-limit: max ~1.7x/sec regardless of how many chars are digging
+    dig:        300,   // 300ms: responsive enough to feel sync'd, slow enough to not spam
     build:      200,
     eat:        300,
     social:     400,
@@ -140,12 +140,30 @@ function _noise(ctx, startT, duration, gainVal, filterFreq = 800) {
 
 // ─── Sound definitions ───────────────────────────────────────────────────────
 
-/** Soft distant earth thud – blends into ambient background activity */
+/** Muffled earth thud – soil impact, no hollow resonance */
 function _playDig(ctx) {
     const t = ctx.currentTime;
-    // Very muffled, low-frequency, short — reads as distant background work, not a foreground pop
-    _noise(ctx, t, 0.06, 0.10, 160);              // 160 Hz (lower than before), very quiet, 60ms
-    _osc(ctx, 'sine', 75, t, t + 0.06, 0.08, 55); // sub-bass body, gain 0.08 (was 0.3)
+    // Lowpass noise (not bandpass) — removes the Q resonance that causes "poko"
+    const bufLen = Math.floor(ctx.sampleRate * 0.07);
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 180;   // only sub-200Hz passes — reads as dull thud
+    lp.Q.value = 0.5;           // no resonance peak
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.28, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    src.connect(lp);
+    lp.connect(g);
+    g.connect(_masterGain);
+    src.start(t);
+    src.stop(t + 0.09);
+    // Sub-bass body punch
+    _osc(ctx, 'sine', 70, t, t + 0.06, 0.12, 45);
 }
 
 /** Two-tone click – block placed */
