@@ -292,6 +292,9 @@ export function buildReaperGroup() {
         scytheGroup.rotation.z = Math.sin(t * 0.9) * 0.06;
     };
 
+    // Scale down uniformly so total height ~1.4 world units (chibi-comparable)
+    root.scale.setScalar(0.68);
+
     root.userData.roam = { tx: 8, tz: 6, speed: 1.0, phase: Math.PI };
     return root;
 }
