@@ -432,6 +432,23 @@ for (let tick = 0; tick < options.ticks; tick++) {
     const _dd = (globalThis.window.dayDurationSeconds > 0) ? globalThis.window.dayDurationSeconds : DAY_DURATION;
     const isNight = (simTime % _dd) > (_dd / 2);
     const currentChars = [...characters];
+
+    // Headless campfire proxy: characters with a home provide warmth at their home position.
+    // Without this, every outdoor character takes full thermal drain in winter regardless of
+    // whether they are near a house/campfire, causing unrealistic mass starvation in CLI runs.
+    if (tick % 4 === 0) { // update every 4 ticks (~1s at dt=0.25)
+        const _campfireProxy = [];
+        for (const char of currentChars) {
+            if (char && char.state !== 'dead') {
+                const hp = char.homePosition || char.provisionalHome;
+                if (hp && !_campfireProxy.some(p => Math.abs(p.x - hp.x) + Math.abs(p.z - hp.z) < 3)) {
+                    _campfireProxy.push({ x: hp.x, z: hp.z });
+                }
+            }
+        }
+        globalThis.window._activeCampfirePositions = _campfireProxy;
+    }
+
     for (const char of currentChars) {
         if (char && typeof char.update === 'function') {
             char.update(options.dt, isNight, null);

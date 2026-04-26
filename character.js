@@ -729,10 +729,10 @@ class Character {
                 const _hungerGain = blockType.foodValue + Math.random() * 20;
                 const _hungerBefore = this.needs.hunger;
                 this.needs.hunger = Math.min(100, _hungerBefore + _hungerGain);
-                // Overflow above 90 converts to body fat (cap: 50)
-                const _eatOverflow = (_hungerBefore + _hungerGain) - 90;
+                // Overflow above 80 converts to body fat (cap: 50)
+                const _eatOverflow = (_hungerBefore + _hungerGain) - 80;
                 if (_eatOverflow > 0) {
-                    this.fatReserve = Math.min(50, (this.fatReserve || 0) + _eatOverflow * 0.25);
+                    this.fatReserve = Math.min(50, (this.fatReserve || 0) + _eatOverflow * 0.40);
                 }
                 this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                 if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
@@ -4179,7 +4179,7 @@ class Character {
         const daytimeSafetyRecoveryRate = (typeof window !== 'undefined' && window.daytimeSafetyRecoveryRate !== undefined) ? Number(window.daytimeSafetyRecoveryRate) : 16;
         // Fat-burning buffer: when hungry and fat reserves remain, burn fat before hunger drops further
         const _rawHungerDrain = deltaTime * hungerDecayRate * this.personality.diligence;
-        if (this.needs.hunger <= 30 && (this.fatReserve || 0) > 0) {
+        if (this.needs.hunger <= 15 && (this.fatReserve || 0) > 0) {
             const _fatBurn = Math.min(this.fatReserve, _rawHungerDrain * 0.6);
             this.fatReserve = Math.max(0, this.fatReserve - _fatBurn);
             this.needs.hunger -= (_rawHungerDrain - _fatBurn);
@@ -4219,7 +4219,7 @@ class Character {
                     Math.abs(this.gridPos.x - fp.x) + Math.abs(this.gridPos.z - fp.z) <= 5
                 );
                 if (!_nearFire) {
-                    this.needs.energy -= deltaTime * 0.7 * _coldIntensity;
+                    this.needs.energy -= deltaTime * 0.3 * _coldIntensity;
                     this._coldExposed = true;
                 } else {
                     this._coldExposed = false;
@@ -4272,8 +4272,8 @@ class Character {
                     if (!_other || _other.id === this.id || _other.state === 'dead') continue;
                     if (_other._diseaseState !== null) continue; // already infected or immune
                     const _dist = Math.abs(this.gridPos.x - _other.gridPos.x) + Math.abs(this.gridPos.z - _other.gridPos.z);
-                    if (_dist > 2) continue;
-                    // ~2.5% per 3s transmission tick (tuned for R0≈2 at typical density)
+                    if (_dist > 1) continue;
+                    // ~2.5% per 3s transmission tick (range=1 tiles only)
                     if (Math.random() < 0.025) {
                         _other._diseaseState = 'infected';
                         _other._diseaseTimer = 90 + Math.random() * 90; // 90–180s
