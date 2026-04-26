@@ -66,7 +66,7 @@ export function buildAngelGroup() {
     const FACE_ROWS = [
         [5, 2, 4, -2.5],  // chin/lower
         [7, 3, 6,  0.5],  // mid (widest)
-        [6, 2, 5,  3.5],  // upper/forehead
+        [6, 2, 4,  3.5],  // upper/forehead (slightly less front protrusion)
     ];
     for (const [fw, fh, fd, fy] of FACE_ROWS) {
         const fl = box(fw, fh, fd, SKIN);
@@ -77,6 +77,7 @@ export function buildAngelGroup() {
     // Hair cap (top — compact pom: 7×7)
     const hairTop = box(7, 2.5, 7, HAIR);
     hairTop.position.y = 5.5 * S;
+    hairTop.position.z = -0.4 * S;
     headGroup.add(hairTop);
 
     // Hair sides
