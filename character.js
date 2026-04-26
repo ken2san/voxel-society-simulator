@@ -270,7 +270,14 @@ class Character {
                 // 社交状態に遷移
                 this.state = 'socializing';
                 this.triggerMicroGesture('chat', 0.95 + Math.random() * 0.25, 1.0);
-                playSound('social');
+                // Per-character throttle (8s) — prevents greeting sound on every re-entry
+                {
+                    const _now = performance.now();
+                    if (!this._lastSocialSoundAt || (_now - this._lastSocialSoundAt) > 8000) {
+                        playSound('social');
+                        this._lastSocialSoundAt = _now;
+                    }
+                }
                 // パートナーも同時に社交状態にする
                 const partner = this.action.target;
                 if (partner && partner !== this) {
@@ -4750,14 +4757,18 @@ class Character {
             } else if (partner) {
                 this.state = 'idle';
                 this.action = null;
+                // Add cooldown so char doesn't immediately re-socialize with the same partner
+                this.actionCooldown = Math.max(this.actionCooldown, 3.0 + Math.random() * 2.0);
             } else {
                 this.state = 'idle';
                 this.action = null;
+                this.actionCooldown = Math.max(this.actionCooldown, 2.0 + Math.random() * 2.0);
             }
             // Let strong conversations continue until the tie reaches the bonded tier.
             const currentAffinity = this.relationships.get(partner?.id) || 0;
             if(this.needs.social >= 100 && currentAffinity >= socializeCompletionAffinity) {
                 this.state = 'idle';
+                this.actionCooldown = Math.max(this.actionCooldown, 4.0 + Math.random() * 2.0);
             }
         }
         // Death condition (旧: hunger <= -10 はclipにより到達不能だったため上部のstarvationTimerに移行)
