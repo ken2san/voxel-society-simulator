@@ -526,9 +526,24 @@ kept its sound throttle intact (still solves the originally-reported spam). Veri
 HEAD now reproduces end pop 10/10/32 across 3 trials — back in the healthy range alongside the
 pre-regression commits.
 
-**Not yet re-validated:** the full iter20 6-metric table (hunger avg 43-66 etc.) — end population
-is now healthy but the exact hunger/starvation numbers haven't been re-checked against every
-original criterion. Worth a proper multi-run pass before calling this fully closed.
+**Re-validated (2026-09-14) against the original 6-metric table**, using
+`npm run sim --out=<file>` + `node scripts/analyze-telemetry.mjs` + `benchmark-telemetry.mjs`
+(3 fresh runs, same `--minutes=10 --population=32` config, post-fix):
+
+| Metric             | Target        | Result (3 runs)                          | Verdict |
+| ------------------ | ------------- | ----------------------------------------- | ------- |
+| Benchmark          | PASS 5/5      | 5/5, 5/5, 4/5 (WARN — avgRelationships 16.2 vs ≥18 threshold, one run) | 🟡 close, not fully clean |
+| starvation deaths  | ≤ 10%         | 0%, 0%, 0%                                | ✅ pass |
+| old_age deaths     | ≥ 60%         | 100%, 100%, 100%                          | ✅ pass |
+| Gen2+ births       | ≥1 per 3 runs | gen2/gen3 present in all 3/3 runs         | ✅ pass |
+| wanderRatio avg    | < 72%         | tooling changed since 04-17 — `analyze-telemetry.mjs` now only reports wander% for a flagged "stuck-suspect" subset (17.4% avg there), not a full-population figure | ⚠️ can't confirm same metric with current tooling |
+| socializeRatio avg | > 3%          | no longer exposed by any current script    | ⚠️ can't confirm with current tooling |
+
+**Conclusion:** the fix is confirmed to restore healthy population/death/generation dynamics.
+The two ratio metrics can't be re-checked apples-to-apples because the analysis tooling itself
+changed between 2026-04-17 and now — that's a tooling gap, not a sign of regression, but it means
+this project has lost the ability to verify those two specific criteria without adding the
+metric back to `analyze-telemetry.mjs` first.
 
 ---
 
