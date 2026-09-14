@@ -215,12 +215,13 @@ export function buildReaperGroup() {
     hem.position.set(0, -7.4 * S, 3.6 * S);
     bodyGroup.add(hem);
 
-    // ── Robe body: taller column + lighter front slab for depth ──────────────
-    const body = box(5, 7, 4, ROBE);
-    body.position.y = 2 * S;
+    // ── Robe body: widened to match skirt/hood (was 5w/7h — read as a thin
+    //    "pencil" waist between the wider skirt below and hood above) ─────────
+    const body = box(7, 6, 4, ROBE);
+    body.position.y = 1.5 * S;
     bodyGroup.add(body);
-    const bodyFront = box(4, 6, 0.6, ROBEF);
-    bodyFront.position.set(0, 2.3 * S, 2.3 * S);
+    const bodyFront = box(6, 5, 0.6, ROBEF);
+    bodyFront.position.set(0, 1.8 * S, 2.3 * S);
     bodyGroup.add(bodyFront);
 
     // Belt — border ring + central buckle + dangling sash
@@ -291,9 +292,10 @@ export function buildReaperGroup() {
     brow.position.set(0, 3.2 * S, 0.5 * S);
     headGroup.add(brow);
 
-    // Hood peak — 3-step taper (traditional silhouette, more polished)
-    const PEAK = [[6, 2, 4.5], [4.5, 2, 3], [3, 2, 2]];
-    for (let i = 0; i < 3; i++) {
+    // Hood peak — 2-step taper (was 3-step; the extra tip pushed total height
+    // toward a "pencil point" silhouette without adding readable shape)
+    const PEAK = [[6, 2, 4.5], [4.5, 2, 3]];
+    for (let i = 0; i < PEAK.length; i++) {
         const [pw, ph, pd] = PEAK[i];
         const pk = box(pw, ph, pd, ROBE);
         pk.position.y = (4 + i * 2) * S;
