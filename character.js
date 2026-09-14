@@ -3818,15 +3818,24 @@ class Character {
             ((1 - conflictBurden) * 0.05)
         );
 
+        // Health condition folds the 2026-04-25 biology layer (disease, fat reserve) into the
+        // readiness model instead of leaving it as a parallel, unconnected system.
+        const fatReserveCapForHealth = (typeof window !== 'undefined' && window.fatReserveCap !== undefined) ? Number(window.fatReserveCap) : 50;
+        const healthCondition = (char) => clamp01(
+            (char?._diseaseState === 'infected' ? 0.4 : 1.0) * 0.7 +
+            clamp01(Number(char?.fatReserve || 0) / fatReserveCapForHealth) * 0.3
+        );
         const selfNeedMargin = clamp01(
-            (Number(this.needs?.hunger || 0) / 100) * 0.35 +
-            (Number(this.needs?.energy || 0) / 100) * 0.35 +
-            (Number(this.needs?.safety || 0) / 100) * 0.30
+            (Number(this.needs?.hunger || 0) / 100) * 0.30 +
+            (Number(this.needs?.energy || 0) / 100) * 0.30 +
+            (Number(this.needs?.safety || 0) / 100) * 0.25 +
+            healthCondition(this) * 0.15
         );
         const partnerNeedMargin = clamp01(
-            (Number(partner?.needs?.hunger || 0) / 100) * 0.35 +
-            (Number(partner?.needs?.energy || 0) / 100) * 0.35 +
-            (Number(partner?.needs?.safety || 0) / 100) * 0.30
+            (Number(partner?.needs?.hunger || 0) / 100) * 0.30 +
+            (Number(partner?.needs?.energy || 0) / 100) * 0.30 +
+            (Number(partner?.needs?.safety || 0) / 100) * 0.25 +
+            healthCondition(partner) * 0.15
         );
 
         const uniqueDependentChildren = new Set([

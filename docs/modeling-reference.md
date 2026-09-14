@@ -34,13 +34,16 @@ recommendations. Corrected status:
   biology system (disease/pregnancy/thermal/fat, see `ROADMAP.md`) did not follow this pattern
   and needs the same treatment retroactively.
 
-**Not yet integrated:** the pregnancy system (`_pregnant`/`_pregnancyTimer`/`_giveBirth()`,
-added 2026-04-25) adds a gestation delay after conception succeeds, but `livelihoodViability`'s
-`selfNeedMargin`/`partnerNeedMargin` still only reads `hunger`/`energy`/`safety` — disease state
-and `fatReserve` are not read anywhere in `getReproductionReadiness()`. So the newer biology
-layer currently sits *beside* this readiness model rather than feeding into it, which cuts
-against this doc's own layered-causation argument. Wiring biology state into `livelihoodViability`
-is the natural next step, not a new stage.
+**Now integrated (2026-09-14):** `selfNeedMargin`/`partnerNeedMargin` gained a `healthCondition`
+component — `(disease infected ? 0.4 : 1.0) * 0.7 + clamp01(fatReserve / fatReserveCap) * 0.3` —
+folded in at weight 0.15 (hunger/energy/safety weights compressed from 0.35/0.35/0.30 to
+0.30/0.30/0.25 to make room, so the term still sums to 1.0). Disease and fat reserve now actually
+affect reproduction readiness instead of sitting beside the model unconnected. Verified with 3
+headless trials at `--minutes=10 --population=32`: end population 18/25/17 (healthy range,
+consistent with pre-change runs), starvation 0% and old_age 100% of deaths in all 3, gen2/gen3
+present in all 3 — no destabilization observed. Pregnancy's own gestation-delay mechanic was
+already independent of this readiness score (it governs timing after conception succeeds, not
+whether conception is attempted) and needed no change here.
 
 ---
 
@@ -248,8 +251,8 @@ the way the "Ecology Tuning — Done Criteria" pass in `ROADMAP.md` was. A pract
    `npm run sim -- --districtMode=4` and check the success criteria below before assuming this
    model is tuned, not just implemented.
 5. ~~close the Stage C gap (sibling anchor)~~ ✅ done (2026-09-14, `isHouseholdTie()`)
-6. **open**: decide whether to wire the 2026-04-25 biology state (disease/`fatReserve`) into
-   `livelihoodViability` rather than leaving it as a parallel system — see the Status update above.
+6. ~~wire biology state (disease/`fatReserve`) into `livelihoodViability`~~ ✅ done (2026-09-14,
+   `healthCondition` term) — see the Status update above.
 
 Success criteria should be:
 
