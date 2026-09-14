@@ -742,6 +742,48 @@ function renderCharacterDetail() {
     groupThInput.disabled = paramDisabled;
     groupThVal.disabled = paramDisabled;
 
+    // --- social need recovery multiplier ---
+    const socialRecoveryRow = document.createElement('div');
+    socialRecoveryRow.style.display = 'flex';
+    socialRecoveryRow.style.alignItems = 'center';
+    socialRecoveryRow.style.gap = '10px';
+    const socialRecoveryLabel = document.createElement('span');
+    socialRecoveryLabel.textContent = '💗 Social Need Recovery:';
+    socialRecoveryLabel.style.width = '140px';
+    socialRecoveryRow.appendChild(socialRecoveryLabel);
+    const socialRecoveryInput = document.createElement('input');
+    socialRecoveryInput.type = 'range';
+    socialRecoveryInput.min = 0.5;
+    socialRecoveryInput.max = 2.0;
+    socialRecoveryInput.step = 0.05;
+    socialRecoveryInput.value = sidebarParams.socialNeedRecovery;
+    socialRecoveryInput.style.width = '120px';
+    socialRecoveryInput.disabled = paramDisabled;
+    socialRecoveryInput.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.socialNeedRecovery = v;
+        socialRecoveryNumber.value = v;
+        window.socialNeedRecovery = v;
+    });
+    socialRecoveryRow.appendChild(socialRecoveryInput);
+    const socialRecoveryNumber = document.createElement('input');
+    socialRecoveryNumber.type = 'number';
+    socialRecoveryNumber.min = 0.5;
+    socialRecoveryNumber.max = 2.0;
+    socialRecoveryNumber.step = 0.05;
+    socialRecoveryNumber.value = sidebarParams.socialNeedRecovery;
+    socialRecoveryNumber.disabled = paramDisabled;
+    socialRecoveryNumber.style.width = '64px';
+    socialRecoveryNumber.addEventListener('input', e => {
+        const v = Number(e.target.value);
+        sidebarParams.socialNeedRecovery = v;
+        socialRecoveryInput.value = v;
+        window.socialNeedRecovery = v;
+    });
+    socialRecoveryRow.appendChild(socialRecoveryNumber);
+    socialRecoveryRow.dataset.label = 'Social Need Recovery';
+    tabPanels[1].appendChild(socialRecoveryRow);
+
     // --- 初期affinity値スライダー（min/max） ---
     const affinityInitRow = document.createElement('div');
     affinityInitRow.style.display = 'flex';
@@ -872,48 +914,6 @@ function renderCharacterDetail() {
     affinityDecayRow.dataset.label = 'Affinity Decay';
     tabPanels[1].appendChild(affinityDecayRow);
 
-    // --- social need recovery multiplier ---
-    const socialRecoveryRow = document.createElement('div');
-    socialRecoveryRow.style.display = 'flex';
-    socialRecoveryRow.style.alignItems = 'center';
-    socialRecoveryRow.style.gap = '10px';
-    const socialRecoveryLabel = document.createElement('span');
-    socialRecoveryLabel.textContent = '💗 Social Need Recovery:';
-    socialRecoveryLabel.style.width = '140px';
-    socialRecoveryRow.appendChild(socialRecoveryLabel);
-    const socialRecoveryInput = document.createElement('input');
-    socialRecoveryInput.type = 'range';
-    socialRecoveryInput.min = 0.5;
-    socialRecoveryInput.max = 2.0;
-    socialRecoveryInput.step = 0.05;
-    socialRecoveryInput.value = sidebarParams.socialNeedRecovery;
-    socialRecoveryInput.style.width = '120px';
-    socialRecoveryInput.disabled = paramDisabled;
-    socialRecoveryInput.addEventListener('input', e => {
-        const v = Number(e.target.value);
-        sidebarParams.socialNeedRecovery = v;
-        socialRecoveryNumber.value = v;
-        window.socialNeedRecovery = v;
-    });
-    socialRecoveryRow.appendChild(socialRecoveryInput);
-    const socialRecoveryNumber = document.createElement('input');
-    socialRecoveryNumber.type = 'number';
-    socialRecoveryNumber.min = 0.5;
-    socialRecoveryNumber.max = 2.0;
-    socialRecoveryNumber.step = 0.05;
-    socialRecoveryNumber.value = sidebarParams.socialNeedRecovery;
-    socialRecoveryNumber.disabled = paramDisabled;
-    socialRecoveryNumber.style.width = '64px';
-    socialRecoveryNumber.addEventListener('input', e => {
-        const v = Number(e.target.value);
-        sidebarParams.socialNeedRecovery = v;
-        socialRecoveryInput.value = v;
-        window.socialNeedRecovery = v;
-    });
-    socialRecoveryRow.appendChild(socialRecoveryNumber);
-    socialRecoveryRow.dataset.label = 'Social Need Recovery';
-    tabPanels[1].appendChild(socialRecoveryRow);
-
     // --- bond persistence multiplier ---
     const bondPersistenceRow = document.createElement('div');
     bondPersistenceRow.style.display = 'flex';
@@ -996,7 +996,13 @@ function renderCharacterDetail() {
     // next rerun, which is exactly what the pre-existing "Detailed metrics" collapsible
     // (`sidebarParams.populationMetricsExpanded`, see below) already had to work around. `key`
     // persists this group's state in `sidebarParams` the same way.
-    function createCollapsibleParamGroup(labelText, key, { open = false } = {}) {
+    // direction:'row' (default) packs compact label+number pairs (appendCompactSliderInput)
+    // side by side, wrapping as needed — used for dense param-cluster groups (Disease
+    // Dynamics, Tie Thresholds, etc). direction:'column' stacks full-width existing rows
+    // one per line instead — used to make the pre-existing named sections below (Affinity
+    // Core, Needs & Survival, etc.) collapsible without changing how those rows lay themselves
+    // out internally.
+    function createCollapsibleParamGroup(labelText, key, { open = false, direction = 'row' } = {}) {
         if (sidebarParams[key] === undefined) sidebarParams[key] = open;
         const details = document.createElement('details');
         details.open = !!sidebarParams[key];
@@ -1010,7 +1016,9 @@ function renderCharacterDetail() {
         summary.style.cssText = 'cursor:pointer;font-size:0.82em;color:#475569;font-weight:600;padding:2px 0;';
         details.appendChild(summary);
         const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;';
+        row.style.cssText = direction === 'column'
+            ? 'display:flex;flex-direction:column;gap:6px;margin-top:4px;'
+            : 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;';
         details.appendChild(row);
         details.addEventListener('toggle', () => { sidebarParams[key] = details.open; });
         return { details, row };
@@ -2447,69 +2455,91 @@ function renderCharacterDetail() {
             });
         });
 
-        const _h = (text) => {
-            const h = document.createElement('div');
-            h.textContent = text;
-            h.style.cssText = 'font-size:0.72em;font-weight:700;color:#94a3b8;letter-spacing:0.07em;text-transform:uppercase;padding:6px 0 3px;margin-top:6px;border-bottom:1px solid #e8eef6;';
-            return h;
-        };
+        // Named sections used to be a plain uppercase divider (_h) followed by flat sibling
+        // rows — always fully expanded, no way to collapse. Converted to collapsible groups
+        // (direction:'column' stacks the existing full-width rows one per line, same as
+        // before) so opening Social/Behavior doesn't dump every row in the tab at once.
+        // Closed by default, same as the biology-system groups defined earlier.
+        const section = (label, key) => createCollapsibleParamGroup(label, key, { direction: 'column' });
 
         // ── Social Tab ──────────────────────────────────────────────────────
-        tabPanels[1].appendChild(_h('🤝 Affinity Core'));
-        tabPanels[1].appendChild(groupThRow);
-        tabPanels[1].appendChild(perceptionRow);
-        tabPanels[1].appendChild(affinityInitRow);
-        tabPanels[1].appendChild(affinityRateRow);
-        tabPanels[1].appendChild(affinityDecayRow);
-        tabPanels[1].appendChild(maxAffinityRow);
-        tabPanels[1].appendChild(affinityFloorRow);
-        tabPanels[1].appendChild(traitCapRow);
+        const affinityCore = section('🤝 Affinity Core', 'affinityCoreExpanded');
+        affinityCore.row.appendChild(groupThRow);
+        affinityCore.row.appendChild(perceptionRow);
+        affinityCore.row.appendChild(affinityInitRow);
+        affinityCore.row.appendChild(affinityRateRow);
+        affinityCore.row.appendChild(affinityDecayRow);
+        affinityCore.row.appendChild(maxAffinityRow);
+        affinityCore.row.appendChild(affinityFloorRow);
+        affinityCore.row.appendChild(traitCapRow);
+        tabPanels[1].appendChild(affinityCore.details);
 
-        tabPanels[1].appendChild(_h('🔗 Bonds & Ties'));
-        tabPanels[1].appendChild(relationThresholdRow);
-        tabPanels[1].appendChild(bondPersistenceRow);
-        tabPanels[1].appendChild(affinityResetRow);
+        const bondsAndTies = section('🔗 Bonds & Ties', 'bondsAndTiesExpanded');
+        bondsAndTies.row.appendChild(relationThresholdRow);
+        bondsAndTies.row.appendChild(bondPersistenceRow);
+        bondsAndTies.row.appendChild(affinityResetRow);
+        tabPanels[1].appendChild(bondsAndTies.details);
 
-        tabPanels[1].appendChild(_h('🫂 Support System'));
-        tabPanels[1].appendChild(socialRecoveryRow);
-        tabPanels[1].appendChild(supportModelRow);
-        tabPanels[1].appendChild(supportDynamicsRow);
-        tabPanels[1].appendChild(supportWeightsRow);
+        const supportSystem = section('🫂 Support System', 'supportSystemExpanded');
+        supportSystem.row.appendChild(socialRecoveryRow);
+        supportSystem.row.appendChild(supportModelRow);
+        supportSystem.row.appendChild(supportDynamicsRow);
+        supportSystem.row.appendChild(supportWeightsRow);
+        tabPanels[1].appendChild(supportSystem.details);
 
-        tabPanels[1].appendChild(_h('🧭 Decision Making'));
-        tabPanels[1].appendChild(socialDecisionRow);
-        tabPanels[1].appendChild(socialAdaptRow);
+        const decisionMaking = section('🧭 Decision Making', 'decisionMakingExpanded');
+        decisionMaking.row.appendChild(socialDecisionRow);
+        decisionMaking.row.appendChild(socialAdaptRow);
+        tabPanels[1].appendChild(decisionMaking.details);
 
-        tabPanels[1].appendChild(_h('👶 Reproduction & Genetics'));
-        tabPanels[1].appendChild(reproductionModelRow);
-        tabPanels[1].appendChild(minAgeRow);
-        tabPanels[1].appendChild(reproAffinRow);
-        tabPanels[1].appendChild(pairCooldownRow);
-        tabPanels[1].appendChild(parentCooldownRow);
-        tabPanels[1].appendChild(mutRateRow);
+        const reproGenetics = section('👶 Reproduction & Genetics', 'reproGeneticsExpanded');
+        reproGenetics.row.appendChild(reproductionModelRow);
+        reproGenetics.row.appendChild(minAgeRow);
+        reproGenetics.row.appendChild(reproAffinRow);
+        reproGenetics.row.appendChild(pairCooldownRow);
+        reproGenetics.row.appendChild(parentCooldownRow);
+        reproGenetics.row.appendChild(mutRateRow);
+        tabPanels[1].appendChild(reproGenetics.details);
 
         // ── Behavior Tab ────────────────────────────────────────────────────
-        tabPanels[2].appendChild(_h('🍎 Needs & Survival'));
-        tabPanels[2].appendChild(needsDynamicsRow);
-        tabPanels[2].appendChild(hungerEmergencyRow);
-        tabPanels[2].appendChild(energyEmergencyRow);
-        tabPanels[2].appendChild(starvRow);
+        const needsSurvival = section('🍎 Needs & Survival', 'needsSurvivalExpanded');
+        needsSurvival.row.appendChild(needsDynamicsRow);
+        needsSurvival.row.appendChild(hungerEmergencyRow);
+        needsSurvival.row.appendChild(energyEmergencyRow);
+        needsSurvival.row.appendChild(starvRow);
+        tabPanels[2].appendChild(needsSurvival.details);
 
-        tabPanels[2].appendChild(_h('🏃 Agent Behavior'));
-        tabPanels[2].appendChild(autoRecoverRow);
-        tabPanels[2].appendChild(isolationRow);
-        tabPanels[2].appendChild(homeReturnRow);
-        tabPanels[2].appendChild(homeBuildRow);
+        // Thermal/Fat/Disease/Pregnancy were defined earlier as their own collapsible groups
+        // (see "Deep/rarely-touched biology-system params" above) — reposition them here,
+        // right after Needs & Survival, instead of leaving them stranded ahead of every other
+        // Behavior section purely because of creation order.
+        tabPanels[2].appendChild(thermalFatGroup.details);
+        tabPanels[2].appendChild(diseaseGroup.details);
+        tabPanels[2].appendChild(pregnancyGroup.details);
 
-        tabPanels[2].appendChild(_h('🌍 World & Ecology'));
-        tabPanels[2].appendChild(lifespanRow);
-        tabPanels[2].appendChild(fruitRegenRow);
-        tabPanels[2].appendChild(seasonCycleRow);
-        tabPanels[2].appendChild(seasonAmpRow);
+        const agentBehavior = section('🏃 Agent Behavior', 'agentBehaviorExpanded');
+        agentBehavior.row.appendChild(autoRecoverRow);
+        agentBehavior.row.appendChild(isolationRow);
+        agentBehavior.row.appendChild(homeReturnRow);
+        agentBehavior.row.appendChild(homeBuildRow);
+        tabPanels[2].appendChild(agentBehavior.details);
 
-        tabPanels[2].appendChild(_h('🗺️ District / Migration'));
-        tabPanels[2].appendChild(districtPressureRow);
-        tabPanels[2].appendChild(districtOpportunityRow);
+        const worldEcology = section('🌍 World & Ecology', 'worldEcologyExpanded');
+        worldEcology.row.appendChild(fruitCapRow); // was previously left out of this section entirely
+        worldEcology.row.appendChild(dayDurRow);   // (ditto)
+        worldEcology.row.appendChild(lifespanRow);
+        worldEcology.row.appendChild(fruitRegenRow);
+        worldEcology.row.appendChild(seasonCycleRow);
+        worldEcology.row.appendChild(seasonAmpRow);
+        tabPanels[2].appendChild(worldEcology.details);
+
+        tabPanels[2].appendChild(campfireGroup.details);
+        tabPanels[2].appendChild(specialEntityGroup.details);
+
+        const districtMigration = section('🗺️ District / Migration', 'districtMigrationExpanded');
+        districtMigration.row.appendChild(districtPressureRow);
+        districtMigration.row.appendChild(districtOpportunityRow);
+        tabPanels[2].appendChild(districtMigration.details);
     }
 
     // ランダム生成トグル
