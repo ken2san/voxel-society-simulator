@@ -1,14 +1,14 @@
 # Simulation Modeling Reference
 
-_Last updated: 2026-09-13_
+_Last updated: 2026-09-14_
 
 ---
 
-## Status update (2026-09-13)
+## Status update (2026-09-13, revised 2026-09-14)
 
 Read `character.js` directly against the plan below (not just commit messages). Result: **Stages
-A, B, and D are already implemented**, and Stage C is partially implemented — this document was
-still framing them as future recommendations. Corrected status:
+A, B, C, and D are all now implemented** — this document was still framing them as future
+recommendations. Corrected status:
 
 - **Stage A (layered readiness model)** — ✅ done. `getReproductionReadiness(partner)` computes
   `pairBond`, `localSupport`, `livelihoodViability`, and `futureExpectation` exactly as the
@@ -17,9 +17,12 @@ still framing them as future recommendations. Corrected status:
   `reproductionHazard` value, and `shouldAttemptReproductionWith(partner)` converts it into a
   per-tick `attemptChance` fed through `Math.random()` — a probabilistic event, not a threshold
   gate. This is the "Fertility hazard model" from section 1 below, already shipped.
-- **Stage C (household continuity anchors)** — 🟡 partial. `isHouseholdTie(other)` recognizes
-  bonded partner (`_lovePartnerId`), parent, and child — but not sibling / co-resident kin, which
-  this doc originally called for as a fourth anchor type. That gap is still open.
+- **Stage C (household continuity anchors)** — ✅ done (closed 2026-09-14). `isHouseholdTie(other)`
+  recognizes bonded partner (`_lovePartnerId`), parent, child, and now sibling (shared entry in
+  both sides' `parentIds`) — the fourth anchor type this doc originally called for. "Co-resident
+  kin" beyond that (e.g. extended family sharing a home without a direct parent/child/sibling
+  link) was left out as too vague to implement as a concrete check; `localSupport`/`nearbySupport`
+  in the readiness formula already cover general proximity-based support separately.
 - **Stage D (care load from dependent children)** — ✅ done. A `careLoad` term (dependent child
   count, elder load, crowding, rivalry, minus support) feeds negatively into both `readiness` and
   `reproductionHazard` — matching the "Cooperative child-rearing load model" in section 4 below
@@ -184,16 +187,17 @@ Do not throw away the current structure. It already matches a believable causal 
 
 Keep the existing readiness value, but interpret it as a probability or event intensity rather than a strict threshold.
 
-### Stage C — Add explicit household continuity 🟡 partial — sibling/kin anchor still open
+### Stage C — Add explicit household continuity ✅ done (2026-09-14)
 
 Treat the following as special support anchors:
 
 - bonded partner, ✅ (`_lovePartnerId`)
 - parent, ✅ (`parentIds`)
 - child, ✅ (`children`)
-- sibling / co-resident kin. ❌ not implemented in `isHouseholdTie()`
-
-This remains the highest-value next step.
+- sibling, ✅ (shared entry in both sides' `parentIds`)
+- co-resident kin beyond the above — intentionally not implemented; too vague to express as a
+  concrete check, and general proximity-based support is already covered separately by
+  `localSupport`/`nearbySupport` in the readiness formula.
 
 ### Stage D — Add care load from dependent children ✅ done
 
@@ -209,7 +213,7 @@ Confirmed hooks in `character.js` (verified by reading the code, 2026-09-13):
   `livelihoodViability`, `futureExpectation`, `careLoad`, `reproductionHazard`, `readiness`.
 - `shouldAttemptReproductionWith(partner)` (~line 3962) — converts `reproductionHazard` into a
   probabilistic attempt via `Math.random()`.
-- `isHouseholdTie(other)` (~line 2980) — the Stage C anchor check (partner/parent/child only).
+- `isHouseholdTie(other)` (~line 2984) — the Stage C anchor check (partner/parent/child/sibling).
 - `getPreferredSupportTarget()`, `getRelationshipSnapshot()`
 - district social context signals such as `supportAccess`, `housingPressure`, and `relationshipStability`
 - `getReproductionModelParams()` (~line 3751) — reads `reproductionReadinessThreshold`,
@@ -243,9 +247,9 @@ the way the "Ecology Tuning — Done Criteria" pass in `ROADMAP.md` was. A pract
 4. **compare results across `districtMode=4` headless runs** — not confirmed done; run
    `npm run sim -- --districtMode=4` and check the success criteria below before assuming this
    model is tuned, not just implemented.
-5. **new, from the Status update above**: close the Stage C gap (sibling / co-resident kin as a
-   household-tie anchor), and decide whether to wire the 2026-04-25 biology state
-   (disease/`fatReserve`) into `livelihoodViability` rather than leaving it as a parallel system.
+5. ~~close the Stage C gap (sibling anchor)~~ ✅ done (2026-09-14, `isHouseholdTie()`)
+6. **open**: decide whether to wire the 2026-04-25 biology state (disease/`fatReserve`) into
+   `livelihoodViability` rather than leaving it as a parallel system — see the Status update above.
 
 Success criteria should be:
 

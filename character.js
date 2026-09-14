@@ -2987,6 +2987,11 @@ class Character {
         if (this._lovePartnerId === otherId) return true;
         if (Array.isArray(this.parentIds) && this.parentIds.includes(otherId)) return true;
         if (Array.isArray(this.children) && this.children.includes(otherId)) return true;
+        // Sibling: shares at least one parent. Requires the full character object (not just
+        // an id) since it needs the other side's parentIds too.
+        if (typeof other === 'object' && Array.isArray(this.parentIds) && Array.isArray(other?.parentIds)) {
+            if (this.parentIds.some(pid => other.parentIds.includes(pid))) return true;
+        }
         return false;
     }
 
