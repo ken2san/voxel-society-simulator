@@ -673,6 +673,9 @@ function renderCharacterDetail() {
                 const match = !q || label.includes(q);
                 row.style.display = match ? 'flex' : 'none';
                 if (match) counts[ti]++;
+                // Force-open collapsible groups on an active search so matches are visible,
+                // not just their collapsed summary line.
+                if (row.tagName === 'DETAILS' && q && match) row.open = true;
             });
         });
         if (q) {
@@ -983,6 +986,27 @@ function renderCharacterDetail() {
         row.appendChild(pair);
     }
 
+    // Collapsible parameter group: closed by default, for deep/rarely-touched subsystem
+    // params (e.g. per-mechanic durations and multipliers) that would otherwise clutter
+    // the tab on open. `applyParamSearch` force-opens a group when its label matches a query.
+    function createCollapsibleParamGroup(labelText, { open = false } = {}) {
+        const details = document.createElement('details');
+        details.open = open;
+        // flex-direction:column so summary sits above the param row once applyParamSearch's
+        // filter logic sets this element's display to 'flex' (it treats all [data-label]
+        // rows uniformly, regardless of whether they're a plain div or this details wrapper).
+        details.style.cssText = 'flex:0 0 100%;flex-direction:column;';
+        details.dataset.label = labelText;
+        const summary = document.createElement('summary');
+        summary.textContent = labelText;
+        summary.style.cssText = 'cursor:pointer;font-size:0.82em;color:#475569;font-weight:600;padding:2px 0;';
+        details.appendChild(summary);
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;';
+        details.appendChild(row);
+        return { details, row };
+    }
+
     const relationThresholdRow = document.createElement('div');
     relationThresholdRow.style.display = 'flex';
     relationThresholdRow.style.alignItems = 'center';
@@ -1048,83 +1072,53 @@ function renderCharacterDetail() {
     appendCompactSliderInput(needsDynamicsRow, 'DayS', 'daytimeSafetyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'RestE', 'restEnergyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'CSMult', 'chargeStoneRecoveryMult', { min: 1.0, max: 3.0, step: 0.1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'ColdE', 'thermalDrainRate', { min: 0, max: 1.5, step: 0.05, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'FireR', 'campfireWarmthRadius', { min: 1, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'FatBn', 'fatBurnFraction', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'FatOv', 'fatOverflowConversionRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'AutFg', 'autumnHoardingForageBonus', { min: 0, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'FatCap', 'fatReserveCap', { min: 10, max: 150, step: 5, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'FatInMn', 'fatReserveInitialMin', { min: 0, max: 100, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(needsDynamicsRow, 'FatInRg', 'fatReserveInitialRange', { min: 0, max: 50, step: 1, width: '64px', sliderWidth: '72px' });
     needsDynamicsRow.dataset.label = 'Needs Dynamics';
     tabPanels[2].appendChild(needsDynamicsRow);
 
-    const diseaseDynamicsRow = document.createElement('div');
-    diseaseDynamicsRow.style.display = 'flex';
-    diseaseDynamicsRow.style.alignItems = 'center';
-    diseaseDynamicsRow.style.flexWrap = 'wrap';
-    diseaseDynamicsRow.style.gap = '8px';
-    const diseaseDynamicsLabel = document.createElement('span');
-    diseaseDynamicsLabel.textContent = 'Disease Dynamics:';
-    diseaseDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
-    diseaseDynamicsRow.appendChild(diseaseDynamicsLabel);
-    appendCompactSliderInput(diseaseDynamicsRow, 'Spont', 'diseaseSpontaneousChance', { min: 0, max: 0.01, step: 0.0005, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'Trans', 'diseaseTransmissionChance', { min: 0, max: 0.2, step: 0.005, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'Range', 'diseaseTransmissionRange', { min: 1, max: 5, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'DurMin', 'diseaseDurationMinSeconds', { min: 10, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'DurRng', 'diseaseDurationRangeSeconds', { min: 0, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'ImmMin', 'diseaseImmunityMinSeconds', { min: 0, max: 600, step: 10, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'ImmRng', 'diseaseImmunityRangeSeconds', { min: 0, max: 600, step: 10, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'SickE', 'diseaseEnergyDrainRate', { min: 0, max: 3, step: 0.1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'SickH', 'diseaseHungerDrainRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(diseaseDynamicsRow, 'SickMv', 'diseaseMovementSpeedMultiplier', { min: 0.2, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
-    diseaseDynamicsRow.dataset.label = 'Disease Dynamics';
-    tabPanels[2].appendChild(diseaseDynamicsRow);
+    // Deep/rarely-touched biology-system params, collapsed by default so opening the
+    // Behavior tab doesn't dump ~30 sliders at once. Expand a group, or search (which
+    // auto-opens matches) to reach them. See ROADMAP.md for why these exist as params at all.
+    const thermalFatGroup = createCollapsibleParamGroup('Thermal & Fat Reserve');
+    appendCompactSliderInput(thermalFatGroup.row, 'ColdE', 'thermalDrainRate', { min: 0, max: 1.5, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'FireR', 'campfireWarmthRadius', { min: 1, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'FatBn', 'fatBurnFraction', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'FatOv', 'fatOverflowConversionRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'AutFg', 'autumnHoardingForageBonus', { min: 0, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'FatCap', 'fatReserveCap', { min: 10, max: 150, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'FatInMn', 'fatReserveInitialMin', { min: 0, max: 100, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(thermalFatGroup.row, 'FatInRg', 'fatReserveInitialRange', { min: 0, max: 50, step: 1, width: '64px', sliderWidth: '72px' });
+    tabPanels[2].appendChild(thermalFatGroup.details);
 
-    const pregnancyDynamicsRow = document.createElement('div');
-    pregnancyDynamicsRow.style.display = 'flex';
-    pregnancyDynamicsRow.style.alignItems = 'center';
-    pregnancyDynamicsRow.style.flexWrap = 'wrap';
-    pregnancyDynamicsRow.style.gap = '8px';
-    const pregnancyDynamicsLabel = document.createElement('span');
-    pregnancyDynamicsLabel.textContent = 'Pregnancy Dynamics:';
-    pregnancyDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
-    pregnancyDynamicsRow.appendChild(pregnancyDynamicsLabel);
-    appendCompactSliderInput(pregnancyDynamicsRow, 'GestMin', 'pregnancyDurationMinSeconds', { min: 5, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(pregnancyDynamicsRow, 'GestRng', 'pregnancyDurationRangeSeconds', { min: 0, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(pregnancyDynamicsRow, 'PregMv', 'pregnancyMovementSpeedMultiplier', { min: 0.3, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(pregnancyDynamicsRow, 'ParInv', 'parentalInvestmentSeconds', { min: 0, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
-    pregnancyDynamicsRow.dataset.label = 'Pregnancy Dynamics';
-    tabPanels[2].appendChild(pregnancyDynamicsRow);
+    const diseaseGroup = createCollapsibleParamGroup('Disease Dynamics');
+    appendCompactSliderInput(diseaseGroup.row, 'Spont', 'diseaseSpontaneousChance', { min: 0, max: 0.01, step: 0.0005, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'Trans', 'diseaseTransmissionChance', { min: 0, max: 0.2, step: 0.005, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'Range', 'diseaseTransmissionRange', { min: 1, max: 5, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'DurMin', 'diseaseDurationMinSeconds', { min: 10, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'DurRng', 'diseaseDurationRangeSeconds', { min: 0, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'ImmMin', 'diseaseImmunityMinSeconds', { min: 0, max: 600, step: 10, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'ImmRng', 'diseaseImmunityRangeSeconds', { min: 0, max: 600, step: 10, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'SickE', 'diseaseEnergyDrainRate', { min: 0, max: 3, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'SickH', 'diseaseHungerDrainRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseGroup.row, 'SickMv', 'diseaseMovementSpeedMultiplier', { min: 0.2, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
+    tabPanels[2].appendChild(diseaseGroup.details);
 
-    const campfireDynamicsRow = document.createElement('div');
-    campfireDynamicsRow.style.display = 'flex';
-    campfireDynamicsRow.style.alignItems = 'center';
-    campfireDynamicsRow.style.flexWrap = 'wrap';
-    campfireDynamicsRow.style.gap = '8px';
-    const campfireDynamicsLabel = document.createElement('span');
-    campfireDynamicsLabel.textContent = 'Campfire (spots/spacing need Regenerate World):';
-    campfireDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
-    campfireDynamicsRow.appendChild(campfireDynamicsLabel);
-    appendCompactSliderInput(campfireDynamicsRow, 'MaxFire', 'maxCampfireSpots', { min: 0, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(campfireDynamicsRow, 'CharsPF', 'charsPerCampfire', { min: 2, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(campfireDynamicsRow, 'Spacing', 'minCampfireSpacing', { min: 1, max: 10, step: 1, width: '64px', sliderWidth: '72px' });
-    campfireDynamicsRow.dataset.label = 'Campfire';
-    tabPanels[2].appendChild(campfireDynamicsRow);
+    const pregnancyGroup = createCollapsibleParamGroup('Pregnancy Dynamics');
+    appendCompactSliderInput(pregnancyGroup.row, 'GestMin', 'pregnancyDurationMinSeconds', { min: 5, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(pregnancyGroup.row, 'GestRng', 'pregnancyDurationRangeSeconds', { min: 0, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(pregnancyGroup.row, 'PregMv', 'pregnancyMovementSpeedMultiplier', { min: 0.3, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(pregnancyGroup.row, 'ParInv', 'parentalInvestmentSeconds', { min: 0, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
+    tabPanels[2].appendChild(pregnancyGroup.details);
 
-    const specialEntityRow = document.createElement('div');
-    specialEntityRow.style.display = 'flex';
-    specialEntityRow.style.alignItems = 'center';
-    specialEntityRow.style.flexWrap = 'wrap';
-    specialEntityRow.style.gap = '8px';
-    const specialEntityLabel = document.createElement('span');
-    specialEntityLabel.textContent = 'Special Entities (Angel/Reaper):';
-    specialEntityLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
-    specialEntityRow.appendChild(specialEntityLabel);
-    appendCompactSliderInput(specialEntityRow, 'AngelC', 'angelChildThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
-    appendCompactSliderInput(specialEntityRow, 'ReapE', 'reaperElderThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
-    specialEntityRow.dataset.label = 'Special Entities';
-    tabPanels[2].appendChild(specialEntityRow);
+    const campfireGroup = createCollapsibleParamGroup('Campfire (spots/spacing need Regenerate World)');
+    appendCompactSliderInput(campfireGroup.row, 'MaxFire', 'maxCampfireSpots', { min: 0, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(campfireGroup.row, 'CharsPF', 'charsPerCampfire', { min: 2, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(campfireGroup.row, 'Spacing', 'minCampfireSpacing', { min: 1, max: 10, step: 1, width: '64px', sliderWidth: '72px' });
+    tabPanels[2].appendChild(campfireGroup.details);
+
+    const specialEntityGroup = createCollapsibleParamGroup('Special Entities (Angel/Reaper)');
+    appendCompactSliderInput(specialEntityGroup.row, 'AngelC', 'angelChildThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(specialEntityGroup.row, 'ReapE', 'reaperElderThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    tabPanels[2].appendChild(specialEntityGroup.details);
 
     const supportWeightsRow = document.createElement('div');
     supportWeightsRow.style.display = 'flex';
