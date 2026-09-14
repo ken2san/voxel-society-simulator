@@ -1337,6 +1337,7 @@ function renderCharacterDetail() {
     perceptionNumber.max = 10;
     perceptionNumber.value = sidebarParams.perceptionRange;
     perceptionNumber.style.width = '48px';
+    perceptionNumber.disabled = paramDisabled;
     perceptionNumber.id = 'perceptionNumber';
     perceptionNumber.name = 'perceptionNumber';
     perceptionNumber.addEventListener('input', e => {
@@ -1379,6 +1380,7 @@ function renderCharacterDetail() {
     affinityResetNumber.step = 1;
     affinityResetNumber.value = sidebarParams.affinityResetAfterReproduce;
     affinityResetNumber.style.width = '48px';
+    affinityResetNumber.disabled = paramDisabled;
     affinityResetNumber.id = 'affinityResetNumber';
     affinityResetNumber.name = 'affinityResetNumber';
     affinityResetNumber.addEventListener('input', e => {
