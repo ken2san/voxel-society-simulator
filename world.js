@@ -43,10 +43,8 @@ let campfireObjects = [];  // decorative campfires (not worldData blocks)
 let wellObject = null;     // single decorative village well
 
 // ── Special entities (angel + reaper) ────────────────────────────────────────
-// Angel roams when child count ≥ CHILD_THRESHOLD.
-// Reaper roams when elder count ≥ ELDER_THRESHOLD.
-const CHILD_THRESHOLD = 10;
-const ELDER_THRESHOLD = 10;
+// Angel roams when child count ≥ angelChildThreshold.
+// Reaper roams when elder count ≥ reaperElderThreshold.
 let specialEntities = { angel: null, reaper: null };
 export { scene, camera, renderer, controls, ambientLight, directionalLight, gameCanvas, minimapCanvas, minimapCtx };
 
@@ -1000,12 +998,11 @@ export function rebuildAllBlockVisuals() {
 }
 
 // Places decorative campfires near the housing cluster (not worldData blocks).
-// Pre-places up to MAX_CAMPFIRE_SPOTS spots; animate() shows only as many as
-// the current population warrants (1 per CHARS_PER_CAMPFIRE alive chars).
-const MAX_CAMPFIRE_SPOTS   = 4;   // absolute ceiling
-const CHARS_PER_CAMPFIRE   = 20;  // 1 campfire per this many alive characters
-const MIN_CAMPFIRE_SPACING = 3;   // minimum grid-unit separation between fires
+// Pre-places up to maxCampfireSpots spots; animate() shows only as many as
+// the current population warrants (1 per charsPerCampfire alive chars).
 function placeCampfires() {
+    const MAX_CAMPFIRE_SPOTS   = (typeof window !== 'undefined' && window.maxCampfireSpots !== undefined) ? Number(window.maxCampfireSpots) : 4;     // absolute ceiling
+    const MIN_CAMPFIRE_SPACING = (typeof window !== 'undefined' && window.minCampfireSpacing !== undefined) ? Number(window.minCampfireSpacing) : 3; // minimum grid-unit separation between fires
     // Clean up any previous campfires (world regeneration)
     for (const cf of campfireObjects) {
         scene?.remove?.(cf);
@@ -1606,7 +1603,8 @@ export function animate() {
             animate._campfireAliveTimer = 0;
             let alive = 0;
             for (const c of characters) { if (c && c.state !== 'dead') alive++; }
-            animate._campfireCount = Math.min(campfireObjects.length, Math.floor(alive / CHARS_PER_CAMPFIRE));
+            const charsPerCampfire = (typeof window !== 'undefined' && window.charsPerCampfire !== undefined) ? Number(window.charsPerCampfire) : 20;
+            animate._campfireCount = Math.min(campfireObjects.length, Math.floor(alive / charsPerCampfire));
         }
         const activeCount = animate._campfireCount || 0;
 
@@ -1650,8 +1648,10 @@ export function animate() {
             animate._childCount = childCount;
             animate._elderCount = elderCount;
         }
-        _updateSpecialEntity(specialEntities.angel,  (animate._childCount || 0) >= CHILD_THRESHOLD, deltaTime);
-        _updateSpecialEntity(specialEntities.reaper, (animate._elderCount || 0) >= ELDER_THRESHOLD, deltaTime);
+        const angelChildThreshold = (typeof window !== 'undefined' && window.angelChildThreshold !== undefined) ? Number(window.angelChildThreshold) : 10;
+        const reaperElderThreshold = (typeof window !== 'undefined' && window.reaperElderThreshold !== undefined) ? Number(window.reaperElderThreshold) : 10;
+        _updateSpecialEntity(specialEntities.angel,  (animate._childCount || 0) >= angelChildThreshold, deltaTime);
+        _updateSpecialEntity(specialEntities.reaper, (animate._elderCount || 0) >= reaperElderThreshold, deltaTime);
     }
 
     // ── Snow update helper (called both when paused and running) ──────────────

@@ -257,6 +257,30 @@ function renderCharacterDetail() {
         daytimeSafetyRecoveryRate:          16.0,
         restEnergyRecoveryRate:             18.0,
         chargeStoneRecoveryMult:            1.5,
+        thermalDrainRate:                   0.3,
+        campfireWarmthRadius:               5,
+        fatBurnFraction:                    0.6,
+        fatOverflowConversionRate:          0.4,
+        autumnHoardingForageBonus:          14,
+        diseaseSpontaneousChance:           0.0005,
+        diseaseTransmissionChance:          0.025,
+        diseaseTransmissionRange:           1,
+        diseaseDurationMinSeconds:          90,
+        diseaseDurationRangeSeconds:        90,
+        diseaseImmunityMinSeconds:          300,
+        diseaseImmunityRangeSeconds:        180,
+        diseaseEnergyDrainRate:             0.5,
+        diseaseHungerDrainRate:             0.15,
+        diseaseMovementSpeedMultiplier:     0.70,
+        pregnancyDurationMinSeconds:        30,
+        pregnancyDurationRangeSeconds:      30,
+        pregnancyMovementSpeedMultiplier:   0.75,
+        parentalInvestmentSeconds:          20,
+        maxCampfireSpots:                   4,
+        charsPerCampfire:                   20,
+        minCampfireSpacing:                 3,
+        angelChildThreshold:                10,
+        reaperElderThreshold:               10,
         characterLifespan:                  420,
         homeReturnHungerLevel:              85,
         homeBuildingPriority:               72,
@@ -1021,8 +1045,80 @@ function renderCharacterDetail() {
     appendCompactSliderInput(needsDynamicsRow, 'DayS', 'daytimeSafetyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'RestE', 'restEnergyRecoveryRate', { min: 0, max: 30, step: 0.5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'CSMult', 'chargeStoneRecoveryMult', { min: 1.0, max: 3.0, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'ColdE', 'thermalDrainRate', { min: 0, max: 1.5, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FireR', 'campfireWarmthRadius', { min: 1, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FatBn', 'fatBurnFraction', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FatOv', 'fatOverflowConversionRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'AutFg', 'autumnHoardingForageBonus', { min: 0, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
     needsDynamicsRow.dataset.label = 'Needs Dynamics';
     tabPanels[2].appendChild(needsDynamicsRow);
+
+    const diseaseDynamicsRow = document.createElement('div');
+    diseaseDynamicsRow.style.display = 'flex';
+    diseaseDynamicsRow.style.alignItems = 'center';
+    diseaseDynamicsRow.style.flexWrap = 'wrap';
+    diseaseDynamicsRow.style.gap = '8px';
+    const diseaseDynamicsLabel = document.createElement('span');
+    diseaseDynamicsLabel.textContent = 'Disease Dynamics:';
+    diseaseDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
+    diseaseDynamicsRow.appendChild(diseaseDynamicsLabel);
+    appendCompactSliderInput(diseaseDynamicsRow, 'Spont', 'diseaseSpontaneousChance', { min: 0, max: 0.01, step: 0.0005, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'Trans', 'diseaseTransmissionChance', { min: 0, max: 0.2, step: 0.005, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'Range', 'diseaseTransmissionRange', { min: 1, max: 5, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'DurMin', 'diseaseDurationMinSeconds', { min: 10, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'DurRng', 'diseaseDurationRangeSeconds', { min: 0, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'ImmMin', 'diseaseImmunityMinSeconds', { min: 0, max: 600, step: 10, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'ImmRng', 'diseaseImmunityRangeSeconds', { min: 0, max: 600, step: 10, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'SickE', 'diseaseEnergyDrainRate', { min: 0, max: 3, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'SickH', 'diseaseHungerDrainRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(diseaseDynamicsRow, 'SickMv', 'diseaseMovementSpeedMultiplier', { min: 0.2, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
+    diseaseDynamicsRow.dataset.label = 'Disease Dynamics';
+    tabPanels[2].appendChild(diseaseDynamicsRow);
+
+    const pregnancyDynamicsRow = document.createElement('div');
+    pregnancyDynamicsRow.style.display = 'flex';
+    pregnancyDynamicsRow.style.alignItems = 'center';
+    pregnancyDynamicsRow.style.flexWrap = 'wrap';
+    pregnancyDynamicsRow.style.gap = '8px';
+    const pregnancyDynamicsLabel = document.createElement('span');
+    pregnancyDynamicsLabel.textContent = 'Pregnancy Dynamics:';
+    pregnancyDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
+    pregnancyDynamicsRow.appendChild(pregnancyDynamicsLabel);
+    appendCompactSliderInput(pregnancyDynamicsRow, 'GestMin', 'pregnancyDurationMinSeconds', { min: 5, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(pregnancyDynamicsRow, 'GestRng', 'pregnancyDurationRangeSeconds', { min: 0, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(pregnancyDynamicsRow, 'PregMv', 'pregnancyMovementSpeedMultiplier', { min: 0.3, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(pregnancyDynamicsRow, 'ParInv', 'parentalInvestmentSeconds', { min: 0, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
+    pregnancyDynamicsRow.dataset.label = 'Pregnancy Dynamics';
+    tabPanels[2].appendChild(pregnancyDynamicsRow);
+
+    const campfireDynamicsRow = document.createElement('div');
+    campfireDynamicsRow.style.display = 'flex';
+    campfireDynamicsRow.style.alignItems = 'center';
+    campfireDynamicsRow.style.flexWrap = 'wrap';
+    campfireDynamicsRow.style.gap = '8px';
+    const campfireDynamicsLabel = document.createElement('span');
+    campfireDynamicsLabel.textContent = 'Campfire (spots/spacing need Regenerate World):';
+    campfireDynamicsLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
+    campfireDynamicsRow.appendChild(campfireDynamicsLabel);
+    appendCompactSliderInput(campfireDynamicsRow, 'MaxFire', 'maxCampfireSpots', { min: 0, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(campfireDynamicsRow, 'CharsPF', 'charsPerCampfire', { min: 2, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(campfireDynamicsRow, 'Spacing', 'minCampfireSpacing', { min: 1, max: 10, step: 1, width: '64px', sliderWidth: '72px' });
+    campfireDynamicsRow.dataset.label = 'Campfire';
+    tabPanels[2].appendChild(campfireDynamicsRow);
+
+    const specialEntityRow = document.createElement('div');
+    specialEntityRow.style.display = 'flex';
+    specialEntityRow.style.alignItems = 'center';
+    specialEntityRow.style.flexWrap = 'wrap';
+    specialEntityRow.style.gap = '8px';
+    const specialEntityLabel = document.createElement('span');
+    specialEntityLabel.textContent = 'Special Entities (Angel/Reaper):';
+    specialEntityLabel.style.cssText = 'flex:0 0 100%;font-size:0.82em;color:#475569;font-weight:600;';
+    specialEntityRow.appendChild(specialEntityLabel);
+    appendCompactSliderInput(specialEntityRow, 'AngelC', 'angelChildThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(specialEntityRow, 'ReapE', 'reaperElderThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    specialEntityRow.dataset.label = 'Special Entities';
+    tabPanels[2].appendChild(specialEntityRow);
 
     const supportWeightsRow = document.createElement('div');
     supportWeightsRow.style.display = 'flex';

@@ -153,7 +153,8 @@ export function decideNextAction_rulebase(character, isNight) {
     const _si = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
     const _seasonPhase = _si ? _si.phase : 0.5;
     const _isAutumn = _seasonPhase >= 0.50 && _seasonPhase < 0.75;
-    const _autumnHoardingBonus = _isAutumn ? 14 : 0; // forage earlier in autumn to build fat
+    const autumnHoardingForageBonus = getTunableNumber('autumnHoardingForageBonus', 14, { min: 0, max: 40 });
+    const _autumnHoardingBonus = _isAutumn ? autumnHoardingForageBonus : 0; // forage earlier in autumn to build fat
     const _fatAdjustedThreshold = foodSeekHungerThreshold + (10 - _fatReserve * 0.2) + _autumnHoardingBonus;
     const _effectiveFoodThreshold = Math.min(78, Math.max(15, _fatAdjustedThreshold));
     if (character.needs.hunger <= _effectiveFoodThreshold) {

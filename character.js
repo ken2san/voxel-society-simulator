@@ -737,9 +737,10 @@ class Character {
                 const _hungerBefore = this.needs.hunger;
                 this.needs.hunger = Math.min(100, _hungerBefore + _hungerGain);
                 // Overflow above 80 converts to body fat (cap: 50)
+                const fatOverflowConversionRate = (typeof window !== 'undefined' && window.fatOverflowConversionRate !== undefined) ? Number(window.fatOverflowConversionRate) : 0.40;
                 const _eatOverflow = (_hungerBefore + _hungerGain) - 80;
                 if (_eatOverflow > 0) {
-                    this.fatReserve = Math.min(50, (this.fatReserve || 0) + _eatOverflow * 0.40);
+                    this.fatReserve = Math.min(50, (this.fatReserve || 0) + _eatOverflow * fatOverflowConversionRate);
                 }
                 this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                 if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
@@ -4201,9 +4202,10 @@ class Character {
         const unsafeNightSafetyDecayRate = (typeof window !== 'undefined' && window.unsafeNightSafetyDecayRate !== undefined) ? Number(window.unsafeNightSafetyDecayRate) : 5;
         const daytimeSafetyRecoveryRate = (typeof window !== 'undefined' && window.daytimeSafetyRecoveryRate !== undefined) ? Number(window.daytimeSafetyRecoveryRate) : 16;
         // Fat-burning buffer: when hungry and fat reserves remain, burn fat before hunger drops further
+        const fatBurnFraction = (typeof window !== 'undefined' && window.fatBurnFraction !== undefined) ? Number(window.fatBurnFraction) : 0.6;
         const _rawHungerDrain = deltaTime * hungerDecayRate * this.personality.diligence;
         if (this.needs.hunger <= 15 && (this.fatReserve || 0) > 0) {
-            const _fatBurn = Math.min(this.fatReserve, _rawHungerDrain * 0.6);
+            const _fatBurn = Math.min(this.fatReserve, _rawHungerDrain * fatBurnFraction);
             this.fatReserve = Math.max(0, this.fatReserve - _fatBurn);
             this.needs.hunger -= (_rawHungerDrain - _fatBurn);
         } else {
@@ -4230,6 +4232,8 @@ class Character {
         }
         // Thermal drain: cold season × outdoor exposure (campfire proximity gives shelter)
         {
+            const thermalDrainRate = (typeof window !== 'undefined' && window.thermalDrainRate !== undefined) ? Number(window.thermalDrainRate) : 0.3;
+            const campfireWarmthRadius = (typeof window !== 'undefined' && window.campfireWarmthRadius !== undefined) ? Number(window.campfireWarmthRadius) : 5;
             const _si = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
             const _sp = _si ? _si.phase : 0.5;
             const _isWinter     = _sp > 0.78 || _sp < 0.06;
@@ -4239,10 +4243,10 @@ class Character {
                 const _coldIntensity = _isWinter ? 1.0 : 0.45;
                 const _fires = (typeof window !== 'undefined' && window._activeCampfirePositions) || [];
                 const _nearFire = _fires.some(fp =>
-                    Math.abs(this.gridPos.x - fp.x) + Math.abs(this.gridPos.z - fp.z) <= 5
+                    Math.abs(this.gridPos.x - fp.x) + Math.abs(this.gridPos.z - fp.z) <= campfireWarmthRadius
                 );
                 if (!_nearFire) {
-                    this.needs.energy -= deltaTime * 0.3 * _coldIntensity;
+                    this.needs.energy -= deltaTime * thermalDrainRate * _coldIntensity;
                     this._coldExposed = true;
                 } else {
                     this._coldExposed = false;
@@ -4264,18 +4268,25 @@ class Character {
 
         // --- Disease (SIR model) ---
         // State transitions and cost application.  Transmission is checked in a throttled block below.
+        const diseaseDurationMinSeconds = (typeof window !== 'undefined' && window.diseaseDurationMinSeconds !== undefined) ? Number(window.diseaseDurationMinSeconds) : 90;
+        const diseaseDurationRangeSeconds = (typeof window !== 'undefined' && window.diseaseDurationRangeSeconds !== undefined) ? Number(window.diseaseDurationRangeSeconds) : 90;
+        const diseaseImmunityMinSeconds = (typeof window !== 'undefined' && window.diseaseImmunityMinSeconds !== undefined) ? Number(window.diseaseImmunityMinSeconds) : 300;
+        const diseaseImmunityRangeSeconds = (typeof window !== 'undefined' && window.diseaseImmunityRangeSeconds !== undefined) ? Number(window.diseaseImmunityRangeSeconds) : 180;
+        const diseaseEnergyDrainRate = (typeof window !== 'undefined' && window.diseaseEnergyDrainRate !== undefined) ? Number(window.diseaseEnergyDrainRate) : 0.5;
+        const diseaseHungerDrainRate = (typeof window !== 'undefined' && window.diseaseHungerDrainRate !== undefined) ? Number(window.diseaseHungerDrainRate) : 0.15;
+        const diseaseMovementSpeedMultiplier = (typeof window !== 'undefined' && window.diseaseMovementSpeedMultiplier !== undefined) ? Number(window.diseaseMovementSpeedMultiplier) : 0.70;
         if (this._diseaseState === 'infected') {
             this._diseaseTimer -= deltaTime;
             // Infected: mild energy + hunger drain, reduced movement speed
-            this.needs.energy -= deltaTime * 0.5;
-            this.needs.hunger -= deltaTime * 0.15;
+            this.needs.energy -= deltaTime * diseaseEnergyDrainRate;
+            this.needs.hunger -= deltaTime * diseaseHungerDrainRate;
             if (this.movementSpeed && !this._preDiseaseSpeed) {
                 this._preDiseaseSpeed = this.movementSpeed;
-                this.movementSpeed = this.movementSpeed * 0.70;
+                this.movementSpeed = this.movementSpeed * diseaseMovementSpeedMultiplier;
             }
             if (this._diseaseTimer <= 0) {
                 this._diseaseState = 'recovered';
-                this._immuneTimer  = 300 + Math.random() * 180; // 5–8 min immunity
+                this._immuneTimer  = diseaseImmunityMinSeconds + Math.random() * diseaseImmunityRangeSeconds;
                 if (this._preDiseaseSpeed) { this.movementSpeed = this._preDiseaseSpeed; this._preDiseaseSpeed = null; }
             }
         } else if (this._diseaseState === 'recovered') {
@@ -4287,6 +4298,9 @@ class Character {
         this._diseaseTransmitTick = (this._diseaseTransmitTick || 0) + deltaTime;
         if (this._diseaseTransmitTick >= 3.0) {
             this._diseaseTransmitTick = 0;
+            const diseaseTransmissionChance = (typeof window !== 'undefined' && window.diseaseTransmissionChance !== undefined) ? Number(window.diseaseTransmissionChance) : 0.025;
+            const diseaseTransmissionRange = (typeof window !== 'undefined' && window.diseaseTransmissionRange !== undefined) ? Number(window.diseaseTransmissionRange) : 1;
+            const diseaseSpontaneousChance = (typeof window !== 'undefined' && window.diseaseSpontaneousChance !== undefined) ? Number(window.diseaseSpontaneousChance) : 0.0005;
             if (this._diseaseState === 'infected') {
                 // Spread to nearby susceptible characters
                 const _allChars = (typeof window !== 'undefined' && window.characters)
@@ -4295,18 +4309,17 @@ class Character {
                     if (!_other || _other.id === this.id || _other.state === 'dead') continue;
                     if (_other._diseaseState !== null) continue; // already infected or immune
                     const _dist = Math.abs(this.gridPos.x - _other.gridPos.x) + Math.abs(this.gridPos.z - _other.gridPos.z);
-                    if (_dist > 1) continue;
-                    // ~2.5% per 3s transmission tick (range=1 tiles only)
-                    if (Math.random() < 0.025) {
+                    if (_dist > diseaseTransmissionRange) continue;
+                    if (Math.random() < diseaseTransmissionChance) {
                         _other._diseaseState = 'infected';
-                        _other._diseaseTimer = 90 + Math.random() * 90; // 90–180s
+                        _other._diseaseTimer = diseaseDurationMinSeconds + Math.random() * diseaseDurationRangeSeconds;
                     }
                 }
             } else if (this._diseaseState === null) {
-                // Spontaneous infection: very rare environmental source (0.05% per 3s per char)
-                if (Math.random() < 0.0005) {
+                // Spontaneous infection: very rare environmental source
+                if (Math.random() < diseaseSpontaneousChance) {
                     this._diseaseState = 'infected';
-                    this._diseaseTimer = 90 + Math.random() * 90;
+                    this._diseaseTimer = diseaseDurationMinSeconds + Math.random() * diseaseDurationRangeSeconds;
                 }
             }
         }
@@ -5974,7 +5987,8 @@ class Character {
         }
     // apply speed multiplier for slight variation
     const aging = this.getAgingProfile ? this.getAgingProfile() : { mobilityMul: 1.0 };
-    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0) * (aging.mobilityMul || 1.0) * (this._pregnant ? 0.75 : 1.0);
+    const pregnancyMovementSpeedMultiplier = (typeof window !== 'undefined' && window.pregnancyMovementSpeedMultiplier !== undefined) ? Number(window.pregnancyMovementSpeedMultiplier) : 0.75;
+    const effectiveSpeed = (this.movementSpeed || 1.0) * (this._speedMultiplier || 1.0) * (aging.mobilityMul || 1.0) * (this._pregnant ? pregnancyMovementSpeedMultiplier : 1.0);
     const moveDistance = effectiveSpeed * deltaTime;
         if (direction.length() < moveDistance) {
             // 移動実行前の最終当たり判定チェック
@@ -6873,7 +6887,9 @@ class Character {
                 this.pelvis.scale.x = this._bodyWidthScale;
                 this.pelvis.scale.z = this._bodyWidthScale;
                 if (this._pregnant && this._pregnancyTimer > 0) {
-                    const _maxTimer = 60; // approximate max
+                    const _pregDurMin = (typeof window !== 'undefined' && window.pregnancyDurationMinSeconds !== undefined) ? Number(window.pregnancyDurationMinSeconds) : 30;
+                    const _pregDurRange = (typeof window !== 'undefined' && window.pregnancyDurationRangeSeconds !== undefined) ? Number(window.pregnancyDurationRangeSeconds) : 30;
+                    const _maxTimer = _pregDurMin + _pregDurRange; // belly-growth curve tracks the actual max duration
                     const _progress = Math.max(0, Math.min(1, 1 - (this._pregnancyTimer / _maxTimer)));
                     const _bellyTarget = 1.0 + _progress * 0.55;
                     if (!this._bellyScale) this._bellyScale = 1.0;
@@ -7153,8 +7169,10 @@ class Character {
             if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[REPRO] ${this.id} reproduction blocked: already pregnant`); } catch(e){} }
             return;
         }
+        const pregnancyDurationMinSeconds = (typeof window !== 'undefined' && window.pregnancyDurationMinSeconds !== undefined) ? Number(window.pregnancyDurationMinSeconds) : 30;
+        const pregnancyDurationRangeSeconds = (typeof window !== 'undefined' && window.pregnancyDurationRangeSeconds !== undefined) ? Number(window.pregnancyDurationRangeSeconds) : 30;
         this._pregnant = true;
-        this._pregnancyTimer = 30 + Math.random() * 30;
+        this._pregnancyTimer = pregnancyDurationMinSeconds + Math.random() * pregnancyDurationRangeSeconds;
         this._pendingBabyGenes = { childColor, childGenes, partnerId: partner ? partner.id : null };
         this._lastReproductionTime = _reproSimSec();
         if (partner) partner._lastReproductionTime = _reproSimSec();
@@ -7301,8 +7319,8 @@ class Character {
                 if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[BIRTH] ${this.id} gave birth to child ${child.id} at ${JSON.stringify(spawnPos)}`); } catch(e){} }
             } catch (e) { /* ignore visual tweak errors */ }
         }
-        // Parental investment: mother stays near the newborn for ~20s
-        this._parentalTimer = 20;
+        // Parental investment: mother stays near the newborn
+        this._parentalTimer = (typeof window !== 'undefined' && window.parentalInvestmentSeconds !== undefined) ? Number(window.parentalInvestmentSeconds) : 20;
         this._lastChildId = child ? child.id : null;
     }
 
