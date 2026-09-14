@@ -989,9 +989,17 @@ function renderCharacterDetail() {
     // Collapsible parameter group: closed by default, for deep/rarely-touched subsystem
     // params (e.g. per-mechanic durations and multipliers) that would otherwise clutter
     // the tab on open. `applyParamSearch` force-opens a group when its label matches a query.
-    function createCollapsibleParamGroup(labelText, { open = false } = {}) {
+    //
+    // renderCharacterDetail() (this whole function) reruns often — on Start/Finish, settings
+    // import, character selection, etc. — rebuilding this panel from scratch each time. A plain
+    // `details.open = open` would silently reset to closed (or drop a just-opened group) on the
+    // next rerun, which is exactly what the pre-existing "Detailed metrics" collapsible
+    // (`sidebarParams.populationMetricsExpanded`, see below) already had to work around. `key`
+    // persists this group's state in `sidebarParams` the same way.
+    function createCollapsibleParamGroup(labelText, key, { open = false } = {}) {
+        if (sidebarParams[key] === undefined) sidebarParams[key] = open;
         const details = document.createElement('details');
-        details.open = open;
+        details.open = !!sidebarParams[key];
         // flex-direction:column so summary sits above the param row once applyParamSearch's
         // filter logic sets this element's display to 'flex' (it treats all [data-label]
         // rows uniformly, regardless of whether they're a plain div or this details wrapper).
@@ -1004,6 +1012,7 @@ function renderCharacterDetail() {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;';
         details.appendChild(row);
+        details.addEventListener('toggle', () => { sidebarParams[key] = details.open; });
         return { details, row };
     }
 
@@ -1078,7 +1087,7 @@ function renderCharacterDetail() {
     // Deep/rarely-touched biology-system params, collapsed by default so opening the
     // Behavior tab doesn't dump ~30 sliders at once. Expand a group, or search (which
     // auto-opens matches) to reach them. See ROADMAP.md for why these exist as params at all.
-    const thermalFatGroup = createCollapsibleParamGroup('Thermal & Fat Reserve');
+    const thermalFatGroup = createCollapsibleParamGroup('Thermal & Fat Reserve', 'thermalFatGroupExpanded');
     appendCompactSliderInput(thermalFatGroup.row, 'ColdE', 'thermalDrainRate', { min: 0, max: 1.5, step: 0.05, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(thermalFatGroup.row, 'FireR', 'campfireWarmthRadius', { min: 1, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(thermalFatGroup.row, 'FatBn', 'fatBurnFraction', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
@@ -1089,7 +1098,7 @@ function renderCharacterDetail() {
     appendCompactSliderInput(thermalFatGroup.row, 'FatInRg', 'fatReserveInitialRange', { min: 0, max: 50, step: 1, width: '64px', sliderWidth: '72px' });
     tabPanels[2].appendChild(thermalFatGroup.details);
 
-    const diseaseGroup = createCollapsibleParamGroup('Disease Dynamics');
+    const diseaseGroup = createCollapsibleParamGroup('Disease Dynamics', 'diseaseGroupExpanded');
     appendCompactSliderInput(diseaseGroup.row, 'Spont', 'diseaseSpontaneousChance', { min: 0, max: 0.01, step: 0.0005, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(diseaseGroup.row, 'Trans', 'diseaseTransmissionChance', { min: 0, max: 0.2, step: 0.005, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(diseaseGroup.row, 'Range', 'diseaseTransmissionRange', { min: 1, max: 5, step: 1, width: '64px', sliderWidth: '72px' });
@@ -1102,20 +1111,20 @@ function renderCharacterDetail() {
     appendCompactSliderInput(diseaseGroup.row, 'SickMv', 'diseaseMovementSpeedMultiplier', { min: 0.2, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
     tabPanels[2].appendChild(diseaseGroup.details);
 
-    const pregnancyGroup = createCollapsibleParamGroup('Pregnancy Dynamics');
+    const pregnancyGroup = createCollapsibleParamGroup('Pregnancy Dynamics', 'pregnancyGroupExpanded');
     appendCompactSliderInput(pregnancyGroup.row, 'GestMin', 'pregnancyDurationMinSeconds', { min: 5, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(pregnancyGroup.row, 'GestRng', 'pregnancyDurationRangeSeconds', { min: 0, max: 180, step: 5, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(pregnancyGroup.row, 'PregMv', 'pregnancyMovementSpeedMultiplier', { min: 0.3, max: 1.0, step: 0.05, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(pregnancyGroup.row, 'ParInv', 'parentalInvestmentSeconds', { min: 0, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
     tabPanels[2].appendChild(pregnancyGroup.details);
 
-    const campfireGroup = createCollapsibleParamGroup('Campfire (spots/spacing need Regenerate World)');
+    const campfireGroup = createCollapsibleParamGroup('Campfire (spots/spacing need Regenerate World)', 'campfireGroupExpanded');
     appendCompactSliderInput(campfireGroup.row, 'MaxFire', 'maxCampfireSpots', { min: 0, max: 12, step: 1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(campfireGroup.row, 'CharsPF', 'charsPerCampfire', { min: 2, max: 60, step: 1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(campfireGroup.row, 'Spacing', 'minCampfireSpacing', { min: 1, max: 10, step: 1, width: '64px', sliderWidth: '72px' });
     tabPanels[2].appendChild(campfireGroup.details);
 
-    const specialEntityGroup = createCollapsibleParamGroup('Special Entities (Angel/Reaper)');
+    const specialEntityGroup = createCollapsibleParamGroup('Special Entities (Angel/Reaper)', 'specialEntityGroupExpanded');
     appendCompactSliderInput(specialEntityGroup.row, 'AngelC', 'angelChildThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(specialEntityGroup.row, 'ReapE', 'reaperElderThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
     tabPanels[2].appendChild(specialEntityGroup.details);
