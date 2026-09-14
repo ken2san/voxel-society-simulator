@@ -1,6 +1,43 @@
 # Simulation Modeling Reference
 
-_Last updated: 2026-04-18_
+_Last updated: 2026-09-13_
+
+---
+
+## Status update (2026-09-13)
+
+Read `character.js` directly against the plan below (not just commit messages). Result: **Stages
+A, B, and D are already implemented**, and Stage C is partially implemented — this document was
+still framing them as future recommendations. Corrected status:
+
+- **Stage A (layered readiness model)** — ✅ done. `getReproductionReadiness(partner)` computes
+  `pairBond`, `localSupport`, `livelihoodViability`, and `futureExpectation` exactly as the
+  "Current model structure" section below describes.
+- **Stage B (hazard score instead of hard gate)** — ✅ done. The function also returns a
+  `reproductionHazard` value, and `shouldAttemptReproductionWith(partner)` converts it into a
+  per-tick `attemptChance` fed through `Math.random()` — a probabilistic event, not a threshold
+  gate. This is the "Fertility hazard model" from section 1 below, already shipped.
+- **Stage C (household continuity anchors)** — 🟡 partial. `isHouseholdTie(other)` recognizes
+  bonded partner (`_lovePartnerId`), parent, and child — but not sibling / co-resident kin, which
+  this doc originally called for as a fourth anchor type. That gap is still open.
+- **Stage D (care load from dependent children)** — ✅ done. A `careLoad` term (dependent child
+  count, elder load, crowding, rivalry, minus support) feeds negatively into both `readiness` and
+  `reproductionHazard` — matching the "Cooperative child-rearing load model" in section 4 below
+  almost variable-for-variable.
+- **Parameter Addition Rule compliance** — ✅ this system followed it correctly:
+  `reproductionReadinessThreshold`, `reproductionAnxietyCohesionBonus`, and
+  `reproductionPressurePenalty` are all present in `sim-settings.workspace.json`, `sidebar.js`
+  `PARAM_DEFAULTS`, and have sidebar sliders. Worth noting as the model to copy — the 2026-04-25
+  biology system (disease/pregnancy/thermal/fat, see `ROADMAP.md`) did not follow this pattern
+  and needs the same treatment retroactively.
+
+**Not yet integrated:** the pregnancy system (`_pregnant`/`_pregnancyTimer`/`_giveBirth()`,
+added 2026-04-25) adds a gestation delay after conception succeeds, but `livelihoodViability`'s
+`selfNeedMargin`/`partnerNeedMargin` still only reads `hunger`/`energy`/`safety` — disease state
+and `fatReserve` are not read anywhere in `getReproductionReadiness()`. So the newer biology
+layer currently sits *beside* this readiness model rather than feeding into it, which cuts
+against this doc's own layered-causation argument. Wiring biology state into `livelihoodViability`
+is the natural next step, not a new stage.
 
 ---
 
@@ -136,26 +173,29 @@ Why this fits the project:
 
 ## Recommended implementation order
 
-### Stage A — Keep the current layered readiness model
+_See "Status update (2026-09-13)" above for what's actually done vs. open — this section is kept
+as the original design narrative, not a live checklist._
+
+### Stage A — Keep the current layered readiness model ✅ done
 
 Do not throw away the current structure. It already matches a believable causal story.
 
-### Stage B — Replace hard reproduction gating with a hazard score
+### Stage B — Replace hard reproduction gating with a hazard score ✅ done
 
 Keep the existing readiness value, but interpret it as a probability or event intensity rather than a strict threshold.
 
-### Stage C — Add explicit household continuity
+### Stage C — Add explicit household continuity 🟡 partial — sibling/kin anchor still open
 
 Treat the following as special support anchors:
 
-- bonded partner,
-- parent,
-- child,
-- sibling / co-resident kin.
+- bonded partner, ✅ (`_lovePartnerId`)
+- parent, ✅ (`parentIds`)
+- child, ✅ (`children`)
+- sibling / co-resident kin. ❌ not implemented in `isHouseholdTie()`
 
-This is likely the highest-value next step.
+This remains the highest-value next step.
 
-### Stage D — Add care load from dependent children
+### Stage D — Add care load from dependent children ✅ done
 
 Existing children should reduce future fertility unless enough support and stability are present.
 
@@ -163,13 +203,18 @@ Existing children should reduce future fertility unless enough support and stabi
 
 ## Mapping to the current codebase
 
-Useful existing hooks already exist in the code:
+Confirmed hooks in `character.js` (verified by reading the code, 2026-09-13):
 
-- `getReproductionReadiness(partner)`
-- `shouldAttemptReproductionWith(partner)`
-- `getPreferredSupportTarget()`
-- `getRelationshipSnapshot()`
+- `getReproductionReadiness(partner)` (~line 3764) — returns `pairBond`, `localSupport`,
+  `livelihoodViability`, `futureExpectation`, `careLoad`, `reproductionHazard`, `readiness`.
+- `shouldAttemptReproductionWith(partner)` (~line 3962) — converts `reproductionHazard` into a
+  probabilistic attempt via `Math.random()`.
+- `isHouseholdTie(other)` (~line 2980) — the Stage C anchor check (partner/parent/child only).
+- `getPreferredSupportTarget()`, `getRelationshipSnapshot()`
 - district social context signals such as `supportAccess`, `housingPressure`, and `relationshipStability`
+- `getReproductionModelParams()` (~line 3751) — reads `reproductionReadinessThreshold`,
+  `reproductionAnxietyCohesionBonus`, `reproductionPressurePenalty` from `window.*`, all three
+  wired through the full Parameter Addition Rule (workspace JSON + `PARAM_DEFAULTS` + slider).
 
 This means a new model can be layered into the current system incrementally instead of requiring a rewrite.
 
@@ -188,12 +233,19 @@ The simulator should stay observation-first rather than turning into a demograph
 
 ## Suggested next experiment
 
-A practical next model iteration would be:
+Items 1–3 below are now implemented (`localSupport`, `careLoad`, `reproductionHazard` — see
+Status update above); they weren't necessarily ever validated against districtMode=4 telemetry
+the way the "Ecology Tuning — Done Criteria" pass in `ROADMAP.md` was. A practical next iteration:
 
-1. compute a household support score,
-2. compute a child-care load score,
-3. convert reproduction readiness into a hazard probability,
-4. compare results across `districtMode=4` headless runs.
+1. ~~compute a household support score~~ ✅ done (`localSupport`)
+2. ~~compute a child-care load score~~ ✅ done (`careLoad`)
+3. ~~convert reproduction readiness into a hazard probability~~ ✅ done (`reproductionHazard`)
+4. **compare results across `districtMode=4` headless runs** — not confirmed done; run
+   `npm run sim -- --districtMode=4` and check the success criteria below before assuming this
+   model is tuned, not just implemented.
+5. **new, from the Status update above**: close the Stage C gap (sibling / co-resident kin as a
+   household-tie anchor), and decide whether to wire the 2026-04-25 biology state
+   (disease/`fatReserve`) into `livelihoodViability` rather than leaving it as a parallel system.
 
 Success criteria should be:
 

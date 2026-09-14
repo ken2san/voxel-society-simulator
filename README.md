@@ -95,14 +95,11 @@ Make sure `gcloud` is authenticated and the target project is selected before ru
 
 ## Agent Workspace Rules
 
-This workspace includes Copilot agent configuration files.
+- `AGENTS.md`: single source of agent behavior and decision policy for this project.
 
-- `AGENTS.md`: project-specific behavior and decision policy.
-- `.github/copilot-instructions.md`: workspace instructions loaded before coding tasks.
-- `.github/agents/`: role-specific agent guidance (`backend`, `frontend`, `infra`).
-- `agents/global.md`: project-level clarifications that supplement `AGENTS.md`.
-
-When updating these files, keep rules concise and avoid duplicating the same policy text across files.
+(Previously split across `.github/copilot-instructions.md`, `.github/agents/*.agent.md`, and
+`agents/global.md` — a Copilot-specific format not read by this project's Claude Code CLI
+workflow. Consolidated into `AGENTS.md` on 2026-09-13; those files no longer exist.)
 
 ## Roadmap Workflow
 
@@ -119,6 +116,9 @@ For the current reproduction / household-cohesion thinking and future academical
 - `docs/modeling-reference.md`
 
 Use that document as the reference note when adjusting social, fertility, support, or child-rearing behavior.
+
+Historical session-by-session handoff logs superseded by the current roadmap direction live in
+`docs/roadmap-archive.md` — reference only, never current direction.
 
 ## Notes
 
