@@ -1,6 +1,6 @@
 // --- 落下先が安全か（抜け出せるか）判定 ---
 
-import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter, forEachWorldKeyOfTypes } from './world.js';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter, forEachWorldKeyOfTypes, addDecompositionSite } from './world.js';
 import { decideNextAction_rulebase } from './sim-core/AI_rulebase.js';
 import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
@@ -5381,6 +5381,12 @@ class Character {
                 if (window.__deathRecords.length > 200) window.__deathRecords.shift();
             }
         } catch (e) {}
+
+        // Death enriches the ground it happened on — bacteria/soil/nutrient cycle
+        // feeding back into local fruit spawn rate. See addDecompositionSite() in
+        // world.js for why this is pure data (+ a fading ground disc), not a
+        // permanent object, in a world this small.
+        try { addDecompositionSite(this.gridPos.x, this.gridPos.y, this.gridPos.z); } catch (e) {}
 
         // 死亡時に持ち物をワールドにドロップ
         if (this.inventory && this.inventory[0]) {

@@ -129,6 +129,86 @@ export function setStoneSpawnRate(rate) { stoneSpawnRate = Math.max(0, Math.min(
 export function setCaveSpawnRate(rate) { caveSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setLeafSpawnRate(rate) { leafSpawnRate = Math.max(0, Math.min(1, rate)); }
 
+// ── Decomposition sites: death enriches the ground it happened on ────────────
+// Ecology-level feedback loop instead of an individual-level rescue: a death
+// temporarily boosts local fruit spawn probability (bacteria -> soil -> nutrients),
+// so a die-off can, but is not guaranteed to, help survivors nearby recover. No
+// permanent world object is placed — sites are pure data (+ an optional decorative
+// ground disc in the browser) so they never consume space in the small world grid,
+// and they auto-expire instead of needing manual cleanup.
+// Each site: { x, y, z, remaining, duration, mesh }. `remaining` counts down by
+// deltaTime every tick in both browser and headless runs (tickFruitRegen doesn't
+// advance the shared `worldTime` clock, so sites can't be aged off an absolute
+// timestamp — they carry their own countdown instead).
+let _decompositionSites = [];
+const DECOMP_DECAY_COLOR = new THREE.Color(0x2a1f14);  // dark, freshly-turned soil
+const DECOMP_BLOOM_COLOR = new THREE.Color(0x4caf50);  // fertile green payoff
+
+export function addDecompositionSite(x, y, z) {
+    const duration = (typeof window !== 'undefined' && window.decompositionDurationSeconds > 0)
+        ? window.decompositionDurationSeconds : 90;
+    const site = { x, y, z, remaining: duration, duration, mesh: null };
+    if (scene) {
+        const geo = new THREE.CircleGeometry(0.55, 16);
+        const mat = new THREE.MeshBasicMaterial({
+            color: DECOMP_DECAY_COLOR.clone(), transparent: true, opacity: 0,
+            depthWrite: false, side: THREE.DoubleSide,
+        });
+        const disc = new THREE.Mesh(geo, mat);
+        disc.rotation.x = -Math.PI / 2;
+        disc.position.set(x + 0.5, y + 1.02, z + 0.5);
+        disc.renderOrder = 5;
+        scene.add(disc);
+        site.mesh = disc;
+    }
+    _decompositionSites.push(site);
+}
+
+// Ages every active site by deltaTime; updates the ground-disc color/opacity in the
+// browser (dark decay -> green bloom -> fade out) and removes expired sites. Safe to
+// call every tick in both browser and headless contexts (no-ops on the visual part
+// when `scene` doesn't exist).
+export function updateDecompositionSites(deltaTime) {
+    if (_decompositionSites.length === 0) return;
+    for (let i = _decompositionSites.length - 1; i >= 0; i--) {
+        const site = _decompositionSites[i];
+        site.remaining -= deltaTime;
+        if (site.mesh) {
+            const t = Math.min(1, Math.max(0, 1 - site.remaining / site.duration));
+            site.mesh.material.color.copy(DECOMP_DECAY_COLOR).lerp(DECOMP_BLOOM_COLOR, t);
+            const fadeIn = Math.min(1, (site.duration - site.remaining) / 3);
+            const fadeOut = t > 0.7 ? Math.max(0, 1 - (t - 0.7) / 0.3) : 1;
+            site.mesh.material.opacity = 0.7 * fadeIn * fadeOut;
+        }
+        if (site.remaining <= 0) {
+            if (site.mesh) {
+                scene.remove(site.mesh);
+                site.mesh.geometry.dispose();
+                site.mesh.material.dispose();
+            }
+            _decompositionSites.splice(i, 1);
+        }
+    }
+}
+
+// Fruit-spawn rate multiplier for a tile from the strongest overlapping active
+// decomposition site (1 = no boost). Multiple overlapping sites don't stack, to
+// avoid runaway rates around a mass-death cluster.
+export function getDecompositionFruitBoost(x, z) {
+    if (_decompositionSites.length === 0) return 1;
+    const radius = (typeof window !== 'undefined' && window.decompositionRadius > 0)
+        ? window.decompositionRadius : 2;
+    const boostAmount = (typeof window !== 'undefined' && window.decompositionFruitBoost !== undefined)
+        ? Number(window.decompositionFruitBoost) : 1.5;
+    let best = 1;
+    for (const site of _decompositionSites) {
+        if (Math.max(Math.abs(x - site.x), Math.abs(z - site.z)) > radius) continue;
+        const strength = 1 + boostAmount * Math.max(0, site.remaining / site.duration);
+        if (strength > best) best = strength;
+    }
+    return best;
+}
+
 export const DISTRICT_MODE_OPTIONS = Object.freeze([1, 4, 16]);
 let districtMode = 1;
 let activeDistrictIndex = 0;
@@ -1360,6 +1440,9 @@ export function findGroundY(x, z) {
 // the browser animate() loop (which normally handles this) is never called headless.
 let _fruitRegenAccum = 0;
 export function tickFruitRegen(deltaTime) {
+    // Ages decomposition sites every tick, independent of the regen-interval gate
+    // below, so their duration doesn't drift with whatever fruitRegenInterval is set to.
+    updateDecompositionSites(deltaTime);
     _fruitRegenAccum += deltaTime;
     const fruitRegenInterval = (typeof globalThis.window !== 'undefined' && globalThis.window.fruitRegenIntervalSeconds > 0)
         ? globalThis.window.fruitRegenIntervalSeconds : 15;
@@ -1381,7 +1464,8 @@ export function tickFruitRegen(deltaTime) {
     const rate = fruitSpawnRate * seasonalMultiplier * densityMult;
     for (let x = 0; x < gridSize; x++) {
         for (let z = 0; z < gridSize; z++) {
-            if (Math.random() >= rate) continue;
+            const tileRate = rate * getDecompositionFruitBoost(x, z);
+            if (Math.random() >= tileRate) continue;
             const y = findGroundY(x, z);
             if (y < 0) continue;
             if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
@@ -1998,6 +2082,10 @@ export function animate() {
         }
     }
 
+    // Ages decomposition sites every frame (visual fade + fruit-boost countdown),
+    // independent of the regen-interval gate below.
+    updateDecompositionSites(deltaTime);
+
     // --- 果物再生：fruitRegenIntervalSeconds ごとに表面GRASSにFRUITをランダム再生 ---
     // 季節サイクル（sinカーブ）で実効レートを変動させる。
     //   seasonAmplitude=0 → 季節なし（定数レート）
@@ -2015,7 +2103,8 @@ export function animate() {
         let _fruitAdded = 0;
         for (let x = 0; x < gridSize; x++) {
             for (let z = 0; z < gridSize; z++) {
-                if (Math.random() >= rate) continue;
+                const tileRate = rate * getDecompositionFruitBoost(x, z);
+                if (Math.random() >= tileRate) continue;
                 const y = findGroundY(x, z);
                 if (y < 0) continue;
                 if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;

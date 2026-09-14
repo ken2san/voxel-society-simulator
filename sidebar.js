@@ -284,6 +284,9 @@ function renderCharacterDetail() {
         minCampfireSpacing:                 3,
         angelChildThreshold:                10,
         reaperElderThreshold:               10,
+        decompositionRadius:                2,
+        decompositionFruitBoost:            1.5,
+        decompositionDurationSeconds:       90,
         characterLifespan:                  420,
         homeReturnHungerLevel:              85,
         homeBuildingPriority:               72,
@@ -1136,6 +1139,12 @@ function renderCharacterDetail() {
     appendCompactSliderInput(specialEntityGroup.row, 'AngelC', 'angelChildThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(specialEntityGroup.row, 'ReapE', 'reaperElderThreshold', { min: 1, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
     tabPanels[2].appendChild(specialEntityGroup.details);
+
+    const decompositionGroup = createCollapsibleParamGroup('Decomposition (Death → Growth)', 'decompositionGroupExpanded');
+    appendCompactSliderInput(decompositionGroup.row, 'Radius', 'decompositionRadius', { min: 1, max: 6, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(decompositionGroup.row, 'Boost', 'decompositionFruitBoost', { min: 0, max: 5, step: 0.1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(decompositionGroup.row, 'Secs', 'decompositionDurationSeconds', { min: 10, max: 300, step: 5, width: '64px', sliderWidth: '72px' });
+    tabPanels[2].appendChild(decompositionGroup.details);
 
     const supportWeightsRow = document.createElement('div');
     supportWeightsRow.style.display = 'flex';
@@ -2534,6 +2543,7 @@ function renderCharacterDetail() {
         worldEcology.row.appendChild(seasonCycleRow);
         worldEcology.row.appendChild(seasonAmpRow);
         tabPanels[2].appendChild(worldEcology.details);
+        tabPanels[2].appendChild(decompositionGroup.details);
 
         tabPanels[2].appendChild(campfireGroup.details);
         tabPanels[2].appendChild(specialEntityGroup.details);
