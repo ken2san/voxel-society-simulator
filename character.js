@@ -1,6 +1,6 @@
 // --- 落下先が安全か（抜け出せるか）判定 ---
 
-import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter, forEachWorldKeyOfTypes, addDecompositionSite } from './world.js';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, gridSize, findGroundY, addBlock, removeBlock, spawnCharacter, maxHeight, pickDistrictMoveTargetForCharacter, forEachWorldKeyOfTypes, addDecompositionSite, camera, renderer } from './world.js';
 import { decideNextAction_rulebase } from './sim-core/AI_rulebase.js';
 import { decideNextAction_utility } from './sim-core/AI_utility.js';
 import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
@@ -504,8 +504,12 @@ class Character {
 
     // スクリーン座標を取得
     getScreenPosition() {
-        if (!this.mesh || !window.camera || !window.renderer || this.mesh.visible === false) return null;
-        return toScreenPosition(this.iconAnchor || this.mesh, window.camera, window.renderer.domElement);
+        // Pre-existing bug: this used to check window.camera/window.renderer, but nothing
+        // in the codebase ever assigns those — they were always undefined, so every
+        // screen-space effect (birth/death, and now grow) silently no-opped here. camera
+        // and renderer are the real live bindings, set by world.js's setWorldObjects().
+        if (!this.mesh || !camera || !renderer || this.mesh.visible === false) return null;
+        return toScreenPosition(this.iconAnchor || this.mesh, camera, renderer.domElement);
     }
 
     resetVisualEffects() {
