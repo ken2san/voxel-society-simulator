@@ -262,6 +262,9 @@ function renderCharacterDetail() {
         fatBurnFraction:                    0.6,
         fatOverflowConversionRate:          0.4,
         autumnHoardingForageBonus:          14,
+        fatReserveCap:                      50,
+        fatReserveInitialMin:               20,
+        fatReserveInitialRange:             10,
         diseaseSpontaneousChance:           0.0005,
         diseaseTransmissionChance:          0.025,
         diseaseTransmissionRange:           1,
@@ -1050,6 +1053,9 @@ function renderCharacterDetail() {
     appendCompactSliderInput(needsDynamicsRow, 'FatBn', 'fatBurnFraction', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'FatOv', 'fatOverflowConversionRate', { min: 0, max: 1, step: 0.05, width: '64px', sliderWidth: '72px' });
     appendCompactSliderInput(needsDynamicsRow, 'AutFg', 'autumnHoardingForageBonus', { min: 0, max: 40, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FatCap', 'fatReserveCap', { min: 10, max: 150, step: 5, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FatInMn', 'fatReserveInitialMin', { min: 0, max: 100, step: 1, width: '64px', sliderWidth: '72px' });
+    appendCompactSliderInput(needsDynamicsRow, 'FatInRg', 'fatReserveInitialRange', { min: 0, max: 50, step: 1, width: '64px', sliderWidth: '72px' });
     needsDynamicsRow.dataset.label = 'Needs Dynamics';
     tabPanels[2].appendChild(needsDynamicsRow);
 

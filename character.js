@@ -736,11 +736,12 @@ class Character {
                 const _hungerGain = blockType.foodValue + Math.random() * 20;
                 const _hungerBefore = this.needs.hunger;
                 this.needs.hunger = Math.min(100, _hungerBefore + _hungerGain);
-                // Overflow above 80 converts to body fat (cap: 50)
+                // Overflow above 80 converts to body fat (cap: fatReserveCap)
                 const fatOverflowConversionRate = (typeof window !== 'undefined' && window.fatOverflowConversionRate !== undefined) ? Number(window.fatOverflowConversionRate) : 0.40;
+                const fatReserveCap = (typeof window !== 'undefined' && window.fatReserveCap !== undefined) ? Number(window.fatReserveCap) : 50;
                 const _eatOverflow = (_hungerBefore + _hungerGain) - 80;
                 if (_eatOverflow > 0) {
-                    this.fatReserve = Math.min(50, (this.fatReserve || 0) + _eatOverflow * fatOverflowConversionRate);
+                    this.fatReserve = Math.min(fatReserveCap, (this.fatReserve || 0) + _eatOverflow * fatOverflowConversionRate);
                 }
                 this.learn && this.learn({ type: 'ATE_FOOD', inDanger });
                 if (this._knownFoodSpots) this._knownFoodSpots.set(key, Date.now());
@@ -2528,10 +2529,12 @@ class Character {
             safety: 100,
             social: 80 + Math.random() * 10
         };
-        // fatReserve: energy buffer stored as body fat (0–50).
+        // fatReserve: energy buffer stored as body fat (0–fatReserveCap).
         // Fills when well-fed (hunger overflow above 90), burns before hunger hits crisis.
         // Reflected visually as body/torso width.
-        this.fatReserve = 20 + Math.random() * 10;
+        const fatReserveInitialMin = (typeof window !== 'undefined' && window.fatReserveInitialMin !== undefined) ? Number(window.fatReserveInitialMin) : 20;
+        const fatReserveInitialRange = (typeof window !== 'undefined' && window.fatReserveInitialRange !== undefined) ? Number(window.fatReserveInitialRange) : 10;
+        this.fatReserve = fatReserveInitialMin + Math.random() * fatReserveInitialRange;
         // needsが0以下なら強制回復
         for (const k of ['hunger','energy','safety','social']) {
             if (this.needs[k] === undefined || this.needs[k] <= 0) {
@@ -6871,10 +6874,11 @@ class Character {
             }
         }
 
-        // Body width: fat reserve visual — lean (fatReserve=0) → plump (fatReserve=50)
+        // Body width: fat reserve visual — lean (fatReserve=0) → plump (fatReserve=fatReserveCap)
         // Applied to torso and pelvis X/Z scale only; overall mesh scale driven by life stage
         {
-            const _fatW = 0.85 + 0.40 * ((this.fatReserve || 0) / 50);
+            const _fatReserveCapVis = (typeof window !== 'undefined' && window.fatReserveCap !== undefined) ? Number(window.fatReserveCap) : 50;
+            const _fatW = 0.85 + 0.40 * ((this.fatReserve || 0) / _fatReserveCapVis);
             if (!this._bodyWidthScale) this._bodyWidthScale = _fatW;
             this._bodyWidthScale += (_fatW - this._bodyWidthScale) * Math.min(1, deltaTime * 0.3);
             if (this.body)   { this.body.scale.x   = this._bodyWidthScale; this.body.scale.z   = this._bodyWidthScale; }
