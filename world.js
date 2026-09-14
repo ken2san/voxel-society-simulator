@@ -156,7 +156,11 @@ export function addDecompositionSite(x, y, z) {
         });
         const disc = new THREE.Mesh(geo, mat);
         disc.rotation.x = -Math.PI / 2;
-        disc.position.set(x + 0.5, y + 1.02, z + 0.5);
+        // `y` here is the dying character's gridPos.y, which (per
+        // Character.updateWorldPosFromGrid) is already the world-y of the ground
+        // they're standing on — no extra +1 needed, that was floating the disc a
+        // full block above the surface.
+        disc.position.set(x + 0.5, y + 0.02, z + 0.5);
         disc.renderOrder = 5;
         scene.add(disc);
         site.mesh = disc;

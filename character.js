@@ -23,7 +23,7 @@ function spawnScreenEffect(x, y, type) {
     if (window.showEffects === false) return;
     const el = document.createElement('div');
     el.className = `event-effect event-effect-${type}`;
-    el.textContent = type === 'birth' ? '👶✨' : '💨';
+    el.textContent = type === 'birth' ? '👶✨' : type === 'grow' ? '🌟' : '💨';
     el.style.left = x + 'px';
     el.style.top  = y + 'px';
     document.body.appendChild(el);
@@ -4883,6 +4883,19 @@ class Character {
                 if (this.body && this.body.scale) this.body.scale.set(1,1,1);
                 if (this.head && this.head.scale) this.head.scale.set(1,1,1);
                 if (this.shadowMesh && this.shadowMesh.scale) this.shadowMesh.scale.multiplyScalar(1.3333);
+                // Growth visual + sound — the maturity moment was previously a silent,
+                // instant scale-snap with no in-game feedback (only a DEBUG_MODE log).
+                // The screen-space particle is easy to miss (small, 1.6s, tied to one
+                // character among many) — also log it to the Timeline so the moment is
+                // confirmable independent of whether anyone was looking at the right spot.
+                try {
+                    const _gsp = this.getScreenPosition ? this.getScreenPosition() : null;
+                    if (_gsp) spawnScreenEffect(_gsp.x, _gsp.y, 'grow');
+                } catch (_) {}
+                playSound('grow');
+                if (typeof window !== 'undefined' && typeof window.logChronicleEvent === 'function') {
+                    try { window.logChronicleEvent('🌟', `#${this.id} grew up (gen${Number(this.generation || 0)})`, 'grow'); } catch (_) {}
+                }
                 if (typeof window !== 'undefined' && window.DEBUG_MODE) { try { console.log(`[GROW] ${this.id} matured after ${Math.round(this.age)}s`); } catch(e){} }
             }
         }

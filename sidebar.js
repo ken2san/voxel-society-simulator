@@ -3715,6 +3715,7 @@ const _etlKindColor = {
     season:   '#fbbf24',
     new_gen:     '#c084fc',
     gen_summary: '#a78bfa',
+    grow:        '#fde047',
     peak:     '#34d399',
     warning:  '#facc15',
     start:    '#60a5fa',

@@ -15,6 +15,7 @@
  *   playSound('eat');
  *   playSound('social');
  *   playSound('death');
+ *   playSound('grow');    // child matures into an adult
  *   playSound('night');   // dusk transition
  *   playSound('dawn');    // dawn transition
  */
@@ -94,6 +95,7 @@ export function playSound(name) {
         case 'eat':    _playEat(ctx);    break;
         case 'social': _playSocial(ctx); break;
         case 'death':  _playDeath(ctx);  break;
+        case 'grow':   _playGrow(ctx);   break;
         case 'night':      _playNight(ctx);     break;
         case 'dawn':       _playDawn(ctx);      break;
         case 'enter_home': _playEnterHome(ctx); break;
@@ -201,6 +203,14 @@ function _playDeath(ctx) {
     const t = ctx.currentTime;
     _osc(ctx, 'sawtooth', 320, t, t + 0.45, 0.28, 80);
     _noise(ctx, t + 0.10, 0.30, 0.22, 180);
+}
+
+/** Ascending three-note sparkle – child matures into an adult (mirror of _playDeath's descent) */
+function _playGrow(ctx) {
+    const t = ctx.currentTime;
+    _osc(ctx, 'sine', 440, t,        t + 0.12, 0.22, 660);
+    _osc(ctx, 'sine', 660, t + 0.10, t + 0.24, 0.20, 880);
+    _osc(ctx, 'sine', 880, t + 0.20, t + 0.40, 0.16, 1100);
 }
 
 /** Slow descending bell chord – dusk / lights on */
