@@ -496,6 +496,42 @@ _Note: lowEnergyRatio=40.9% is elevated (chronic energy stress, not fatal). Watc
 
 ---
 
+## Regression Found & Fixed — iter20 balance-pass criteria (2026-09-14)
+
+**Symptom:** `npm run sim -- --minutes=10 --population=32` (the exact config `balance(iter20)`,
+commit `2764bcf`, recorded as a 4-run pass) was producing much worse outcomes than its recorded
+criteria (hunger avg 43-66, end pop 20-26, starvation 0) — end pop as low as 2, safety collapsing
+to near 0.
+
+**Ruled out:** the same-day Parameter Addition Rule migration (commit `baec233`, see
+"Biology & Environment Systems" above) was not the cause — every literal it touched was verified
+byte-for-byte identical to its pre-migration value, and a worktree run at the pre-migration commit
+(`3e73c34`) reproduced the same instability. This predates that work.
+
+**Root cause, confirmed by worktree bisection** (3 trials each at `2764bcf` iter20 baseline →
+healthy end pop 17/33/25; `d902a2f` → still healthy 21/34/13; `fb4be40` → collapsed to 2/2/4):
+
+`fb4be40` ("stop instant re-socialize loop") bundled two independent fixes for one symptom
+(repeated `playSound('social')` spam): a per-character 8s sound throttle (fine, kept), and a
+2-6s `this.actionCooldown = Math.max(this.actionCooldown, ...)` added on every socializing-exit
+path. The bug: `actionCooldown` isn't a socialize-specific cooldown — in the `idle` state handler
+it's the single gate on calling `decideNextAction` at all. So every social interaction, for both
+participants, paused *all* AI decision-making (including hunger response) for 2-6s. At
+population=32 with frequent socializing, this compounded into mass starvation — a case of a
+sound-spam fix accidentally blocking survival behavior, not a deliberate behavior change, so it
+falls outside (not in violation of) the "no AI changes without explicit ask" guardrail.
+
+**Fix applied (2026-09-14, same day):** removed the 3 `actionCooldown` lines added by `fb4be40`;
+kept its sound throttle intact (still solves the originally-reported spam). Verified: current
+HEAD now reproduces end pop 10/10/32 across 3 trials — back in the healthy range alongside the
+pre-regression commits.
+
+**Not yet re-validated:** the full iter20 6-metric table (hunger avg 43-66 etc.) — end population
+is now healthy but the exact hunger/starvation numbers haven't been re-checked against every
+original criterion. Worth a proper multi-run pass before calling this fully closed.
+
+---
+
 ## Archive Pointer
 
 Older session-by-session handoff logs and superseded design narratives (2026-04-14 → 04-15,
