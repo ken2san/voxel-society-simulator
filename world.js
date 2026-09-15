@@ -894,6 +894,10 @@ export function setDistrictMode(mode = 1) {
         // camera stays wherever it was, looking at empty space where the old
         // district used to be.
         focusCameraOnActiveDistrict();
+        if (animate._birds) {
+            const _b = getDistrictBounds(activeDistrictIndex, districtMode);
+            animate._birds.recenter(_b.centerX, _b.centerZ);
+        }
     }
 
     applyDistrictVisualization();
@@ -912,6 +916,10 @@ export function setActiveDistrict(index = 0) {
         // sub-region of one shared small world) — the camera must actually
         // travel to the newly-active district, not stay put.
         focusCameraOnActiveDistrict();
+        if (animate._birds) {
+            const _b = getDistrictBounds(activeDistrictIndex, districtMode);
+            animate._birds.recenter(_b.centerX, _b.centerZ);
+        }
     } else {
         activeDistrictIndex = resolvedIndex;
     }
@@ -1831,7 +1839,8 @@ export function animate() {
 
     // ── Lazy-init bird system (ambient creatures, pure visual) ────────────────
     if (!animate._birds && scene) {
-        animate._birds = createBirdSystem(scene, gridSize);
+        const _birdBounds = getDistrictBounds(activeDistrictIndex, districtMode);
+        animate._birds = createBirdSystem(scene, DISTRICT_CELL_SIZE, _birdBounds.centerX, _birdBounds.centerZ);
     }
     if (animate._birds) animate._birds.update(deltaTime);
 
@@ -1908,6 +1917,12 @@ export function animate() {
     // ── Snow update helper (called both when paused and running) ──────────────
     function _updateSnow(dt) {
         if (!animate._snow) return;
+        // snow-system.js recenters recycled particles on window._simCamera, but
+        // nothing ever assigned that global — particles always recycled around
+        // world origin (0,0), so switching districts (camera jumps elsewhere)
+        // left snow falling in the old spot. `camera` is this module's own live
+        // binding, so just keep the global in sync with it here.
+        if (typeof window !== 'undefined') window._simCamera = camera;
         const si   = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;
         const ph   = si ? si.phase     : 0;
         const amp  = si ? si.amplitude : 0;
@@ -1918,6 +1933,8 @@ export function animate() {
     // ── Rain update helper (called both when paused and running) ─────────────
     function _updateRain(dt) {
         if (!animate._rain) return;
+        // Same window._simCamera fix as _updateSnow above — see that comment.
+        if (typeof window !== 'undefined') window._simCamera = camera;
         // On mobile, skip rain particle CPU update on the non-rendered frame
         if (_skipRender) return;
         const si  = (typeof window !== 'undefined' && window.currentSeasonInfo) ? window.currentSeasonInfo : null;

@@ -81,12 +81,14 @@ function buildBirdMesh(mat) {
 
 /**
  * @param {THREE.Scene} scene
- * @param {number} worldSize   grid size (e.g. 16)
+ * @param {number} worldSize   the visible district's footprint (DISTRICT_CELL_SIZE,
+ *                              e.g. 16) — NOT the total (possibly tiled-bigger) world,
+ *                              since birds should stay within whichever one district
+ *                              is currently being watched.
+ * @param {number} [centerX]   active district center, defaults to worldSize/2
+ * @param {number} [centerZ]
  */
-export function createBirdSystem(scene, worldSize) {
-    const cx = worldSize / 2;
-    const cz = worldSize / 2;
-
+export function createBirdSystem(scene, worldSize, centerX = worldSize / 2, centerZ = worldSize / 2) {
     const mats = getBirdMat();
     const birds = [];
 
@@ -94,7 +96,7 @@ export function createBirdSystem(scene, worldSize) {
         const mat = mats[i % mats.length];
         const { group, leftPivot, rightPivot } = buildBirdMesh(mat);
 
-        // Orbit params: birds spread across the world in loose clusters
+        // Orbit params: birds spread across the district in loose clusters
         const orbitRadius  = 3.5 + Math.random() * 5.5;   // 3.5–9 units from orbit center
         const orbitSpeed   = (0.18 + Math.random() * 0.22) * (Math.random() < 0.5 ? 1 : -1);  // CW or CCW
         const orbitPhase   = Math.random() * Math.PI * 2;
@@ -103,9 +105,14 @@ export function createBirdSystem(scene, worldSize) {
         const bobAmp       = 0.18 + Math.random() * 0.18;
         const flapFreq     = 3.2 + Math.random() * 2.4;   // wing beats per second
         const flapAmp      = 0.55 + Math.random() * 0.25; // flap angle (radians)
-        // Orbit center: spread across the world surface, biased toward middle
-        const oCx = cx + (Math.random() - 0.5) * worldSize * 0.7;
-        const oCz = cz + (Math.random() - 0.5) * worldSize * 0.7;
+        // Orbit center offset: spread across the district, biased toward middle.
+        // Stored separately from oCx/oCz so recenter() can re-anchor the whole
+        // flock to a new district center while preserving each bird's relative
+        // spot in the flock.
+        const offX = (Math.random() - 0.5) * worldSize * 0.7;
+        const offZ = (Math.random() - 0.5) * worldSize * 0.7;
+        const oCx = centerX + offX;
+        const oCz = centerZ + offZ;
 
         // Stagger time so birds don't all flap in sync
         const t0 = Math.random() * 50;
@@ -113,10 +120,19 @@ export function createBirdSystem(scene, worldSize) {
         group.visible = true;
         scene.add(group);
 
-        birds.push({ group, leftPivot, rightPivot, orbitRadius, orbitSpeed, orbitPhase, height, bobFreq, bobAmp, flapFreq, flapAmp, oCx, oCz, t: t0 });
+        birds.push({ group, leftPivot, rightPivot, orbitRadius, orbitSpeed, orbitPhase, height, bobFreq, bobAmp, flapFreq, flapAmp, offX, offZ, oCx, oCz, t: t0 });
     }
 
     return {
+        // Re-anchors the whole flock to a new district center (called on
+        // district switch) — each bird keeps its offset within the flock, so
+        // they move together rather than popping to identical positions.
+        recenter(centerX, centerZ) {
+            for (const b of birds) {
+                b.oCx = centerX + b.offX;
+                b.oCz = centerZ + b.offZ;
+            }
+        },
         update(deltaTime) {
             // Respect showEffects flag
             const show = typeof window === 'undefined' || window.showEffects !== false;
