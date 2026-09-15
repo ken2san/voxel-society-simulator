@@ -1,10 +1,11 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, maxHeight, clock, characters, worldTime, DAY_DURATION, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange, focusCameraOnActiveDistrict } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, DISTRICT_CELL_SIZE, maxHeight, clock, characters, worldTime, DAY_DURATION, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange, focusCameraOnActiveDistrict } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { setSimulationIO } from './sim-core/interfaces.js';
 import { createThreeSimulationIO } from './sim-core/browser-io.js';
+import { playSound } from './sim-core/sound-system.js';
 
 // --- Global variables, Three.js initialization, UI events, loops, etc. ---
 
@@ -57,7 +58,8 @@ async function init() {
         gameCanvas.height = gameCanvas.offsetHeight;
 
         const camera = new THREE.PerspectiveCamera(75, gameCanvas.width / gameCanvas.height, 0.1, 1000);
-        camera.position.set(gridSize * 1.2, gridSize * 1.1, gridSize * 1.2);
+        // Frame one district's footprint, not the total (possibly larger) world.
+        camera.position.set(DISTRICT_CELL_SIZE * 1.2, DISTRICT_CELL_SIZE * 1.1, DISTRICT_CELL_SIZE * 1.2);
 
         // Mobile: disable antialias (expensive MSAA on mobile GPU) and cap pixel ratio at 1.0.
         const _isMobile = !!window.__mobileOptimized;
@@ -72,7 +74,7 @@ async function init() {
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.target.set(gridSize / 2, 2, gridSize / 2);
+        controls.target.set(DISTRICT_CELL_SIZE / 2, 2, DISTRICT_CELL_SIZE / 2);
 
         window.focusCharacterInView = function focusCharacterInView(charOrId, opts = {}) {
             const targetChar = typeof charOrId === 'object'
@@ -830,6 +832,7 @@ window.resetPopulationStats = function resetPopulationStats(initialCount = 0) {
     window.__populationPulseHistory = [];
     window.__populationMetricHistory = [];
     window.characterHistory = {};
+    window.__seenPopulationMilestones = new Set();
     if (window.__selectedCharacterMarker) {
         window.__selectedCharacterMarker.style.opacity = '0';
     }
@@ -858,6 +861,28 @@ window.logChronicleEvent = function logChronicleEvent(icon, text, kind) {
     if (window.__eventLog.length > 60) window.__eventLog.pop();
     window.__societyChronicle = window.__eventLog;
     return entry;
+};
+
+// Population milestones — celebrate the first time alive count reaches each
+// threshold. Fires once ever per threshold (tracked in a Set, reset alongside
+// the rest of population stats in resetPopulationStats), so a population that
+// dips below a milestone and climbs back doesn't re-trigger it.
+const POPULATION_MILESTONES = [10, 25, 50, 100, 150, 200];
+window.checkPopulationMilestone = function checkPopulationMilestone() {
+    const chars = Array.isArray(window.characters) ? window.characters : [];
+    const alive = chars.filter(c => c && c.state !== 'dead').length;
+    if (!window.__seenPopulationMilestones) window.__seenPopulationMilestones = new Set();
+    for (const m of POPULATION_MILESTONES) {
+        if (alive >= m && !window.__seenPopulationMilestones.has(m)) {
+            window.__seenPopulationMilestones.add(m);
+            // No screen particle here by design: population is a global event with
+            // no character to anchor to, so sound + Timeline carry it alone.
+            if (typeof window.logChronicleEvent === 'function') {
+                window.logChronicleEvent('🎉', `Population reached ${m}`, 'milestone');
+            }
+            try { playSound('milestone'); } catch (_) {}
+        }
+    }
 };
 
 window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
@@ -895,6 +920,7 @@ window.recordPopulationBirth = function recordPopulationBirth(payload = {}) {
             }
         }
     }
+    if (typeof window.checkPopulationMilestone === 'function') window.checkPopulationMilestone();
     return stats;
 };
 

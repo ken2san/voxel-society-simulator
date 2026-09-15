@@ -2593,6 +2593,10 @@ function renderCharacterDetail() {
     districtModeLabel.style.width = '140px';
     districtModeRow.appendChild(districtModeLabel);
     [1, 4, 16].forEach(mode => {
+        // Shrinking the world in place would orphan characters/blocks outside
+        // the new (smaller) bounds — disallowed. Use "Regenerate World" to
+        // start over at a smaller size instead.
+        const isShrink = mode < districtMode;
         const btn = document.createElement('button');
         btn.textContent = String(mode);
         btn.style.padding = '4px 10px';
@@ -2600,11 +2604,12 @@ function renderCharacterDetail() {
         btn.style.border = mode === districtMode ? '2px solid #2563eb' : '1px solid #cbd5e1';
         btn.style.background = mode === districtMode ? '#dbeafe' : '#f8fafc';
         btn.style.fontWeight = '700';
-        btn.style.cursor = paramDisabled ? 'not-allowed' : 'pointer';
-        btn.style.opacity = paramDisabled ? '0.55' : '1';
-        btn.disabled = paramDisabled;
+        btn.style.cursor = (paramDisabled || isShrink) ? 'not-allowed' : 'pointer';
+        btn.style.opacity = (paramDisabled || isShrink) ? '0.55' : '1';
+        btn.disabled = paramDisabled || isShrink;
+        if (isShrink) btn.title = 'Shrinking the world requires "Regenerate World" — growing is applied live, shrinking is not.';
         btn.onclick = () => {
-            if (paramDisabled) return;
+            if (paramDisabled || isShrink) return;
             const previousMode = sidebarParams.districtMode || 1;
             sidebarParams.districtMode = mode;
             if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;
@@ -3716,6 +3721,8 @@ const _etlKindColor = {
     new_gen:     '#c084fc',
     gen_summary: '#a78bfa',
     grow:        '#fde047',
+    milestone:   '#60a5fa',
+    bond:        '#f472b6',
     peak:     '#34d399',
     warning:  '#facc15',
     start:    '#60a5fa',

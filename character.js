@@ -23,7 +23,7 @@ function spawnScreenEffect(x, y, type) {
     if (window.showEffects === false) return;
     const el = document.createElement('div');
     el.className = `event-effect event-effect-${type}`;
-    el.textContent = type === 'birth' ? '👶✨' : type === 'grow' ? '🌟' : '💨';
+    el.textContent = type === 'birth' ? '👶✨' : type === 'grow' ? '🌟' : type === 'bond' ? '💞' : '💨';
     el.style.left = x + 'px';
     el.style.top  = y + 'px';
     document.body.appendChild(el);
@@ -245,11 +245,11 @@ class Character {
         if (resetBlockedRetry) this._blockedRetryCount = 0;
     }
 
-    runWorkAction(actionType = this.action?.type) {
+    runWorkAction(actionType = this.action?.type, deltaTime = 0.1) {
         switch (actionType) {
             case 'BUILD_HOME':    this.buildHome();    return true;
             case 'CRAFT_TOOL':   this.craftTool();    return true;
-            case 'DESTROY_BLOCK': this.destroyBlock(); return true;
+            case 'DESTROY_BLOCK': this.destroyBlock(deltaTime); return true;
             default: return false;
         }
     }
@@ -602,6 +602,14 @@ class Character {
                 this.triggerMicroGesture(kind, 0.65 + Math.random() * 0.50, 0.8 + Math.random() * 0.30);
                 this._idleGestureTimer = (this._idleGestureCooldown || 4.5) + Math.random() * 2.5;
             }
+        } else if (this.state === 'socializing' && !this._microGesture) {
+            // Occasional chat-gesture punctuation between otherwise-still conversation,
+            // so a long chat doesn't read as frozen (see the calm socializing body pose).
+            this._idleGestureTimer -= deltaTime;
+            if (this._idleGestureTimer <= 0) {
+                this.triggerMicroGesture('chat', 0.8 + Math.random() * 0.4, 0.75 + Math.random() * 0.30);
+                this._idleGestureTimer = 2.5 + Math.random() * 2.5;
+            }
         } else if (this.state !== 'idle') {
             this._idleGestureTimer = Math.max(this._idleGestureTimer || 0, 1.2);
         }
@@ -875,7 +883,7 @@ class Character {
         this.actionCooldown = 1.0;
     }
 
-    destroyBlock() {
+    destroyBlock(deltaTime = 0.1) {
         this.log('⚡ DESTROY_BLOCK execution started', this.action);
         if (!this.action.target) {
             this.log('DESTROY_BLOCK: No target specified');
@@ -896,14 +904,21 @@ class Character {
         const blockId = worldData.get(key);
 
         if (blockId) {
-            this._diggingProgress += 1;
+            const _prevDigProgress = this._diggingProgress;
+            // Time-based, not frame-count-based: this is called once per rendered frame
+            // while working, so a flat "+= 1" completed digging in ~18 frames (a few hundred
+            // ms) regardless of framerate — the block vanished before the arm-swing animation
+            // had time to read. 10 units/sec paces the full dig to ~1.8s.
+            this._diggingProgress += Math.max(0.001, deltaTime) * 10;
             // Keep dig animation alive for ~0.5 s after each tick regardless of state
             this._digAnimTimer = 0.5;
             this._digAnimTarget = { x, y, z }; // store so updateAnimations can compute direction
             // Play only at the start of a new dig and at the halfway point — not every tick.
             // Per-character cooldown (2s) prevents 32-char global spam that bypasses global throttle.
             const _digNow = performance.now();
-            if ((this._diggingProgress === 1 || this._diggingProgress === 9)
+            const _crossedStart = _prevDigProgress < 1 && this._diggingProgress >= 1;
+            const _crossedMid = _prevDigProgress < 9 && this._diggingProgress >= 9;
+            if ((_crossedStart || _crossedMid)
                 && (!this._lastDigSoundAt || _digNow - this._lastDigSoundAt > 2000)) {
                 playSound('dig');
                 this._lastDigSoundAt = _digNow;
@@ -1924,6 +1939,28 @@ class Character {
             }
         }
         return reachable;
+    }
+
+    // Picks a nearby, actually-reachable waypoint biased toward `farTarget`,
+    // so long-distance goals (home return, following a distant parent/child)
+    // are approached via cheap local hops — the same mechanism district-bias
+    // WANDER already uses safely (see setNextAction's WANDER branch) —
+    // instead of one very-long-distance BFS call. Returns null if no local
+    // candidate is reachable; callers should fall back to `farTarget` itself.
+    pickLocalWaypointToward(farTarget, { range = 4, maxPathLength = 18 } = {}) {
+        const candidates = this._getReachableGridCandidates(range, true, maxPathLength);
+        if (candidates.length === 0) return null;
+        const ranked = candidates
+            .map(candidate => ({
+                candidate,
+                score: Math.random() * 1.35 +
+                    Math.abs(candidate.x - farTarget.x) +
+                    Math.abs(candidate.y - farTarget.y) +
+                    Math.abs(candidate.z - farTarget.z)
+            }))
+            .sort((a, b) => a.score - b.score);
+        const pool = ranked.slice(0, Math.min(4, ranked.length));
+        return (pool[Math.floor(Math.random() * pool.length)] || ranked[0]).candidate;
     }
 
     // --- 移動方向を設定に基づいて構築 ---
@@ -4208,7 +4245,7 @@ class Character {
                 return;
             }
             this.log(`⚡ continuing processing in working state: ${this.action.type}`, this.action);
-            if (!this.runWorkAction(this.action.type)) {
+            if (!this.runWorkAction(this.action.type, deltaTime)) {
                 this.log(`Unhandled working action: ${this.action.type}`);
                 this.setIdleState({ clearAction: true });
             }
@@ -4709,6 +4746,7 @@ class Character {
                 const allyPresenceBonus = Math.max(0, Math.min(1, Number((typeof window !== 'undefined' && window.supportAllyPresenceBonus !== undefined) ? window.supportAllyPresenceBonus : 0.22)));
                 const anxietyCohesionBonus = Math.max(0, Math.min(0.4, Number((typeof window !== 'undefined' && window.reproductionAnxietyCohesionBonus !== undefined) ? window.reproductionAnxietyCohesionBonus : 0.08)));
                 let affinity = this.relationships.get(partner.id) || 0;
+                const affinityBeforeTick = affinity;
                 const { trustedTieBonus, socialAnchorBias } = this.getSocialDecisionParams();
                 const familiarMomentum = affinity >= socialAnchorAffinity ? Math.min(0.24, (trustedTieBonus / 100) * 0.3) : 0;
                 const anchoredTie = (String(this._socialAnchorId || '') === String(partner.id) || String(partner._socialAnchorId || '') === String(this.id)) && affinity >= socialAnchorAffinity;
@@ -4724,6 +4762,27 @@ class Character {
                 const affinityCap = maxAffinity * (1.0 - capReduction * traitDist);
                 if (affinity > affinityCap) affinity = affinityCap;
                 this.relationships.set(partner.id, affinity);
+                // --- Bond-formation visual: fire once when a tie first crosses ally/bonded tier ---
+                // Only the numerically-smaller id fires, since both characters run this same
+                // block independently and would otherwise double-trigger the effect per pair.
+                if (Number(this.id) < Number(partner.id)) {
+                    const { ally: _allyT, bonded: _bondedT } = this.getRelationshipThresholds();
+                    const _crossedBonded = affinityBeforeTick < _bondedT && affinity >= _bondedT;
+                    const _crossedAlly = !_crossedBonded && affinityBeforeTick < _allyT && affinity >= _allyT;
+                    if (_crossedBonded || _crossedAlly) {
+                        try {
+                            const _bsp = this.getScreenPosition && this.getScreenPosition();
+                            if (_bsp) spawnScreenEffect(_bsp.x, _bsp.y, 'bond');
+                        } catch (_) {}
+                        if (typeof playSound === 'function') { try { playSound('bond'); } catch (_) {} }
+                        if (typeof window !== 'undefined' && typeof window.logChronicleEvent === 'function') {
+                            try {
+                                const _label = _crossedBonded ? 'bonded' : 'became allies';
+                                window.logChronicleEvent('💞', `#${this.id} and #${partner.id} ${_label}`, 'bond');
+                            } catch (_) {}
+                        }
+                    }
+                }
                 // --- ハート表示 & reproduction logic ---
                 // 両者が距離1以内＆友好度60以上でハート表示。もし既にlovePhaseが'showing'かつ
                 // loveTimerが<=0ならreproduceを先に実行する（timerリセットを防ぐため）。
@@ -4934,7 +4993,10 @@ class Character {
                 const _child = _allChars.find(c => c && c.id === this._lastChildId && c.state !== 'dead');
                 if (_child) {
                     const _d = Math.abs(this.gridPos.x - _child.gridPos.x) + Math.abs(this.gridPos.z - _child.gridPos.z);
-                    if (_d > 2) this.setNextAction('WANDER', null, _child.gridPos);
+                    if (_d > 2) {
+                        const waypoint = this.pickLocalWaypointToward(_child.gridPos) || _child.gridPos;
+                        this.setNextAction('WANDER', null, waypoint);
+                    }
                 }
             }
         }
@@ -6275,22 +6337,22 @@ class Character {
         if ((this._digAnimTimer || 0) > 0 && this.body) {
             this._digAnimTimer -= deltaTime;
             if (!this._digPhase) this._digPhase = 0;
-            this._digPhase += deltaTime * 5.0;
+            this._digPhase += deltaTime * 8.0;
             const digSwing = Math.sin(this._digPhase);
             const _tgt = this._digAnimTarget || (this.action && this.action.target) || null;
             const _tgtDy = _tgt ? (_tgt.y - this.gridPos.y) : 0;
             if (_tgtDy < 0) {
-                this.leftArm.rotation.x  =  0.60 + digSwing * 0.60;
-                this.rightArm.rotation.x =  0.60 + digSwing * 0.60;
-                if (this.leftForearm)  this.leftForearm.rotation.x  = 0.25 + digSwing * 0.30;
-                if (this.rightForearm) this.rightForearm.rotation.x = 0.25 + digSwing * 0.30;
+                this.leftArm.rotation.x  =  0.70 + digSwing * 0.80;
+                this.rightArm.rotation.x =  0.70 + digSwing * 0.80;
+                if (this.leftForearm)  this.leftForearm.rotation.x  = 0.30 + digSwing * 0.45;
+                if (this.rightForearm) this.rightForearm.rotation.x = 0.30 + digSwing * 0.45;
                 this.body.rotation.x =  0.35 + digSwing * 0.20;
                 this.head.rotation.x =  0.30 - digSwing * 0.08;
             } else {
-                this.leftArm.rotation.x  = -0.65 - digSwing * 0.80;
-                this.rightArm.rotation.x = -0.65 - digSwing * 0.80;
-                if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.45 : 0;
-                if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.45 : 0;
+                this.leftArm.rotation.x  = -0.70 - digSwing * 1.00;
+                this.rightArm.rotation.x = -0.70 - digSwing * 1.00;
+                if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.60 : 0;
+                if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.60 : 0;
                 this.body.rotation.x = digSwing > 0 ? digSwing * 0.30 : 0;
                 this.head.rotation.x = -0.18 + digSwing * 0.08;
             }
@@ -6708,34 +6770,38 @@ class Character {
                 this.body.scale.x = this.body.scale.z = 1.0 + (1.0 - t) * 0.08;
             }
         } else if (this.state === 'socializing') {
-            // Excited, bouncy animation
-            this.bobTime += deltaTime * 4;
-            const excitement = Math.sin(this.bobTime) * 0.08;
-            this.body.position.y = (this._bodyRow1RestY ?? 0.630) + Math.abs(excitement);
-            if (this.pelvis)      this.pelvis.position.y      = (this._bodyRow2RestY ?? 0.445) + Math.abs(excitement);
-            if (this.leftThigh)   this.leftThigh.position.y   = (this._bodyRow3RestY ?? 0.325) + Math.abs(excitement);
-            if (this.rightThigh)  this.rightThigh.position.y  = (this._bodyRow3RestY ?? 0.325) + Math.abs(excitement);
-            if (this.leftShin)    this.leftShin.position.y    = (this._bodyRow4RestY ?? 0.175) + Math.abs(excitement);
-            if (this.rightShin)   this.rightShin.position.y   = (this._bodyRow4RestY ?? 0.175) + Math.abs(excitement);
-            if (this.leftFoot)    this.leftFoot.position.y    = (this._bodyRow5RestY ?? 0.045) + Math.abs(excitement);
-            if (this.rightFoot)   this.rightFoot.position.y   = (this._bodyRow5RestY ?? 0.045) + Math.abs(excitement);
-            if (this.leftArm)     this.leftArm.position.y     = (this._armRestY     ?? 0.660) + Math.abs(excitement);
-            if (this.rightArm)    this.rightArm.position.y    = (this._armRestY     ?? 0.660) + Math.abs(excitement);
-            if (this.leftForearm) this.leftForearm.position.y = (this._forearmRestY ?? 0.505) + Math.abs(excitement);
-            if (this.rightForearm)this.rightForearm.position.y= (this._forearmRestY ?? 0.505) + Math.abs(excitement);
-            this.head.position.y = (this._headRestY ?? 1.01) + Math.abs(excitement) * 1.2;
-            // Wing flutter when socializing
-            if (this.leftWingUpper)  this.leftWingUpper.rotation.z  =  Math.sin(this.bobTime * 2.0) * 0.35 + 0.15;
-            if (this.rightWingUpper) this.rightWingUpper.rotation.z = -Math.sin(this.bobTime * 2.0) * 0.35 - 0.15;
-            if (this.leftWingLower)  this.leftWingLower.rotation.z  =  Math.sin(this.bobTime * 1.8) * 0.28;
-            if (this.rightWingLower) this.rightWingLower.rotation.z = -Math.sin(this.bobTime * 1.8) * 0.28;
-            // Head nodding
-            this.head.rotation.x = Math.sin(this.bobTime * 2) * 0.15;
-            // Expressive talking arm gestures — amplitude raised so readable from top-down view
-            this.leftArm.rotation.y = Math.sin(this.bobTime * 1.5) * 0.65;
-            this.rightArm.rotation.y = -Math.sin(this.bobTime * 1.5) * 0.65;
-            this.leftArm.rotation.x = Math.sin(this.bobTime * 1.2 + 0.8) * 0.30;
-            this.rightArm.rotation.x = Math.sin(this.bobTime * 1.2) * 0.30;
+            // Calm, content stillness — mostly still and happy-looking, punctuated by
+            // occasional 'chat' micro-gestures (see updateMicroGesture) for arm-wave
+            // punctuation, rather than continuous frantic bouncing throughout the talk.
+            this.bobTime += deltaTime * 1.0;
+            const contentSway = Math.sin(this.bobTime) * 0.010;
+            this.body.position.y = (this._bodyRow1RestY ?? 0.630) + contentSway;
+            if (this.pelvis)      this.pelvis.position.y      = (this._bodyRow2RestY ?? 0.445) + contentSway;
+            if (this.leftThigh)   this.leftThigh.position.y   = (this._bodyRow3RestY ?? 0.325);
+            if (this.rightThigh)  this.rightThigh.position.y  = (this._bodyRow3RestY ?? 0.325);
+            if (this.leftShin)    this.leftShin.position.y    = (this._bodyRow4RestY ?? 0.175);
+            if (this.rightShin)   this.rightShin.position.y   = (this._bodyRow4RestY ?? 0.175);
+            if (this.leftFoot)    this.leftFoot.position.y    = (this._bodyRow5RestY ?? 0.045);
+            if (this.rightFoot)   this.rightFoot.position.y   = (this._bodyRow5RestY ?? 0.045);
+            if (this.leftArm)     this.leftArm.position.y     = (this._armRestY     ?? 0.660);
+            if (this.rightArm)    this.rightArm.position.y    = (this._armRestY     ?? 0.660);
+            if (this.leftForearm) this.leftForearm.position.y = (this._forearmRestY ?? 0.505);
+            if (this.rightForearm)this.rightForearm.position.y= (this._forearmRestY ?? 0.505);
+            this.head.position.y = (this._headRestY ?? 1.01) + contentSway;
+            // Relax any lingering rotation carried over from walking in (arm swing, leg
+            // lift, wing flutter) instead of leaving it frozen mid-stride.
+            this.leftArm.rotation.x  *= 0.85; this.rightArm.rotation.x  *= 0.85;
+            this.leftArm.rotation.y  *= 0.85; this.rightArm.rotation.y  *= 0.85;
+            if (this.leftThigh)  this.leftThigh.rotation.x  *= 0.85;
+            if (this.rightThigh) this.rightThigh.rotation.x *= 0.85;
+            if (this.leftShin)   this.leftShin.rotation.x   *= 0.85;
+            if (this.rightShin)  this.rightShin.rotation.x  *= 0.85;
+            if (this.leftWingUpper)  this.leftWingUpper.rotation.z  *= 0.85;
+            if (this.rightWingUpper) this.rightWingUpper.rotation.z *= 0.85;
+            if (this.leftWingLower)  this.leftWingLower.rotation.z  *= 0.85;
+            if (this.rightWingLower) this.rightWingLower.rotation.z *= 0.85;
+            // Gentle content head tilt (no frantic nodding)
+            this.head.rotation.x = Math.sin(this.bobTime * 0.6) * 0.04;
             if (!this.actionAnim.active) this.body.scale.y = 1.0;
         } else if (this.state === 'working') {
             // Dig animation fires when: (a) working state with dig action, OR
@@ -6745,7 +6811,7 @@ class Character {
                 if (this._digAnimTimer > 0) this._digAnimTimer -= deltaTime;
                 // Dig / break animation: rhythm varies by target direction
                 if (!this._digPhase) this._digPhase = 0;
-                this._digPhase += deltaTime * 5.0; // ~2.5 strikes per second
+                this._digPhase += deltaTime * 8.0; // ~4 strikes per second — energetic windmill swing
                 const digSwing = Math.sin(this._digPhase);
                 // Use stored dig target (set by destroyBlock) so direction stays correct
                 // even when called from non-working-state paths
@@ -6754,18 +6820,18 @@ class Character {
                 const _tgtDy = _tgt ? (_tgt.y - this.gridPos.y) : 0;
                 if (_tgtDy < 0) {
                     // Digging downward: arms swing down in front, body bends over
-                    this.leftArm.rotation.x  =  0.60 + digSwing * 0.60;
-                    this.rightArm.rotation.x =  0.60 + digSwing * 0.60;
-                    if (this.leftForearm)  this.leftForearm.rotation.x  = 0.25 + digSwing * 0.30;
-                    if (this.rightForearm) this.rightForearm.rotation.x = 0.25 + digSwing * 0.30;
+                    this.leftArm.rotation.x  =  0.70 + digSwing * 0.80;
+                    this.rightArm.rotation.x =  0.70 + digSwing * 0.80;
+                    if (this.leftForearm)  this.leftForearm.rotation.x  = 0.30 + digSwing * 0.45;
+                    if (this.rightForearm) this.rightForearm.rotation.x = 0.30 + digSwing * 0.45;
                     this.body.rotation.x =  0.35 + digSwing * 0.20;
                     this.head.rotation.x =  0.30 - digSwing * 0.08;
                 } else {
                     // Sideways / overhead strike: arms raise and thrust forward
-                    this.leftArm.rotation.x  = -0.65 - digSwing * 0.80;
-                    this.rightArm.rotation.x = -0.65 - digSwing * 0.80;
-                    if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.45 : 0;
-                    if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.45 : 0;
+                    this.leftArm.rotation.x  = -0.70 - digSwing * 1.00;
+                    this.rightArm.rotation.x = -0.70 - digSwing * 1.00;
+                    if (this.leftForearm)  this.leftForearm.rotation.x  = digSwing > 0 ? digSwing * 0.60 : 0;
+                    if (this.rightForearm) this.rightForearm.rotation.x = digSwing > 0 ? digSwing * 0.60 : 0;
                     this.body.rotation.x = digSwing > 0 ? digSwing * 0.30 : 0;
                     this.head.rotation.x = -0.18 + digSwing * 0.08;
                 }
@@ -7410,7 +7476,8 @@ class Character {
                 + Math.abs(this.gridPos.y - this.homePosition.y)
                 + Math.abs(this.gridPos.z - this.homePosition.z);
             if (homeDist > 4) {
-                this.setNextAction('WANDER', null, this.homePosition);
+                const waypoint = this.pickLocalWaypointToward(this.homePosition) || this.homePosition;
+                this.setNextAction('WANDER', null, waypoint);
                 return;
             }
         }
@@ -7434,7 +7501,8 @@ class Character {
                     if (pdist > 5) {
                         // move closer to parent — follow distance widened (3→5) so children
                         // trail parents across the village rather than hugging them
-                        this.setNextAction('MOVE', nearestParent, nearestParent.gridPos);
+                        const waypoint = this.pickLocalWaypointToward(nearestParent.gridPos) || nearestParent.gridPos;
+                        this.setNextAction('MOVE', nearestParent, waypoint);
                         return;
                     } else if (Math.random() < 0.4) {
                         // sometimes play or wander nearby

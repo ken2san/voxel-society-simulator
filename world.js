@@ -85,7 +85,11 @@ export function setWorldObjects(objs) {
     }
 }
 export const blockSize = 1;
-export const gridSize = 16;
+// Fixed footprint of a single district cell — never changes. `gridSize` is the
+// TOTAL world size and grows with districtMode (tiling DISTRICT_CELL_SIZE
+// cells together), recomputed in recomputeGridSize()/setDistrictMode().
+export const DISTRICT_CELL_SIZE = 16;
+export let gridSize = DISTRICT_CELL_SIZE;
 export const maxHeight = 10;
 export const clock = simIO().createClock();
 export const characters = [];
@@ -275,6 +279,17 @@ function getDistrictGridSide(mode = districtMode) {
     return Math.max(1, Math.round(Math.sqrt(clampDistrictMode(mode))));
 }
 
+// Total world size for a given districtMode — districts tile fixed-size
+// DISTRICT_CELL_SIZE cells together, so more districts means a bigger world,
+// not a finer subdivision of a fixed-size one.
+function getTotalGridSizeForMode(mode = districtMode) {
+    return DISTRICT_CELL_SIZE * getDistrictGridSide(mode);
+}
+
+function recomputeGridSize() {
+    gridSize = getTotalGridSizeForMode(districtMode);
+}
+
 function roundDistrictValue(value) {
     return Math.round((Number(value) || 0) * 100) / 100;
 }
@@ -301,15 +316,16 @@ export function getDistrictCount(mode = districtMode) {
 }
 
 export function getDistrictCellSize(mode = districtMode) {
-    return gridSize / getDistrictGridSide(mode);
+    return DISTRICT_CELL_SIZE;
 }
 
 export function getDistrictIndexForPosition(pos, mode = districtMode) {
     const side = getDistrictGridSide(mode);
     if (side <= 1) return 0;
-    const cellSize = gridSize / side;
-    const x = Math.max(0, Math.min(gridSize - 1, Math.floor(Number(pos?.x) || 0)));
-    const z = Math.max(0, Math.min(gridSize - 1, Math.floor(Number(pos?.z) || 0)));
+    const totalSize = getTotalGridSizeForMode(mode);
+    const cellSize = DISTRICT_CELL_SIZE;
+    const x = Math.max(0, Math.min(totalSize - 1, Math.floor(Number(pos?.x) || 0)));
+    const z = Math.max(0, Math.min(totalSize - 1, Math.floor(Number(pos?.z) || 0)));
     const col = Math.max(0, Math.min(side - 1, Math.floor(x / cellSize)));
     const row = Math.max(0, Math.min(side - 1, Math.floor(z / cellSize)));
     return row * side + col;
@@ -319,13 +335,14 @@ export function getDistrictBounds(index, mode = districtMode) {
     const side = getDistrictGridSide(mode);
     const count = side * side;
     const safeIndex = Math.max(0, Math.min(count - 1, Number(index) || 0));
-    const cellSize = gridSize / side;
+    const totalSize = getTotalGridSizeForMode(mode);
+    const cellSize = DISTRICT_CELL_SIZE;
     const row = Math.floor(safeIndex / side);
     const col = safeIndex % side;
     const minX = Math.floor(col * cellSize);
-    const maxX = Math.min(gridSize - 1, Math.floor((col + 1) * cellSize) - 1);
+    const maxX = Math.min(totalSize - 1, Math.floor((col + 1) * cellSize) - 1);
     const minZ = Math.floor(row * cellSize);
-    const maxZ = Math.min(gridSize - 1, Math.floor((row + 1) * cellSize) - 1);
+    const maxZ = Math.min(totalSize - 1, Math.floor((row + 1) * cellSize) - 1);
     return {
         index: safeIndex,
         row,
@@ -342,11 +359,6 @@ export function getDistrictBounds(index, mode = districtMode) {
 function isGridPositionInActiveDistrict(pos) {
     if (districtMode === 1) return true;
     return getDistrictIndexForPosition(pos, districtMode) === activeDistrictIndex;
-}
-
-function setObjectDistrictVisibility(obj, pos) {
-    if (!obj) return;
-    obj.visible = isGridPositionInActiveDistrict(pos);
 }
 
 export function getDistrictRuntimeForPosition(pos) {
@@ -717,10 +729,10 @@ export function focusCameraOnActiveDistrict() {
     const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
     const desiredTarget = new THREE.Vector3(bounds.centerX, 2, bounds.centerZ);
     const offset = camera.position.clone().sub(controls.target);
-    const desiredDistance = Math.min(Math.max(offset.length(), 12), Math.max(20, gridSize * 1.4));
+    const desiredDistance = Math.min(Math.max(offset.length(), 12), Math.max(20, DISTRICT_CELL_SIZE * 1.4));
     const desiredOffset = offset.length() > 0.001
         ? offset.clone().setLength(desiredDistance)
-        : new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
+        : new THREE.Vector3(DISTRICT_CELL_SIZE * 0.7, DISTRICT_CELL_SIZE * 0.65, DISTRICT_CELL_SIZE * 0.7);
     const desiredCameraPos = desiredTarget.clone().add(desiredOffset);
     const startTarget = controls.target.clone();
     const startPos = camera.position.clone();
@@ -765,11 +777,11 @@ export function stabilizeCameraAfterVisibilityChange() {
         && Number.isFinite(camera.position.y)
         && Number.isFinite(camera.position.z))
         ? camera.position.clone().sub(currentTarget)
-        : new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
+        : new THREE.Vector3(DISTRICT_CELL_SIZE * 0.7, DISTRICT_CELL_SIZE * 0.65, DISTRICT_CELL_SIZE * 0.7);
     if (!Number.isFinite(offset.x) || !Number.isFinite(offset.y) || !Number.isFinite(offset.z) || offset.lengthSq() < 0.001) {
-        offset = new THREE.Vector3(gridSize * 0.7, gridSize * 0.65, gridSize * 0.7);
+        offset = new THREE.Vector3(DISTRICT_CELL_SIZE * 0.7, DISTRICT_CELL_SIZE * 0.65, DISTRICT_CELL_SIZE * 0.7);
     }
-    offset.clampLength(6, Math.max(14, gridSize * 1.8));
+    offset.clampLength(6, Math.max(14, DISTRICT_CELL_SIZE * 1.8));
     controls.target.copy(desiredTarget);
     camera.position.copy(desiredTarget.clone().add(offset));
     camera.lookAt(controls.target);
@@ -786,6 +798,9 @@ function emitDistrictChange() {
     window.getDistrictSocialContextForPosition = (pos) => getDistrictSocialContextForPosition(pos);
     window.pickDistrictMoveTargetForCharacter = (character) => pickDistrictMoveTargetForCharacter(character);
     window.getDistrictState = getDistrictState;
+    // Debug: verify mesh cost stays scoped to one district regardless of total world size.
+    window.__visualBlocksCount = () => visualBlocks.size;
+    window.__worldDataCount = () => worldData.size;
     try {
         window.dispatchEvent(new CustomEvent('district-changed', { detail: getDistrictState() }));
     } catch (err) {
@@ -794,29 +809,112 @@ function emitDistrictChange() {
 }
 
 export function applyDistrictVisualization() {
-    if (scene) {
-        for (const [key, block] of visualBlocks.entries()) {
-            const [x, y, z] = key.split(',').map(Number);
-            setObjectDistrictVisibility(block, { x, y, z });
-        }
-    }
     drawMinimap();
 }
 
+// Builds Three.js visuals for every worldData block in a district that
+// doesn't already have one — i.e. "loads" a district's meshes from the
+// always-resident block-data layer.
+export function activateDistrict(index, mode = districtMode) {
+    const bounds = getDistrictBounds(index, mode);
+    const blockTypeById = new Map(Object.values(BLOCK_TYPES).map(t => [t.id, t]));
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
+        for (let z = bounds.minZ; z <= bounds.maxZ; z++) {
+            for (let y = 0; y < maxHeight; y++) {
+                const key = `${x},${y},${z}`;
+                if (visualBlocks.has(key)) continue;
+                const blockValue = worldData.get(key);
+                if (blockValue === undefined) continue;
+                const typeId = normalizeBlockTypeId(blockValue);
+                if (typeId === undefined || typeId === BLOCK_TYPES.AIR.id) continue;
+                const type = blockTypeById.get(typeId);
+                if (!type) continue;
+                buildAndRegisterBlockVisual(key, x, y, z, type);
+            }
+        }
+    }
+}
+
+// Disposes Three.js visuals for a district's blocks — worldData (the
+// persisted block-type layer) is left untouched, so re-activating the same
+// district later reconstructs identical state, including any edits made
+// while it was active.
+export function deactivateDistrict(index, mode = districtMode) {
+    const bounds = getDistrictBounds(index, mode);
+    const io = simIO();
+    for (let x = bounds.minX; x <= bounds.maxX; x++) {
+        for (let z = bounds.minZ; z <= bounds.maxZ; z++) {
+            for (let y = 0; y < maxHeight; y++) {
+                const key = `${x},${y},${z}`;
+                const block = visualBlocks.get(key);
+                if (!block) continue;
+                io.removeVisual(scene, block);
+                visualBlocks.delete(key);
+            }
+        }
+    }
+}
+
 export function setDistrictMode(mode = 1) {
-    districtMode = clampDistrictMode(mode);
+    const requestedMode = clampDistrictMode(mode);
+    if (requestedMode < districtMode) {
+        // Shrinking the world in place would orphan characters/blocks outside
+        // the new (smaller) bounds. Disallowed — a shrink must go through
+        // main.js's regenerateWorld(), which resets worldData/visualBlocks
+        // from scratch rather than truncating live state.
+        console.warn(`setDistrictMode: ignoring shrink from ${districtMode} to ${requestedMode} — use Regenerate World to shrink.`);
+        return getDistrictState();
+    }
+    const previousMode = districtMode;
+    districtMode = requestedMode;
+    recomputeGridSize();
     activeDistrictIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(activeDistrictIndex) || 0));
     if (districtMode === 1) activeDistrictIndex = 0;
     districtSummaryCache = [];
     districtSummaryCacheUpdatedAt = 0;
+
+    // Backfill worldData for any newly-exposed territory. Cheap — Map writes
+    // only, gated by isGridPositionInActiveDistrict inside addBlock so mesh
+    // cost stays proportional to one district, not the whole (bigger) world.
+    generateTerrain();
+
+    if (previousMode !== districtMode) {
+        // Total world footprint changed — old visualBlocks no longer
+        // correspond to the same district bounds. Drop everything and
+        // rebuild only the active district from worldData.
+        const io = simIO();
+        for (const block of visualBlocks.values()) {
+            io.removeVisual(scene, block);
+        }
+        visualBlocks.clear();
+        activateDistrict(activeDistrictIndex, districtMode);
+        // A district's bounds shift when the world is tiled bigger (even for
+        // the "same" activeDistrictIndex, e.g. index 0 goes from being the
+        // whole 16x16 world to just its top-left cell) — without this the
+        // camera stays wherever it was, looking at empty space where the old
+        // district used to be.
+        focusCameraOnActiveDistrict();
+    }
+
     applyDistrictVisualization();
     emitDistrictChange();
     return getDistrictState();
 }
 
 export function setActiveDistrict(index = 0) {
-    activeDistrictIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(index) || 0));
-    if (districtMode === 1) activeDistrictIndex = 0;
+    const requestedIndex = Math.max(0, Math.min(getDistrictCount(districtMode) - 1, Number(index) || 0));
+    const resolvedIndex = districtMode === 1 ? 0 : requestedIndex;
+    if (resolvedIndex !== activeDistrictIndex) {
+        deactivateDistrict(activeDistrictIndex, districtMode);
+        activeDistrictIndex = resolvedIndex;
+        activateDistrict(activeDistrictIndex, districtMode);
+        // Districts are physically separate cells now (not just a highlighted
+        // sub-region of one shared small world) — the camera must actually
+        // travel to the newly-active district, not stay put.
+        focusCameraOnActiveDistrict();
+    } else {
+        activeDistrictIndex = resolvedIndex;
+    }
     districtSummaryCacheUpdatedAt = 0;
     applyDistrictVisualization();
     emitDistrictChange();
@@ -1062,9 +1160,12 @@ export function rebuildAllBlockVisuals() {
         const x = Number(xStr), y = Number(yStr), z = Number(zStr);
         const material = blockMaterials.get(type.id);
 
+        // visualBlocks only ever holds active-district entries now, so this
+        // rebuild (triggered by the Voxel Detail toggle) never touches
+        // inactive-district blocks — always visible.
         const newBlock = io.createBlockVisual({
             x, y, z, type, blockSize, material, edgeMaterial,
-            isVisible: isGridPositionInActiveDistrict({ x, y, z }),
+            isVisible: true,
             hasBlock: (bx, by, bz) => worldData.has(`${bx},${by},${bz}`),
         });
 
@@ -1072,7 +1173,6 @@ export function rebuildAllBlockVisuals() {
             if (!newBlock.userData) newBlock.userData = {};
             newBlock.userData.worldKey = key;
             newBlock.userData.blockTypeId = type.id;
-            setObjectDistrictVisibility(newBlock, { x, y, z });
             visualBlocks.set(key, newBlock);
             scene?.add?.(newBlock);
         } else {
@@ -1246,15 +1346,20 @@ function placeSpecialEntities() {
     animate._elderCount   = 0;
     if (!scene) return;
 
-    const mid = gridSize / 2;
+    // Anchor to the active district's center, not the raw (possibly
+    // world-spanning) grid midpoint — keeps the angel/reaper near wherever
+    // the village actually is instead of the middle of the whole world.
+    const activeBounds = getDistrictBounds(activeDistrictIndex, districtMode);
+    const midX = activeBounds.centerX;
+    const midZ = activeBounds.centerZ;
     const angel = buildAngelGroup();
-    angel.position.set(mid + 0.5, 4, mid + 3.5);
+    angel.position.set(midX + 0.5, 4, midZ + 3.5);
     angel.visible = false;
     scene.add(angel);
     specialEntities.angel = angel;
 
     const reaper = buildReaperGroup();
-    reaper.position.set(mid - 2.5, 4, mid + 0.5);
+    reaper.position.set(midX - 2.5, 4, midZ + 0.5);
     reaper.visible = false;
     scene.add(reaper);
     specialEntities.reaper = reaper;
@@ -1275,9 +1380,13 @@ function _updateSpecialEntity(entity, shouldShow, dt) {
     const dist = Math.sqrt(dx * dx + dz * dz);
 
     if (dist < 0.5) {
-        // Arrived — pick a new random target within the world
-        roam.tx = 2 + Math.random() * (gridSize - 4);
-        roam.tz = 2 + Math.random() * (gridSize - 4);
+        // Arrived — pick a new random target within the active district only
+        // (not the whole, possibly much larger, world).
+        const bounds = getDistrictBounds(activeDistrictIndex, districtMode);
+        const spanX = Math.max(1, bounds.maxX - bounds.minX - 3);
+        const spanZ = Math.max(1, bounds.maxZ - bounds.minZ - 3);
+        roam.tx = bounds.minX + 2 + Math.random() * spanX;
+        roam.tz = bounds.minZ + 2 + Math.random() * spanZ;
     } else {
         const spd = roam.speed * dt;
         entity.position.x += (dx / dist) * spd;
@@ -1297,12 +1406,21 @@ function _updateSpecialEntity(entity, shouldShow, dt) {
     if (entity.userData.updateAnim) entity.userData.updateAnim(worldTime);
 }
 
+let lastGeneratedGridSize = 0;
 export function generateTerrain() {
+    // Safe to call again after gridSize grows (district-mode change): columns
+    // that already have terrain are skipped entirely, so existing terrain —
+    // including any digging/building characters already did — is untouched,
+    // and only the newly-exposed territory gets generated. A fully-cleared
+    // worldData (e.g. regenerateWorld()) always counts as "growing" so
+    // decorations get freshly placed even when gridSize itself is unchanged.
+    const isGrowingPass = worldData.size === 0 || gridSize > lastGeneratedGridSize;
     PerlinNoise.seed(Math.random);
     const terrainScale = 12;
     const pathRows = [Math.floor(gridSize/3), Math.floor(gridSize*2/3)];
     const pathCols = [Math.floor(gridSize/3), Math.floor(gridSize*2/3)];
     for (let x = 0; x < gridSize; x++) { for (let z = 0; z < gridSize; z++) {
+        if (worldData.has(`${x},0,${z}`)) continue;
         let isPath = pathRows.includes(z) || pathCols.includes(x);
         const noiseVal = PerlinNoise.simplex2(x / terrainScale, z / terrainScale);
         const normalizedHeight = (noiseVal + 1) / 2;
@@ -1351,16 +1469,22 @@ export function generateTerrain() {
         }
     }}
     drawMinimap();
-    placeCampfires();
-    placeVillageWell();
-    placeSpecialEntities();
+    // Only re-roll decoration placement when the world actually grew — not on
+    // every setDistrictMode()/generateTerrain() call (including re-selecting
+    // the same mode), which would otherwise relocate campfires/well/entities
+    // for no reason.
+    if (isGrowingPass) {
+        placeCampfires();
+        placeVillageWell();
+        placeSpecialEntities();
+    }
+    lastGeneratedGridSize = gridSize;
 }
-export function addBlock(x, y, z, type, updateMinimap = true) {
-    const key = `${x},${y},${z}`;
-    if (worldData.has(key) || y >= maxHeight) return;
-    removeBlock(x,y,z, false);
-    worldData.set(key, type.id);
-    indexWorldBlockKey(key, type.id);
+// Builds and registers a block's Three.js visual. Only ever called for blocks
+// already known to be in the active district (see addBlock/activateDistrict),
+// so isVisible is unconditionally true here — inactive-district blocks simply
+// never get a visual at all, rather than getting one and hiding it.
+function buildAndRegisterBlockVisual(key, x, y, z, type) {
     const material = blockMaterials.get(type.id);
     const block = simIO().createBlockVisual({
         x,
@@ -1370,7 +1494,7 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
         blockSize,
         material,
         edgeMaterial,
-        isVisible: isGridPositionInActiveDistrict({ x, y, z }),
+        isVisible: true,
         hasBlock: (bx, by, bz) => worldData.has(`${bx},${by},${bz}`),
     });
 
@@ -1378,9 +1502,21 @@ export function addBlock(x, y, z, type, updateMinimap = true) {
         if (!block.userData) block.userData = {};
         block.userData.worldKey = key;
         block.userData.blockTypeId = type.id;
-        setObjectDistrictVisibility(block, { x, y, z });
         visualBlocks.set(key, block);
         scene?.add?.(block);
+    }
+    return block;
+}
+
+export function addBlock(x, y, z, type, updateMinimap = true) {
+    const key = `${x},${y},${z}`;
+    if (worldData.has(key) || y >= maxHeight) return;
+    removeBlock(x,y,z, false);
+    worldData.set(key, type.id);
+    indexWorldBlockKey(key, type.id);
+
+    if (isGridPositionInActiveDistrict({ x, y, z })) {
+        buildAndRegisterBlockVisual(key, x, y, z, type);
     }
     if(updateMinimap) drawMinimap();
     // signal world change
@@ -1601,17 +1737,44 @@ export function isSafeSpot(pos) {
     if (here && typeof here === 'object' && here.cave) return true;
     return false;
 }
+// drawMinimap() is called on every block add/remove (default updateMinimap=true),
+// which at large districtMode (up to 64x64=4096 columns) becomes a real per-dig
+// cost. Throttle to a max redraw rate — callers that fire faster than this just
+// coalesce into the next scheduled redraw, so the minimap still ends up correct,
+// just not re-rendered on every single block edit.
+const MINIMAP_MIN_INTERVAL_MS = 200;
+let _lastMinimapDrawAt = 0;
+let _minimapRedrawPending = false;
+
 export function drawMinimap() {
-    if(!minimapCtx || !minimapCanvas) return;
+    if (!minimapCtx || !minimapCanvas) return;
+    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+    if (now - _lastMinimapDrawAt < MINIMAP_MIN_INTERVAL_MS) {
+        if (!_minimapRedrawPending) {
+            _minimapRedrawPending = true;
+            setTimeout(() => {
+                _minimapRedrawPending = false;
+                _lastMinimapDrawAt = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                drawMinimapImmediate();
+            }, MINIMAP_MIN_INTERVAL_MS);
+        }
+        return;
+    }
+    _lastMinimapDrawAt = now;
+    drawMinimapImmediate();
+}
+
+function drawMinimapImmediate() {
     const minimapSize = minimapCanvas.width;
     const cellSize = minimapSize / gridSize;
+    const blockTypeById = new Map(Object.values(BLOCK_TYPES).map(t => [t.id, t]));
     minimapCtx.clearRect(0, 0, minimapSize, minimapSize);
     for (let x = 0; x < gridSize; x++) {
         for (let z = 0; z < gridSize; z++) {
             const y = findGroundY(x, z);
             if (y !== -1) {
                 const blockId = worldData.get(`${x},${y},${z}`);
-                const blockType = Object.values(BLOCK_TYPES).find(t => t.id === blockId);
+                const blockType = blockTypeById.get(typeof blockId === 'object' ? blockId?.id : blockId);
                 if(blockType && blockType.color) {
                    minimapCtx.fillStyle = simIO().colorToCssHex(blockType.color);
                    minimapCtx.fillRect(x * cellSize, z * cellSize, cellSize, cellSize);
@@ -1870,8 +2033,17 @@ export function animate() {
 
         // Rebuild terrain voxels when season changes (snow on step edges etc.)
         if (animate._lastSeasonName !== _name) {
+            const _isFirstSeason = !animate._lastSeasonName;
             animate._lastSeasonName = _name;
             if (window.voxelDetailMode !== false && !window.__mobileOptimized) rebuildAllBlockVisuals();
+            if (!_isFirstSeason) {
+                // Chronicle logging for season change already happens below
+                // (Society Chronicle event hooks, "<Season> — food ×N" entry).
+                // No screen particle here by design: season is a global event with
+                // no character to anchor to, so sound + Timeline carry it alone —
+                // a screen-wide banner would just restate the Timeline text.
+                if (typeof playSound === 'function') { try { playSound('season'); } catch (_) {} }
+            }
         }
 
         // --- Society Chronicle event hooks (always active) ---

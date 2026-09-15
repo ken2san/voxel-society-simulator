@@ -18,6 +18,9 @@
  *   playSound('grow');    // child matures into an adult
  *   playSound('night');   // dusk transition
  *   playSound('dawn');    // dawn transition
+ *   playSound('season');  // season changes
+ *   playSound('bond');      // relationship crosses ally/bonded tier
+ *   playSound('milestone'); // population crosses a milestone
  */
 
 let _ctx = null;
@@ -63,6 +66,7 @@ const THROTTLE = {
     enter_home: 600,
     leave_home: 600,
     thunder:    8000,   // max one crack per 8 s globally
+    bond:       800,
 };
 
 /**
@@ -96,6 +100,9 @@ export function playSound(name) {
         case 'social': _playSocial(ctx); break;
         case 'death':  _playDeath(ctx);  break;
         case 'grow':   _playGrow(ctx);   break;
+        case 'season': _playSeason(ctx); break;
+        case 'bond':      _playBond(ctx);      break;
+        case 'milestone': _playMilestone(ctx); break;
         case 'night':      _playNight(ctx);     break;
         case 'dawn':       _playDawn(ctx);      break;
         case 'enter_home': _playEnterHome(ctx); break;
@@ -211,6 +218,30 @@ function _playGrow(ctx) {
     _osc(ctx, 'sine', 440, t,        t + 0.12, 0.22, 660);
     _osc(ctx, 'sine', 660, t + 0.10, t + 0.24, 0.20, 880);
     _osc(ctx, 'sine', 880, t + 0.20, t + 0.40, 0.16, 1100);
+}
+
+/** Bright four-note fanfare – population crosses a milestone (10/25/50/...) */
+function _playMilestone(ctx) {
+    const t = ctx.currentTime;
+    _osc(ctx, 'triangle', 523, t,        t + 0.16, 0.20, 780);
+    _osc(ctx, 'triangle', 659, t + 0.12, t + 0.30, 0.20, 900);
+    _osc(ctx, 'triangle', 784, t + 0.24, t + 0.44, 0.18, 1050);
+    _osc(ctx, 'sine',     1047, t + 0.36, t + 0.62, 0.16, 1400);
+}
+
+/** Warm two-note interval – a relationship crosses the ally/bonded tier */
+function _playBond(ctx) {
+    const t = ctx.currentTime;
+    _osc(ctx, 'sine', 523, t,        t + 0.30, 0.20, 700);
+    _osc(ctx, 'sine', 659, t + 0.12, t + 0.42, 0.18, 880);
+}
+
+/** Wide, slow triad – season turns (Spring/Summer/Autumn/Winter) */
+function _playSeason(ctx) {
+    const t = ctx.currentTime;
+    _osc(ctx, 'sine',     392, t,        t + 1.4, 0.14, 300);
+    _osc(ctx, 'triangle', 494, t + 0.20, t + 1.6, 0.10, 380);
+    _osc(ctx, 'sine',     587, t + 0.40, t + 1.8, 0.08, 460);
 }
 
 /** Slow descending bell chord – dusk / lights on */

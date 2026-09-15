@@ -217,25 +217,45 @@ export class VoxelCrowdRenderer {
         }
 
         const activeCount = slot;
+        const prevActiveCount = this._lastActiveCount || 0;
+        this._lastActiveCount = activeCount;
 
-        // Write dirty characters
-        for (const { char, slot } of toUpdate) {
-            this._writeChar(char, slot);
-        }
+        // Slots that actually need a GPU upload this frame: characters that
+        // were written, plus any slots that just became vacant (population
+        // shrank) and need zeroing. Previously this zeroed activeCount..max
+        // (up to `maxCount`, e.g. 300) and force-uploaded the ENTIRE instance
+        // buffer for every one of the ~17 body-part groups every single frame,
+        // regardless of how many instances actually changed — the dominant
+        // cost in profiling (bindVertexArray/bufferSubData/WebGLRenderer.render
+        // self time). Uploading only the changed slot ranges fixes that.
+        const dirtySlots = new Set();
+        for (const { slot } of toUpdate) dirtySlots.add(slot);
+        for (let i = activeCount; i < prevActiveCount; i++) dirtySlots.add(i);
 
-        // Zero out slots beyond active count
-        for (let i = activeCount; i < this._max; i++) {
-            for (const { im } of this._groups) im.setMatrixAt(i, ZERO_M4);
-            this._shadowIM.setMatrixAt(i, ZERO_M4);
-        }
+        if (dirtySlots.size > 0) {
+            // Write dirty characters
+            for (const { char, slot } of toUpdate) {
+                this._writeChar(char, slot);
+            }
 
-        // Mark GPU buffers dirty
-        for (const { im } of this._groups) {
-            im.count = this._max;
-            im.instanceMatrix.needsUpdate = true;
+            // Zero out newly-vacated slots only (not the whole activeCount..max range)
+            for (let i = activeCount; i < prevActiveCount; i++) {
+                for (const { im } of this._groups) im.setMatrixAt(i, ZERO_M4);
+                this._shadowIM.setMatrixAt(i, ZERO_M4);
+            }
+
+            // Mark only the dirty instance ranges as needing GPU upload.
+            for (const { im } of this._groups) {
+                im.count = this._max;
+                im.instanceMatrix.clearUpdateRanges();
+                for (const s of dirtySlots) im.instanceMatrix.addUpdateRange(s * 16, 16);
+                im.instanceMatrix.needsUpdate = true;
+            }
+            this._shadowIM.count = this._max;
+            this._shadowIM.instanceMatrix.clearUpdateRanges();
+            for (const s of dirtySlots) this._shadowIM.instanceMatrix.addUpdateRange(s * 16, 16);
+            this._shadowIM.instanceMatrix.needsUpdate = true;
         }
-        this._shadowIM.count = this._max;
-        this._shadowIM.instanceMatrix.needsUpdate = true;
 
         // ── Golem core-eye pulse (only when golem skin active) ───────────────
         // Pulses any IM group tagged as a core (eyes/inner glow) for any golem type.

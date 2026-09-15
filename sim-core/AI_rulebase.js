@@ -1,7 +1,7 @@
 // Rule-based AI logic for voxel society simulator
 // This function is a direct extraction of the original decideNextAction from character.js
 // It is designed to be called as: decideNextAction_rulebase(character, isNight)
-import { worldData, BLOCK_TYPES, ITEM_TYPES, maxHeight, removeBlock, addBlock } from '../world.js';
+import { worldData, BLOCK_TYPES, ITEM_TYPES, maxHeight, removeBlock, addBlock, forEachWorldKeyOfTypes } from '../world.js';
 
 function getTunableNumber(key, fallback, { min = -Infinity, max = Infinity } = {}) {
     const raw = (typeof window !== 'undefined' && window[key] !== undefined) ? Number(window[key]) : fallback;
@@ -336,30 +336,40 @@ export function decideNextAction_rulebase(character, isNight) {
     const shouldBuildHome = Math.random() * 100 < (homeBuildingPriority * (aging.workMul || 1.0));
 
     // 最善の木材ターゲット選択とprovisionalHomeからの復帰
+    // Nearest-first search with a bounded number of path checks, mirroring the
+    // pattern findClosestFood() already uses. Previously this ran a full
+    // findPath() (192-step BFS) against EVERY wood block in the world with no
+    // sorting and no early exit — tolerable in the original 16x16 world
+    // (~100-200 wood blocks), but catastrophic once districtMode could tile the
+    // world up to 64x64 (~2000+ wood blocks, most of them far enough away that
+    // the BFS burns its entire step budget before failing). Sorting by distance
+    // first means the first reachable candidate IS the closest reachable one, so
+    // we can stop immediately instead of scanning the whole world.
+    const MAX_WOOD_PATH_CHECKS = 12;
     function findClosestReachableWood() {
         if (!character.findClosestWood) return null;
-        const woods = (typeof worldData !== 'undefined' && worldData) ? Array.from(worldData.entries()).filter(([key, val]) => {
-            if (typeof val === 'object' && val.id !== undefined) val = val.id;
-            return val === BLOCK_TYPES.WOOD.id;
-        }) : [];
-        let best = null;
-        let minDist = Infinity;
-        for (const [key,] of woods) {
+        const woods = [];
+        forEachWorldKeyOfTypes([BLOCK_TYPES.WOOD.id], (key) => {
             const [x, y, z] = key.split(',').map(Number);
-            const wood = {x, y, z};
+            const dist = Math.abs(character.gridPos.x - x)
+                + Math.abs(character.gridPos.y - y)
+                + Math.abs(character.gridPos.z - z);
+            woods.push({ x, y, z, dist });
+        });
+        woods.sort((a, b) => a.dist - b.dist);
+
+        let checked = 0;
+        for (const wood of woods) {
+            if (checked >= MAX_WOOD_PATH_CHECKS) break;
             const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(wood);
-            if (adjacentSpot) {
-                const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
-                if (testPath && testPath.length > 0) {
-                    const dist = Math.abs(character.gridPos.x - x) + Math.abs(character.gridPos.y - y) + Math.abs(character.gridPos.z - z);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        best = wood;
-                    }
-                }
+            if (!adjacentSpot) continue;
+            checked++;
+            const testPath = character.findPath && character.findPath(character.gridPos, adjacentSpot);
+            if (testPath && testPath.length > 0) {
+                return { x: wood.x, y: wood.y, z: wood.z };
             }
         }
-        return best;
+        return null;
     }
 
     if (shouldBuildHome && ((character.needs.hunger >= homeReturnHungerLevel && !character.homePosition) || (character.provisionalHome && !character.homePosition))) {
