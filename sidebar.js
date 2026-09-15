@@ -2593,10 +2593,10 @@ function renderCharacterDetail() {
     districtModeLabel.style.width = '140px';
     districtModeRow.appendChild(districtModeLabel);
     [1, 4, 16].forEach(mode => {
-        // Shrinking the world in place would orphan characters/blocks outside
-        // the new (smaller) bounds — disallowed. Use "Regenerate World" to
-        // start over at a smaller size instead.
-        const isShrink = mode < districtMode;
+        // Growing or shrinking are both applied live (world.js's setDistrictMode
+        // treats a shrink as "clear and regenerate at the smaller size" — safe
+        // since this is only reachable pre-Start, before any population exists
+        // to strand). Only the running-simulation lock (paramDisabled) applies.
         const btn = document.createElement('button');
         btn.textContent = String(mode);
         btn.style.padding = '4px 10px';
@@ -2604,12 +2604,11 @@ function renderCharacterDetail() {
         btn.style.border = mode === districtMode ? '2px solid #2563eb' : '1px solid #cbd5e1';
         btn.style.background = mode === districtMode ? '#dbeafe' : '#f8fafc';
         btn.style.fontWeight = '700';
-        btn.style.cursor = (paramDisabled || isShrink) ? 'not-allowed' : 'pointer';
-        btn.style.opacity = (paramDisabled || isShrink) ? '0.55' : '1';
-        btn.disabled = paramDisabled || isShrink;
-        if (isShrink) btn.title = 'Shrinking the world requires "Regenerate World" — growing is applied live, shrinking is not.';
+        btn.style.cursor = paramDisabled ? 'not-allowed' : 'pointer';
+        btn.style.opacity = paramDisabled ? '0.55' : '1';
+        btn.disabled = paramDisabled;
         btn.onclick = () => {
-            if (paramDisabled || isShrink) return;
+            if (paramDisabled) return;
             const previousMode = sidebarParams.districtMode || 1;
             sidebarParams.districtMode = mode;
             if ((sidebarParams.activeDistrictIndex || 0) >= mode) sidebarParams.activeDistrictIndex = 0;

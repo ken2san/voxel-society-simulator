@@ -857,13 +857,23 @@ export function deactivateDistrict(index, mode = districtMode) {
 
 export function setDistrictMode(mode = 1) {
     const requestedMode = clampDistrictMode(mode);
-    if (requestedMode < districtMode) {
-        // Shrinking the world in place would orphan characters/blocks outside
-        // the new (smaller) bounds. Disallowed — a shrink must go through
-        // main.js's regenerateWorld(), which resets worldData/visualBlocks
-        // from scratch rather than truncating live state.
-        console.warn(`setDistrictMode: ignoring shrink from ${districtMode} to ${requestedMode} — use Regenerate World to shrink.`);
-        return getDistrictState();
+    const isShrink = requestedMode < districtMode;
+    if (isShrink) {
+        // Shrinking in place would leave worldData/visualBlocks outside the
+        // new (smaller) bounds as orphaned, unreachable leftovers. Safe fix:
+        // since this can only be reached pre-Start (the sidebar disables the
+        // mode buttons once a simulation is actually running, and Start's own
+        // setDistrictMode call just replays whatever mode was already chosen
+        // pre-Start) there's no live population to strand — treat a shrink as
+        // a fresh start at the smaller size instead of rejecting it outright.
+        worldData.clear();
+        resetWorldSpatialIndex();
+        const io = simIO();
+        for (const block of visualBlocks.values()) {
+            io.removeVisual(scene, block);
+        }
+        visualBlocks.clear();
+        lastGeneratedGridSize = 0;
     }
     const previousMode = districtMode;
     districtMode = requestedMode;
@@ -873,9 +883,10 @@ export function setDistrictMode(mode = 1) {
     districtSummaryCache = [];
     districtSummaryCacheUpdatedAt = 0;
 
-    // Backfill worldData for any newly-exposed territory. Cheap — Map writes
-    // only, gated by isGridPositionInActiveDistrict inside addBlock so mesh
-    // cost stays proportional to one district, not the whole (bigger) world.
+    // Backfill worldData for any newly-exposed territory (growth) or fully
+    // regenerate (shrink, worldData was just cleared above). Cheap either
+    // way — Map writes only, gated by isGridPositionInActiveDistrict inside
+    // addBlock so mesh cost stays proportional to one district.
     generateTerrain();
 
     if (previousMode !== districtMode) {
