@@ -6067,7 +6067,43 @@ class Character {
             }
         } else {
             direction.normalize();
-            const nextWorldPos = this.mesh.position.clone().add(direction.clone().multiplyScalar(moveDistance));
+            // Vertical steps (climbing up / descending down one block) used to move in a
+            // straight 3D line blending X/Z and Y progress equally — reads as "floating"
+            // diagonally through the block's corner rather than a climb/descent. Ease the
+            // height component separately from horizontal progress instead: fast-rise
+            // early when climbing (step up, then walk across the top), stay level then
+            // drop late when descending (walk to the edge, then step off). Pathfinding/
+            // validity is untouched — this only reshapes movement within an already-valid
+            // segment, so it can't strand characters the way stricter footing rules could.
+            const isVerticalStep = next.y !== this.gridPos.y;
+            let nextWorldPos;
+            if (isVerticalStep) {
+                const dx = targetWorldPos.x - this.mesh.position.x;
+                const dz = targetWorldPos.z - this.mesh.position.z;
+                const horizDist = Math.hypot(dx, dz);
+                const horizMoveDistance = Math.min(horizDist, moveDistance);
+                let nextX = this.mesh.position.x, nextZ = this.mesh.position.z;
+                if (horizDist > 0.0001) {
+                    nextX += (dx / horizDist) * horizMoveDistance;
+                    nextZ += (dz / horizDist) * horizMoveDistance;
+                }
+                // Progress approximated from remaining horizontal distance (adjacent grid
+                // cells are ~1 unit apart; diagonal steps under-report early progress
+                // slightly, an acceptable cosmetic approximation).
+                const progress = Math.max(0, Math.min(1, 1 - horizDist));
+                const climbing = next.y > this.gridPos.y;
+                const easedProgress = climbing
+                    ? 1 - Math.pow(1 - progress, 3)  // fast rise, then level off
+                    : Math.pow(progress, 3);         // stay level, then drop
+                const startY = gridToWorldPosition(this.gridPos).y;
+                const nextY = startY + (targetWorldPos.y - startY) * easedProgress;
+                // Clone an existing Vector3 rather than constructing one — THREE isn't
+                // imported into this module directly.
+                nextWorldPos = targetWorldPos.clone();
+                nextWorldPos.set(nextX, nextY, nextZ);
+            } else {
+                nextWorldPos = this.mesh.position.clone().add(direction.clone().multiplyScalar(moveDistance));
+            }
             const traverse = this.canTraverseWorldSegment(this.mesh.position, nextWorldPos);
             if (!traverse.canMove) {
                 const slideTarget = this.tryWallSlideMove(direction, moveDistance);
