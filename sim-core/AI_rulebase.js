@@ -238,6 +238,27 @@ export function decideNextAction_rulebase(character, isNight) {
         }
     }
 
+    // === PRIORITY 0.9: CURIO RETRY — honor an in-progress curio pursuit ===
+    // Curio-seek (9.4 below) is intentionally rare/low-priority to trigger, but once
+    // committed, a single failed BFS attempt (obstructed terrain) shouldn't lose the
+    // curio to a higher-priority goal like home building (3) on the very next tick —
+    // that made curio pickups far rarer in practice than the spawn/seek rates implied.
+    // Bounded by both a time window and an attempt cap so this can't loop forever.
+    if (character._curioCommitUntil && Date.now() < character._curioCommitUntil
+        && character.state === 'idle'
+        && character.inventory.some(i => i === null)
+        && (character._curioCommitAttempts || 0) < 4) {
+        const curioPos = character.findClosestCurio && character.findClosestCurio();
+        const adjacentSpot = curioPos && character.findAdjacentSpot && character.findAdjacentSpot(curioPos);
+        if (adjacentSpot) {
+            character._curioCommitAttempts = (character._curioCommitAttempts || 0) + 1;
+            character.log('CURIO RETRY: resuming interrupted curio pursuit', character._curioCommitAttempts);
+            character.setNextAction('DESTROY_BLOCK', curioPos, adjacentSpot);
+            return;
+        }
+        character._curioCommitUntil = 0;
+    }
+
     // === PRIORITY 1: RANDOM EXPLORATION (only when the character can afford to roam) ===
     const canExploreFreely = character.needs.energy > Math.max(effectiveEnergyEmergency + 18, effectiveRestThreshold + wanderReserveEnergy)
         && character.needs.hunger > 30
@@ -1001,6 +1022,43 @@ export function decideNextAction_rulebase(character, isNight) {
             return;
         } else if (character.needs.energy > readyToRoamThreshold && character.needs.hunger > 45) {
             character.setNextAction('WANDER');
+            return;
+        }
+    }
+
+    // === PRIORITY 9.4: CURIO SEEKING (curiosity-driven, spare-time activity) ===
+    // Dedicated seek rather than relying on generic PRIORITY 10 digging below —
+    // findDiggableBlock() always finds grass/dirt right underfoot first, so a
+    // rare, usually-distant curio would never win against that. Mirrors
+    // findClosestStone()'s unbounded nearest-match pattern (cheap since
+    // curios are intentionally rare, so there's little to scan).
+    if (character.inventory.some(i => i === null)) {
+        const curioSeekChance = (typeof window !== 'undefined' && window.curioSeekChance !== undefined)
+            ? window.curioSeekChance : 0.01;
+        if (Math.random() < curioSeekChance * (character.personality.curiosity ?? 1.0)) {
+            const curioPos = character.findClosestCurio && character.findClosestCurio();
+            if (curioPos) {
+                const adjacentSpot = character.findAdjacentSpot && character.findAdjacentSpot(curioPos);
+                if (adjacentSpot) {
+                    character.log('CURIO SEEKING: heading toward a curio');
+                    character._curioCommitUntil = Date.now() + 10000;
+                    character._curioCommitAttempts = 0;
+                    character.setNextAction('DESTROY_BLOCK', curioPos, adjacentSpot);
+                    return;
+                }
+            }
+        }
+    }
+
+    // === PRIORITY 9.5: ITEM COMBINATION (emergent crafting, spare-time activity) ===
+    // Never competes with survival/social priorities above — this only runs
+    // once they've all declined to act. Curiosity-scaled, same style as
+    // diligence scaling PRIORITY 10's chance below.
+    if (character.inventory.filter(i => i !== null).length >= 2) {
+        const combineChance = (typeof window !== 'undefined' && window.itemCombineChance !== undefined)
+            ? window.itemCombineChance : 0.004;
+        if (Math.random() < combineChance * (character.personality.curiosity ?? 1.0)) {
+            character.setNextAction('COMBINE_ITEMS', null, character.gridPos);
             return;
         }
     }

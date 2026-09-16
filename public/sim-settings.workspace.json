@@ -142,7 +142,8 @@
       "leafSpawnRate": 0.7,
       "fruitSpawnRate": 0.3,
       "stoneSpawnRate": 0.15,
-      "caveSpawnRate": 0.1
+      "caveSpawnRate": 0.1,
+      "curioSpawnRate": 0.01
     },
     "debug": {
       "debugMode": false

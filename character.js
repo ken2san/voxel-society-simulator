@@ -7,6 +7,7 @@ import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
 import { getSimulationIO, gridToWorldPosition } from './sim-core/interfaces.js';
 import { getActiveSkin } from './character-skins.js';
 import { playSound } from './sim-core/sound-system.js';
+import { isGeneratedItem, generatedItems, getItemVector, getItemDepth, combineItemVectors, registerGeneratedItem, MAX_CREATION_DEPTH } from './sim-core/item-genesis.js';
 
 function simIO() {
     return getSimulationIO();
@@ -69,6 +70,10 @@ function getStoneBlockTypeIds() {
     return Object.values(BLOCK_TYPES)
         .filter(type => type?.diggable && typeof type.name === 'string' && (type.name === 'Stone' || type.name.includes('Stone') || type.name === 'STONE'))
         .map(type => type.id);
+}
+
+function getCurioBlockTypeIds() {
+    return Object.values(BLOCK_TYPES).filter(type => type?.isCurioBlock).map(type => type.id);
 }
 
 function getDiggableBlockTypeIds() {
@@ -249,6 +254,7 @@ class Character {
         switch (actionType) {
             case 'BUILD_HOME':    this.buildHome();    return true;
             case 'CRAFT_TOOL':   this.craftTool();    return true;
+            case 'COMBINE_ITEMS': this.combineItemsAction(); return true;
             case 'DESTROY_BLOCK': this.destroyBlock(deltaTime); return true;
             default: return false;
         }
@@ -347,6 +353,9 @@ class Character {
                 // 道具作成のため作業状態に遷移
                 this.state = 'working';
                 break;
+            case 'COMBINE_ITEMS':
+                this.state = 'working';
+                break;
             case 'DESTROY_BLOCK':
                 // ブロック破壊: targetPosが設定されていない場合は隣接しているので即座に実行
                 if (this.targetPos) {
@@ -407,6 +416,7 @@ class Character {
                 break;
             case 'BUILD_HOME':
             case 'CRAFT_TOOL':
+            case 'COMBINE_ITEMS':
             case 'DESTROY_BLOCK':
                 this.runWorkAction(this.action.type);
                 break;
@@ -690,6 +700,14 @@ class Character {
     updateCarriedItemAppearance(itemType) {
         if (!this.carriedItemMesh) return;
 
+        if (isGeneratedItem(itemType)) {
+            const rec = generatedItems.get(itemType);
+            const color = rec ? rec.color : 0x8B4513;
+            if (this.carriedItemMesh.material?.dispose) this.carriedItemMesh.material.dispose();
+            this.carriedItemMesh.material = simIO().createMaterial({ color });
+            return;
+        }
+
         let color = 0x8B4513;
         switch (itemType) {
             case 'FRUIT_ITEM':
@@ -700,6 +718,9 @@ class Character {
                 break;
             case 'STONE_TOOL':
                 color = 0x696969;
+                break;
+            case 'CURIO_ITEM':
+                color = 0x2b1b3d;
                 break;
             default:
                 color = 0x8B4513;
@@ -950,6 +971,19 @@ class Character {
                         this.carriedItemMesh.visible = true;
                         this.showActionIcon('✅⛏️', 1.5);
                         this.log(`✅ Fruit item acquired! inventory=[${this.inventory[0]}] hunger=${this.needs.hunger.toFixed(1)}`);
+                    } else if (blockType.name.includes('Curio')) {
+                        // Unlike FRUIT above, don't overwrite slot 0 — a curio
+                        // exists to coexist with whatever else is already held,
+                        // not replace it.
+                        const emptyIndex = this.inventory.findIndex(item => item === null);
+                        if (emptyIndex !== -1) {
+                            this.inventory[emptyIndex] = 'CURIO_ITEM';
+                            this.updateCarriedItemAppearance('CURIO_ITEM');
+                            this.carriedItemMesh.visible = true;
+                        }
+                        this.showActionIcon('🔮✨', 2.0);
+                        this.log('Curio acquired!');
+                        this._curioCommitUntil = 0;
                     } else if (blockType.name.includes('Stone')) {
                         this.showActionIcon('🗿💥', 2.0);
                         this.log('Destroyed stone block');
@@ -1073,6 +1107,77 @@ class Character {
             this.state = 'idle';
             this.action = null;
             this.actionCooldown = 3.0; // 作成時間を長くする
+        }
+    }
+
+    // Spare-time "combine two held items into something new" hobby action —
+    // see sim-core/item-genesis.js for the blend/naming logic. Modeled on
+    // craftTool() above: same progress-counter-with-stage-icons shape.
+    combineItemsAction() {
+        if (!this._combiningProgress) {
+            this._combiningProgress = 0;
+            this._combiningStage = 0;
+            // Depth cap: items already at MAX_CREATION_DEPTH keep their name/
+            // appearance legible instead of drifting into noise forever, so
+            // they're excluded as further combine inputs (still usable/kept
+            // in inventory, just terminal).
+            const occupied = [];
+            for (let i = 0; i < this.inventory.length; i++) {
+                const v = this.inventory[i];
+                if (v !== null && getItemDepth(v) < MAX_CREATION_DEPTH) occupied.push(i);
+            }
+            if (occupied.length < 2) {
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 1.0;
+                return;
+            }
+            occupied.sort(() => Math.random() - 0.5);
+            this._combiningSlots = [occupied[0], occupied[1]];
+            this.log('COMBINE_ITEMS: combining started');
+        }
+
+        this._combiningProgress += 1;
+        const stages = ['🧪', '⚗️', '🔀', '💫', '✨❓'];
+        const currentStage = Math.floor(this._combiningProgress / 3) % stages.length;
+        if (currentStage !== this._combiningStage) {
+            this.showActionIcon(stages[currentStage], 1.0);
+            this._combiningStage = currentStage;
+        }
+
+        if (this._combiningProgress >= 15) {
+            const [ia, ib] = this._combiningSlots;
+            const idA = this.inventory[ia], idB = this.inventory[ib];
+            if (!idA || !idB) {
+                this._combiningProgress = 0;
+                this._combiningStage = 0;
+                this._combiningSlots = null;
+                this.state = 'idle';
+                this.action = null;
+                this.actionCooldown = 1.0;
+                return;
+            }
+            const vecA = getItemVector(idA), vecB = getItemVector(idB);
+            const depth = Math.max(getItemDepth(idA), getItemDepth(idB)) + 1;
+            const newId = registerGeneratedItem(combineItemVectors(vecA, vecB, depth), depth, [idA, idB]);
+            this.inventory[ia] = newId;
+            this.inventory[ib] = null;
+            const rec = generatedItems.get(newId);
+
+            this.updateCarriedItemAppearance(newId);
+            this.carriedItemMesh.visible = true;
+            this.showActionIcon(rec.icon, 2.5);
+            this.log('Combine complete!', newId, rec.name);
+            if (typeof window !== 'undefined' && typeof window.logChronicleEvent === 'function') {
+                window.logChronicleEvent(rec.icon, `#${this.id} created a ${rec.name} (gen ${depth})`, 'creation');
+            }
+
+            this._combiningProgress = 0;
+            this._combiningStage = 0;
+            this._combiningSlots = null;
+            this.state = 'idle';
+            this.action = null;
+            this.actionCooldown = 3.0;
         }
     }
 
@@ -3262,6 +3367,20 @@ class Character {
     findClosestStone() {
         let minDist = Infinity, closest = null;
         forEachWorldKeyOfTypes(getStoneBlockTypeIds(), (key) => {
+            const [x, y, z] = key.split(',').map(Number);
+            const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
+            if (dist < minDist) { minDist = dist; closest = {x, y, z}; }
+        });
+        return closest;
+    }
+
+    // Curios are rare on purpose (world.js:curioSpawnRate ~1%) and need their
+    // own dedicated seek: findDiggableBlock() (used by generic PRIORITY 10
+    // work) always finds grass/dirt right underfoot first, so a rare, usually
+    // far-away curio would otherwise never be reached.
+    findClosestCurio() {
+        let minDist = Infinity, closest = null;
+        forEachWorldKeyOfTypes(getCurioBlockTypeIds(), (key) => {
             const [x, y, z] = key.split(',').map(Number);
             const dist = Math.abs(this.gridPos.x - x) + Math.abs(this.gridPos.y - y) + Math.abs(this.gridPos.z - z);
             if (dist < minDist) { minDist = dist; closest = {x, y, z}; }

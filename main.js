@@ -1,4 +1,4 @@
-import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, DISTRICT_CELL_SIZE, maxHeight, clock, characters, worldTime, DAY_DURATION, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange, focusCameraOnActiveDistrict } from './world.js';
+import { generateTerrain, addBlock, removeBlock, findGroundY, isSafeSpot, worldData, BLOCK_TYPES, ITEM_TYPES, blockMaterials, visualBlocks, blockSize, gridSize, DISTRICT_CELL_SIZE, maxHeight, clock, characters, worldTime, DAY_DURATION, edgeMaterial, updateWorldLighting, onWindowResize, drawMinimap, animate, spawnCharacter, findValidSpawn, toScreenPosition, setWorldObjects, setDEBUG_MODE, setTreeSpawnRate, setFruitSpawnRate, setStoneSpawnRate, setCaveSpawnRate, setLeafSpawnRate, setCurioSpawnRate, setDistrictMode, setActiveDistrict, refreshRenderResources, resetWorldSpatialIndex, resetFrameTimingAfterVisibilityChange, stabilizeCameraAfterVisibilityChange, focusCameraOnActiveDistrict } from './world.js';
 import { Character } from './character.js';
 import { PerlinNoise } from './utils.js';
 import * as THREE from 'three';
@@ -471,6 +471,7 @@ function setupResourceSliders() {
     const fruitSlider = document.getElementById('fruitSlider');
     const stoneSlider = document.getElementById('stoneSlider');
     const caveSlider = document.getElementById('caveSlider');
+    const curioSlider = document.getElementById('curioSlider');
     const regenerateButton = document.getElementById('regenerateButton');
 
     const treeValue = document.getElementById('treeValue');
@@ -478,6 +479,7 @@ function setupResourceSliders() {
     const fruitValue = document.getElementById('fruitValue');
     const stoneValue = document.getElementById('stoneValue');
     const caveValue = document.getElementById('caveValue');
+    const curioValue = document.getElementById('curioValue');
 
     const clampFromSlider = (slider, rawValue) => {
         if (!slider) return Number(rawValue);
@@ -495,6 +497,7 @@ function setupResourceSliders() {
         if (fruitValue) fruitValue.textContent = Math.round(fruitSlider.value * 100) + '%';
         if (stoneValue) stoneValue.textContent = Math.round(stoneSlider.value * 100) + '%';
         if (caveValue) caveValue.textContent = Math.round(caveSlider.value * 100) + '%';
+        if (curioValue) curioValue.textContent = Math.round(curioSlider.value * 100) + '%';
     }
 
     // Tree slider
@@ -537,6 +540,14 @@ function setupResourceSliders() {
         });
     }
 
+    // Curio slider
+    if (curioSlider) {
+        curioSlider.addEventListener('input', (e) => {
+            setCurioSpawnRate(parseFloat(e.target.value));
+            updateSliderValues();
+        });
+    }
+
     // Regenerate world button
     if (regenerateButton) {
         regenerateButton.addEventListener('click', () => {
@@ -552,7 +563,8 @@ function setupResourceSliders() {
         leafSpawnRate: leafSlider ? Number(leafSlider.value) : null,
         fruitSpawnRate: fruitSlider ? Number(fruitSlider.value) : null,
         stoneSpawnRate: stoneSlider ? Number(stoneSlider.value) : null,
-        caveSpawnRate: caveSlider ? Number(caveSlider.value) : null
+        caveSpawnRate: caveSlider ? Number(caveSlider.value) : null,
+        curioSpawnRate: curioSlider ? Number(curioSlider.value) : null
     });
 
     window.applyResourceGenerationSettings = (settings = {}) => {
@@ -580,6 +592,11 @@ function setupResourceSliders() {
             const value = clampFromSlider(caveSlider, settings.caveSpawnRate);
             caveSlider.value = String(value);
             setCaveSpawnRate(value);
+        }
+        if (curioSlider && settings.curioSpawnRate !== undefined) {
+            const value = clampFromSlider(curioSlider, settings.curioSpawnRate);
+            curioSlider.value = String(value);
+            setCurioSpawnRate(value);
         }
         updateSliderValues();
     };

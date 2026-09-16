@@ -126,12 +126,14 @@ export let fruitSpawnRate = 0.48; // 48% chance for fruit (supports pop up to ~6
 export let stoneSpawnRate = 0.15; // 15% chance for stone
 export let caveSpawnRate = 0.10; // 10% chance for caves
 export let leafSpawnRate = 0.70; // 70% chance for leaf generation per position (controls leaf density)
+export let curioSpawnRate = 0.01; // 1% — rare on purpose, a "found by chance" pickup
 
 export function setTreeSpawnRate(rate) { treeSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setFruitSpawnRate(rate) { fruitSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setStoneSpawnRate(rate) { stoneSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setCaveSpawnRate(rate) { caveSpawnRate = Math.max(0, Math.min(1, rate)); }
 export function setLeafSpawnRate(rate) { leafSpawnRate = Math.max(0, Math.min(1, rate)); }
+export function setCurioSpawnRate(rate) { curioSpawnRate = Math.max(0, Math.min(1, rate)); }
 
 // ── Decomposition sites: death enriches the ground it happened on ────────────
 // Ecology-level feedback loop instead of an individual-level rescue: a death
@@ -960,12 +962,14 @@ export const BLOCK_TYPES = {
     HOUSE_WALL: { id: 8, name: 'House Wall', color: 0xd8c39a, isHouseWall: true },
     HOUSE_ROOF: { id: 9, name: 'House Roof', color: 0x6b4a2f, isHouseRoof: true },
     STONE_WALL: { id: 10, name: 'Stone Wall', color: 0x7b8a94, isHouseWall: true, isStoneWall: true },
-    DARK_ROOF:  { id: 11, name: 'Dark Roof',  color: 0x46515e, isHouseRoof: true, isDarkRoof: true }
+    DARK_ROOF:  { id: 11, name: 'Dark Roof',  color: 0x46515e, isHouseRoof: true, isDarkRoof: true },
+    CURIO: { id: 12, name: 'Curio', color: 0x2b1b3d, diggable: true, drops: 'CURIO_ITEM', isCurioBlock: true }
 };
 export const ITEM_TYPES = {
     WOOD_LOG: { id: 100, name: 'Log', material: null },
     FRUIT_ITEM: { id: 101, name: 'Fruit Item', material: null, isStorable: true },
-    STONE_TOOL: { id: 102, name: 'Stone Tool', material: null, isTool: true }
+    STONE_TOOL: { id: 102, name: 'Stone Tool', material: null, isTool: true },
+    CURIO_ITEM: { id: 103, name: 'Curio', material: null }
 };
 export const blockMaterials = new Map();
 export let edgeMaterial = null;
@@ -1466,9 +1470,15 @@ export function generateTerrain() {
                 addBlock(x, y, z, y < height - 1 ? BLOCK_TYPES.DIRT : BLOCK_TYPES.GRASS, false);
             }
         }
-        if (!isPath && Math.random() < fruitSpawnRate) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false);
-        // 石ブロックを表面に生成（設定可能な確率）
-        if (!isPath && Math.random() < stoneSpawnRate) addBlock(x, height, z, BLOCK_TYPES.STONE, false);
+        // Curio checked first and exclusively — a rare, special find, not just
+        // another resource competing with fruit/stone for the same tile.
+        if (!isPath && Math.random() < curioSpawnRate) {
+            addBlock(x, height, z, BLOCK_TYPES.CURIO, false);
+        } else {
+            if (!isPath && Math.random() < fruitSpawnRate) addBlock(x, height, z, BLOCK_TYPES.FRUIT, false);
+            // 石ブロックを表面に生成（設定可能な確率）
+            if (!isPath && Math.random() < stoneSpawnRate) addBlock(x, height, z, BLOCK_TYPES.STONE, false);
+        }
         if (!isPath && Math.random() < treeSpawnRate && x > 1 && x < gridSize - 2 && z > 1 && z < gridSize - 2) {
             const treeHeight = height + Math.floor(Math.random() * 3) + 3;
             for (let y = height; y < treeHeight; y++) addBlock(x, y, z, BLOCK_TYPES.WOOD, false);
