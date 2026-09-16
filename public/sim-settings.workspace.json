@@ -124,6 +124,8 @@
       "reproductionPressurePenalty": 0.18,
       "affinityResetAfterReproduce": 68,
       "mutationRate": 0.05,
+      "curioSeekChance": 0.01,
+      "itemCombineChance": 0.004,
       "starvationDeathDelaySeconds": 10,
       "districtMode": 1,
       "activeDistrictIndex": 0,

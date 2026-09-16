@@ -1653,6 +1653,42 @@ export function tickFruitRegen(deltaTime) {
     }
 }
 
+// Headless-safe curio regeneration tick, mirroring tickFruitRegen. Curios used
+// to be a one-time, non-renewable pool seeded only at generateTerrain() — once
+// a district's curios were dug up, item combination went permanently silent for
+// the rest of the session. This gives curios a slow regrow cycle like fruit
+// (spawn → get found → wait → spawn again), capped by curioCarryingCapacity so
+// an unpicked-over district doesn't accumulate them indefinitely.
+let _curioRegenAccum = 0;
+export function tickCurioRegen(deltaTime) {
+    _curioRegenAccum += deltaTime;
+    const curioRegenInterval = (typeof globalThis.window !== 'undefined' && globalThis.window.curioRegenIntervalSeconds > 0)
+        ? globalThis.window.curioRegenIntervalSeconds : 90;
+    if (_curioRegenAccum < curioRegenInterval) return;
+    _curioRegenAccum = 0;
+    const curioCap = (typeof globalThis.window !== 'undefined' && globalThis.window.curioCarryingCapacity > 0)
+        ? globalThis.window.curioCarryingCapacity : 12;
+    let _currentCurioCount = 0;
+    forEachWorldKeyOfTypes([BLOCK_TYPES.CURIO.id], () => _currentCurioCount++);
+    if (_currentCurioCount >= curioCap) return;
+    for (let x = 0; x < gridSize; x++) {
+        for (let z = 0; z < gridSize; z++) {
+            if (_currentCurioCount >= curioCap) return;
+            if (Math.random() >= curioSpawnRate) continue;
+            const y = findGroundY(x, z);
+            if (y < 0) continue;
+            if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
+            if (worldData.has(`${x},${y + 1},${z}`)) continue;
+            const curioY = y + 1;
+            const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
+                !worldData.has(`${x+dx},${curioY},${z+dz}`));
+            if (!hasPassableNeighbor) continue;
+            addBlock(x, curioY, z, BLOCK_TYPES.CURIO);
+            _currentCurioCount++;
+        }
+    }
+}
+
 export function findValidSpawn() {
     for (let i = 0; i < 100; i++) {
         const x = Math.floor(Math.random() * gridSize);
@@ -2335,6 +2371,42 @@ export function animate() {
         }
         if (_fruitAdded > 0) drawMinimap(); // single redraw after all fruit placed
         animate.lastFruitRegenTime = 0;
+    }
+
+    // --- Curio再生：curioRegenIntervalSeconds ごとに表面GRASSにCURIOをランダム再生 ---
+    // Mirrors the fruit regen block above. Without this, a district's curios
+    // (needed for item combination) were a one-time pool — dug up once, gone
+    // for the rest of the session. curioCarryingCapacity caps accumulation if
+    // characters aren't picking them up as fast as they spawn.
+    if (!animate.lastCurioRegenTime) animate.lastCurioRegenTime = 0;
+    animate.lastCurioRegenTime += deltaTime;
+    const curioRegenInterval = (typeof window !== 'undefined' && window.curioRegenIntervalSeconds > 0)
+        ? window.curioRegenIntervalSeconds : 90;
+    if (animate.lastCurioRegenTime >= curioRegenInterval) {
+        animate.lastCurioRegenTime = 0;
+        const curioCap = (typeof window !== 'undefined' && window.curioCarryingCapacity > 0) ? window.curioCarryingCapacity : 12;
+        let _currentCurioCount = 0;
+        forEachWorldKeyOfTypes([BLOCK_TYPES.CURIO.id], () => _currentCurioCount++);
+        if (_currentCurioCount < curioCap) {
+            let _curioAdded = 0;
+            for (let x = 0; x < gridSize; x++) {
+                for (let z = 0; z < gridSize; z++) {
+                    if (_currentCurioCount + _curioAdded >= curioCap) break;
+                    if (Math.random() >= curioSpawnRate) continue;
+                    const y = findGroundY(x, z);
+                    if (y < 0) continue;
+                    if (worldData.get(`${x},${y},${z}`) !== BLOCK_TYPES.GRASS.id) continue;
+                    if (worldData.has(`${x},${y + 1},${z}`)) continue;
+                    const curioY = y + 1;
+                    const hasPassableNeighbor = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dz]) =>
+                        !worldData.has(`${x+dx},${curioY},${z+dz}`));
+                    if (!hasPassableNeighbor) continue;
+                    addBlock(x, curioY, z, BLOCK_TYPES.CURIO, false);
+                    _curioAdded++;
+                }
+            }
+            if (_curioAdded > 0) drawMinimap();
+        }
     }
 
     const _renderStart = performance.now();

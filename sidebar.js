@@ -342,6 +342,10 @@ function renderCharacterDetail() {
         reproductionCooldownSeconds:        8,
         fruitRegenIntervalSeconds:          60,
         fruitCarryingCapacity:              80,
+        curioRegenIntervalSeconds:          90,
+        curioCarryingCapacity:              12,
+        curioSeekChance:                    0.01,
+        itemCombineChance:                  0.004,
         dayDurationSeconds:                 120,
         seasonCycleSeconds:                 4,
         seasonAmplitude:                    0.6,
@@ -2195,6 +2199,142 @@ function renderCharacterDetail() {
     fruitCapInput.disabled = paramDisabled;
     fruitCapVal.disabled = paramDisabled;
 
+    // --- Curio Regen Interval Slider ---
+    if (sidebarParams.curioRegenIntervalSeconds === undefined) sidebarParams.curioRegenIntervalSeconds = 90;
+    const curioRegenRow = document.createElement('div');
+    curioRegenRow.style.display = 'flex';
+    curioRegenRow.style.alignItems = 'center';
+    curioRegenRow.style.gap = '10px';
+    const curioRegenLabel = document.createElement('span');
+    curioRegenLabel.textContent = '🔮 Curio Regen Interval (s):';
+    curioRegenLabel.style.flex = '1';
+    const curioRegenInput = document.createElement('input');
+    curioRegenInput.type = 'range';
+    curioRegenInput.min = 10;
+    curioRegenInput.max = 300;
+    curioRegenInput.step = 10;
+    curioRegenInput.value = sidebarParams.curioRegenIntervalSeconds;
+    curioRegenInput.style.flex = '2';
+    curioRegenInput.id = 'curioRegenInput';
+    curioRegenInput.name = 'curioRegenInput';
+    const curioRegenVal = document.createElement('input');
+    curioRegenVal.type = 'number';
+    curioRegenVal.min = 10;
+    curioRegenVal.max = 300;
+    curioRegenVal.step = 10;
+    curioRegenVal.value = sidebarParams.curioRegenIntervalSeconds;
+    curioRegenVal.style.width = '60px';
+    curioRegenVal.id = 'curioRegenVal';
+    curioRegenVal.name = 'curioRegenVal';
+    curioRegenRow.appendChild(curioRegenLabel);
+    curioRegenRow.appendChild(curioRegenInput);
+    curioRegenRow.appendChild(curioRegenVal);
+    curioRegenInput.oninput = () => {
+        curioRegenVal.value = curioRegenInput.value;
+        sidebarParams.curioRegenIntervalSeconds = parseInt(curioRegenInput.value);
+        window.curioRegenIntervalSeconds = parseInt(curioRegenInput.value);
+    };
+    curioRegenVal.oninput = () => {
+        curioRegenInput.value = curioRegenVal.value;
+        sidebarParams.curioRegenIntervalSeconds = parseInt(curioRegenVal.value);
+        window.curioRegenIntervalSeconds = parseInt(curioRegenVal.value);
+    };
+    curioRegenRow.dataset.label = 'Curio Regen Interval';
+    tabPanels[2].appendChild(curioRegenRow);
+    curioRegenInput.disabled = paramDisabled;
+    curioRegenVal.disabled = paramDisabled;
+
+    // --- Curio Carrying Capacity Slider ---
+    if (sidebarParams.curioCarryingCapacity === undefined) sidebarParams.curioCarryingCapacity = 12;
+    const curioCapRow = document.createElement('div');
+    curioCapRow.style.display = 'flex';
+    curioCapRow.style.alignItems = 'center';
+    curioCapRow.style.gap = '10px';
+    const curioCapLabel = document.createElement('span');
+    curioCapLabel.textContent = '🔮 Carrying Capacity:';
+    curioCapLabel.style.flex = '1';
+    const curioCapInput = document.createElement('input');
+    curioCapInput.type = 'range';
+    curioCapInput.min = 1;
+    curioCapInput.max = 60;
+    curioCapInput.step = 1;
+    curioCapInput.value = sidebarParams.curioCarryingCapacity;
+    curioCapInput.style.flex = '2';
+    curioCapInput.id = 'curioCapInput';
+    curioCapInput.name = 'curioCapInput';
+    const curioCapVal = document.createElement('input');
+    curioCapVal.type = 'number';
+    curioCapVal.min = 1;
+    curioCapVal.max = 60;
+    curioCapVal.step = 1;
+    curioCapVal.value = sidebarParams.curioCarryingCapacity;
+    curioCapVal.style.width = '60px';
+    curioCapVal.id = 'curioCapVal';
+    curioCapVal.name = 'curioCapVal';
+    curioCapRow.appendChild(curioCapLabel);
+    curioCapRow.appendChild(curioCapInput);
+    curioCapRow.appendChild(curioCapVal);
+    curioCapInput.oninput = () => {
+        curioCapVal.value = curioCapInput.value;
+        sidebarParams.curioCarryingCapacity = parseInt(curioCapInput.value);
+        window.curioCarryingCapacity = parseInt(curioCapInput.value);
+    };
+    curioCapVal.oninput = () => {
+        curioCapInput.value = curioCapVal.value;
+        sidebarParams.curioCarryingCapacity = parseInt(curioCapVal.value);
+        window.curioCarryingCapacity = parseInt(curioCapVal.value);
+    };
+    curioCapRow.dataset.label = 'Curio Carrying Capacity';
+    tabPanels[2].appendChild(curioCapRow);
+    curioCapInput.disabled = paramDisabled;
+    curioCapVal.disabled = paramDisabled;
+
+    // --- Curio Seek Chance Slider ---
+    if (sidebarParams.curioSeekChance === undefined) sidebarParams.curioSeekChance = 0.01;
+    const curioSeekRow = document.createElement('div');
+    curioSeekRow.style.display = 'flex'; curioSeekRow.style.alignItems = 'center'; curioSeekRow.style.gap = '10px';
+    const curioSeekLabel = document.createElement('span');
+    curioSeekLabel.textContent = '🔮 Curio Seek Chance:';
+    curioSeekLabel.style.width = '140px';
+    curioSeekRow.appendChild(curioSeekLabel);
+    const curioSeekInput = document.createElement('input');
+    curioSeekInput.type = 'range'; curioSeekInput.min = 0; curioSeekInput.max = 1; curioSeekInput.step = 0.01;
+    curioSeekInput.value = sidebarParams.curioSeekChance; curioSeekInput.style.width = '120px'; curioSeekInput.disabled = paramDisabled;
+    curioSeekInput.id = 'curioSeekInput'; curioSeekInput.name = 'curioSeekInput';
+    curioSeekInput.addEventListener('input', e => { sidebarParams.curioSeekChance = parseFloat(e.target.value); curioSeekNumber.value = e.target.value; window.curioSeekChance = parseFloat(e.target.value); });
+    curioSeekRow.appendChild(curioSeekInput);
+    const curioSeekNumber = document.createElement('input');
+    curioSeekNumber.type = 'number'; curioSeekNumber.min = 0; curioSeekNumber.max = 1; curioSeekNumber.step = 0.01;
+    curioSeekNumber.value = sidebarParams.curioSeekChance; curioSeekNumber.style.width = '56px'; curioSeekNumber.disabled = paramDisabled;
+    curioSeekNumber.id = 'curioSeekVal'; curioSeekNumber.name = 'curioSeekVal';
+    curioSeekNumber.addEventListener('input', e => { sidebarParams.curioSeekChance = parseFloat(e.target.value); curioSeekInput.value = e.target.value; window.curioSeekChance = parseFloat(e.target.value); });
+    curioSeekRow.appendChild(curioSeekNumber);
+    curioSeekRow.dataset.label = 'Curio Seek Chance — per-decision chance a curious, idle character goes looking for a curio';
+    tabPanels[2].appendChild(curioSeekRow);
+
+    // --- Item Combine Chance Slider ---
+    if (sidebarParams.itemCombineChance === undefined) sidebarParams.itemCombineChance = 0.004;
+    const itemCombineRow = document.createElement('div');
+    itemCombineRow.style.display = 'flex'; itemCombineRow.style.alignItems = 'center'; itemCombineRow.style.gap = '10px';
+    const itemCombineLabel = document.createElement('span');
+    itemCombineLabel.textContent = '🧪 Item Combine Chance:';
+    itemCombineLabel.style.width = '140px';
+    itemCombineRow.appendChild(itemCombineLabel);
+    const itemCombineInput = document.createElement('input');
+    itemCombineInput.type = 'range'; itemCombineInput.min = 0; itemCombineInput.max = 0.5; itemCombineInput.step = 0.005;
+    itemCombineInput.value = sidebarParams.itemCombineChance; itemCombineInput.style.width = '120px'; itemCombineInput.disabled = paramDisabled;
+    itemCombineInput.id = 'itemCombineInput'; itemCombineInput.name = 'itemCombineInput';
+    itemCombineInput.addEventListener('input', e => { sidebarParams.itemCombineChance = parseFloat(e.target.value); itemCombineNumber.value = e.target.value; window.itemCombineChance = parseFloat(e.target.value); });
+    itemCombineRow.appendChild(itemCombineInput);
+    const itemCombineNumber = document.createElement('input');
+    itemCombineNumber.type = 'number'; itemCombineNumber.min = 0; itemCombineNumber.max = 0.5; itemCombineNumber.step = 0.005;
+    itemCombineNumber.value = sidebarParams.itemCombineChance; itemCombineNumber.style.width = '56px'; itemCombineNumber.disabled = paramDisabled;
+    itemCombineNumber.id = 'itemCombineVal'; itemCombineNumber.name = 'itemCombineVal';
+    itemCombineNumber.addEventListener('input', e => { sidebarParams.itemCombineChance = parseFloat(e.target.value); itemCombineInput.value = e.target.value; window.itemCombineChance = parseFloat(e.target.value); });
+    itemCombineRow.appendChild(itemCombineNumber);
+    itemCombineRow.dataset.label = 'Item Combine Chance — per-decision chance a character holding 2+ items attempts a combine';
+    tabPanels[2].appendChild(itemCombineRow);
+
     // --- Day Duration Slider ---
     if (sidebarParams.dayDurationSeconds === undefined) sidebarParams.dayDurationSeconds = 120;
     const dayDurRow = document.createElement('div');
@@ -2540,6 +2680,10 @@ function renderCharacterDetail() {
         worldEcology.row.appendChild(dayDurRow);   // (ditto)
         worldEcology.row.appendChild(lifespanRow);
         worldEcology.row.appendChild(fruitRegenRow);
+        worldEcology.row.appendChild(curioRegenRow);
+        worldEcology.row.appendChild(curioCapRow);
+        worldEcology.row.appendChild(curioSeekRow);
+        worldEcology.row.appendChild(itemCombineRow);
         worldEcology.row.appendChild(seasonCycleRow);
         worldEcology.row.appendChild(seasonAmpRow);
         tabPanels[2].appendChild(worldEcology.details);

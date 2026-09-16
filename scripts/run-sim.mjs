@@ -380,6 +380,7 @@ const {
     getDistrictSummaries,
     getDistrictIndexForPosition,
     tickFruitRegen,
+    tickCurioRegen,
 } = worldModule;
 
 const { Character } = characterModule;
@@ -477,6 +478,8 @@ for (let tick = 0; tick < options.ticks; tick++) {
 
     // Fruit regeneration (mirrors the animate() loop in the browser)
     if (typeof tickFruitRegen === 'function') tickFruitRegen(options.dt);
+    // Curio regeneration (mirrors the animate() loop in the browser)
+    if (typeof tickCurioRegen === 'function') tickCurioRegen(options.dt);
 
     if (simulatedNow >= nextWorldSampleMs) {
         const alive = characters.filter(char => char && char.state !== 'dead');

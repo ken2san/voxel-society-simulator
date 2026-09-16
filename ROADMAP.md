@@ -1,6 +1,6 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-09-13_
+_Last updated: 2026-09-16_
 
 ---
 
@@ -546,6 +546,99 @@ this project has lost the ability to verify those two specific criteria without 
 metric back to `analyze-telemetry.mjs` first.
 
 ---
+
+## Feature Shipped — Item Combination ("Creations") + Curio Pickups (2026-09-15/16)
+
+**User-directed AI logic change** (explicit request, satisfies the guardrail in "Current Status"
+above — noted here per the process-gap lesson from 2026-09-13): user wanted characters to
+combine held items into new, unpredictable "creation" items — explicitly framed as Mandelbrot-like
+(simple recursive rule → complex output) and later as a *2001*-monolith-like inert curiosity object.
+
+### What shipped
+
+- **`sim-core/item-genesis.js`** (new file): 5-dimension item vectors (hardness/organicness/
+  sharpness/luminosity/volatility). Combining two items blends their vectors using the same
+  average+noise+mutation+clamp shape already used for personality-trait inheritance
+  (`_blendTrait` in `character.js`), plus depth-scaled noise so recursive combination doesn't
+  regress to the mean. Result is classified into an archetype (`unstable`/`blade`/`radiant`/
+  `husk`/`monolith`/`grown`/`edged`/`composite`) the same way mood is cascaded into a display
+  category elsewhere in the codebase.
+- **Curio pickups**: a new `BLOCK_TYPES.CURIO` / `ITEM_TYPES.CURIO_ITEM` — a rare, purely
+  decorative find with zero economic function. Added *because* wood/fruit/stone almost never
+  coexist in inventory (consumed immediately for their normal purpose), which meant item
+  combination almost never had two items to work with. A curio just sits in inventory until
+  combined, so it's the mechanism that actually makes combination reachable.
+- **`sim-core/AI_rulebase.js`**: PRIORITY 9.4 (curio seeking) and 9.5 (item combination), both
+  gated by a `curioSeekChance` / `itemCombineChance` `window` global. **Correction (2026-09-16):**
+  these initially skipped the Parameter Addition Rule (console-only, no slider) — a violation
+  AGENTS.md explicitly calls out as a known gap to not repeat. Fixed same day: both now have
+  full `sim-settings.workspace.json` → `PARAM_DEFAULTS` → sidebar-slider wiring under
+  "🌍 World & Ecology" ("🔮 Curio Seek Chance", "🧪 Item Combine Chance").
+  Also PRIORITY 0.9 (curio retry): once a character commits to a curio, it gets a bounded
+  10s/4-attempt window to retry past a single failed BFS attempt before a higher-priority goal
+  (home building, priority 3) can steal the decision back — without this, the very first
+  pathfinding failure to a distant curio reliably lost it permanently.
+- **Curio regen**: curios were originally seeded once at `generateTerrain()` with no respawn,
+  so a district's curio supply was a one-time, non-renewable burst — once dug up, item
+  combination went permanently silent for the rest of the session. Added `tickCurioRegen()`
+  in `world.js` (mirrors the existing `tickFruitRegen` pattern, wired into both the browser
+  `animate()` loop and headless `run-sim.mjs`), plus two new sidebar sliders under
+  "🌍 World & Ecology": **Curio Regen Interval** (default 90s) and **Curio Carrying Capacity**
+  (default 12, caps accumulation).
+
+### Key finding: growth shape is front-loaded-then-flat, not linear or exponential
+
+Each combine event consumes 2 inventory items to produce 1 — net-negative on total item count,
+so combination cannot compound on itself. Before the regen fix, headless testing showed a burst
+of pickups/creations in the first few minutes (while a district's fixed curio pool lasted), then
+a hard plateau at zero for the rest of a 60-minute run once the pool was exhausted. The regen fix
+turns this into a repeating "deplete → wait → replenish" cycle instead of a one-time event.
+
+**At shipped defaults** (`curioSpawnRate=1%`, `curioSeekChance=1%`, `itemCombineChance=0.4%`),
+a pickup is genuinely rare — 0 pickups observed in a 60-minute/25-population headless run was not
+unusual. Boosting `curioSeekChance`/`itemCombineChance` via console to ~0.2–0.5 makes it
+observable within single-digit minutes in headless testing. Whether to raise the shipped defaults
+(vs. keep the "monolith, found by chance" rarity) is an open decision — not yet made.
+
+### Deploy status
+
+Commit `a5fa67e` was built (`make build`) and deployed to Cloud Run
+(`voxel-society-simulator` project, `us-central1`, revision `voxel-society-simulator-00053-7r6`)
+via the repo's `Makefile`. **The curio-regen fix above was implemented and headless-verified
+*after* that deploy and is not yet committed or redeployed** — check `git status` before assuming
+prod matches local `world.js`/`sidebar.js`/`scripts/run-sim.mjs`.
+
+### Open / unresolved at handoff
+
+- User tested `window.curioSeekChance = 0.5; window.itemCombineChance = 0.5;` live in-browser
+  (post-Start) and reported no observable behavior change after some minutes. An independent
+  repro attempt via Chrome automation was inconclusive — the automated tab hit the
+  session's known `document.hidden`/rAF-suspension artifact (ALL characters stuck at
+  `state: 'idle', action: null` for 30+ seconds regardless of curio settings — a tooling
+  limitation, not signal about the real bug). User was given this diagnostic to run in their
+  actual session, result not yet received:
+  ```js
+  ({
+    curioSeekChance: window.curioSeekChance,
+    itemCombineChance: window.itemCombineChance,
+    sample: window.characters.slice(0, 10).map(c => ({
+      id: c.id, state: c.state, action: c.action ? c.action.type : null,
+      curiosity: c.personality?.curiosity,
+      invCount: c.inventory.filter(i => i !== null).length,
+      hasCurio: c.inventory.includes('CURIO_ITEM')
+    }))
+  })
+  ```
+  **Next step for a fresh thread:** get this diagnostic's output before re-theorizing from
+  scratch — likely candidates not yet ruled out: characters rarely reaching priority 9.4 because
+  higher priorities (home building, hunger, social) keep firing first; or curios already picked
+  up but stuck pre-combine because a second item never coexists long enough even at boosted
+  `itemCombineChance`.
+- **Unrelated observation, not investigated**: long (~60 min) headless runs repeatedly showed
+  full population collapse/extinction, reproduced even at pure default rates (curio settings
+  untouched) — likely a pre-existing population-dynamics issue, not caused by this feature.
+  Flagged to the user, deferred by mutual agreement.
+- ~~`curioSeekChance` / `itemCombineChance` have no UI slider yet~~ — fixed 2026-09-16, see above.
 
 ## Archive Pointer
 
