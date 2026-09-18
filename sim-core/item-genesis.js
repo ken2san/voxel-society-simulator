@@ -14,6 +14,8 @@
  * capped so it also acts as a self-limiting complexity guardrail.
  */
 
+import { ITEM_TYPES } from '../world.js';
+
 export const ITEM_DIMS = ['hardness', 'organicness', 'sharpness', 'luminosity', 'volatility'];
 
 export const BASE_ITEM_VECTORS = {
@@ -92,4 +94,13 @@ export function getItemVector(id) {
 
 export function getItemDepth(id) {
     return BASE_ITEM_VECTORS[id] ? 0 : (generatedItems.get(id)?.depth ?? 0);
+}
+
+// Plain, factual name for provenance logging — a base item's real ITEM_TYPES name, a
+// creation's real generated name, or a neutral note when its record has aged out of
+// generatedItems (200-entry cap). Deliberately no invented emotion or flavor text here;
+// see the Chronicle log line in character.js's combineItemsAction for why.
+export function getItemDisplayName(id) {
+    if (isGeneratedItem(id)) return generatedItems.get(id)?.name ?? 'an unrecorded creation';
+    return ITEM_TYPES[id]?.name ?? id;
 }

@@ -7,7 +7,7 @@ import { chooseClosestTarget, simpleNeedsPriority } from './character_ai.js';
 import { getSimulationIO, gridToWorldPosition } from './sim-core/interfaces.js';
 import { getActiveSkin } from './character-skins.js';
 import { playSound } from './sim-core/sound-system.js';
-import { isGeneratedItem, generatedItems, getItemVector, getItemDepth, combineItemVectors, registerGeneratedItem, MAX_CREATION_DEPTH } from './sim-core/item-genesis.js';
+import { isGeneratedItem, generatedItems, getItemVector, getItemDepth, combineItemVectors, registerGeneratedItem, getItemDisplayName, MAX_CREATION_DEPTH } from './sim-core/item-genesis.js';
 
 function simIO() {
     return getSimulationIO();
@@ -1177,7 +1177,12 @@ class Character {
             this.showActionIcon(rec.icon, 2.5);
             this.log('Combine complete!', newId, rec.name);
             if (typeof window !== 'undefined' && typeof window.logChronicleEvent === 'function') {
-                window.logChronicleEvent(rec.icon, `#${this.id} created a ${rec.name} (gen ${depth})`, 'creation');
+                // Plain facts only — real parent names, no invented narration. A name the
+                // observer noticed earlier reappearing here is the whole point; inventing
+                // mood/backstory on top would assert feelings the simulation never computed.
+                const nameA = getItemDisplayName(idA);
+                const nameB = getItemDisplayName(idB);
+                window.logChronicleEvent(rec.icon, `#${this.id} combined ${nameA} and ${nameB} into a ${rec.name} (gen ${depth})`, 'creation');
             }
 
             this._combiningProgress = 0;
