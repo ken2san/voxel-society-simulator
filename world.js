@@ -4,6 +4,7 @@ import { Character } from './character.js';
 import { getSimulationIO } from './sim-core/interfaces.js';
 import { createSnowSystem } from './sim-core/snow-system.js';
 import { createRainSystem } from './sim-core/rain-system.js';
+import { createMudPuffSystem } from './sim-core/mud-puff-system.js';
 import { createBirdSystem } from './sim-core/ambient-creatures.js';
 import { buildCampfireGroup } from './sim-core/campfire-renderer.js';
 import { buildWellGroup } from './sim-core/well-renderer.js';
@@ -1878,6 +1879,16 @@ function drawMinimapImmediate() {
         minimapCtx.restore();
     }
 }
+
+// Ground directly underfoot counts as "wet" surface for mud-puff spawning —
+// only the two walkable surface types characters actually stand on.
+function _isWetGroundAt(gridPos) {
+    if (!gridPos) return false;
+    const raw = worldData.get(`${gridPos.x},${gridPos.y - 1},${gridPos.z}`);
+    const id = (raw && typeof raw === 'object') ? raw.id : raw;
+    return id === BLOCK_TYPES.DIRT.id || id === BLOCK_TYPES.GRASS.id;
+}
+
 export function animate() {
     requestAnimationFrame(animate);
     const _frameStart = performance.now();
@@ -1904,6 +1915,11 @@ export function animate() {
     // ── Lazy-init rain system (spring/summer rainfall, pure visual) ──────────
     if (!animate._rain && scene) {
         animate._rain = createRainSystem(scene);
+    }
+
+    // ── Lazy-init mud puff system (rain aftermath, pure visual) ───────────────
+    if (!animate._mudPuffs && scene) {
+        animate._mudPuffs = createMudPuffSystem(scene);
     }
 
     // ── Campfire lifecycle ────────────────────────────────────────────────────
@@ -2001,6 +2017,14 @@ export function animate() {
         animate._rain.update(dt, ph, amp, fx);
     }
 
+    // ── Mud puff update helper — only meaningful while characters are moving,
+    // so unlike snow/rain this doesn't need to run in the paused branch below.
+    function _updateMudPuffs(dt) {
+        if (!animate._mudPuffs) return;
+        const isRaining = typeof window !== 'undefined' && !!window._isRaining;
+        animate._mudPuffs.update(dt, characters, isRaining, _isWetGroundAt);
+    }
+
     // simulationRunningがtrueのときだけ進行
     if (typeof window !== 'undefined' && window.simulationRunning === false) {
         // 停止中もワールドの描画・UI更新は継続
@@ -2018,6 +2042,7 @@ export function animate() {
     updateAmbientWorldEffects();
     _updateSnow(deltaTime);
     _updateRain(deltaTime);
+    _updateMudPuffs(deltaTime);
     const _dd = getDayDuration();
     const isNight = (worldTime % _dd) > (_dd / 2);
     // Day/night transition sounds
