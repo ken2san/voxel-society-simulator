@@ -1,6 +1,6 @@
 # Voxel Society Simulator - Development Roadmap
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-09-18_
 
 ---
 
@@ -639,6 +639,20 @@ prod matches local `world.js`/`sidebar.js`/`scripts/run-sim.mjs`.
   untouched) — likely a pre-existing population-dynamics issue, not caused by this feature.
   Flagged to the user, deferred by mutual agreement.
 - ~~`curioSeekChance` / `itemCombineChance` have no UI slider yet~~ — fixed 2026-09-16, see above.
+
+## Known Cosmetic Quirk — Accepted, Not Fixed (2026-09-18)
+
+Tree trunks can show a faint vertical seam running the height of the trunk, visible mainly from
+steep/oblique camera angles that look nearly straight up along the trunk's axis (not noticeable
+from the normal top-down isometric view). Cause: `buildWoodGroup()`
+(`sim-core/tree-voxel-renderer.js`) generates each 1-block trunk segment's fuzzy bark-cylinder
+shape independently, seeded only by that block's own `(x, y, z)` — there's no continuity between
+a segment and the one stacked above/below it, so their random edge-chipping doesn't line up.
+Not a bug in the traditional sense (each segment renders exactly as designed); it's a side effect
+of per-block-independent procedural generation. Fixing it would mean giving vertically-adjacent
+trunk segments correlated RNG seeds so their boundaries agree — user reviewed and decided it's
+not worth the design change for how minor/rare the viewing angle is. Leave as-is; don't
+re-investigate from scratch if it comes up again.
 
 ## Archive Pointer
 
