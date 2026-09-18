@@ -6105,6 +6105,33 @@ class Character {
         // 1マスずつ進む
         const next = this.path[0];
             if (!next) {
+            // An exhausted partial path is a failure, not arrival at the target.
+            if (this.gridPos.x !== this.targetPos.x || this.gridPos.y !== this.targetPos.y || this.gridPos.z !== this.targetPos.z) {
+                this.bfsFailCount = (this.bfsFailCount || 0) + 1;
+                if (this.bfsFailCount > 2) {
+                    const tpos = this.action?.target;
+                    this.log(`BFS: too many failures, giving up [action=${this.action?.type} target=${tpos ? `${tpos.x},${tpos.y},${tpos.z}` : 'none'}]`);
+                    this.clearNavigationState();
+                    this.state = 'idle';
+                    this.bfsFailCount = 0;
+                    this.actionCooldown = 2.0;
+                    if (this.action && this.action.target) {
+                        const { x, y, z } = this.action.target;
+                        const tkey = `${x},${y},${z}`;
+                        Character.releaseReservation(tkey, this.id);
+                        const res = Character.incrFailedTarget(tkey);
+                        if (res === -1) {
+                            this.log('Target reached blacklist threshold, blacklisting until TTL:', tkey);
+                        }
+                    }
+                    this.releaseReservedSidestep && this.releaseReservedSidestep();
+                    return;
+                }
+                this.log(`BFS: path failed, retrying [action=${this.action?.type} fail#${this.bfsFailCount}]`);
+                this.actionCooldown = 1.0;
+                this.state = 'idle';
+                return;
+            }
             // clear any sidestep reservation when path emptied
             this.releaseReservedSidestep && this.releaseReservedSidestep();
             this.state = 'idle';
