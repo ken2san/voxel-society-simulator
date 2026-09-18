@@ -5866,12 +5866,7 @@ class Character {
                     this.log('Delaying BFS fallback due to recent failures', {until: this._bfsRetryUntil});
                     this.path = null;
                 } else {
-                    if (this._bfsRetryUntil && Date.now() < this._bfsRetryUntil) {
-                        this.log('Delaying corner-break BFS due to recent failures', {until: this._bfsRetryUntil});
-                        this.path = null;
-                    } else {
-                        this.path = this.bfsPath(this.gridPos, this.targetPos, 128, true, true, 3, ignoreDynamicOccupancy);
-                    }
+                    this.path = this.bfsPath(this.gridPos, this.targetPos, 128, true, true, 3, ignoreDynamicOccupancy);
                 }
             }
 
