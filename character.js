@@ -405,6 +405,14 @@ class Character {
                 // WANDER action is completed by reaching the destination
                 this.setIdleState({ clearAction: true, cooldown: 0.5 });
                 break;
+            case 'SOCIALIZE':
+                // Arrival-completion path: a partner far enough away to require walking
+                // over lands here after the walk; delegate to performAction()'s SOCIALIZE
+                // case (same transition used when the partner was already adjacent) rather
+                // than duplicating the socializing-entry logic. Without this, arrival used
+                // to fall through to the default case and silently drop the action.
+                this.performAction();
+                break;
             case 'COLLECT_FOOD':
                 this.collectFood();
                 break;
@@ -2123,7 +2131,12 @@ class Character {
     }
 
     // --- 移動可能性チェック（当たり判定＋頭上チェック） ---
-    canMoveToPosition(x, y, z) {
+    // fromPos defaults to the character's actual current position (correct for a real,
+    // immediate single step). Path validation must instead pass the preceding path node —
+    // otherwise a multi-step staircase gets compared against the character's original
+    // position instead of the previous step, and a perfectly walkable 1-block-at-a-time
+    // ascent gets rejected as 'too_high' once it's 2+ blocks above where the path started.
+    canMoveToPosition(x, y, z, fromPos = this.gridPos) {
         // 移動先の障害物チェック
         const blockId = worldData.get(`${x},${y},${z}`);
         if (!this.isBlockPassable(blockId)) {
@@ -2137,7 +2150,7 @@ class Character {
         }
 
         // Allow stepping up by 1 block if footing exists at destination or one below
-        const dy = y - this.gridPos.y;
+        const dy = y - fromPos.y;
         if (dy > 1) return { canMove: false, reason: 'too_high' };
         if (dy === 1) {
             // require that destination has footing (block under it) or it's ground level
@@ -5756,7 +5769,7 @@ class Character {
             }
 
             // basic can-move check
-            const check = this.canMoveToPosition(step.x, step.y, step.z);
+            const check = this.canMoveToPosition(step.x, step.y, step.z, from);
             if (!check.canMove) {
                 try { if (typeof window !== 'undefined') { window.pathInvalidationStats = window.pathInvalidationStats || { worldBlocked:0, occupied:0, cannotMove:0, cornerBlocked:0 }; window.pathInvalidationStats.cannotMove++; } } catch(e){}
                 return false;
