@@ -113,7 +113,7 @@ export class VoxelCrowdRenderer {
         this._scene    = scene;
         this._max      = maxCount;
         this._groups   = [];  // [{part, im}]
-        this._slotMap  = new Map();  // charId → slotIdx
+        this._slotOwners = [];  // Visible character references, bounded by maxCount.
         this._prevPos  = Array.from({ length: maxCount },
             () => ({ x: NaN, z: NaN, state: '__none', headRotY: NaN }));
 
@@ -132,6 +132,7 @@ export class VoxelCrowdRenderer {
             color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false,
         });
         this._shadowIM = new THREE.InstancedMesh(shadowGeo, shadowMat, maxCount);
+        this._shadowIM.count = 0;
         this._shadowIM.frustumCulled = false;
         this._shadowIM.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         for (let i = 0; i < maxCount; i++) this._shadowIM.setMatrixAt(i, ZERO_M4);
@@ -164,6 +165,7 @@ export class VoxelCrowdRenderer {
                 const geo = mergeBoxes(positions, vs);
                 const mat = new THREE.MeshLambertMaterial({ color });
                 const im  = new THREE.InstancedMesh(geo, mat, this._max);
+                im.count = 0;
                 im.frustumCulled = false;
                 im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
                 for (let i = 0; i < this._max; i++) im.setMatrixAt(i, ZERO_M4);
@@ -179,13 +181,11 @@ export class VoxelCrowdRenderer {
     update(characters) {
         if (!this._groups.length && !this._shadowIM) return;
 
-        const selId = (typeof window !== 'undefined' && window.selectedCharacterId != null)
-            ? String(window.selectedCharacterId) : '';
-
         let slot        = 0;
         const toUpdate  = [];
 
         for (const char of characters) {
+            if (slot >= this._max) break;
             if (!char || char.state === 'dead') continue;
             if (!char.mesh || !char.body || !char.head) continue;
             // Skip characters hidden by district visibility — avoids rendering
@@ -201,8 +201,7 @@ export class VoxelCrowdRenderer {
             // Detect dirty: position changed, state changed, actively animating,
             // or head yaw changed (idle glance rotates head even in non-anim states),
             // or dig animation is running (rescue digs can fire outside working state)
-            const isDirty = !this._slotMap.has(char.id)
-                || this._slotMap.get(char.id) !== slot
+            const isDirty = this._slotOwners[slot] !== char
                 || px !== prev.x || pz !== prev.z
                 || st !== prev.state
                 || ANIM_STATES.has(st)
@@ -211,49 +210,32 @@ export class VoxelCrowdRenderer {
 
             if (isDirty) toUpdate.push({ char, slot });
 
-            this._slotMap.set(char.id, slot);
+            this._slotOwners[slot] = char;
             prev.x = px; prev.z = pz; prev.state = st; prev.headRotY = hry;
             slot++;
         }
 
         const activeCount = slot;
-        const prevActiveCount = this._lastActiveCount || 0;
-        this._lastActiveCount = activeCount;
+        // Draw only populated slots. Vacant slots need no zeroing or GPU upload;
+        // truncating ownership forces a fresh matrix write when they are reused.
+        this._slotOwners.length = activeCount;
+        for (const { im } of this._groups) im.count = activeCount;
+        this._shadowIM.count = activeCount;
 
-        // Slots that actually need a GPU upload this frame: characters that
-        // were written, plus any slots that just became vacant (population
-        // shrank) and need zeroing. Previously this zeroed activeCount..max
-        // (up to `maxCount`, e.g. 300) and force-uploaded the ENTIRE instance
-        // buffer for every one of the ~17 body-part groups every single frame,
-        // regardless of how many instances actually changed — the dominant
-        // cost in profiling (bindVertexArray/bufferSubData/WebGLRenderer.render
-        // self time). Uploading only the changed slot ranges fixes that.
-        const dirtySlots = new Set();
-        for (const { slot } of toUpdate) dirtySlots.add(slot);
-        for (let i = activeCount; i < prevActiveCount; i++) dirtySlots.add(i);
-
-        if (dirtySlots.size > 0) {
+        if (toUpdate.length > 0) {
             // Write dirty characters
             for (const { char, slot } of toUpdate) {
                 this._writeChar(char, slot);
             }
 
-            // Zero out newly-vacated slots only (not the whole activeCount..max range)
-            for (let i = activeCount; i < prevActiveCount; i++) {
-                for (const { im } of this._groups) im.setMatrixAt(i, ZERO_M4);
-                this._shadowIM.setMatrixAt(i, ZERO_M4);
-            }
-
             // Mark only the dirty instance ranges as needing GPU upload.
             for (const { im } of this._groups) {
-                im.count = this._max;
                 im.instanceMatrix.clearUpdateRanges();
-                for (const s of dirtySlots) im.instanceMatrix.addUpdateRange(s * 16, 16);
+                for (const { slot } of toUpdate) im.instanceMatrix.addUpdateRange(slot * 16, 16);
                 im.instanceMatrix.needsUpdate = true;
             }
-            this._shadowIM.count = this._max;
             this._shadowIM.instanceMatrix.clearUpdateRanges();
-            for (const s of dirtySlots) this._shadowIM.instanceMatrix.addUpdateRange(s * 16, 16);
+            for (const { slot } of toUpdate) this._shadowIM.instanceMatrix.addUpdateRange(slot * 16, 16);
             this._shadowIM.instanceMatrix.needsUpdate = true;
         }
 
@@ -342,14 +324,16 @@ export class VoxelCrowdRenderer {
     // ── Dispose (for skin hot-swap) ─────────────────────────────────────────
     dispose() {
         for (const { im } of this._groups) {
+            im.dispose();
             im.geometry.dispose();
             im.material.dispose();
             this._scene.remove(im);
         }
+        this._shadowIM.dispose();
         this._shadowIM.geometry.dispose();
         this._shadowIM.material.dispose();
         this._scene.remove(this._shadowIM);
         this._groups   = [];
-        this._slotMap.clear();
+        this._slotOwners.length = 0;
     }
 }
