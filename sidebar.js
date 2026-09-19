@@ -1,3 +1,4 @@
+import { getRelationshipBadgeMeta, renderRelationshipMarkers, clearRelationshipMarkers } from './ui/relationship-markers.js';
 // Function to individually update only needs/mood
 // --- Record mood/needs history for each character ---
 if (!window.characterHistory) window.characterHistory = {};
@@ -3274,14 +3275,7 @@ function ensureRelationshipMarkerLayer() {
 
 function clearSelectedRelationshipMarkers() {
     const layer = ensureRelationshipMarkerLayer();
-    if (layer) layer.innerHTML = '';
-}
-
-function getRelationshipBadgeMeta(relationshipClass) {
-    if (relationshipClass === 'bonded') return { icon: '❤', bg: 'rgba(190,24,93,0.88)', border: '#f9a8d4', stroke: '#ec4899' };
-    if (relationshipClass === 'ally') return { icon: '🤝', bg: 'rgba(30,64,175,0.88)', border: '#93c5fd', stroke: '#3b82f6' };
-    if (relationshipClass === 'acquaintance') return { icon: '•', bg: 'rgba(8,145,178,0.82)', border: '#67e8f9', stroke: '#06b6d4' };
-    return { icon: '•', bg: 'rgba(51,65,85,0.84)', border: '#cbd5e1', stroke: '#94a3b8' };
+    clearRelationshipMarkers(layer);
 }
 
 function describeRelationshipSnapshot(snapshot) {
@@ -3339,63 +3333,8 @@ function updateSelectedRelationshipMarkers(char, selectedPos = null) {
     }
 
     const snapshot = char.getRelationshipSnapshot(4);
-    layer.innerHTML = '';
-
-    const svgNS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('width', String(window.innerWidth || 0));
-    svg.setAttribute('height', String(window.innerHeight || 0));
-    svg.style.position = 'fixed';
-    svg.style.inset = '0';
-    svg.style.overflow = 'visible';
-    layer.appendChild(svg);
-
-    (snapshot?.ties || []).forEach(tie => {
-        if (!tie?.other || typeof tie.other.getScreenPosition !== 'function') return;
-        const pos = tie.other.getScreenPosition();
-        if (!pos) return;
-        const meta = getRelationshipBadgeMeta(tie.relationshipClass);
-
-        const line = document.createElementNS(svgNS, 'line');
-        line.setAttribute('x1', String(sourcePos.x));
-        line.setAttribute('y1', String(sourcePos.y - 10));
-        line.setAttribute('x2', String(pos.x));
-        line.setAttribute('y2', String(pos.y - 6));
-        line.setAttribute('stroke', meta.stroke);
-        line.setAttribute('stroke-width', String((1.5 + Math.max(0, tie.affinity - 40) / 30).toFixed(2)));
-        line.setAttribute('stroke-linecap', 'round');
-        line.setAttribute('opacity', String(Math.max(0.32, Math.min(0.9, tie.affinity / 100))));
-        if (tie.relationshipClass === 'ally' || tie.relationshipClass === 'acquaintance') {
-            line.setAttribute('stroke-dasharray', tie.relationshipClass === 'ally' ? '6 5' : '3 5');
-        }
-        svg.appendChild(line);
-
-        const halo = document.createElementNS(svgNS, 'circle');
-        halo.setAttribute('cx', String(pos.x));
-        halo.setAttribute('cy', String(pos.y - 6));
-        halo.setAttribute('r', String(tie.relationshipClass === 'bonded' ? 11 : 9));
-        halo.setAttribute('fill', 'none');
-        halo.setAttribute('stroke', meta.stroke);
-        halo.setAttribute('stroke-width', '2');
-        halo.setAttribute('opacity', '0.45');
-        svg.appendChild(halo);
-
-        const badge = document.createElement('div');
-        badge.style.position = 'fixed';
-        badge.style.left = `${pos.x}px`;
-        badge.style.top = `${pos.y - 28}px`;
-        badge.style.transform = 'translate(-50%, -50%)';
-        badge.style.padding = '2px 7px';
-        badge.style.borderRadius = '999px';
-        badge.style.background = meta.bg;
-        badge.style.border = `1px solid ${meta.border}`;
-        badge.style.color = '#fff';
-        badge.style.fontSize = '11px';
-        badge.style.fontWeight = '700';
-        badge.style.boxShadow = '0 2px 8px rgba(0,0,0,0.18)';
-        badge.textContent = `${meta.icon} ${tie.other.id}`;
-        badge.title = `${tie.relationshipClass} · affinity ${Math.round(tie.affinity)} · dist ${tie.distance}`;
-        layer.appendChild(badge);
+    renderRelationshipMarkers(layer, sourcePos, snapshot, {
+        width: window.innerWidth, height: window.innerHeight,
     });
 
     return snapshot;
@@ -4563,15 +4502,19 @@ function renderCharacterList() {
             detailTd.colSpan = showAreaColumn ? 10 : 9;
             detailTd.style.padding = '0';
             detailTd.style.background = 'transparent';
-            const detailCard = createCharacterDetailCard(char);
-            detailCard.title = 'Tap to close';
-            detailCard.addEventListener('click', (e) => {
-                if (String(openedCharId) === String(char.id)) {
-                    closeOpenedCharacterDetail(leftSidebar);
-                }
-                e.stopPropagation();
-            });
-            detailTd.appendChild(detailCard);
+            // Build expensive profile/history DOM only when the row is opened.
+            const populateDetail = () => {
+                const detailCard = createCharacterDetailCard(char);
+                detailCard.title = 'Tap to close';
+                detailCard.addEventListener('click', (e) => {
+                    if (String(openedCharId) === String(char.id)) {
+                        closeOpenedCharacterDetail(leftSidebar);
+                    }
+                    e.stopPropagation();
+                });
+                detailTd.replaceChildren(detailCard);
+            };
+            if (String(openedCharId) === String(char.id)) populateDetail();
             detailTr.appendChild(detailTd);
 
             tr.onclick = (e) => {
@@ -4588,6 +4531,7 @@ function renderCharacterList() {
                 openedCharId = String(char.id);
                 window.selectedCharacterId = String(char.id); // sync for InstancedMesh + layer switching
                 tr.classList.add('is-open');
+                populateDetail();
                 detailTr.style.display = '';
                 updateSelectedCharacterMarker();
                 if (typeof window.focusCharacterInView === 'function') {
