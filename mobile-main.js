@@ -3,7 +3,7 @@
  * Sets up defaults, boots the game engine via main.js, and wires the mobile HUD.
  */
 
-import { focusCameraOnActiveDistrict, setTreeSpawnRate, setFruitSpawnRate } from './world.js';
+import { focusCameraOnActiveDistrict, setTreeSpawnRate, setFruitSpawnRate, worldTime } from './world.js';
 
 // ── 1. Defaults ──────────────────────────────────────────────────────────────
 // Set before main.js init() reads these values.
@@ -76,7 +76,7 @@ function updateHud() {
         elPop.textContent = alive;
     }
 
-    const wt = window._simWorldTime ?? 0;
+    const wt = worldTime;
     if (elDay) {
         const dayNum = Math.floor(wt / BASE_DAY_DURATION) + 1;
         elDay.textContent = `Day ${dayNum}`;
@@ -89,26 +89,6 @@ function updateHud() {
 }
 
 setInterval(updateHud, 500);
-
-// Expose worldTime so updateHud can read it (world.js doesn't expose it as live binding)
-// We patch it via the animate callback if available, otherwise poll from world
-let _wtPollHandle = null;
-function _startWtPolling() {
-    if (_wtPollHandle) return;
-    _wtPollHandle = setInterval(() => {
-        if (window.__simWorldTimeGetter) {
-            window._simWorldTime = window.__simWorldTimeGetter();
-        }
-    }, 500);
-}
-_startWtPolling();
-
-// world.js exports worldTime as a const (snapshot at import time).
-// We dynamically import world.js to get a live reference via function call.
-import('./world.js').then(mod => {
-    // worldTime is a number export — it's a live binding in ES modules
-    window.__simWorldTimeGetter = () => mod.worldTime;
-});
 
 // ── Pause / resume ────────────────────────────────────────────────────────────
 function setPaused(paused) {

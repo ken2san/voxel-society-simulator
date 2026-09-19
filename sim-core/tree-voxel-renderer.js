@@ -16,9 +16,8 @@
  */
 
 import * as THREE from 'three';
+import { buildVoxelGeometry, VOXEL_FACES, VOXEL_FACE_INDICES, VOXEL_FACE_BRIGHTNESS } from './voxel-geometry.js';
 
-// ── Per-face brightness (+X, -X, +Y, -Y, +Z, -Z) ─────────────────────────────
-const _FB = [0.88, 0.78, 1.30, 0.40, 1.00, 0.70];
 
 // ── Colour palettes (voxelchar05-inspired) ─────────────────────────────────────
 const BARK_BASE = [0x5d4037, 0x4e342e, 0x6d4c41, 0x795548, 0x3e2723];
@@ -53,64 +52,9 @@ function makeRng(x, y, z) {
     };
 }
 
-// ── Geometry builder (identical to house-voxel-renderer.js) ───────────────────
-const _FD = [
-    { n: [ 1,0,0], c: [[ 1,-1,-1],[ 1, 1,-1],[ 1, 1, 1],[ 1,-1, 1]] },
-    { n: [-1,0,0], c: [[-1,-1, 1],[-1, 1, 1],[-1, 1,-1],[-1,-1,-1]] },
-    { n: [ 0,1,0], c: [[-1, 1,-1],[-1, 1, 1],[ 1, 1, 1],[ 1, 1,-1]] },
-    { n: [ 0,-1,0],c: [[-1,-1, 1],[-1,-1,-1],[ 1,-1,-1],[ 1,-1, 1]] },
-    { n: [ 0,0, 1],c: [[-1,-1, 1],[ 1,-1, 1],[ 1, 1, 1],[-1, 1, 1]] },
-    { n: [ 0,0,-1],c: [[ 1,-1,-1],[-1,-1,-1],[-1, 1,-1],[ 1, 1,-1]] },
-];
-const _FI = [0,1,2,0,2,3];
-
-function buildVoxelGeo(voxels, innerSize) {
-    if (!voxels.length) return new THREE.BufferGeometry();
-    const hs = innerSize / 2;
-    const n  = voxels.length;
-    const pos = new Float32Array(n * 24 * 3);
-    const nrm = new Float32Array(n * 24 * 3);
-    const col = new Float32Array(n * 24 * 3);
-    const idx = new Uint32Array(n * 36);
-
-    for (let i = 0; i < n; i++) {
-        const { x: px, y: py, z: pz, color: c } = voxels[i];
-        const cr = ((c >> 16) & 0xff) / 255;
-        const cg = ((c >>  8) & 0xff) / 255;
-        const cb = ( c        & 0xff) / 255;
-        const vB = i * 24;
-        for (let f = 0; f < 6; f++) {
-            const fd  = _FD[f];
-            const bri = _FB[f];
-            const fr  = Math.min(1, cr * bri);
-            const fg  = Math.min(1, cg * bri);
-            const fb  = Math.min(1, cb * bri);
-            for (let v = 0; v < 4; v++) {
-                const [fx, fy, fz] = fd.c[v];
-                const vi = vB + f * 4 + v;
-                const pi = vi * 3;
-                pos[pi]   = fx * hs + px;  pos[pi+1] = fy * hs + py;  pos[pi+2] = fz * hs + pz;
-                nrm[pi]   = fd.n[0];       nrm[pi+1] = fd.n[1];       nrm[pi+2] = fd.n[2];
-                col[pi]   = fr;            col[pi+1] = fg;             col[pi+2] = fb;
-            }
-        }
-        const iB = i * 36;
-        for (let f = 0; f < 6; f++) {
-            const vFB = vB + f * 4;
-            for (let k = 0; k < 6; k++) idx[iB + f*6 + k] = vFB + _FI[k];
-        }
-    }
-
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('normal',   new THREE.BufferAttribute(nrm, 3));
-    geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
-    geo.setIndex(new THREE.BufferAttribute(idx, 1));
-    return geo;
-}
 
 function makeGroup(voxels, innerSize, x, y, z, isVisible) {
-    const geo   = buildVoxelGeo(voxels, innerSize);
+    const geo   = buildVoxelGeometry(voxels, innerSize);
     const mat   = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mesh  = new THREE.Mesh(geo, mat);
     const group = new THREE.Group();
@@ -200,7 +144,7 @@ export function buildLeafGroup(type, x, y, z, isVisible) {
         }
     }
     if (fruitVoxels.length > 0) {
-        const fGeo  = buildVoxelGeo(fruitVoxels, LVI);
+        const fGeo  = buildVoxelGeometry(fruitVoxels, LVI);
         const fMesh = new THREE.Mesh(fGeo, new THREE.MeshLambertMaterial({ vertexColors: true }));
         fMesh.visible = false;
         group.add(fMesh);
@@ -319,7 +263,7 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
     const rng = makeRng(x, y, z);
 
     // ── Box geometry with per-face vertex colours ──
-    // 6 faces × 4 vertices, faces in same order as _FD: +X, -X, +Y, -Y, +Z, -Z
+    // 6 faces × 4 vertices, faces in same order as VOXEL_FACES: +X, -X, +Y, -Y, +Z, -Z
     const FACE_COLORS = [
         GRASS_SIDE[Math.floor(rng() * GRASS_SIDE.length)],  // +X
         GRASS_SIDE[Math.floor(rng() * GRASS_SIDE.length)],  // -X
@@ -335,8 +279,8 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
     const idxArr = new Uint32Array(6 * 6);
 
     for (let f = 0; f < 6; f++) {
-        const fd  = _FD[f];
-        const bri = _FB[f];
+        const fd  = VOXEL_FACES[f];
+        const bri = VOXEL_FACE_BRIGHTNESS[f];
         const c   = FACE_COLORS[f];
         const cr  = Math.min(1, ((c >> 16) & 0xff) / 255 * bri);
         const cg  = Math.min(1, ((c >>  8) & 0xff) / 255 * bri);
@@ -351,7 +295,7 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
         }
         const iB = f * 6;
         const vB = f * 4;
-        for (let k = 0; k < 6; k++) idxArr[iB + k] = vB + _FI[k];
+        for (let k = 0; k < 6; k++) idxArr[iB + k] = vB + VOXEL_FACE_INDICES[k];
     }
 
     const boxGeo = new THREE.BufferGeometry();
@@ -506,8 +450,8 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
                 const cb = ( color        & 0xff) / 255;
                 const vB = i * 24;
                 for (let f = 0; f < 6; f++) {
-                    const fd  = _FD[f];
-                    const bri = _FB[f];
+                    const fd  = VOXEL_FACES[f];
+                    const bri = VOXEL_FACE_BRIGHTNESS[f];
                     for (let v = 0; v < 4; v++) {
                         const [fx, fy, fz] = fd.c[v];
                         const vi = vB + f * 4 + v;
@@ -522,7 +466,7 @@ export function buildGrassGroup(type, x, y, z, isVisible, hasBlock) {
                 const iB = i * 36;
                 for (let f = 0; f < 6; f++) {
                     const vFB = vB + f * 4;
-                    for (let k = 0; k < 6; k++) idxA[iB + f*6 + k] = vFB + _FI[k];
+                    for (let k = 0; k < 6; k++) idxA[iB + f*6 + k] = vFB + VOXEL_FACE_INDICES[k];
                 }
             }
             const stepGeo = new THREE.BufferGeometry();
@@ -560,8 +504,8 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
     const idxArr = new Uint32Array(6 * 6);
 
     for (let f = 0; f < 6; f++) {
-        const fd  = _FD[f];
-        const bri = _FB[f];
+        const fd  = VOXEL_FACES[f];
+        const bri = VOXEL_FACE_BRIGHTNESS[f];
         const c   = FACE_COLORS[f];
         // Striation: 20% chance to darken individual vertex on side faces
         for (let v = 0; v < 4; v++) {
@@ -579,7 +523,7 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
         }
         const iB = f * 6;
         const vB = f * 4;
-        for (let k = 0; k < 6; k++) idxArr[iB + k] = vB + _FI[k];
+        for (let k = 0; k < 6; k++) idxArr[iB + k] = vB + VOXEL_FACE_INDICES[k];
     }
 
     const geo  = new THREE.BufferGeometry();
@@ -671,8 +615,8 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
                 const cb = ( color        & 0xff) / 255;
                 const vB = i * 24;
                 for (let f = 0; f < 6; f++) {
-                    const fd  = _FD[f];
-                    const bri = _FB[f];
+                    const fd  = VOXEL_FACES[f];
+                    const bri = VOXEL_FACE_BRIGHTNESS[f];
                     for (let v = 0; v < 4; v++) {
                         const [fx, fy, fz] = fd.c[v];
                         const vi = vB + f * 4 + v;
@@ -687,7 +631,7 @@ export function buildDirtGroup(type, x, y, z, isVisible, hasBlock) {
                 const iB = i * 36;
                 for (let f = 0; f < 6; f++) {
                     const vFB = vB + f * 4;
-                    for (let k = 0; k < 6; k++) idxA[iB + f*6 + k] = vFB + _FI[k];
+                    for (let k = 0; k < 6; k++) idxA[iB + f*6 + k] = vFB + VOXEL_FACE_INDICES[k];
                 }
             }
             const stepGeo = new THREE.BufferGeometry();
