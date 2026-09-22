@@ -55,3 +55,4 @@ test-*.json
 # Others
 *.swp
 *.tmp
+.vercel
